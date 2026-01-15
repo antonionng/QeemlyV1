@@ -1,4 +1,6 @@
 @import "tailwindcss";
+@import "../node_modules/react-grid-layout/css/styles.css";
+@import "../node_modules/react-resizable/css/styles.css";
 
 :root {
   --background: #ffffff;
@@ -7,6 +9,11 @@
   --muted: #f3f4f6;
   --muted-strong: #e5e7eb;
   --border: #e0e3eb;
+  
+  /* Dashboard sidebar dimensions */
+  --sidebar-width: 260px;
+  --sidebar-collapsed-width: 72px;
+  --sidebar-transition: 220ms cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 @theme inline {
@@ -140,6 +147,87 @@ body {
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
+/* Dashboard shell utilities */
+.dash-bg {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background: #ffffff;
+}
+
+.dash-glass {
+  background: #ffffff;
+}
+
+.dash-hairline {
+  border-color: var(--color-border);
+}
+
+.dash-elevation {
+  box-shadow:
+    0 1px 0 rgba(15, 15, 26, 0.02),
+    0 4px 12px rgba(15, 15, 26, 0.04);
+}
+
+.dash-card {
+  background: #ffffff;
+  border-color: var(--color-border);
+  box-shadow:
+    0 1px 0 rgba(15, 15, 26, 0.02),
+    0 4px 12px rgba(15, 15, 26, 0.04);
+}
+
+/* Benchmarks results visibility guard */
+.bench-results {
+  color: #0f0f1a !important;
+}
+
+.bench-results * {
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+.bench-results .text-white {
+  color: #ffffff !important;
+}
+
+/* Fixed sidebar layout */
+.dash-sidebar {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 30;
+  width: var(--sidebar-width);
+  transition: width var(--sidebar-transition);
+  background: #ffffff;
+  border-right: 1px solid var(--color-border);
+}
+
+.dash-sidebar[data-collapsed="true"] {
+  width: var(--sidebar-collapsed-width);
+}
+
+.dash-main {
+  margin-left: var(--sidebar-width);
+  transition: margin-left var(--sidebar-transition);
+  min-height: 100vh;
+}
+
+.dash-main[data-sidebar-collapsed="true"] {
+  margin-left: var(--sidebar-collapsed-width);
+}
+
+@media (max-width: 1023px) {
+  .dash-sidebar {
+    display: none;
+  }
+  .dash-main {
+    margin-left: 0;
+  }
+}
+
 /* Auth right-panel visuals (split-screen login/register) */
 .auth-hero-panel {
   position: relative;
@@ -161,4 +249,310 @@ body {
   background-size: 44px 44px;
   opacity: 0.5;
   mask-image: radial-gradient(60% 60% at 50% 35%, #000 0%, transparent 80%);
+}
+
+/* Dashboard Widget Animations */
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInLeft {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes scaleIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(92, 69, 253, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(92, 69, 253, 0);
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+/* Widget entrance animations */
+.widget-animate-in {
+  animation: slideInUp 0.4s ease-out forwards;
+}
+
+.widget-animate-in:nth-child(1) { animation-delay: 0ms; }
+.widget-animate-in:nth-child(2) { animation-delay: 50ms; }
+.widget-animate-in:nth-child(3) { animation-delay: 100ms; }
+.widget-animate-in:nth-child(4) { animation-delay: 150ms; }
+.widget-animate-in:nth-child(5) { animation-delay: 200ms; }
+.widget-animate-in:nth-child(6) { animation-delay: 250ms; }
+.widget-animate-in:nth-child(7) { animation-delay: 300ms; }
+.widget-animate-in:nth-child(8) { animation-delay: 350ms; }
+
+/* Dashboard widget card styles */
+.dash-widget {
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid color-mix(in oklab, var(--color-border), transparent 30%);
+  border-radius: 1rem;
+  box-shadow:
+    0 1px 0 rgba(15, 15, 26, 0.02),
+    0 8px 24px rgba(15, 15, 26, 0.05);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: all 0.2s ease;
+}
+
+.dash-widget:hover {
+  box-shadow:
+    0 1px 0 rgba(15, 15, 26, 0.02),
+    0 12px 32px rgba(15, 15, 26, 0.08);
+  border-color: color-mix(in oklab, var(--color-brand-300), transparent 50%);
+}
+
+/* Shimmer loading effect */
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.5) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+/* Pulse effect for live indicators */
+.live-pulse {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* Float animation for highlights */
+.float-animation {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Dropdown menu animations */
+.dropdown-enter {
+  animation: scaleIn 0.15s ease-out forwards;
+  transform-origin: top;
+}
+
+/* Progress bar animations */
+.progress-animated {
+  transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Chart container styling */
+.tremor-Chart-root {
+  font-family: var(--font-poppins), system-ui, sans-serif !important;
+}
+
+/* Scrollbar styling for widget content */
+.widget-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-brand-200) transparent;
+}
+
+.widget-scroll::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.widget-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.widget-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-brand-200);
+  border-radius: 3px;
+}
+
+.widget-scroll::-webkit-scrollbar-thumb:hover {
+  background: var(--color-brand-300);
+}
+
+/* Responsive grid adjustments for widgets */
+.react-grid-layout {
+  position: relative;
+  transition: height 200ms ease;
+}
+
+.react-grid-item {
+  transition: all 200ms ease;
+  transition-property: left, top;
+}
+
+.react-grid-item.resizing {
+  z-index: 1;
+  will-change: width, height;
+}
+
+.react-grid-item.react-draggable-dragging {
+  transition: none;
+  z-index: 3;
+  will-change: transform;
+}
+
+.react-grid-item.dropping {
+  visibility: hidden;
+}
+
+.react-grid-item.react-grid-placeholder {
+  background: color-mix(in oklab, var(--color-brand-500), transparent 90%);
+  border: 2px dashed color-mix(in oklab, var(--color-brand-500), transparent 70%);
+  border-radius: 1.5rem;
+  transition-duration: 100ms;
+  z-index: 2;
+  user-select: none;
+}
+
+.react-resizable-handle {
+  position: absolute;
+  width: 20px;
+  height: 20px;
+  bottom: 0;
+  right: 0;
+  cursor: se-resize;
+}
+
+.react-resizable-handle::after {
+  content: "";
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  width: 6px;
+  height: 6px;
+  border-right: 2px solid var(--color-brand-300);
+  border-bottom: 2px solid var(--color-brand-300);
+  transition: border-color 0.2s;
+}
+
+.react-grid-item:hover .react-resizable-handle::after {
+  border-color: var(--color-brand-500);
+}
+
+@media (max-width: 1023px) {
+  .react-grid-layout {
+    display: flex !important;
+    flex-direction: column !important;
+    height: auto !important;
+  }
+  
+  .react-grid-item {
+    position: relative !important;
+    transform: none !important;
+    width: 100% !important;
+    height: auto !important;
+    min-height: 300px !important;
+    margin-bottom: 1rem !important;
+  }
+  
+  .react-grid-item > .react-resizable-handle {
+    display: none !important;
+  }
+}
+
+/* Tooltip and popover styling */
+.tooltip-content {
+  background: var(--color-brand-900);
+  color: white;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  box-shadow: 0 4px 12px rgba(15, 15, 26, 0.2);
+  animation: scaleIn 0.15s ease-out;
+}
+
+/* Badge animations */
+.badge-pulse {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* Trend indicator colors */
+.trend-up {
+  color: #059669;
+}
+
+.trend-down {
+  color: #dc2626;
+}
+
+.trend-neutral {
+  color: var(--color-brand-500);
+}
+
+/* AI Chat Button Glow Effect */
+@keyframes ai-glow {
+  0%, 100% {
+    box-shadow: 
+      0 4px 14px rgba(92, 69, 253, 0.35),
+      0 0 0 0 rgba(92, 69, 253, 0.2);
+  }
+  50% {
+    box-shadow: 
+      0 6px 20px rgba(92, 69, 253, 0.45),
+      0 0 0 4px rgba(92, 69, 253, 0.1);
+  }
+}
+
+.ai-chat-btn {
+  animation: ai-glow 3s ease-in-out infinite;
+}
+
+.ai-chat-btn:hover {
+  animation: none;
+}
+
+/* User dropdown menu styling */
+.dropdown-enter {
+  animation: dropdownSlide 0.2s ease-out forwards;
+  transform-origin: top right;
+}
+
+@keyframes dropdownSlide {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
 }

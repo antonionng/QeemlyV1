@@ -1,125 +1,135 @@
-import { ArrowUpRight, BarChart2, Globe2, LineChart, Users } from "lucide-react";
+"use client";
+
+import { ArrowUpRight, Download, RefreshCw, Sparkles } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Chip } from "@/components/ui/chip";
-import { SAMPLE_BENCHMARK, formatMoney } from "@/lib/sample-benchmark";
-
-const ranges = [
-  { label: "Median", value: formatMoney(SAMPLE_BENCHMARK.currency, SAMPLE_BENCHMARK.p50), delta: SAMPLE_BENCHMARK.momDeltaP50 },
-  { label: "P25", value: formatMoney(SAMPLE_BENCHMARK.currency, SAMPLE_BENCHMARK.p25), delta: SAMPLE_BENCHMARK.momDeltaP25 },
-  { label: "P75", value: formatMoney(SAMPLE_BENCHMARK.currency, SAMPLE_BENCHMARK.p75), delta: SAMPLE_BENCHMARK.momDeltaP75 },
-];
-
-const filters = ["UAE", "Expat", "Mid-level", "Engineering"];
+import { LayoutManager } from "@/components/dashboard/layout-manager";
+import { PresetSwitcher } from "@/components/dashboard/preset-switcher";
+import { WidgetPicker } from "@/components/dashboard/widget-picker";
+import { useDashboard } from "@/lib/dashboard/use-dashboard";
+import { MARKET_PULSE } from "@/lib/dashboard/dummy-data";
 
 export default function DashboardPage() {
+  const {
+    currentPresetId,
+    activeWidgets,
+    layout,
+    isCustomized,
+    applyPreset,
+    updateLayout,
+    removeWidget,
+    toggleWidget,
+    resetToDefault,
+  } = useDashboard();
+
   return (
-    <div className="space-y-6">
-      <div className="rounded-3xl border border-border/70 bg-white px-5 py-5 shadow-sm sm:px-7">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <Badge variant="brand">Live</Badge>
-            <h1 className="mt-2 text-2xl font-semibold text-brand-900">Market snapshot</h1>
-            <p className="text-sm text-brand-800/80">
-              Live Gulf benchmarks with confidence scoring across roles, levels, and cities.
+    <div className="space-y-8">
+      {/* Dashboard Header */}
+      <div className="relative">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+          {/* Title & Description */}
+          <div className="flex flex-col gap-1">
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-3xl font-bold tracking-tight text-brand-900">
+                Compensation Intelligence
+              </h1>
+              <Badge variant="brand" className="animate-pulse bg-brand-500/10 text-brand-600 border-brand-500/20">
+                Live
+              </Badge>
+            </div>
+            <p className="mt-2 text-[15px] leading-relaxed text-brand-700/80 max-w-2xl">
+              Real-time GCC salary benchmarks with AI-powered insights across{" "}
+              <span className="font-semibold text-brand-900">{MARKET_PULSE.marketsTracked}</span> markets and{" "}
+              <span className="font-semibold text-brand-900">{MARKET_PULSE.rolesTracked}</span> roles.
             </p>
           </div>
-          <div className="flex gap-2">
-            <Button variant="ghost" className="bg-white">
+
+          {/* Actions */}
+          <div className="flex flex-wrap items-center gap-3 lg:justify-end">
+            <PresetSwitcher
+              currentPresetId={currentPresetId}
+              isCustomized={isCustomized}
+              onSelectPreset={applyPreset}
+              onReset={resetToDefault}
+            />
+            <WidgetPicker
+              activeWidgets={activeWidgets}
+              onToggleWidget={toggleWidget}
+            />
+            <div className="hidden h-10 w-px bg-border/60 sm:block mx-1" />
+            <Button variant="ghost" className="h-11 bg-white hover:bg-brand-50 border border-border/40 px-5">
+              <Download className="mr-2 h-4 w-4 text-brand-600" />
               Export
             </Button>
-            <Button>
-              New search <ArrowUpRight className="h-4 w-4" />
+            <Button className="h-11 px-6 shadow-lg shadow-brand-500/20">
+              New search
+              <ArrowUpRight className="ml-2 h-4 w-4" />
             </Button>
           </div>
         </div>
-        <div className="mt-4 flex flex-wrap gap-2">
-          {filters.map((filter) => (
-            <Chip key={filter} active>
-              {filter}
-            </Chip>
-          ))}
+
+        {/* Stats bar */}
+        <div className="mt-8 flex flex-wrap items-center gap-x-8 gap-y-3 rounded-2xl border border-border/40 bg-white/50 p-4 backdrop-blur-sm">
+          <div className="flex items-center gap-2">
+            <span className="relative flex h-2 w-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+            </span>
+            <span className="text-sm text-brand-700">
+              <strong className="text-brand-900">
+                {MARKET_PULSE.totalDataPoints.toLocaleString()}
+              </strong>{" "}
+              data points
+            </span>
+          </div>
+          <div className="h-4 w-px bg-brand-200" />
+          <span className="text-sm text-brand-700">
+            <strong className="text-brand-900">
+              {MARKET_PULSE.weeklySubmissions.toLocaleString()}
+            </strong>{" "}
+            submissions this week
+          </span>
+          <div className="h-4 w-px bg-brand-200" />
+          <span className="text-sm text-brand-700">
+            <strong className="text-brand-900">
+              {MARKET_PULSE.activeCompanies}
+            </strong>{" "}
+            active companies
+          </span>
+          <div className="ml-auto flex items-center gap-2">
+            <RefreshCw className="h-3.5 w-3.5 text-brand-500" />
+            <span className="text-xs text-brand-500">
+              Last updated: Just now
+            </span>
+          </div>
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        {ranges.map((item) => (
-          <Card key={item.label} className="p-5">
-            <div className="flex items-center justify-between text-sm font-semibold text-brand-800/80">
-              {item.label}
-              <LineChart className="h-4 w-4 text-brand-600" />
-            </div>
-            <div className="mt-3 text-2xl font-semibold text-brand-900">{item.value}</div>
-            <div className="text-xs text-brand-700/80">{item.delta}</div>
-          </Card>
-        ))}
-      </div>
+      {/* Widget Grid */}
+      <LayoutManager
+        layout={layout}
+        activeWidgets={activeWidgets}
+        onLayoutChange={updateLayout}
+        onRemoveWidget={removeWidget}
+      />
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card className="md:col-span-2 p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-sm font-semibold text-brand-800/80">Expat vs Local</div>
-              <div className="text-xl font-semibold text-brand-900">Salary comparison</div>
-            </div>
-            <Globe2 className="h-5 w-5 text-brand-700" />
+      {/* Empty state */}
+      {activeWidgets.length === 0 && (
+        <div className="flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-brand-200 bg-brand-50/30 py-16">
+          <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-100 text-brand-500">
+            <Sparkles className="h-8 w-8" />
           </div>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
-            <div className="rounded-2xl bg-brand-50 px-4 py-3">
-              <div className="text-sm font-semibold text-brand-800">Expat</div>
-              <div className="text-2xl font-semibold text-brand-900">{formatMoney(SAMPLE_BENCHMARK.currency, 33_400)}</div>
-              <div className="text-xs text-brand-700/80">+4.1% YoY</div>
-            </div>
-            <div className="rounded-2xl bg-white px-4 py-3 ring-1 ring-border">
-              <div className="text-sm font-semibold text-brand-800">Local</div>
-              <div className="text-2xl font-semibold text-brand-900">{formatMoney(SAMPLE_BENCHMARK.currency, 29_800)}</div>
-              <div className="text-xs text-brand-700/80">+3.4% YoY</div>
-            </div>
-          </div>
-          <div className="mt-4 rounded-2xl border border-dashed border-border px-4 py-3 text-sm text-brand-700/80">
-            Compare profiles (e.g., expat vs local) to spot pay risk before offers go out.
-          </div>
-        </Card>
-
-        <Card className="p-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <div className="text-sm font-semibold text-brand-800/80">Activity</div>
-              <div className="text-xl font-semibold text-brand-900">Confidence</div>
-            </div>
-            <BarChart2 className="h-5 w-5 text-brand-700" />
-          </div>
-          <div className="mt-4 space-y-2 text-sm text-brand-800/90">
-            <div className="flex items-center justify-between">
-              <span>Data freshness</span>
-              <Badge variant="brand">High</Badge>
-            </div>
-            <div className="flex items-center justify-between">
-              <span>Submissions</span>
-              <span className="font-semibold">{SAMPLE_BENCHMARK.submissionsThisWeek} this week</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span>Coverage</span>
-              <span className="font-semibold">UAE, KSA</span>
-            </div>
-          </div>
-        </Card>
-      </div>
-
-      <Card className="p-5">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="text-sm font-semibold text-brand-800/80">Search feed</div>
-            <div className="text-xl font-semibold text-brand-900">Recent lookups</div>
-          </div>
-          <Users className="h-5 w-5 text-brand-700" />
+          <h3 className="mt-4 text-lg font-semibold text-brand-900">
+            No widgets added
+          </h3>
+          <p className="mt-1 text-sm text-brand-600">
+            Click "Widgets" above to add your first widget to the dashboard.
+          </p>
+          <Button className="mt-4" onClick={() => toggleWidget("market-pulse")}>
+            Add Market Pulse widget
+          </Button>
         </div>
-        <div className="mt-3 rounded-2xl border border-dashed border-border px-4 py-6 text-sm text-brand-700/80">
-          No recent searches yet.
-        </div>
-      </Card>
+      )}
     </div>
   );
 }
-

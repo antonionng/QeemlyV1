@@ -3,7 +3,7 @@
 import clsx from "clsx";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Menu, X, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
@@ -14,15 +14,15 @@ const navLinks = [
     label: "Product",
     children: [
       { href: "/search", label: "Benchmark Search", desc: "Real-time salary ranges by role & location" },
-      { href: "/dashboard", label: "Analytics Dashboard", desc: "Insights, trends, and market intelligence" },
+      { href: "/analytics", label: "Analytics Dashboard", desc: "Insights, trends, and market intelligence" },
     ],
   },
   {
     label: "Solutions",
     children: [
-      { href: "/contact", label: "For HR Teams", desc: "Build fair compensation frameworks" },
-      { href: "/contact", label: "For Founders", desc: "Hire confidently, optimize burn" },
-      { href: "/contact", label: "For Finance", desc: "Forecast salary budgets accurately" },
+      { href: "/solutions/hr-teams", label: "For HR Teams", desc: "Build fair compensation frameworks" },
+      { href: "/solutions/founders", label: "For Founders", desc: "Hire confidently, optimize burn" },
+      { href: "/solutions/finance", label: "For Finance", desc: "Forecast salary budgets accurately" },
     ],
   },
   { href: "/pricing", label: "Pricing" },
@@ -33,6 +33,28 @@ export function SiteNav() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const dropdownRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!openDropdown) return;
+
+    function onPointerDown(e: PointerEvent) {
+      const target = e.target as Node | null;
+      if (!target) return;
+      if (dropdownRef.current && !dropdownRef.current.contains(target)) setOpenDropdown(null);
+    }
+
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setOpenDropdown(null);
+    }
+
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [openDropdown]);
 
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-white/95 backdrop-blur-md">
@@ -52,31 +74,41 @@ export function SiteNav() {
                   <div
                     key={link.label}
                     className="relative"
-                    onMouseEnter={() => setOpenDropdown(link.label)}
-                    onMouseLeave={() => setOpenDropdown(null)}
+                    ref={isOpen ? dropdownRef : undefined}
                   >
                     <button
                       type="button"
+                      aria-haspopup="menu"
+                      aria-expanded={isOpen}
                       className={clsx(
                         "flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium transition-colors",
                         isOpen ? "bg-brand-50 text-brand-800" : "text-brand-700 hover:bg-muted hover:text-brand-900"
                       )}
+                      onClick={() => setOpenDropdown(isOpen ? null : link.label)}
+                      onMouseEnter={() => setOpenDropdown(link.label)}
                     >
                       {link.label}
                       <ChevronDown className={clsx("h-4 w-4 transition-transform", isOpen && "rotate-180")} />
                     </button>
                     {isOpen && (
-                      <div className="absolute left-0 top-full z-50 mt-1 w-72 rounded-xl border border-border bg-white p-2 shadow-lg">
-                        {link.children.map((child) => (
-                          <Link
-                            key={child.label}
-                            href={child.href}
-                            className="block rounded-lg px-4 py-3 transition-colors hover:bg-muted"
-                          >
-                            <div className="text-sm font-semibold text-brand-900">{child.label}</div>
-                            <div className="text-xs text-brand-600">{child.desc}</div>
-                          </Link>
-                        ))}
+                      <div
+                        className="absolute left-0 top-full z-50 w-72 pt-1"
+                        onMouseEnter={() => setOpenDropdown(link.label)}
+                        onMouseLeave={() => setOpenDropdown(null)}
+                      >
+                        <div className="rounded-xl border border-border bg-white p-2 shadow-lg">
+                          {link.children.map((child) => (
+                            <Link
+                              key={child.label}
+                              href={child.href}
+                              className="block rounded-lg px-4 py-3 transition-colors hover:bg-muted"
+                              onClick={() => setOpenDropdown(null)}
+                            >
+                              <div className="text-sm font-semibold text-brand-900">{child.label}</div>
+                              <div className="text-xs text-brand-600">{child.desc}</div>
+                            </Link>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>

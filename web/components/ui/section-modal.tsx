@@ -41,11 +41,9 @@ export function SectionModal({
 }: SectionModalProps) {
   const modalId = useId();
   const [open, setOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);
   const panelRef = useRef<HTMLDivElement | null>(null);
   const prefersReducedMotion = usePrefersReducedMotion();
-
-  useEffect(() => setMounted(true), []);
+  const canPortal = typeof document !== "undefined";
 
   // Body scroll lock when modal is open
   useEffect(() => {
@@ -110,7 +108,7 @@ export function SectionModal({
     <div className={clsx("inline-flex", className)}>
       {trigger}
 
-      {open && mounted
+      {open && canPortal
         ? createPortal(
             <div className="fixed inset-0 z-[90]">
               {/* Backdrop */}
@@ -189,5 +187,9 @@ export function SectionModal({
     </div>
   );
 }
+
+
+
+
 
 

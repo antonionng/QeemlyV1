@@ -4,7 +4,7 @@ import { Logo } from "@/components/logo";
 const footerLinks = {
   product: [
     { label: "Benchmark Search", href: "/search" },
-    { label: "Dashboard", href: "/dashboard" },
+    { label: "Analytics Dashboard", href: "/analytics" },
     { label: "Pricing", href: "/pricing" },
   ],
   company: [

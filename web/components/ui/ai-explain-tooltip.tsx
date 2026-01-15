@@ -35,12 +35,10 @@ export function AiExplainTooltip({ message, label = "Explain", className }: AiEx
   const tooltipRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
   const [typed, setTyped] = useState("");
-  const [mounted, setMounted] = useState(false);
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
 
   const fullMessage = useMemo(() => message.trim(), [message]);
-
-  useEffect(() => setMounted(true), []);
+  const canPortal = typeof document !== "undefined";
 
   // Close on outside click / Esc.
   useEffect(() => {
@@ -97,20 +95,33 @@ export function AiExplainTooltip({ message, label = "Explain", className }: AiEx
   // Type-out effect when opened (subtle + respects reduced motion).
   useEffect(() => {
     if (!open) return;
-    if (prefersReducedMotion) {
-      setTyped(fullMessage);
-      return;
-    }
+    let cancelled = false;
+    let intervalId: number | null = null;
 
-    setTyped("");
-    let i = 0;
-    const stepMs = 14;
-    const id = window.setInterval(() => {
-      i += 1;
-      setTyped(fullMessage.slice(0, i));
-      if (i >= fullMessage.length) window.clearInterval(id);
-    }, stepMs);
-    return () => window.clearInterval(id);
+    // Schedule state updates to avoid calling setState synchronously in the effect body.
+    const startId = window.setTimeout(() => {
+      if (cancelled) return;
+
+      if (prefersReducedMotion) {
+        setTyped(fullMessage);
+        return;
+      }
+
+      setTyped("");
+      let i = 0;
+      const stepMs = 14;
+      intervalId = window.setInterval(() => {
+        i += 1;
+        setTyped(fullMessage.slice(0, i));
+        if (i >= fullMessage.length && intervalId) window.clearInterval(intervalId);
+      }, stepMs);
+    }, 0);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(startId);
+      if (intervalId) window.clearInterval(intervalId);
+    };
   }, [open, fullMessage, prefersReducedMotion]);
 
   return (
@@ -130,7 +141,7 @@ export function AiExplainTooltip({ message, label = "Explain", className }: AiEx
         {label}
       </button>
 
-      {open && mounted && pos
+      {open && canPortal && pos
         ? createPortal(
             <div
               ref={tooltipRef}

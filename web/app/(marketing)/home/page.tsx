@@ -517,13 +517,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             </div>
           </div>
 
-          <div className="relative aspect-[14/9] overflow-hidden rounded-2xl border border-border bg-muted">
-            <Image
-              src="/images/confidence-illustration.png"
-              alt="Confidence scoring illustration placeholder"
-              fill
-              className="object-cover"
-            />
+          <div className="relative aspect-[14/9] overflow-hidden rounded-2xl border border-border bg-white">
+            <ModalHeroConfidence className="h-full" />
           </div>
         </div>
       </section>
@@ -537,46 +532,46 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </div>
 
         <div className="space-y-4">
-          {suites.map((suite) => (
-            <Card key={suite.title} className="flex flex-col gap-4 p-6 lg:flex-row lg:items-start">
-              <div className="flex-1 space-y-3">
-                <div className="inline-flex items-center gap-2 rounded-full bg-brand-50 px-3 py-1 text-xs font-bold uppercase tracking-widest text-brand-600">
-                  <LineChart size={12} />
-                  Suite
+          {suites.map((suite) => {
+            const visual =
+              suite.title === "Comp Benchmarks" ? (
+                <TourBenchmarkVisual className="h-full" />
+              ) : suite.title === "Talent Insights" ? (
+                <TourDeltasVisual className="h-full" />
+              ) : (
+                <TourPlanningVisual className="h-full" />
+              );
+
+            return (
+              <Card key={suite.title} className="flex flex-col gap-4 p-6 lg:flex-row lg:items-start">
+                <div className="flex-1 space-y-3">
+                  <div className="inline-flex items-center gap-2 rounded-full bg-brand-50 px-3 py-1 text-xs font-bold uppercase tracking-widest text-brand-600">
+                    <LineChart size={12} />
+                    Suite
+                  </div>
+                  <h3 className="text-lg font-semibold text-brand-900">{suite.title}</h3>
+                  <p className="text-sm text-brand-700">{suite.description}</p>
+                  <ul className="grid gap-2 sm:grid-cols-2">
+                    {suite.items.map((item) => (
+                      <li key={item} className="flex items-start gap-2 text-sm text-brand-700">
+                        <CheckCircle className="mt-0.5 h-4 w-4 text-brand-500" />
+                        <span>{item}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <Button variant="outline" className="w-fit gap-2">
+                    Explore suite
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
                 </div>
-                <h3 className="text-lg font-semibold text-brand-900">{suite.title}</h3>
-                <p className="text-sm text-brand-700">{suite.description}</p>
-                <ul className="grid gap-2 sm:grid-cols-2">
-                  {suite.items.map((item) => (
-                    <li key={item} className="flex items-start gap-2 text-sm text-brand-700">
-                      <CheckCircle className="mt-0.5 h-4 w-4 text-brand-500" />
-                      <span>{item}</span>
-                    </li>
-                  ))}
-                </ul>
-                <Button variant="outline" className="w-fit gap-2">
-                  Explore suite
-                  <ArrowRight className="h-4 w-4" />
-                </Button>
-              </div>
-              <div className="w-full max-w-sm lg:w-64">
-                <div className="relative aspect-[4/3] w-full overflow-hidden rounded-xl border border-border bg-muted">
-                  <Image
-                    src={
-                      suite.title === "Comp Benchmarks"
-                        ? "/images/suite-benchmarks.png"
-                        : suite.title === "Talent Insights"
-                          ? "/images/suite-insights.png"
-                          : "/images/suite-planning.png"
-                    }
-                    alt={`${suite.title} placeholder`}
-                    fill
-                    className="object-cover"
-                  />
+                <div className="w-full max-w-sm lg:w-64">
+                  <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl bg-transparent">
+                    {visual}
+                  </div>
                 </div>
-              </div>
-            </Card>
-          ))}
+              </Card>
+            );
+          })}
         </div>
       </section>
 
@@ -626,13 +621,17 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <Link href="/register">
-              <Button size="lg" className="bg-white text-brand-900 hover:bg-gray-100">
+              <Button size="lg" className="!bg-white !text-brand-900 hover:!bg-gray-100">
                 Get early access
                 <ArrowRight size={18} />
               </Button>
             </Link>
             <Link href="/contact">
-              <Button variant="ghost" size="lg" className="bg-transparent text-white ring-1 ring-white hover:bg-white/10">
+              <Button
+                variant="ghost"
+                size="lg"
+                className="!bg-transparent !text-white ring-1 ring-white hover:!bg-white/10 hover:!text-white"
+              >
                 Talk to us
               </Button>
             </Link>
