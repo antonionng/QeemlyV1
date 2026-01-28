@@ -657,4 +657,3 @@ export function getCompMix(roleId: string, locationId: string, levelId: string) 
     { name: "Equity", value: Math.round(total * equityWeight) },
   ];
 }
-

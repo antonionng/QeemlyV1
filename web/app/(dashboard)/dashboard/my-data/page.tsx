@@ -148,11 +148,9 @@ export default function MyDataPage() {
           <p className="text-brand-600">Manage and upload your organization's compensation datasets.</p>
         </div>
         <label className="cursor-pointer">
-          <Button asChild isLoading={uploading}>
-            <span>
-              <FileUp size={18} className="mr-2" />
-              Upload CSV
-            </span>
+          <Button isLoading={uploading} className="pointer-events-none">
+            <FileUp size={18} className="mr-2" />
+            Upload CSV
           </Button>
           <input
             type="file"
@@ -184,8 +182,8 @@ export default function MyDataPage() {
               Upload your first compensation CSV to start benchmarking with your own data.
             </p>
             <label className="cursor-pointer">
-              <Button variant="outline" asChild>
-                <span>Select CSV File</span>
+              <Button variant="outline" className="pointer-events-none">
+                Select CSV File
               </Button>
               <input
                 type="file"

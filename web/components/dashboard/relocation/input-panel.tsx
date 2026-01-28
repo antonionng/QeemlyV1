@@ -63,6 +63,7 @@ function CitySelect({
 
   const groupedCities = useMemo(() => {
     const groups: Record<Region, City[]> = {
+      gcc: [],
       mena: [],
       europe: [],
       asia: [],
