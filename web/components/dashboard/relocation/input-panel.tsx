@@ -69,7 +69,9 @@ function CitySelect({
       americas: [],
     };
     filteredCities.forEach((city) => {
-      groups[city.region].push(city);
+      if (city.region && groups[city.region]) {
+        groups[city.region].push(city);
+      }
     });
     return groups;
   }, [filteredCities]);
@@ -246,7 +248,7 @@ export function InputPanel({ data, onChange, className }: InputPanelProps) {
         {/* Base Salary */}
         <div>
           <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-accent-500">
-            Base Salary (Annual, USD)
+            Base Salary (Annual, AED)
           </label>
           <div className="relative">
             <Wallet className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-accent-400" />
@@ -257,7 +259,7 @@ export function InputPanel({ data, onChange, className }: InputPanelProps) {
               onChange={(e) =>
                 updateField("baseSalary", Number(e.target.value) || 0)
               }
-              placeholder="e.g., 120000"
+              placeholder="e.g., 450000"
               className="h-12 rounded-xl pl-10"
             />
           </div>
@@ -333,7 +335,7 @@ export function InputPanel({ data, onChange, className }: InputPanelProps) {
         {/* Rent Override */}
         <div>
           <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-accent-500">
-            Rent Override (Optional)
+            Rent Override (Optional, Monthly AED)
           </label>
           <div className="relative">
             <MapPin className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-accent-400" />
@@ -347,7 +349,7 @@ export function InputPanel({ data, onChange, className }: InputPanelProps) {
                   e.target.value ? Number(e.target.value) : undefined
                 )
               }
-              placeholder="Monthly rent in USD"
+              placeholder="Monthly rent in AED"
               className="h-12 rounded-xl pl-10"
             />
           </div>

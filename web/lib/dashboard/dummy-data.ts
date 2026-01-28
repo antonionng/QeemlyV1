@@ -343,6 +343,16 @@ export const MARKET_PULSE = {
   volatilityIndex: 0.15,
 };
 
+// Market Outlook data
+export const MARKET_OUTLOOK = {
+  sentiment: 68, // 0-100 (Candidate to Employer driven)
+  hiringVelocity: "High",
+  velocityValue: 82,
+  topSkillsDemand: ["AI/ML", "Cloud Architecture", "Cybersecurity", "Data Engineering"],
+  marketStatus: "Bullish",
+  summary: "The GCC tech market remains resilient with strong demand for specialized talent, particularly in KSA and UAE's fintech sectors.",
+};
+
 // Geographic comparison data
 export const GEO_COMPARISON = LOCATIONS.map(loc => {
   const benchmark = generateBenchmark("swe", loc.id, "ic3");
@@ -589,5 +599,62 @@ export function getLocation(locationId: string): Location | undefined {
 
 export function getLevel(levelId: string): Level | undefined {
   return LEVELS.find(l => l.id === levelId);
+}
+
+// === NEW HELPER FUNCTIONS FOR ANALYTICAL WIDGETS ===
+
+export function getIndustryBreakdown(roleId: string, locationId: string, levelId: string) {
+  const benchmark = generateBenchmark(roleId, locationId, levelId);
+  const median = benchmark.percentiles.p50;
+  
+  return INDUSTRIES.map((industry, i) => {
+    const variance = 0.85 + (Math.sin(i + hashString(roleId)) + 1) * 0.15; // Realistic variation by sector
+    return {
+      industry,
+      median: Math.round(median * variance),
+    };
+  }).sort((a, b) => b.median - a.median);
+}
+
+export function getCompanySizePremium(roleId: string, locationId: string, levelId: string) {
+  const benchmark = generateBenchmark(roleId, locationId, levelId);
+  const median = benchmark.percentiles.p50;
+  
+  // Larger companies typically pay more
+  const sizeMultipliers = [0.85, 0.9, 0.95, 1.05, 1.15, 1.25];
+  
+  return COMPANY_SIZES.map((size, i) => ({
+    size,
+    median: Math.round(median * sizeMultipliers[i]),
+  }));
+}
+
+export function getExperienceMatrix(roleId: string, locationId: string) {
+  return LEVELS.map(level => {
+    const benchmark = generateBenchmark(roleId, locationId, level.id);
+    return {
+      level: level.name,
+      p25: benchmark.percentiles.p25,
+      p50: benchmark.percentiles.p50,
+      p75: benchmark.percentiles.p75,
+    };
+  });
+}
+
+export function getCompMix(roleId: string, locationId: string, levelId: string) {
+  const benchmark = generateBenchmark(roleId, locationId, levelId);
+  const total = benchmark.percentiles.p50;
+  
+  // Higher levels typically have more equity/bonus mix
+  const levelIndex = LEVELS.findIndex(l => l.id === levelId);
+  const bonusWeight = 0.05 + (levelIndex / LEVELS.length) * 0.15;
+  const equityWeight = (levelIndex / LEVELS.length) * 0.25;
+  const baseWeight = 1 - bonusWeight - equityWeight;
+  
+  return [
+    { name: "Base", value: Math.round(total * baseWeight) },
+    { name: "Bonus", value: Math.round(total * bonusWeight) },
+    { name: "Equity", value: Math.round(total * equityWeight) },
+  ];
 }
 

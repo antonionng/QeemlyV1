@@ -56,7 +56,7 @@ export function WidgetWrapper({
   if (!widget) return null;
 
   const Icon = widget.icon;
-  const tooltip = tooltipExplanation || (customWidget as any)?.tooltipExplanation;
+  const tooltip = tooltipExplanation || (widget as WidgetDefinition).tooltipExplanation;
 
   const renderCardContent = (expanded: boolean) => (
     <>

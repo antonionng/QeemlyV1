@@ -1,5 +1,6 @@
 import { ButtonHTMLAttributes, forwardRef } from "react";
 import clsx from "clsx";
+import { Loader2 } from "lucide-react";
 
 type Variant = "primary" | "secondary" | "ghost" | "outline";
 type Size = "sm" | "md" | "lg";
@@ -8,6 +9,7 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: Variant;
   size?: Size;
   fullWidth?: boolean;
+  isLoading?: boolean;
 };
 
 const baseStyles =
@@ -32,12 +34,13 @@ const variants: Record<Variant, string> = {
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
   (
-    { children, className, variant = "primary", size = "md", fullWidth, ...rest },
+    { children, className, variant = "primary", size = "md", fullWidth, isLoading, disabled, ...rest },
     ref,
   ) => {
     return (
       <button
         ref={ref}
+        disabled={isLoading || disabled}
         className={clsx(
           baseStyles,
           sizeStyles[size],
@@ -47,6 +50,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         )}
         {...rest}
       >
+        {isLoading && <Loader2 className="h-4 w-4 animate-spin" />}
         {children}
       </button>
     );

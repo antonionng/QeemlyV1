@@ -45,7 +45,7 @@ function BreakdownBar({
               key={key}
               className={clsx(color, "transition-all hover:brightness-110")}
               style={{ width: `${width}%` }}
-              title={`${key}: $${value}`}
+              title={`${key}: ${formatCurrency(value)}`}
             />
           );
         })}
@@ -135,9 +135,9 @@ export function CostBreakdownWidget({ result }: CostBreakdownWidgetProps) {
             <div key={key} className="rounded-xl bg-brand-50/50 p-4 ring-1 ring-brand-100 shadow-sm transition-all hover:bg-brand-50">
               <p className="font-bold uppercase tracking-widest text-accent-400 text-[10px] mb-2">{label}</p>
               <div className="flex items-baseline gap-1">
-                <span className="text-xs font-bold text-accent-400">${homeVal}</span>
+                <span className="text-xs font-bold text-accent-400">{formatCurrency(homeVal, true)}</span>
                 <span className="text-[10px] text-accent-300">→</span>
-                <span className="text-sm font-bold text-brand-900">${targetVal}</span>
+                <span className="text-sm font-bold text-brand-900">{formatCurrency(targetVal, true)}</span>
               </div>
               <p
                 className={clsx(
@@ -145,7 +145,7 @@ export function CostBreakdownWidget({ result }: CostBreakdownWidgetProps) {
                   diff > 0 ? "text-rose-600" : diff < 0 ? "text-emerald-600" : "text-accent-500"
                 )}
               >
-                {diff > 0 ? "+" : ""}${diff}
+                {diff > 0 ? "+" : ""}{formatCurrency(diff, true)}
               </p>
             </div>
           );

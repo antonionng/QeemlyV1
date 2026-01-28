@@ -1,6 +1,7 @@
 "use client";
 
-import { RECENT_REPORTS, REPORT_TYPES, formatTimeAgo } from "@/lib/reports/data";
+import { REPORT_TYPES, formatTimeAgo } from "@/lib/reports/data";
+import { useReportsContext } from "@/lib/reports/context";
 import { Download, FileText, MoreHorizontal } from "lucide-react";
 import clsx from "clsx";
 
@@ -11,9 +12,11 @@ const STATUS_STYLES: Record<string, string> = {
 };
 
 export function RecentReportsWidget() {
+  const { filteredRecentReports } = useReportsContext();
+
   return (
     <div className="space-y-3">
-      {RECENT_REPORTS.map((report) => (
+      {filteredRecentReports.map((report) => (
         <div 
           key={report.id} 
           className="group flex items-center justify-between rounded-xl border border-border bg-white p-3 transition-all hover:border-brand-300 hover:shadow-sm"
@@ -45,6 +48,11 @@ export function RecentReportsWidget() {
           </div>
         </div>
       ))}
+      {filteredRecentReports.length === 0 && (
+        <div className="flex flex-col items-center justify-center py-6">
+          <p className="text-xs font-medium italic text-accent-400">No reports found</p>
+        </div>
+      )}
       <button className="w-full rounded-xl border border-dashed border-border py-2 text-[11px] font-bold uppercase tracking-widest text-accent-400 transition-all hover:border-brand-300 hover:bg-brand-50/50 hover:text-brand-600">
         View All Reports
       </button>

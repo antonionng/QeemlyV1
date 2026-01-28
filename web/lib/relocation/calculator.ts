@@ -8,7 +8,7 @@ export type CompApproach = "local" | "purchasing-power" | "hybrid";
 export interface RelocationInputs {
   homeCityId: string;
   targetCityId: string;
-  baseSalary: number; // Annual salary in home currency (converted to USD for calc)
+  baseSalary: number; // Annual salary in home currency (converted to AED for calc)
   compApproach: CompApproach;
   hybridCap?: number; // Percentage cap for hybrid approach (e.g., 120 = 120%)
   rentOverride?: number; // Optional manual rent override for target city
@@ -124,20 +124,20 @@ export function calculateRelocation(inputs: RelocationInputs): RelocationResult 
 }
 
 /**
- * Format currency for display
+ * Format currency for display (Default to AED for GCC context)
  */
 export function formatCurrency(amount: number, compact = false): string {
   if (compact) {
     if (amount >= 1000000) {
-      return `$${(amount / 1000000).toFixed(1)}M`;
+      return `AED ${(amount / 1000000).toFixed(1)}M`;
     }
     if (amount >= 1000) {
-      return `$${(amount / 1000).toFixed(0)}K`;
+      return `AED ${(amount / 1000).toFixed(0)}K`;
     }
   }
-  return new Intl.NumberFormat("en-US", {
+  return new Intl.NumberFormat("en-AE", {
     style: "currency",
-    currency: "USD",
+    currency: "AED",
     maximumFractionDigits: 0,
   }).format(amount);
 }

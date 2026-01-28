@@ -7,7 +7,8 @@ import { LayoutManager } from "@/components/dashboard/layout-manager";
 import { PresetSwitcher } from "@/components/dashboard/preset-switcher";
 import { WidgetPicker } from "@/components/dashboard/widget-picker";
 import { useDashboard } from "@/lib/dashboard/use-dashboard";
-import { MARKET_PULSE } from "@/lib/dashboard/dummy-data";
+import { MARKET_PULSE, MARKET_OUTLOOK } from "@/lib/dashboard/dummy-data";
+import { AiExplainTooltip } from "@/components/ui/ai-explain-tooltip";
 
 export default function DashboardPage() {
   const {
@@ -69,38 +70,87 @@ export default function DashboardPage() {
         </div>
 
         {/* Stats bar */}
-        <div className="mt-8 flex flex-wrap items-center gap-x-8 gap-y-3 rounded-2xl border border-border/40 bg-white/50 p-4 backdrop-blur-sm">
-          <div className="flex items-center gap-2">
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-            </span>
-            <span className="text-sm text-brand-700">
-              <strong className="text-brand-900">
-                {MARKET_PULSE.totalDataPoints.toLocaleString()}
-              </strong>{" "}
-              data points
-            </span>
+        <div className="mt-8 flex flex-wrap items-center gap-x-8 gap-y-4 rounded-2xl border border-border/40 bg-white/60 p-5 backdrop-blur-md shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+              </span>
+              <span className="text-sm font-medium text-brand-700">
+                <strong className="text-brand-900 font-bold">
+                  {MARKET_PULSE.totalDataPoints.toLocaleString()}
+                </strong>{" "}
+                data points
+              </span>
+            </div>
+            <AiExplainTooltip 
+              message="Total verified salary data points collected across all GCC markets and roles. All data undergoes a multi-stage validation process."
+              label=""
+              className="scale-75 -ml-2"
+            />
           </div>
-          <div className="h-4 w-px bg-brand-200" />
-          <span className="text-sm text-brand-700">
-            <strong className="text-brand-900">
-              {MARKET_PULSE.weeklySubmissions.toLocaleString()}
-            </strong>{" "}
-            submissions this week
-          </span>
-          <div className="h-4 w-px bg-brand-200" />
-          <span className="text-sm text-brand-700">
-            <strong className="text-brand-900">
-              {MARKET_PULSE.activeCompanies}
-            </strong>{" "}
-            active companies
-          </span>
-          <div className="ml-auto flex items-center gap-2">
-            <RefreshCw className="h-3.5 w-3.5 text-brand-500" />
-            <span className="text-xs text-brand-500">
-              Last updated: Just now
+
+          <div className="h-4 w-px bg-brand-200/60 hidden sm:block" />
+
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-medium text-brand-700">
+              <strong className="text-brand-900 font-bold">
+                {MARKET_PULSE.weeklySubmissions.toLocaleString()}
+              </strong>{" "}
+              submissions this week
             </span>
+            <AiExplainTooltip 
+              message="New salary entries submitted by verified users in the last 7 days. High submission volume ensures market data reflects current economic conditions."
+              label=""
+              className="scale-75 -ml-2"
+            />
+          </div>
+
+          <div className="h-4 w-px bg-brand-200/60 hidden sm:block" />
+
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-medium text-brand-700">
+              <strong className="text-brand-900 font-bold">
+                {MARKET_PULSE.activeCompanies}
+              </strong>{" "}
+              active companies
+            </span>
+            <AiExplainTooltip 
+              message="Number of unique organizations whose compensation data is currently represented in our benchmarks."
+              label=""
+              className="scale-75 -ml-2"
+            />
+          </div>
+
+          <div className="h-4 w-px bg-brand-200/60 hidden lg:block" />
+
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <div className="flex h-5 items-center rounded-full bg-brand-100/50 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-brand-600 border border-brand-200/50">
+                {MARKET_OUTLOOK.marketStatus}
+              </div>
+              <span className="text-sm font-medium text-brand-700">Market Confidence</span>
+            </div>
+            <AiExplainTooltip 
+              message="A proprietary index calculating the overall reliability of the current market view based on data volume, freshness, and cross-source verification."
+              label=""
+              className="scale-75 -ml-2"
+            />
+          </div>
+
+          <div className="ml-auto flex items-center gap-3 border-l border-brand-100 pl-8 hidden xl:flex">
+            <div className="flex flex-col items-end">
+              <div className="flex items-center gap-1.5">
+                <RefreshCw className="h-3 w-3 text-brand-500 animate-spin" />
+                <span className="text-[11px] font-bold text-brand-500 uppercase tracking-tight">
+                  Live Engine
+                </span>
+              </div>
+              <span className="text-[10px] text-brand-400">
+                Updated {MARKET_PULSE.lastUpdated ? "just now" : "recently"}
+              </span>
+            </div>
           </div>
         </div>
       </div>

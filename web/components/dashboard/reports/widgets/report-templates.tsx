@@ -2,11 +2,11 @@
 
 import { useState, useMemo } from "react";
 import { 
-  REPORT_TEMPLATES, 
   REPORT_TYPES, 
   ReportTypeId, 
   formatTimeAgo 
 } from "@/lib/reports/data";
+import { useReportsContext } from "@/lib/reports/context";
 import { 
   ArrowRight, 
   BarChart3, 
@@ -27,21 +27,15 @@ const TYPE_ICONS: Record<ReportTypeId, any> = {
 };
 
 export function ReportTemplatesWidget() {
-  const [activeType, setActiveType] = useState<ReportTypeId>("overview");
-  const [searchQuery, setSearchQuery] = useState("");
+  const { 
+    selectedType, 
+    setSelectedType, 
+    searchQuery, 
+    setSearchQuery, 
+    filteredTemplates 
+  } = useReportsContext();
 
-  const filteredTemplates = useMemo(() => {
-    return REPORT_TEMPLATES.filter((t) => {
-      if (t.typeId !== activeType) return false;
-      if (!searchQuery.trim()) return true;
-      const q = searchQuery.toLowerCase();
-      return (
-        t.title.toLowerCase().includes(q) ||
-        t.description.toLowerCase().includes(q) ||
-        t.tags.some(tag => tag.toLowerCase().includes(q))
-      );
-    });
-  }, [activeType, searchQuery]);
+  const activeType = selectedType === "all" ? "overview" : selectedType;
 
   return (
     <div className="flex h-full flex-col">
@@ -51,10 +45,10 @@ export function ReportTemplatesWidget() {
           {REPORT_TYPES.map((type) => (
             <button
               key={type.id}
-              onClick={() => setActiveType(type.id)}
+              onClick={() => setSelectedType(type.id)}
               className={clsx(
                 "rounded-lg px-3 py-1.5 text-xs font-bold transition-all",
-                activeType === type.id
+                selectedType === type.id
                   ? "bg-white text-brand-600 shadow-sm ring-1 ring-brand-200"
                   : "text-accent-500 hover:text-brand-600"
               )}
@@ -62,6 +56,17 @@ export function ReportTemplatesWidget() {
               {type.label}
             </button>
           ))}
+          <button
+            onClick={() => setSelectedType("all")}
+            className={clsx(
+              "rounded-lg px-3 py-1.5 text-xs font-bold transition-all",
+              selectedType === "all"
+                ? "bg-white text-brand-600 shadow-sm ring-1 ring-brand-200"
+                : "text-accent-500 hover:text-brand-600"
+            )}
+          >
+            All
+          </button>
         </div>
         <div className="relative w-full md:w-64">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-accent-400" />

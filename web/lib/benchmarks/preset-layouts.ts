@@ -40,22 +40,17 @@ export const BENCHMARK_PRESET_LAYOUTS: BenchmarkLayoutPreset[] = [
       "trend-chart",
       "gcc-markets",
       "offer-builder",
-      "quick-actions",
-      "ai-guidance",
     ],
     layout: [
-      // Row 1: Role Search (left) + Quick Actions & AI Guidance (right)
-      { i: "role-search", x: 0, y: 0, w: 6, h: 3, minW: 4, minH: 2 },
-      { i: "quick-actions", x: 6, y: 0, w: 3, h: 3, minW: 2, minH: 2 },
-      { i: "ai-guidance", x: 9, y: 0, w: 3, h: 3, minW: 2, minH: 2 },
-      // Row 2: Salary Overview (left) + Offer Builder (right)
-      { i: "salary-overview", x: 0, y: 3, w: 6, h: 3, minW: 4, minH: 2 },
-      { i: "offer-builder", x: 6, y: 3, w: 6, h: 3, minW: 4, minH: 2 },
-      // Row 3: Charts side by side
-      { i: "percentile-distribution", x: 0, y: 6, w: 6, h: 3, minW: 4, minH: 3 },
-      { i: "trend-chart", x: 6, y: 6, w: 6, h: 3, minW: 4, minH: 3 },
-      // Row 4: Full width markets
-      { i: "gcc-markets", x: 0, y: 9, w: 12, h: 3, minW: 6, minH: 2 },
+      // Row 1: 2x2 grid
+      { i: "role-search", x: 0, y: 0, w: 6, h: 2, minW: 4, minH: 2 },
+      { i: "salary-overview", x: 6, y: 0, w: 6, h: 2, minW: 4, minH: 2 },
+      // Row 2: 2x2 grid
+      { i: "percentile-distribution", x: 0, y: 2, w: 6, h: 2, minW: 4, minH: 2 },
+      { i: "trend-chart", x: 6, y: 2, w: 6, h: 2, minW: 4, minH: 2 },
+      // Row 3: 2x2 grid
+      { i: "offer-builder", x: 0, y: 4, w: 6, h: 2, minW: 4, minH: 2 },
+      { i: "gcc-markets", x: 6, y: 4, w: 6, h: 2, minW: 4, minH: 2 },
     ],
   },
   {
@@ -71,10 +66,10 @@ export const BENCHMARK_PRESET_LAYOUTS: BenchmarkLayoutPreset[] = [
     ],
     layout: [
       // 2x2 Grid
-      { i: "role-search", x: 0, y: 0, w: 6, h: 3, minW: 4, minH: 2 },
-      { i: "ai-guidance", x: 6, y: 0, w: 6, h: 3, minW: 3, minH: 2 },
-      { i: "salary-overview", x: 0, y: 3, w: 6, h: 3, minW: 4, minH: 2 },
-      { i: "percentile-distribution", x: 6, y: 3, w: 6, h: 3, minW: 4, minH: 3 },
+      { i: "role-search", x: 0, y: 0, w: 6, h: 2, minW: 4, minH: 2 },
+      { i: "salary-overview", x: 6, y: 0, w: 6, h: 2, minW: 4, minH: 2 },
+      { i: "percentile-distribution", x: 0, y: 2, w: 6, h: 2, minW: 4, minH: 2 },
+      { i: "ai-guidance", x: 6, y: 2, w: 6, h: 2, minW: 4, minH: 2 },
     ],
   },
   {
@@ -87,19 +82,13 @@ export const BENCHMARK_PRESET_LAYOUTS: BenchmarkLayoutPreset[] = [
       "salary-overview",
       "offer-builder",
       "gcc-markets",
-      "ai-guidance",
-      "quick-actions",
     ],
     layout: [
-      // Row 1: 2x2 top section
-      { i: "role-search", x: 0, y: 0, w: 6, h: 3, minW: 4, minH: 2 },
-      { i: "salary-overview", x: 6, y: 0, w: 6, h: 3, minW: 4, minH: 2 },
-      // Row 2: Offer builder + actions
-      { i: "offer-builder", x: 0, y: 3, w: 6, h: 3, minW: 4, minH: 2 },
-      { i: "ai-guidance", x: 6, y: 3, w: 3, h: 3, minW: 2, minH: 2 },
-      { i: "quick-actions", x: 9, y: 3, w: 3, h: 3, minW: 2, minH: 2 },
-      // Row 3: Full width markets
-      { i: "gcc-markets", x: 0, y: 6, w: 12, h: 3, minW: 6, minH: 2 },
+      // 2x2 Grid
+      { i: "role-search", x: 0, y: 0, w: 6, h: 2, minW: 4, minH: 2 },
+      { i: "salary-overview", x: 6, y: 0, w: 6, h: 2, minW: 4, minH: 2 },
+      { i: "offer-builder", x: 0, y: 2, w: 6, h: 2, minW: 4, minH: 2 },
+      { i: "gcc-markets", x: 6, y: 2, w: 6, h: 2, minW: 4, minH: 2 },
     ],
   },
   {
@@ -114,13 +103,11 @@ export const BENCHMARK_PRESET_LAYOUTS: BenchmarkLayoutPreset[] = [
       "salary-overview",
     ],
     layout: [
-      // Row 1: 2x2
-      { i: "role-search", x: 0, y: 0, w: 6, h: 3, minW: 4, minH: 2 },
-      { i: "salary-overview", x: 6, y: 0, w: 6, h: 3, minW: 4, minH: 2 },
-      // Row 2: Full width trend chart
-      { i: "trend-chart", x: 0, y: 3, w: 12, h: 4, minW: 6, minH: 3 },
-      // Row 3: Full width markets
-      { i: "gcc-markets", x: 0, y: 7, w: 12, h: 3, minW: 6, minH: 2 },
+      // 2x2 Grid
+      { i: "role-search", x: 0, y: 0, w: 6, h: 2, minW: 4, minH: 2 },
+      { i: "salary-overview", x: 6, y: 0, w: 6, h: 2, minW: 4, minH: 2 },
+      { i: "trend-chart", x: 0, y: 2, w: 6, h: 2, minW: 4, minH: 2 },
+      { i: "gcc-markets", x: 6, y: 2, w: 6, h: 2, minW: 4, minH: 2 },
     ],
   },
 ];

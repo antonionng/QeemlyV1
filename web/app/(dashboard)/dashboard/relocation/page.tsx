@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 const DEFAULT_FORM_DATA: RelocationFormData = {
   homeCityId: "dubai",
   targetCityId: "london",
-  baseSalary: 120000,
+  baseSalary: 450000,
   compApproach: "purchasing-power",
   hybridCap: 120,
   rentOverride: undefined,

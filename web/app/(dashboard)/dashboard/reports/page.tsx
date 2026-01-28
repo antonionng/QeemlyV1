@@ -15,8 +15,17 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ReportsLayoutManager } from "@/components/dashboard/reports/layout-manager";
+import { ReportsProvider } from "@/lib/reports/context";
 
 export default function ReportsPage() {
+  return (
+    <ReportsProvider>
+      <ReportsContent />
+    </ReportsProvider>
+  );
+}
+
+function ReportsContent() {
   const [activeWidgets, setActiveWidgets] = useState<string[]>(ALL_REPORT_WIDGET_IDS);
 
   const handleRemoveWidget = (widgetId: string) => {

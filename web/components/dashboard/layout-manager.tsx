@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { Responsive, WidthProvider } from "react-grid-layout/legacy";
 import { WidgetWrapper } from "./widget-wrapper";
 import { MarketPulseWidget } from "./widgets/market-pulse";
@@ -10,6 +11,11 @@ import { RoleComparisonWidget } from "./widgets/role-comparison";
 import { WatchlistWidget } from "./widgets/watchlist";
 import { AIInsightsWidget } from "./widgets/ai-insights";
 import { ActivityFeedWidget } from "./widgets/activity-feed";
+import { MarketOutlookWidget } from "./widgets/market-outlook";
+import { IndustryBenchmarkWidget } from "./widgets/industry-benchmark";
+import { CompanySizePremiumWidget } from "./widgets/company-size-premium";
+import { ExperienceMatrixWidget } from "./widgets/experience-matrix";
+import { CompMixWidget } from "./widgets/comp-mix";
 import type { GridLayoutItem } from "@/lib/dashboard/preset-layouts";
 
 const ResponsiveGridLayout = WidthProvider(Responsive);
@@ -30,7 +36,61 @@ const WIDGET_COMPONENTS: Record<string, React.ComponentType> = {
   "watchlist": WatchlistWidget,
   "ai-insights": AIInsightsWidget,
   "activity-feed": ActivityFeedWidget,
+  "market-outlook": MarketOutlookWidget,
+  "industry-benchmark": IndustryBenchmarkWidget,
+  "company-size-premium": CompanySizePremiumWidget,
+  "experience-matrix": ExperienceMatrixWidget,
+  "comp-mix": CompMixWidget,
 };
+
+// Generate responsive layouts from the main layout
+function generateResponsiveLayouts(layout: GridLayoutItem[], activeWidgets: string[]) {
+  const filteredLayout = layout.filter((item) => activeWidgets.includes(item.i));
+  
+  // Large (12 cols) - use original layout with consistent heights
+  const lg = filteredLayout.map((item) => ({
+    ...item,
+    h: item.h || 2,
+  }));
+  
+  // Medium (6 cols) - 2 column grid
+  const md = filteredLayout.map((item, index) => ({
+    ...item,
+    x: (index % 2) * 3,
+    y: Math.floor(index / 2) * 2,
+    w: 3,
+    h: 2,
+  }));
+  
+  // Small (4 cols) - 2 column grid
+  const sm = filteredLayout.map((item, index) => ({
+    ...item,
+    x: (index % 2) * 2,
+    y: Math.floor(index / 2) * 2,
+    w: 2,
+    h: 2,
+  }));
+  
+  // Extra small (2 cols) - 2 column grid
+  const xs = filteredLayout.map((item, index) => ({
+    ...item,
+    x: (index % 2),
+    y: Math.floor(index / 2) * 2,
+    w: 1,
+    h: 2,
+  }));
+  
+  // XXS (1 col) - single column stack
+  const xxs = filteredLayout.map((item, index) => ({
+    ...item,
+    x: 0,
+    y: index * 2,
+    w: 1,
+    h: 2,
+  }));
+  
+  return { lg, md, sm, xs, xxs };
+}
 
 export function LayoutManager({
   layout,
@@ -38,14 +98,11 @@ export function LayoutManager({
   onLayoutChange,
   onRemoveWidget,
 }: LayoutManagerProps) {
-  // Filter layout to only include active widgets
-  const currentLayout = layout.filter((item) => activeWidgets.includes(item.i));
-
-  const handleLayoutChange = (newLayout: any) => {
-    // Only trigger change if something actually moved or resized
-    // react-grid-layout's onLayoutChange gives the full layout
-    onLayoutChange(newLayout);
-  };
+  // Generate responsive layouts
+  const layouts = useMemo(
+    () => generateResponsiveLayouts(layout, activeWidgets),
+    [layout, activeWidgets]
+  );
 
   if (activeWidgets.length === 0) {
     return null;
@@ -55,21 +112,21 @@ export function LayoutManager({
     <div className="w-full">
       <ResponsiveGridLayout
         className="layout"
-        layouts={{ lg: currentLayout }}
-        breakpoints={{ lg: 1024, md: 768, sm: 640, xs: 480, xxs: 0 }}
-        cols={{ lg: 12, md: 8, sm: 4, xs: 2, xxs: 1 }}
+        layouts={layouts}
+        breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
+        cols={{ lg: 12, md: 6, sm: 4, xs: 2, xxs: 1 }}
         rowHeight={160}
         draggableHandle=".drag-handle"
-        margin={[20, 20]}
+        margin={[16, 16]}
+        containerPadding={[0, 0]}
         compactType="vertical"
         preventCollision={false}
-        measureBeforeMount={true}
-        onLayoutChange={(currentLayout) => {
+        onLayoutChange={(currentLayout, allLayouts) => {
           onLayoutChange(
             currentLayout.map((item) => ({ ...item })) as GridLayoutItem[],
           );
         }}
-        useCSSTransforms={false}
+        useCSSTransforms={true}
         isDraggable={true}
         isResizable={true}
       >

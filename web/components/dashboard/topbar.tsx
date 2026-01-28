@@ -1,7 +1,8 @@
 "use client";
 
-import type { RefObject } from "react";
+import { useEffect, useState, type RefObject } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   CreditCard,
   HelpCircle,
@@ -20,6 +21,7 @@ import {
   DropdownItem,
   DropdownDivider,
 } from "@/components/ui/dropdown-menu";
+import { createClient } from "@/lib/supabase/client";
 
 type DashboardTopBarProps = {
   onMobileOpen: () => void;
@@ -32,6 +34,37 @@ export function DashboardTopBar({
   onAIOpen,
   mobileTriggerRef,
 }: DashboardTopBarProps) {
+  const supabase = createClient();
+  const router = useRouter();
+  const [user, setUser] = useState<any>(null);
+  const [profile, setProfile] = useState<any>(null);
+
+  useEffect(() => {
+    async function getUser() {
+      const { data: { user } } = await supabase.auth.getUser();
+      setUser(user);
+      
+      if (user) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", user.id)
+          .single();
+        setProfile(profile);
+      }
+    }
+    getUser();
+  }, [supabase]);
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    router.push("/login");
+  };
+
+  const userInitial = profile?.full_name 
+    ? profile.full_name.charAt(0).toUpperCase() 
+    : user?.email?.charAt(0).toUpperCase() || "U";
+
   return (
     <header className="sticky top-0 z-20 border-b border-border/40 bg-white/80 backdrop-blur-xl">
       <div className="flex h-14 items-center gap-4 px-6 lg:px-10">
@@ -92,15 +125,19 @@ export function DashboardTopBar({
           <DropdownMenu
             align="right"
             trigger={
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-900 text-white font-semibold text-sm transition-all hover:bg-brand-800 hover:scale-105 cursor-pointer">
-                <span>JD</span>
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-900 text-white font-semibold text-sm transition-all hover:bg-brand-800 hover:scale-105 cursor-pointer overflow-hidden">
+                {profile?.avatar_url ? (
+                  <img src={profile.avatar_url} alt={profile.full_name} className="h-full w-full object-cover" />
+                ) : (
+                  <span>{userInitial}</span>
+                )}
               </div>
             }
           >
             {/* User info header */}
             <div className="px-4 py-3 border-b border-border/50">
-              <div className="font-semibold text-brand-900">John Doe</div>
-              <div className="text-xs text-brand-600/80">john@company.com</div>
+              <div className="font-semibold text-brand-900">{profile?.full_name || "User"}</div>
+              <div className="text-xs text-brand-600/80">{user?.email}</div>
             </div>
 
             <div className="py-1">
@@ -126,10 +163,7 @@ export function DashboardTopBar({
             <DropdownItem
               icon={<LogOut className="h-4 w-4" />}
               variant="danger"
-              onClick={() => {
-                // Sign out logic will be implemented
-                console.log("Sign out clicked");
-              }}
+              onClick={handleSignOut}
             >
               Sign Out
             </DropdownItem>
@@ -139,3 +173,4 @@ export function DashboardTopBar({
     </header>
   );
 }
+

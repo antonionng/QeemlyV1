@@ -41,14 +41,24 @@ export const PRESET_LAYOUTS: LayoutPreset[] = [
       "geo-comparison",
       "role-comparison",
       "ai-insights",
+      "market-outlook",
+      "experience-matrix",
+      "comp-mix",
     ],
     layout: [
-      { i: "market-pulse", x: 0, y: 0, w: 4, h: 2 },
-      { i: "salary-distribution", x: 4, y: 0, w: 8, h: 3 },
-      { i: "trend-analytics", x: 0, y: 2, w: 6, h: 3 },
-      { i: "geo-comparison", x: 6, y: 3, w: 6, h: 3 },
-      { i: "role-comparison", x: 0, y: 5, w: 8, h: 3 },
-      { i: "ai-insights", x: 8, y: 6, w: 4, h: 3 },
+      // Row 1: 2x2 grid
+      { i: "market-pulse", x: 0, y: 0, w: 6, h: 2, minW: 4, minH: 2 },
+      { i: "salary-distribution", x: 6, y: 0, w: 6, h: 2, minW: 4, minH: 2 },
+      // Row 2: 2x2 grid
+      { i: "trend-analytics", x: 0, y: 2, w: 6, h: 2, minW: 4, minH: 2 },
+      { i: "geo-comparison", x: 6, y: 2, w: 6, h: 2, minW: 4, minH: 2 },
+      // Row 3: 2x2 grid
+      { i: "role-comparison", x: 0, y: 4, w: 6, h: 2, minW: 4, minH: 2 },
+      { i: "ai-insights", x: 6, y: 4, w: 6, h: 2, minW: 4, minH: 2 },
+      // New row 4
+      { i: "market-outlook", x: 0, y: 6, w: 4, h: 3, minW: 4, minH: 3 },
+      { i: "experience-matrix", x: 4, y: 6, w: 8, h: 4, minW: 6, minH: 4 },
+      { i: "comp-mix", x: 0, y: 9, w: 4, h: 3, minW: 4, minH: 3 },
     ],
   },
   {
@@ -61,12 +71,18 @@ export const PRESET_LAYOUTS: LayoutPreset[] = [
       "trend-analytics",
       "geo-comparison",
       "ai-insights",
+      "market-outlook",
+      "industry-benchmark",
     ],
     layout: [
-      { i: "market-pulse", x: 0, y: 0, w: 4, h: 2 },
-      { i: "trend-analytics", x: 4, y: 0, w: 8, h: 3 },
-      { i: "geo-comparison", x: 0, y: 2, w: 6, h: 3 },
-      { i: "ai-insights", x: 6, y: 3, w: 6, h: 3 },
+      // 2x2 Grid
+      { i: "market-pulse", x: 0, y: 0, w: 6, h: 2, minW: 4, minH: 2 },
+      { i: "trend-analytics", x: 6, y: 0, w: 6, h: 2, minW: 4, minH: 2 },
+      { i: "geo-comparison", x: 0, y: 2, w: 6, h: 2, minW: 4, minH: 2 },
+      { i: "ai-insights", x: 6, y: 2, w: 6, h: 2, minW: 4, minH: 2 },
+      // Row 3
+      { i: "market-outlook", x: 0, y: 4, w: 6, h: 3, minW: 4, minH: 3 },
+      { i: "industry-benchmark", x: 6, y: 4, w: 6, h: 3, minW: 4, minH: 3 },
     ],
   },
   {
@@ -79,14 +95,15 @@ export const PRESET_LAYOUTS: LayoutPreset[] = [
       "salary-distribution",
       "role-comparison",
       "watchlist",
-      "activity-feed",
+      "company-size-premium",
     ],
     layout: [
-      { i: "market-pulse", x: 0, y: 0, w: 4, h: 2 },
-      { i: "salary-distribution", x: 4, y: 0, w: 8, h: 3 },
-      { i: "role-comparison", x: 0, y: 2, w: 8, h: 3 },
-      { i: "watchlist", x: 8, y: 3, w: 4, h: 3 },
-      { i: "activity-feed", x: 0, y: 5, w: 4, h: 3 },
+      // 2x2 Grid
+      { i: "market-pulse", x: 0, y: 0, w: 6, h: 2, minW: 4, minH: 2 },
+      { i: "salary-distribution", x: 6, y: 0, w: 6, h: 2, minW: 4, minH: 2 },
+      { i: "role-comparison", x: 0, y: 2, w: 6, h: 2, minW: 4, minH: 2 },
+      { i: "watchlist", x: 6, y: 2, w: 6, h: 2, minW: 4, minH: 2 },
+      { i: "company-size-premium", x: 0, y: 4, w: 6, h: 3, minW: 4, minH: 3 },
     ],
   },
   {
@@ -101,10 +118,11 @@ export const PRESET_LAYOUTS: LayoutPreset[] = [
       "ai-insights",
     ],
     layout: [
-      { i: "market-pulse", x: 0, y: 0, w: 6, h: 2 },
-      { i: "trend-analytics", x: 6, y: 0, w: 6, h: 3 },
-      { i: "watchlist", x: 0, y: 2, w: 6, h: 3 },
-      { i: "ai-insights", x: 6, y: 3, w: 6, h: 3 },
+      // 2x2 Grid
+      { i: "market-pulse", x: 0, y: 0, w: 6, h: 2, minW: 4, minH: 2 },
+      { i: "trend-analytics", x: 6, y: 0, w: 6, h: 2, minW: 4, minH: 2 },
+      { i: "watchlist", x: 0, y: 2, w: 6, h: 2, minW: 4, minH: 2 },
+      { i: "ai-insights", x: 6, y: 2, w: 6, h: 2, minW: 4, minH: 2 },
     ],
   },
 ];

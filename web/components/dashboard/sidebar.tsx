@@ -2,7 +2,8 @@
 
 import clsx from "clsx";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import {
   BarChart3,
   ChartLine,
@@ -16,6 +17,7 @@ import {
   User,
 } from "lucide-react";
 import { Logo } from "@/components/logo";
+import { createClient } from "@/lib/supabase/client";
 
 type NavItem = {
   href: string;
@@ -61,12 +63,54 @@ function isActiveRoute(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
+type UserData = {
+  email: string;
+  fullName: string | null;
+  avatarUrl: string | null;
+};
+
 export function DashboardSidebar({
   collapsed = false,
   onNavigate,
   onToggleCollapse,
 }: DashboardSidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [user, setUser] = useState<UserData | null>(null);
+
+  useEffect(() => {
+    const supabase = createClient();
+
+    async function fetchUser() {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (authUser) {
+        // Try to get profile data
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("full_name, avatar_url")
+          .eq("id", authUser.id)
+          .single();
+
+        setUser({
+          email: authUser.email || "",
+          fullName: profile?.full_name || null,
+          avatarUrl: profile?.avatar_url || null,
+        });
+      }
+    }
+
+    fetchUser();
+  }, []);
+
+  async function handleSignOut() {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push("/login");
+  }
+
+  // Get display name and initials
+  const displayName = user?.fullName || user?.email?.split("@")[0] || "User";
+  const initials = displayName.charAt(0).toUpperCase();
 
   return (
     <div className="flex h-full flex-col">
@@ -188,18 +232,29 @@ export function DashboardSidebar({
             collapsed ? "justify-center p-2" : "p-2.5"
           )}
         >
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-900 text-white font-semibold text-sm">
-            <User className="h-4 w-4" />
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-900 text-white font-semibold text-sm overflow-hidden">
+            {user?.avatarUrl ? (
+              <img src={user.avatarUrl} alt={displayName} className="h-full w-full object-cover" />
+            ) : user ? (
+              initials
+            ) : (
+              <User className="h-4 w-4" />
+            )}
           </div>
           {!collapsed && (
             <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-semibold text-brand-900">John Doe</div>
-              <div className="truncate text-xs text-brand-700/70">john@company.com</div>
+              <div className="truncate text-sm font-semibold text-brand-900">
+                {displayName}
+              </div>
+              <div className="truncate text-xs text-brand-700/70">
+                {user?.email || "Loading..."}
+              </div>
             </div>
           )}
           {!collapsed && (
             <button
               type="button"
+              onClick={handleSignOut}
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-brand-700/70 transition-colors hover:bg-brand-200/50 hover:text-brand-800"
               aria-label="Sign out"
             >

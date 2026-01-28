@@ -1,11 +1,12 @@
 // Cost of Living Data for Relocation Calculator
-// MVP: MENA focus + key global hubs (18 cities)
+// focus: GCC markets + key global hubs
 // Base index: 100 = Dubai as reference city
+// All breakdown values are in AED (indicative)
 
-export type Region = "mena" | "europe" | "asia" | "americas";
+export type Region = "gcc" | "mena" | "europe" | "asia" | "americas";
 
 export interface CostBreakdown {
-  rent: number; // Monthly average in USD
+  rent: number; // Monthly average in AED
   transport: number;
   food: number;
   utilities: number;
@@ -24,17 +25,17 @@ export interface City {
   currencySymbol: string;
 }
 
-// MVP Cities: MENA (10) + Global Hubs (8)
+// GCC Cities (Primary) + Global Hubs
 export const CITIES: City[] = [
-  // MENA Region
+  // GCC Region
   {
     id: "dubai",
     name: "Dubai",
     country: "UAE",
-    region: "mena",
+    region: "gcc",
     flag: "🇦🇪",
     colIndex: 100,
-    breakdown: { rent: 2500, transport: 300, food: 600, utilities: 200, other: 400 },
+    breakdown: { rent: 9000, transport: 1100, food: 2200, utilities: 750, other: 1500 },
     currency: "AED",
     currencySymbol: "د.إ",
   },
@@ -42,10 +43,10 @@ export const CITIES: City[] = [
     id: "abu-dhabi",
     name: "Abu Dhabi",
     country: "UAE",
-    region: "mena",
+    region: "gcc",
     flag: "🇦🇪",
     colIndex: 95,
-    breakdown: { rent: 2200, transport: 280, food: 580, utilities: 190, other: 380 },
+    breakdown: { rent: 8200, transport: 1000, food: 2100, utilities: 700, other: 1400 },
     currency: "AED",
     currencySymbol: "د.إ",
   },
@@ -53,10 +54,10 @@ export const CITIES: City[] = [
     id: "riyadh",
     name: "Riyadh",
     country: "Saudi Arabia",
-    region: "mena",
+    region: "gcc",
     flag: "🇸🇦",
     colIndex: 85,
-    breakdown: { rent: 1800, transport: 250, food: 500, utilities: 150, other: 350 },
+    breakdown: { rent: 6500, transport: 900, food: 1800, utilities: 550, other: 1300 },
     currency: "SAR",
     currencySymbol: "﷼",
   },
@@ -64,10 +65,10 @@ export const CITIES: City[] = [
     id: "jeddah",
     name: "Jeddah",
     country: "Saudi Arabia",
-    region: "mena",
+    region: "gcc",
     flag: "🇸🇦",
     colIndex: 80,
-    breakdown: { rent: 1600, transport: 230, food: 480, utilities: 140, other: 330 },
+    breakdown: { rent: 5800, transport: 850, food: 1750, utilities: 500, other: 1200 },
     currency: "SAR",
     currencySymbol: "﷼",
   },
@@ -75,10 +76,10 @@ export const CITIES: City[] = [
     id: "doha",
     name: "Doha",
     country: "Qatar",
-    region: "mena",
+    region: "gcc",
     flag: "🇶🇦",
     colIndex: 105,
-    breakdown: { rent: 2700, transport: 320, food: 620, utilities: 180, other: 420 },
+    breakdown: { rent: 9800, transport: 1200, food: 2300, utilities: 650, other: 1600 },
     currency: "QAR",
     currencySymbol: "ر.ق",
   },
@@ -86,10 +87,10 @@ export const CITIES: City[] = [
     id: "kuwait-city",
     name: "Kuwait City",
     country: "Kuwait",
-    region: "mena",
+    region: "gcc",
     flag: "🇰🇼",
     colIndex: 90,
-    breakdown: { rent: 2000, transport: 270, food: 550, utilities: 160, other: 370 },
+    breakdown: { rent: 7300, transport: 1000, food: 2000, utilities: 600, other: 1400 },
     currency: "KWD",
     currencySymbol: "د.ك",
   },
@@ -97,10 +98,10 @@ export const CITIES: City[] = [
     id: "manama",
     name: "Manama",
     country: "Bahrain",
-    region: "mena",
+    region: "gcc",
     flag: "🇧🇭",
     colIndex: 82,
-    breakdown: { rent: 1700, transport: 220, food: 500, utilities: 130, other: 340 },
+    breakdown: { rent: 6200, transport: 800, food: 1850, utilities: 500, other: 1250 },
     currency: "BHD",
     currencySymbol: ".د.ب",
   },
@@ -108,13 +109,15 @@ export const CITIES: City[] = [
     id: "muscat",
     name: "Muscat",
     country: "Oman",
-    region: "mena",
+    region: "gcc",
     flag: "🇴🇲",
     colIndex: 78,
-    breakdown: { rent: 1500, transport: 200, food: 450, utilities: 120, other: 320 },
+    breakdown: { rent: 5500, transport: 750, food: 1650, utilities: 450, other: 1100 },
     currency: "OMR",
     currencySymbol: "ر.ع.",
   },
+
+  // MENA (Other)
   {
     id: "cairo",
     name: "Cairo",
@@ -122,7 +125,7 @@ export const CITIES: City[] = [
     region: "mena",
     flag: "🇪🇬",
     colIndex: 45,
-    breakdown: { rent: 600, transport: 80, food: 250, utilities: 50, other: 150 },
+    breakdown: { rent: 2200, transport: 300, food: 900, utilities: 200, other: 550 },
     currency: "EGP",
     currencySymbol: "£",
   },
@@ -133,12 +136,12 @@ export const CITIES: City[] = [
     region: "mena",
     flag: "🇯🇴",
     colIndex: 55,
-    breakdown: { rent: 800, transport: 120, food: 350, utilities: 80, other: 200 },
+    breakdown: { rent: 3000, transport: 450, food: 1300, utilities: 300, other: 750 },
     currency: "JOD",
     currencySymbol: "د.ا",
   },
 
-  // Global Hubs
+  // Global Hubs (Reference for Relocation)
   {
     id: "london",
     name: "London",
@@ -146,7 +149,7 @@ export const CITIES: City[] = [
     region: "europe",
     flag: "🇬🇧",
     colIndex: 145,
-    breakdown: { rent: 3500, transport: 450, food: 800, utilities: 250, other: 600 },
+    breakdown: { rent: 12800, transport: 1650, food: 2900, utilities: 900, other: 2200 },
     currency: "GBP",
     currencySymbol: "£",
   },
@@ -157,18 +160,7 @@ export const CITIES: City[] = [
     region: "americas",
     flag: "🇺🇸",
     colIndex: 160,
-    breakdown: { rent: 4000, transport: 400, food: 900, utilities: 200, other: 700 },
-    currency: "USD",
-    currencySymbol: "$",
-  },
-  {
-    id: "san-francisco",
-    name: "San Francisco",
-    country: "United States",
-    region: "americas",
-    flag: "🇺🇸",
-    colIndex: 170,
-    breakdown: { rent: 4500, transport: 350, food: 850, utilities: 180, other: 650 },
+    breakdown: { rent: 14700, transport: 1450, food: 3300, utilities: 750, other: 2600 },
     currency: "USD",
     currencySymbol: "$",
   },
@@ -179,20 +171,9 @@ export const CITIES: City[] = [
     region: "asia",
     flag: "🇸🇬",
     colIndex: 130,
-    breakdown: { rent: 3200, transport: 200, food: 700, utilities: 150, other: 550 },
+    breakdown: { rent: 11700, transport: 750, food: 2550, utilities: 550, other: 2000 },
     currency: "SGD",
     currencySymbol: "S$",
-  },
-  {
-    id: "hong-kong",
-    name: "Hong Kong",
-    country: "Hong Kong",
-    region: "asia",
-    flag: "🇭🇰",
-    colIndex: 140,
-    breakdown: { rent: 3800, transport: 180, food: 650, utilities: 140, other: 500 },
-    currency: "HKD",
-    currencySymbol: "HK$",
   },
   {
     id: "berlin",
@@ -201,31 +182,9 @@ export const CITIES: City[] = [
     region: "europe",
     flag: "🇩🇪",
     colIndex: 95,
-    breakdown: { rent: 1800, transport: 280, food: 550, utilities: 200, other: 400 },
+    breakdown: { rent: 6600, transport: 1000, food: 2000, utilities: 750, other: 1500 },
     currency: "EUR",
     currencySymbol: "€",
-  },
-  {
-    id: "amsterdam",
-    name: "Amsterdam",
-    country: "Netherlands",
-    region: "europe",
-    flag: "🇳🇱",
-    colIndex: 115,
-    breakdown: { rent: 2400, transport: 250, food: 600, utilities: 180, other: 450 },
-    currency: "EUR",
-    currencySymbol: "€",
-  },
-  {
-    id: "sydney",
-    name: "Sydney",
-    country: "Australia",
-    region: "asia",
-    flag: "🇦🇺",
-    colIndex: 125,
-    breakdown: { rent: 2800, transport: 350, food: 700, utilities: 200, other: 500 },
-    currency: "AUD",
-    currencySymbol: "A$",
   },
 ];
 
@@ -254,8 +213,10 @@ export function getTotalMonthlyCost(breakdown: CostBreakdown): number {
 
 // Region labels for UI
 export const REGION_LABELS: Record<Region, string> = {
-  mena: "Middle East & North Africa",
+  gcc: "Gulf Cooperation Council",
+  mena: "Other Middle East",
   europe: "Europe",
   asia: "Asia Pacific",
   americas: "Americas",
 };
+
