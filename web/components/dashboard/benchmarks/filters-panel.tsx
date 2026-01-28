@@ -240,7 +240,9 @@ export function FiltersPanel({ filters, onChange, onClose, onClear, options }: F
               <TogglePill
                 key={opt.id}
                 label={opt.label}
-                active={filters.confidences.includes(opt.id)}
+                active={filters.confidences.includes(
+                  opt.id as BenchmarkFilters["confidences"][number]
+                )}
                 onClick={() =>
                   onChange({
                     ...filters,

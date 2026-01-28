@@ -24,7 +24,7 @@ import {
 type DashboardTopBarProps = {
   onMobileOpen: () => void;
   onAIOpen: () => void;
-  mobileTriggerRef: RefObject<HTMLButtonElement | null>;
+  mobileTriggerRef: RefObject<HTMLButtonElement>;
 };
 
 export function DashboardTopBar({

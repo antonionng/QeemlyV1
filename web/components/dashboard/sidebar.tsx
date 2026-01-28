@@ -8,6 +8,7 @@ import {
   ChartLine,
   ChevronLeft,
   ChevronRight,
+  Globe2,
   Home,
   LogOut,
   Settings,
@@ -16,11 +17,33 @@ import {
 } from "lucide-react";
 import { Logo } from "@/components/logo";
 
-const navItems = [
-  { href: "/dashboard", label: "Overview", icon: Home },
-  { href: "/dashboard/benchmarks", label: "Benchmarks", icon: ChartLine },
-  { href: "/dashboard/reports", label: "Reports", icon: BarChart3 },
-  { href: "/dashboard/compliance", label: "Compliance", icon: ShieldCheck },
+type NavItem = {
+  href: string;
+  label: string;
+  icon: typeof Home;
+};
+
+type NavSection = {
+  label: string | null;
+  items: NavItem[];
+};
+
+const navSections: NavSection[] = [
+  {
+    label: null,
+    items: [
+      { href: "/dashboard", label: "Overview", icon: Home },
+      { href: "/dashboard/benchmarks", label: "Benchmarks", icon: ChartLine },
+      { href: "/dashboard/reports", label: "Reports", icon: BarChart3 },
+      { href: "/dashboard/compliance", label: "Compliance", icon: ShieldCheck },
+    ],
+  },
+  {
+    label: "Relocation",
+    items: [
+      { href: "/dashboard/relocation", label: "CoL Calculator", icon: Globe2 },
+    ],
+  },
 ];
 
 const bottomItems = [
@@ -86,29 +109,46 @@ export function DashboardSidebar({
       {/* Main navigation */}
       <nav className={clsx("flex-1 overflow-y-auto px-3 py-4", collapsed && "px-2")}>
         <div className={clsx("flex flex-col gap-1", collapsed && "items-center")}>
-          {navItems.map((item) => {
-            const active = isActiveRoute(pathname, item.href);
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={onNavigate}
-                title={collapsed ? item.label : undefined}
-                aria-label={collapsed ? item.label : undefined}
-                className={clsx(
-                  "group relative flex items-center gap-3 rounded-xl text-sm font-medium transition-all duration-150",
-                  collapsed ? "h-11 w-11 justify-center" : "px-3 py-2.5",
-                  active
-                    ? "bg-brand-500 text-white shadow-sm shadow-brand-500/25"
-                    : "text-brand-800/80 hover:bg-brand-100/70 hover:text-brand-900"
-                )}
-              >
-                <Icon className={clsx("h-[18px] w-[18px] shrink-0", collapsed && "h-5 w-5")} />
-                {!collapsed && <span className="truncate">{item.label}</span>}
-              </Link>
-            );
-          })}
+          {navSections.map((section, sectionIndex) => (
+            <div key={sectionIndex} className={clsx(sectionIndex > 0 && "mt-4")}>
+              {/* Section Label */}
+              {section.label && !collapsed && (
+                <p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-widest text-accent-400">
+                  {section.label}
+                </p>
+              )}
+              {section.label && collapsed && (
+                <div className="mb-2 h-px w-6 bg-brand-200" />
+              )}
+
+              {/* Section Items */}
+              <div className={clsx("flex flex-col gap-1", collapsed && "items-center")}>
+                {section.items.map((item) => {
+                  const active = isActiveRoute(pathname, item.href);
+                  const Icon = item.icon;
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={onNavigate}
+                      title={collapsed ? item.label : undefined}
+                      aria-label={collapsed ? item.label : undefined}
+                      className={clsx(
+                        "group relative flex items-center gap-3 rounded-xl text-sm font-medium transition-all duration-150",
+                        collapsed ? "h-11 w-11 justify-center" : "px-3 py-2.5",
+                        active
+                          ? "bg-brand-500 text-white shadow-sm shadow-brand-500/25"
+                          : "text-brand-800/80 hover:bg-brand-100/70 hover:text-brand-900"
+                      )}
+                    >
+                      <Icon className={clsx("h-[18px] w-[18px] shrink-0", collapsed && "h-5 w-5")} />
+                      {!collapsed && <span className="truncate">{item.label}</span>}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
       </nav>
 

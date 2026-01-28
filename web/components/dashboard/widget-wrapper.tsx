@@ -1,10 +1,11 @@
 "use client";
 
 import clsx from "clsx";
-import { GripVertical, Maximize2, Minimize2, X } from "lucide-react";
+import { GripVertical, Maximize2, Minimize2, Sparkles, X } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { getWidgetDefinition } from "@/lib/dashboard/widget-registry";
+import { getWidgetDefinition, type WidgetDefinition } from "@/lib/dashboard/widget-registry";
+import { AiExplainTooltip } from "@/components/ui/ai-explain-tooltip";
 
 type WidgetWrapperProps = {
   widgetId: string;
@@ -12,6 +13,16 @@ type WidgetWrapperProps = {
   onRemove?: () => void;
   className?: string;
   isDragging?: boolean;
+  /** Optional custom widget definition (for benchmark widgets) */
+  customWidget?: {
+    id: string;
+    name: string;
+    description: string;
+    icon: React.ComponentType<{ className?: string }>;
+    tooltipExplanation?: string;
+  };
+  /** Optional tooltip explanation override */
+  tooltipExplanation?: string;
 };
 
 export function WidgetWrapper({
@@ -20,10 +31,15 @@ export function WidgetWrapper({
   onRemove,
   className,
   isDragging = false,
+  customWidget,
+  tooltipExplanation,
 }: WidgetWrapperProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [isHovered, setIsHovered] = useState(false);
-  const widget = getWidgetDefinition(widgetId);
+  
+  // Use custom widget if provided, otherwise look up from registry
+  const dashboardWidget = getWidgetDefinition(widgetId);
+  const widget = customWidget || dashboardWidget;
 
   // Body scroll lock when expanded
   useEffect(() => {
@@ -40,6 +56,7 @@ export function WidgetWrapper({
   if (!widget) return null;
 
   const Icon = widget.icon;
+  const tooltip = tooltipExplanation || (customWidget as any)?.tooltipExplanation;
 
   const renderCardContent = (expanded: boolean) => (
     <>
@@ -87,6 +104,14 @@ export function WidgetWrapper({
             isHovered || expanded ? "opacity-100 translate-x-0" : "opacity-0 translate-x-2"
           )}
         >
+          {/* AI Tooltip */}
+          {tooltip && (
+            <AiExplainTooltip
+              message={tooltip}
+              label="Explain"
+              className="shrink-0"
+            />
+          )}
           <button
             type="button"
             onClick={() => setIsExpanded(!isExpanded)}

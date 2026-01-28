@@ -18,7 +18,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
   const [sidebarCollapsed, setSidebarCollapsed] = useLocalStorageBoolean(SIDEBAR_COLLAPSED_KEY, false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
-  const mobileTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const mobileTriggerRef = useRef<HTMLButtonElement>(null);
 
   // Prevent body scroll when mobile drawer or AI drawer is open
   useEffect(() => {
@@ -31,10 +31,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
   }, [mobileOpen, aiOpen]);
 
   return (
-    <div className="relative min-h-screen bg-white text-foreground">
-      {/* Ambient background */}
-      <div className="dash-bg" />
-
+    <div className="relative min-h-screen bg-[#fafafa] text-foreground">
       {/* Fixed sidebar (desktop only via CSS) */}
       <aside className="dash-sidebar" data-collapsed={sidebarCollapsed}>
         <DashboardSidebar
@@ -51,7 +48,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
           mobileTriggerRef={mobileTriggerRef}
         />
 
-        <main className="px-6 pb-12 pt-8 lg:px-10">
+        <main className="px-6 pb-12 lg:px-10">
           <div className="mx-auto w-full max-w-[1600px]">{children}</div>
         </main>
       </div>

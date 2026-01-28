@@ -65,7 +65,9 @@ export function LayoutManager({
         preventCollision={false}
         measureBeforeMount={true}
         onLayoutChange={(currentLayout) => {
-          onLayoutChange(currentLayout);
+          onLayoutChange(
+            currentLayout.map((item) => ({ ...item })) as GridLayoutItem[],
+          );
         }}
         useCSSTransforms={false}
         isDraggable={true}

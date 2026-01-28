@@ -175,8 +175,8 @@ export function AIDrawer({ isOpen, onClose }: AIDrawerProps) {
             <Button
               onClick={handleSend}
               disabled={!inputValue.trim() || isTyping}
-              size="icon"
-              className="absolute right-1.5 top-1.5 h-9 w-9 rounded-lg"
+              size="sm"
+              className="absolute right-1.5 top-1.5 h-9 w-9 rounded-lg p-0"
             >
               <Send className="h-4 w-4" />
             </Button>
