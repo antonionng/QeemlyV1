@@ -6,18 +6,22 @@ import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   BarChart3,
+  Building2,
   ChartLine,
   ChevronLeft,
   ChevronRight,
+  DollarSign,
   Globe2,
   Home,
   LogOut,
   Settings,
   ShieldCheck,
+  Upload,
   User,
 } from "lucide-react";
 import { Logo } from "@/components/logo";
 import { createClient } from "@/lib/supabase/client";
+import { useCompanySettings, getCompanyInitials } from "@/lib/company";
 
 type NavItem = {
   href: string;
@@ -34,16 +38,23 @@ const navSections: NavSection[] = [
   {
     label: null,
     items: [
-      { href: "/dashboard", label: "Overview", icon: Home },
+      { href: "/dashboard/overview", label: "Company Overview", icon: Building2 },
       { href: "/dashboard/benchmarks", label: "Benchmarks", icon: ChartLine },
+      { href: "/dashboard/salary-review", label: "Salary Review", icon: DollarSign },
+    ],
+  },
+  {
+    label: "Analytics",
+    items: [
       { href: "/dashboard/reports", label: "Reports", icon: BarChart3 },
       { href: "/dashboard/compliance", label: "Compliance", icon: ShieldCheck },
     ],
   },
   {
-    label: "Relocation",
+    label: "Tools",
     items: [
       { href: "/dashboard/relocation", label: "CoL Calculator", icon: Globe2 },
+      { href: "/dashboard/upload", label: "Upload Data", icon: Upload },
     ],
   },
 ];
@@ -59,7 +70,10 @@ type DashboardSidebarProps = {
 };
 
 function isActiveRoute(pathname: string, href: string) {
-  if (href === "/dashboard") return pathname === href;
+  // Company Overview is active for both /dashboard and /dashboard/overview
+  if (href === "/dashboard/overview") {
+    return pathname === "/dashboard" || pathname === "/dashboard/overview";
+  }
   return pathname === href || pathname.startsWith(`${href}/`);
 }
 
@@ -77,6 +91,12 @@ export function DashboardSidebar({
   const pathname = usePathname();
   const router = useRouter();
   const [user, setUser] = useState<UserData | null>(null);
+  const companySettings = useCompanySettings();
+
+  // Get company initials for collapsed state
+  const companyInitials = getCompanyInitials(companySettings.companyName);
+  const hasCompanyLogo = !!companySettings.companyLogo;
+  const isCompanyConfigured = companySettings.isConfigured;
 
   useEffect(() => {
     const supabase = createClient();
@@ -123,12 +143,58 @@ export function DashboardSidebar({
       >
         {collapsed ? (
           <Link href="/dashboard" className="flex items-center justify-center">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-500 text-white font-bold text-sm">
-              Q
-            </div>
+            {hasCompanyLogo ? (
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white border border-border overflow-hidden">
+                <img 
+                  src={companySettings.companyLogo!} 
+                  alt={companySettings.companyName}
+                  className="h-full w-full object-contain p-1"
+                />
+              </div>
+            ) : isCompanyConfigured ? (
+              <div 
+                className="flex h-9 w-9 items-center justify-center rounded-xl text-white font-bold text-sm"
+                style={{ backgroundColor: companySettings.primaryColor }}
+              >
+                {companyInitials}
+              </div>
+            ) : (
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-500 text-white font-bold text-sm">
+                Q
+              </div>
+            )}
           </Link>
         ) : (
-          <Logo compact href="/dashboard" />
+          <Link href="/dashboard" className="flex items-center gap-2.5">
+            {hasCompanyLogo ? (
+              <>
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white border border-border overflow-hidden">
+                  <img 
+                    src={companySettings.companyLogo!} 
+                    alt={companySettings.companyName}
+                    className="h-full w-full object-contain p-1"
+                  />
+                </div>
+                <span className="font-semibold text-brand-900 text-sm truncate max-w-[120px]">
+                  {companySettings.companyName}
+                </span>
+              </>
+            ) : isCompanyConfigured ? (
+              <>
+                <div 
+                  className="flex h-9 w-9 items-center justify-center rounded-xl text-white font-bold text-sm shadow-sm"
+                  style={{ backgroundColor: companySettings.primaryColor }}
+                >
+                  {companyInitials}
+                </div>
+                <span className="font-semibold text-brand-900 text-sm truncate max-w-[120px]">
+                  {companySettings.companyName}
+                </span>
+              </>
+            ) : (
+              <Logo compact href="/dashboard" />
+            )}
+          </Link>
         )}
 
         {onToggleCollapse && (

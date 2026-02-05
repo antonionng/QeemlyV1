@@ -19,7 +19,7 @@ const plans = [
   {
     id: "starter",
     name: "Starter",
-    price: "$49",
+    price: "AED 179",
     period: "/month",
     description: "For small teams getting started with compensation benchmarking.",
     features: [
@@ -34,7 +34,7 @@ const plans = [
   {
     id: "professional",
     name: "Professional",
-    price: "$149",
+    price: "AED 549",
     period: "/month",
     description: "For growing teams that need more power and flexibility.",
     features: [
@@ -67,9 +67,9 @@ const plans = [
 ];
 
 const invoices = [
-  { id: "INV-001", date: "Jan 1, 2026", amount: "$49.00", status: "Paid" },
-  { id: "INV-002", date: "Dec 1, 2025", amount: "$49.00", status: "Paid" },
-  { id: "INV-003", date: "Nov 1, 2025", amount: "$49.00", status: "Paid" },
+  { id: "INV-001", date: "Jan 1, 2026", amount: "AED 179.00", status: "Paid" },
+  { id: "INV-002", date: "Dec 1, 2025", amount: "AED 179.00", status: "Paid" },
+  { id: "INV-003", date: "Nov 1, 2025", amount: "AED 179.00", status: "Paid" },
 ];
 
 export default function BillingPage() {

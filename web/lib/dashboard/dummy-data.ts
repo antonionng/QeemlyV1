@@ -89,6 +89,27 @@ export type Insight = {
   relatedLocationId?: string;
 };
 
+// UAE Salary Breakdown type - represents the component split of total salary
+export type SalaryBreakdown = {
+  total: number;
+  basic: number;
+  basicPercent: number;
+  housing: number;
+  housingPercent: number;
+  transport: number;
+  transportPercent: number;
+  other: number;
+  otherPercent: number;
+};
+
+// Percentile breakdowns for salary components
+export type PercentileBreakdowns = {
+  p25: SalaryBreakdown;
+  p50: SalaryBreakdown;
+  p75: SalaryBreakdown;
+  p90: SalaryBreakdown;
+};
+
 // === STATIC DATA ===
 
 export const INDUSTRIES = [
@@ -639,9 +660,7 @@ export function getExperienceMatrix(roleId: string, locationId: string) {
       p75: benchmark.percentiles.p75,
     };
   });
-}
-
-export function getCompMix(roleId: string, locationId: string, levelId: string) {
+}export function getCompMix(roleId: string, locationId: string, levelId: string) {
   const benchmark = generateBenchmark(roleId, locationId, levelId);
   const total = benchmark.percentiles.p50;
   
@@ -656,4 +675,89 @@ export function getCompMix(roleId: string, locationId: string, levelId: string) 
     { name: "Bonus", value: Math.round(total * bonusWeight) },
     { name: "Equity", value: Math.round(total * equityWeight) },
   ];
+}
+
+// === UAE SALARY BREAKDOWN FUNCTIONS ===
+// In the UAE region, salaries are typically broken down into:
+// - Basic Salary: 50-65% (used for end-of-service benefits calculations)
+// - Housing/Accommodation: 20-30%
+// - Transport Allowance: 5-12%
+// - Other Allowances: 3-8%
+
+/**
+ * Generate a salary breakdown for a given total salary
+ * Senior roles tend to have higher basic % to maximize end-of-service benefits
+ */
+export function generateSalaryBreakdown(total: number, levelId?: string): SalaryBreakdown {
+  // Senior roles tend to have higher basic salary percentages
+  const levelIndex = levelId ? LEVELS.findIndex(l => l.id === levelId) : 3;
+  const seniorityFactor = Math.min(1, (levelIndex + 1) / LEVELS.length);
+  
+  // Basic salary: 50-65% (higher for senior roles)
+  const basicPercent = 50 + Math.round(seniorityFactor * 15);
+  
+  // Housing: 20-30% (slightly lower for senior roles as basic takes more)
+  const housingPercent = 30 - Math.round(seniorityFactor * 10);
+  
+  // Transport: 5-12%
+  const transportPercent = 12 - Math.round(seniorityFactor * 7);
+  
+  // Other: remainder (typically 3-8%)
+  const otherPercent = 100 - basicPercent - housingPercent - transportPercent;
+  
+  return {
+    total,
+    basic: Math.round(total * basicPercent / 100),
+    basicPercent,
+    housing: Math.round(total * housingPercent / 100),
+    housingPercent,
+    transport: Math.round(total * transportPercent / 100),
+    transportPercent,
+    other: Math.round(total * otherPercent / 100),
+    otherPercent,
+  };
+}
+
+/**
+ * Generate salary breakdowns for all percentiles of a benchmark
+ */
+export function getPercentileBreakdowns(
+  roleId: string,
+  locationId: string,
+  levelId: string
+): PercentileBreakdowns {
+  const benchmark = generateBenchmark(roleId, locationId, levelId);
+  
+  return {
+    p25: generateSalaryBreakdown(benchmark.percentiles.p25, levelId),
+    p50: generateSalaryBreakdown(benchmark.percentiles.p50, levelId),
+    p75: generateSalaryBreakdown(benchmark.percentiles.p75, levelId),
+    p90: generateSalaryBreakdown(benchmark.percentiles.p90, levelId),
+  };
+}
+
+/**
+ * Get market average breakdown percentages for a given level
+ * Returns the typical split percentages seen in the market
+ */
+export function getMarketBreakdownAverages(levelId: string): {
+  basicRange: { min: number; max: number; typical: number };
+  housingRange: { min: number; max: number; typical: number };
+  transportRange: { min: number; max: number; typical: number };
+  otherRange: { min: number; max: number; typical: number };
+} {
+  const levelIndex = LEVELS.findIndex(l => l.id === levelId);
+  const seniorityFactor = Math.min(1, (levelIndex + 1) / LEVELS.length);
+  
+  const typicalBasic = 50 + Math.round(seniorityFactor * 15);
+  const typicalHousing = 30 - Math.round(seniorityFactor * 10);
+  const typicalTransport = 12 - Math.round(seniorityFactor * 7);
+  const typicalOther = 100 - typicalBasic - typicalHousing - typicalTransport;
+  
+  return {
+    basicRange: { min: 50, max: 65, typical: typicalBasic },
+    housingRange: { min: 20, max: 30, typical: typicalHousing },
+    transportRange: { min: 5, max: 12, typical: typicalTransport },
+    otherRange: { min: 3, max: 8, typical: typicalOther },
+  };
 }

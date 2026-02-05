@@ -48,8 +48,8 @@ const tiers: Tier[] = [
     highlight: true,
     badge: "Most popular",
     description: "For growing teams that need repeatable benchmarks and planning workflows.",
-    monthlyPrice: "$49",
-    annualPrice: "$39",
+    monthlyPrice: "AED 179",
+    annualPrice: "AED 139",
     priceNote: "Per seat / month • billed monthly or annually",
     ctaLabel: "Talk to us",
     ctaHref: "/contact",
@@ -242,7 +242,7 @@ export default function PricingPage() {
             <div className="text-xs font-bold uppercase tracking-wider text-brand-500">Plans</div>
             <h2 className="text-2xl font-semibold text-brand-900">Pick the plan that fits your team</h2>
           </div>
-          <div className="text-sm text-brand-700/80">Prices shown in USD. GCC currencies supported in-product.</div>
+          <div className="text-sm text-brand-700/80">Prices shown in AED. Other GCC currencies supported in-product.</div>
         </div>
 
         <div className="grid gap-6 lg:grid-cols-3">

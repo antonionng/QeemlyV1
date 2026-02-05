@@ -1,7 +1,7 @@
 import clsx from "clsx";
 import { HTMLAttributes } from "react";
 
-type Variant = "muted" | "brand" | "ghost";
+type Variant = "muted" | "brand" | "ghost" | "outline";
 
 type BadgeProps = HTMLAttributes<HTMLSpanElement> & {
   variant?: Variant;
@@ -12,6 +12,7 @@ export function Badge({ children, className, variant = "muted", ...rest }: Badge
     muted: "bg-muted text-brand-800",
     brand: "bg-brand-500 text-white",
     ghost: "bg-white text-brand-700 border border-border",
+    outline: "bg-transparent text-brand-600 border border-brand-300",
   };
 
   return (
