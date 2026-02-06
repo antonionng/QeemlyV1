@@ -56,6 +56,17 @@ export interface DepartmentSummary {
   avgVsMarket: number; // % vs market
 }
 
+export interface TrendDataPoint {
+  month: string;
+  value: number;
+}
+
+export interface RiskBreakdownItem {
+  severity: "critical" | "high" | "medium" | "low";
+  count: number;
+  label: string;
+}
+
 export interface CompanyMetrics {
   totalEmployees: number;
   activeEmployees: number;
@@ -66,6 +77,20 @@ export interface CompanyMetrics {
   rolesOutsideBand: number;
   departmentsOverBenchmark: number;
   payrollRiskFlags: number;
+  // Extended metrics for enhanced dashboard
+  healthScore: number;
+  headcountTrend: TrendDataPoint[];
+  payrollTrend: TrendDataPoint[];
+  riskBreakdown: RiskBreakdownItem[];
+  bandDistribution: {
+    below: number;
+    inBand: number;
+    above: number;
+  };
+  // YoY comparisons
+  headcountChange: number; // percentage change YoY
+  payrollChange: number; // percentage change YoY
+  inBandChange: number; // percentage point change YoY
 }
 
 // First names pool
@@ -308,12 +333,78 @@ export function getDepartmentSummaries(): DepartmentSummary[] {
   }).sort((a, b) => b.activeCount - a.activeCount);
 }
 
+// Generate mock trend data for the past 12 months
+function generateTrendData(baseValue: number, volatility: number, trend: number): TrendDataPoint[] {
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const currentMonth = new Date().getMonth();
+  const random = seededRandom(123); // Fixed seed for consistent data
+  
+  const data: TrendDataPoint[] = [];
+  let value = baseValue * (1 - trend * 0.12); // Start 12 months ago
+  
+  for (let i = 0; i < 12; i++) {
+    const monthIndex = (currentMonth - 11 + i + 12) % 12;
+    const monthVariation = (random() - 0.5) * volatility * baseValue;
+    value = value * (1 + trend / 12) + monthVariation;
+    data.push({
+      month: months[monthIndex],
+      value: Math.round(value),
+    });
+  }
+  
+  return data;
+}
+
+// Calculate risk breakdown by severity
+function calculateRiskBreakdown(employees: Employee[]): RiskBreakdownItem[] {
+  const critical = employees.filter(e => e.marketComparison > 25).length;
+  const high = employees.filter(e => e.marketComparison > 15 && e.marketComparison <= 25).length;
+  const medium = employees.filter(e => e.marketComparison > 5 && e.marketComparison <= 15).length;
+  const low = employees.filter(e => e.bandPosition === "above" && e.marketComparison <= 5).length;
+  
+  return [
+    { severity: "critical", count: critical, label: "Critical (>25% above)" },
+    { severity: "high", count: high, label: "High (15-25% above)" },
+    { severity: "medium", count: medium, label: "Medium (5-15% above)" },
+    { severity: "low", count: low, label: "Low (slightly above)" },
+  ];
+}
+
+// Calculate overall compensation health score (0-100)
+function calculateHealthScore(
+  inBandPercentage: number,
+  avgMarketPosition: number,
+  payrollRiskFlags: number,
+  totalEmployees: number
+): number {
+  // Weight factors
+  const bandAlignmentScore = inBandPercentage; // 0-100 based on % in band
+  
+  // Market position score: ideal is 0-5% above market
+  const marketScore = avgMarketPosition >= 0 && avgMarketPosition <= 5 
+    ? 100 
+    : avgMarketPosition < 0 
+      ? Math.max(0, 100 + avgMarketPosition * 5) // Penalize being below market
+      : Math.max(0, 100 - (avgMarketPosition - 5) * 3); // Penalize being too far above
+  
+  // Risk score: fewer risk flags = higher score
+  const riskPercentage = (payrollRiskFlags / totalEmployees) * 100;
+  const riskScore = Math.max(0, 100 - riskPercentage * 5);
+  
+  // Weighted average
+  const score = (bandAlignmentScore * 0.4) + (marketScore * 0.35) + (riskScore * 0.25);
+  
+  return Math.round(Math.min(100, Math.max(0, score)));
+}
+
 // Calculate company-wide metrics
 export function getCompanyMetrics(): CompanyMetrics {
   const activeEmployees = MOCK_EMPLOYEES.filter(e => e.status === "active");
   const totalPayroll = activeEmployees.reduce((sum, e) => sum + e.totalComp, 0);
   
   const inBandCount = activeEmployees.filter(e => e.bandPosition === "in-band").length;
+  const belowBandCount = activeEmployees.filter(e => e.bandPosition === "below").length;
+  const aboveBandCount = activeEmployees.filter(e => e.bandPosition === "above").length;
   const outOfBandCount = activeEmployees.length - inBandCount;
   
   const avgMarketPosition = activeEmployees.reduce((sum, e) => sum + e.marketComparison, 0) / activeEmployees.length;
@@ -328,16 +419,50 @@ export function getCompanyMetrics(): CompanyMetrics {
   // Payroll risk flags = employees significantly above band (>15% above market)
   const payrollRiskFlags = activeEmployees.filter(e => e.marketComparison > 15).length;
   
+  const inBandPercentage = Math.round((inBandCount / activeEmployees.length) * 100);
+  
+  // Generate trend data
+  const headcountTrend = generateTrendData(activeEmployees.length, 0.03, 0.08);
+  const payrollTrend = generateTrendData(totalPayroll, 0.02, 0.12);
+  
+  // Calculate risk breakdown
+  const riskBreakdown = calculateRiskBreakdown(activeEmployees);
+  
+  // Calculate health score
+  const healthScore = calculateHealthScore(
+    inBandPercentage,
+    avgMarketPosition,
+    payrollRiskFlags,
+    activeEmployees.length
+  );
+  
+  // Band distribution as percentages
+  const bandDistribution = {
+    below: Math.round((belowBandCount / activeEmployees.length) * 100),
+    inBand: inBandPercentage,
+    above: Math.round((aboveBandCount / activeEmployees.length) * 100),
+  };
+  
   return {
     totalEmployees: MOCK_EMPLOYEES.length,
     activeEmployees: activeEmployees.length,
     totalPayroll,
-    inBandPercentage: Math.round((inBandCount / activeEmployees.length) * 100),
+    inBandPercentage,
     outOfBandPercentage: Math.round((outOfBandCount / activeEmployees.length) * 100),
     avgMarketPosition: Math.round(avgMarketPosition * 10) / 10,
     rolesOutsideBand,
     departmentsOverBenchmark,
     payrollRiskFlags,
+    // Extended metrics
+    healthScore,
+    headcountTrend,
+    payrollTrend,
+    riskBreakdown,
+    bandDistribution,
+    // Mock YoY changes
+    headcountChange: 8.2,
+    payrollChange: 12.4,
+    inBandChange: 3.5,
   };
 }
 

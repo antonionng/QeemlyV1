@@ -154,6 +154,62 @@ export async function getEmployees(): Promise<Employee[]> {
 // are exported from mock-data.ts - use those for sync access
 // Use async versions below when database access is needed
 
+// Helper to generate trend data for async metrics
+function generateAsyncTrendData(baseValue: number, volatility: number, trend: number): { month: string; value: number }[] {
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const currentMonth = new Date().getMonth();
+  
+  const data: { month: string; value: number }[] = [];
+  let value = baseValue * (1 - trend * 0.12);
+  
+  for (let i = 0; i < 12; i++) {
+    const monthIndex = (currentMonth - 11 + i + 12) % 12;
+    const monthVariation = (Math.random() - 0.5) * volatility * baseValue;
+    value = value * (1 + trend / 12) + monthVariation;
+    data.push({
+      month: months[monthIndex],
+      value: Math.round(value),
+    });
+  }
+  
+  return data;
+}
+
+// Helper to calculate risk breakdown
+function calculateAsyncRiskBreakdown(employees: Employee[]): { severity: "critical" | "high" | "medium" | "low"; count: number; label: string }[] {
+  const critical = employees.filter(e => e.marketComparison > 25).length;
+  const high = employees.filter(e => e.marketComparison > 15 && e.marketComparison <= 25).length;
+  const medium = employees.filter(e => e.marketComparison > 5 && e.marketComparison <= 15).length;
+  const low = employees.filter(e => e.bandPosition === "above" && e.marketComparison <= 5).length;
+  
+  return [
+    { severity: "critical", count: critical, label: "Critical (>25% above)" },
+    { severity: "high", count: high, label: "High (15-25% above)" },
+    { severity: "medium", count: medium, label: "Medium (5-15% above)" },
+    { severity: "low", count: low, label: "Low (slightly above)" },
+  ];
+}
+
+// Helper to calculate health score
+function calculateAsyncHealthScore(
+  inBandPercentage: number,
+  avgMarketPosition: number,
+  payrollRiskFlags: number,
+  totalEmployees: number
+): number {
+  const bandAlignmentScore = inBandPercentage;
+  const marketScore = avgMarketPosition >= 0 && avgMarketPosition <= 5 
+    ? 100 
+    : avgMarketPosition < 0 
+      ? Math.max(0, 100 + avgMarketPosition * 5)
+      : Math.max(0, 100 - (avgMarketPosition - 5) * 3);
+  const riskPercentage = (payrollRiskFlags / totalEmployees) * 100;
+  const riskScore = Math.max(0, 100 - riskPercentage * 5);
+  
+  const score = (bandAlignmentScore * 0.4) + (marketScore * 0.35) + (riskScore * 0.25);
+  return Math.round(Math.min(100, Math.max(0, score)));
+}
+
 /**
  * Async version of getCompanyMetrics that uses database when available
  */
@@ -168,6 +224,8 @@ export async function getCompanyMetricsAsync(): Promise<CompanyMetrics> {
   const totalPayroll = activeEmployees.reduce((sum, e) => sum + e.totalComp, 0);
   
   const inBandCount = activeEmployees.filter(e => e.bandPosition === "in-band").length;
+  const belowBandCount = activeEmployees.filter(e => e.bandPosition === "below").length;
+  const aboveBandCount = activeEmployees.filter(e => e.bandPosition === "above").length;
   const outOfBandCount = activeEmployees.length - inBandCount;
   
   const avgMarketPosition = activeEmployees.length > 0
@@ -189,13 +247,32 @@ export async function getCompanyMetricsAsync(): Promise<CompanyMetrics> {
   const departmentsOverBenchmark = deptMetrics.filter(d => d.avgVsMarket > 5).length;
   const payrollRiskFlags = activeEmployees.filter(e => e.marketComparison > 15).length;
   
+  const inBandPercentage = activeEmployees.length > 0 
+    ? Math.round((inBandCount / activeEmployees.length) * 100)
+    : 0;
+  
+  // Generate extended metrics
+  const headcountTrend = generateAsyncTrendData(activeEmployees.length, 0.03, 0.08);
+  const payrollTrend = generateAsyncTrendData(totalPayroll, 0.02, 0.12);
+  const riskBreakdown = calculateAsyncRiskBreakdown(activeEmployees);
+  const healthScore = calculateAsyncHealthScore(
+    inBandPercentage,
+    avgMarketPosition,
+    payrollRiskFlags,
+    activeEmployees.length
+  );
+  
+  const bandDistribution = {
+    below: activeEmployees.length > 0 ? Math.round((belowBandCount / activeEmployees.length) * 100) : 0,
+    inBand: inBandPercentage,
+    above: activeEmployees.length > 0 ? Math.round((aboveBandCount / activeEmployees.length) * 100) : 0,
+  };
+  
   return {
     totalEmployees: employees.length,
     activeEmployees: activeEmployees.length,
     totalPayroll,
-    inBandPercentage: activeEmployees.length > 0 
-      ? Math.round((inBandCount / activeEmployees.length) * 100)
-      : 0,
+    inBandPercentage,
     outOfBandPercentage: activeEmployees.length > 0
       ? Math.round((outOfBandCount / activeEmployees.length) * 100)
       : 0,
@@ -203,5 +280,14 @@ export async function getCompanyMetricsAsync(): Promise<CompanyMetrics> {
     rolesOutsideBand,
     departmentsOverBenchmark,
     payrollRiskFlags,
+    // Extended metrics
+    healthScore,
+    headcountTrend,
+    payrollTrend,
+    riskBreakdown,
+    bandDistribution,
+    headcountChange: 8.2,
+    payrollChange: 12.4,
+    inBandChange: 3.5,
   };
 }

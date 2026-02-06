@@ -1,23 +1,55 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { Settings, RefreshCw, Upload } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { StatCards, KeyInsights, DepartmentTabs } from "@/components/dashboard/overview";
+import { 
+  StatCards, 
+  KeyInsights, 
+  DepartmentTabs,
+  HealthScore,
+  PayrollTrend,
+  BandDistributionChart,
+  RiskBreakdown,
+  QuickActions,
+} from "@/components/dashboard/overview";
 import { UploadModal } from "@/components/dashboard/upload";
 import { getCompanyMetrics, getDepartmentSummaries } from "@/lib/employees";
 import { useCompanySettings } from "@/lib/company";
+import clsx from "clsx";
 
 export default function CompanyOverviewPage() {
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const { companyName, isConfigured } = useCompanySettings();
   const metrics = getCompanyMetrics();
   const departmentSummaries = getDepartmentSummaries();
 
+  const handleRefresh = useCallback(() => {
+    setIsRefreshing(true);
+    // Simulate refresh - in real app this would refetch data
+    setTimeout(() => {
+      setIsRefreshing(false);
+      setLastRefresh(new Date());
+    }, 1000);
+  }, []);
+
+  const getRefreshText = () => {
+    const now = new Date();
+    const diffMs = now.getTime() - lastRefresh.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    
+    if (diffMins < 1) return "Data refreshed just now";
+    if (diffMins === 1) return "Data refreshed 1 minute ago";
+    if (diffMins < 60) return `Data refreshed ${diffMins} minutes ago`;
+    return `Data refreshed ${Math.floor(diffMins / 60)} hours ago`;
+  };
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Page Header */}
       <div className="relative">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
@@ -39,14 +71,23 @@ export default function CompanyOverviewPage() {
 
           {/* Actions */}
           <div className="flex flex-wrap items-center gap-3 lg:justify-end">
+            <Button 
+              variant="ghost" 
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="text-brand-600"
+            >
+              <RefreshCw className={clsx("mr-2 h-4 w-4", isRefreshing && "animate-spin")} />
+              Refresh
+            </Button>
             <Button variant="ghost" onClick={() => setShowUploadModal(true)}>
               <Upload className="mr-2 h-4 w-4" />
-              Import Employees
+              Import
             </Button>
             <Link href="/dashboard/settings">
               <Button variant="ghost" className="h-11 bg-white hover:bg-brand-50 border border-border/40 px-5">
                 <Settings className="mr-2 h-4 w-4 text-brand-600" />
-                Edit Settings
+                Settings
               </Button>
             </Link>
           </div>
@@ -75,21 +116,37 @@ export default function CompanyOverviewPage() {
         )}
 
         {/* Live indicator */}
-        <div className="mt-6 flex items-center gap-2 text-sm text-brand-500">
-          <RefreshCw className="h-3.5 w-3.5" />
-          <span>Data refreshed just now</span>
+        <div className="mt-4 flex items-center gap-2 text-sm text-brand-500">
+          <div className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+          </div>
+          <span>{getRefreshText()}</span>
         </div>
       </div>
 
       {/* Stat Cards */}
       <StatCards metrics={metrics} />
 
-      {/* Two column layout for insights and departments */}
+      {/* Health Score - Full width prominent widget */}
+      <HealthScore metrics={metrics} />
+
+      {/* Charts Row - Payroll Trend and Band Distribution */}
+      <div className="grid gap-6 lg:grid-cols-2">
+        <PayrollTrend metrics={metrics} />
+        <BandDistributionChart metrics={metrics} departmentSummaries={departmentSummaries} />
+      </div>
+
+      {/* Three column layout for insights, departments, and actions */}
       <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-1">
+        <div className="lg:col-span-1 space-y-6">
           <KeyInsights metrics={metrics} departmentSummaries={departmentSummaries} />
+          <QuickActions />
         </div>
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-1">
+          <RiskBreakdown metrics={metrics} departmentSummaries={departmentSummaries} />
+        </div>
+        <div className="lg:col-span-1">
           <DepartmentTabs summaries={departmentSummaries} />
         </div>
       </div>

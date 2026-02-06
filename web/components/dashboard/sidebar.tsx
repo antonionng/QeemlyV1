@@ -192,7 +192,7 @@ export function DashboardSidebar({
                 </span>
               </>
             ) : (
-              <Logo compact href="/dashboard" />
+              <Logo compact />
             )}
           </Link>
         )}
