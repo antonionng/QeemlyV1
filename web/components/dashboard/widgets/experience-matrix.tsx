@@ -8,6 +8,7 @@ import {
   formatCurrencyK,
   getLocation,
 } from "@/lib/dashboard/dummy-data";
+import { useSalaryView } from "@/lib/salary-view-store";
 import clsx from "clsx";
 
 export function ExperienceMatrixWidget() {
@@ -16,6 +17,8 @@ export function ExperienceMatrixWidget() {
 
   const data = getExperienceMatrix(selectedRole, selectedLocation);
   const location = getLocation(selectedLocation);
+  const { salaryView } = useSalaryView();
+  const multiplier = salaryView === "annual" ? 12 : 1;
 
   return (
     <div className="flex h-full flex-col gap-4">
@@ -60,18 +63,18 @@ export function ExperienceMatrixWidget() {
               <tr key={row.level} className="hover:bg-brand-50/30 transition-colors">
                 <td className="p-3 font-semibold text-brand-800 whitespace-nowrap">{row.level}</td>
                 <td className="p-3 text-center text-brand-600 font-medium">
-                  {formatCurrencyK(location?.currency || "AED", row.p25)}
+                  {formatCurrencyK(location?.currency || "AED", row.p25 * multiplier)}
                 </td>
                 <td className="p-3 text-center">
                    <span className={clsx(
                      "inline-block px-3 py-1 rounded-full font-bold text-brand-900",
                      i < 3 ? "bg-brand-100" : i < 6 ? "bg-brand-200" : "bg-brand-300"
                    )}>
-                    {formatCurrencyK(location?.currency || "AED", row.p50)}
+                    {formatCurrencyK(location?.currency || "AED", row.p50 * multiplier)}
                    </span>
                 </td>
                 <td className="p-3 text-center text-brand-600 font-medium">
-                  {formatCurrencyK(location?.currency || "AED", row.p75)}
+                  {formatCurrencyK(location?.currency || "AED", row.p75 * multiplier)}
                 </td>
               </tr>
             ))}

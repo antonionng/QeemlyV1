@@ -228,12 +228,12 @@ export function normalizeStatus(status: string): "active" | "inactive" {
 /**
  * Normalize employment type
  */
-export function normalizeEmploymentType(type: string): "local" | "expat" {
+export function normalizeEmploymentType(type: string): "national" | "expat" {
   const normalized = normalize(type);
   if (["expat", "expatriate", "international", "foreign"].includes(normalized)) {
     return "expat";
   }
-  return "local";
+  return "national";
 }
 
 /**
@@ -291,7 +291,7 @@ export type TransformedEmployee = {
   equity: number | null;
   currency: string;
   status: "active" | "inactive";
-  employmentType: "local" | "expat";
+  employmentType: "national" | "expat";
   hireDate: string | null;
   performanceRating: "low" | "meets" | "exceeds" | "exceptional" | null;
 };
@@ -331,7 +331,7 @@ export function transformEmployee(data: Record<string, unknown>): TransformedEmp
     equity: parseNumber(String(data.equity || "")),
     currency: (data.currency as string) || getCurrencyForLocation(locationId),
     status: normalizeStatus(data.status as string || "active"),
-    employmentType: normalizeEmploymentType(data.employmentType as string || "local"),
+    employmentType: normalizeEmploymentType(data.employmentType as string || "national"),
     hireDate: parseDate(data.hireDate as string || ""),
     performanceRating: normalizePerformanceRating(data.performanceRating as string || ""),
   };

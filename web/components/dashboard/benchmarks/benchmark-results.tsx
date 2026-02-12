@@ -1,13 +1,14 @@
 "use client";
 
-import { useState } from "react";
-import { ArrowLeft, Download, Bookmark, ArrowRight, Sparkles, CheckCircle, AlertCircle, Info, SlidersHorizontal, Building2 } from "lucide-react";
+import { ArrowLeft, Download, Bookmark, ArrowRight, Sparkles, CheckCircle, AlertCircle, Info, Building2 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+// SalaryViewToggle is now in the global topbar
 import { useBenchmarkState, type BenchmarkResult } from "@/lib/benchmarks/benchmark-state";
 import { useCompanySettings, getCompanyInitials } from "@/lib/company";
 import { useCurrencyFormatter, convertCurrency, monthlyToAnnual, roundToThousand } from "@/lib/utils/currency";
+import { useSalaryView } from "@/lib/salary-view-store";
 import { generateSalaryBreakdown } from "@/lib/dashboard/dummy-data";
 import { FilterSidebar } from "./filter-sidebar";
 
@@ -19,16 +20,16 @@ export function BenchmarkResults({ result }: BenchmarkResultsProps) {
   const { goToStep, clearResult, saveCurrentFilter } = useBenchmarkState();
   const companySettings = useCompanySettings();
   const currency = useCurrencyFormatter();
-  const [showFilters, setShowFilters] = useState(true);
+  const { salaryView, setSalaryView } = useSalaryView();
   
   const { benchmark, role, level, location, formData, isOverridden } = result;
   const targetPercentile = formData.targetPercentile || companySettings.targetPercentile;
   
-  // Convert from source currency (AED monthly) to company default currency (annual)
+  // Convert from source currency (AED monthly) to company default currency
   const sourceCurrency = benchmark.currency || "AED";
   const convertAndRound = (monthlyValue: number) => {
-    const annualValue = monthlyToAnnual(monthlyValue);
-    const convertedValue = convertCurrency(annualValue, sourceCurrency, currency.defaultCurrency);
+    const value = salaryView === "annual" ? monthlyToAnnual(monthlyValue) : monthlyValue;
+    const convertedValue = convertCurrency(value, sourceCurrency, currency.defaultCurrency);
     return roundToThousand(convertedValue);
   };
   
@@ -100,7 +101,7 @@ export function BenchmarkResults({ result }: BenchmarkResultsProps) {
   return (
     <div className="flex gap-6">
       {/* Filter Sidebar */}
-      {showFilters && <FilterSidebar />}
+      <FilterSidebar />
 
       {/* Main Content */}
       <div className="flex-1 space-y-6">
@@ -113,13 +114,6 @@ export function BenchmarkResults({ result }: BenchmarkResultsProps) {
             >
               <ArrowLeft className="h-4 w-4" />
               Back to form
-            </button>
-            <button
-              onClick={() => setShowFilters(!showFilters)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-brand-50 text-xs font-medium text-brand-700 hover:bg-brand-100"
-            >
-              <SlidersHorizontal className="h-3.5 w-3.5" />
-              {showFilters ? "Hide" : "Show"} Filters
             </button>
           </div>
           <div className="flex items-center gap-2">

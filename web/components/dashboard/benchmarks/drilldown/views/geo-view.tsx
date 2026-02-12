@@ -7,6 +7,7 @@ import { type BenchmarkResult } from "@/lib/benchmarks/benchmark-state";
 import { LOCATIONS, generateBenchmark } from "@/lib/dashboard/dummy-data";
 import { useCompanySettings, getCompanyInitials } from "@/lib/company";
 import { useCurrencyFormatter, convertCurrency, monthlyToAnnual, roundToThousand } from "@/lib/utils/currency";
+import { useSalaryView } from "@/lib/salary-view-store";
 
 interface GeoViewProps {
   result: BenchmarkResult;
@@ -23,15 +24,16 @@ export function GeoView({ result }: GeoViewProps) {
   const { role, level, location } = result;
   const companySettings = useCompanySettings();
   const currency = useCurrencyFormatter();
+  const { salaryView } = useSalaryView();
   
   // Company branding
   const hasCompanyLogo = !!companySettings.companyLogo;
   const companyInitials = getCompanyInitials(companySettings.companyName);
   
-  // Convert from monthly AED to company's default currency (annual)
+  // Convert from monthly AED to company's default currency (respects salary view mode)
   const convertToDefault = (value: number) => {
-    const annualValue = monthlyToAnnual(value);
-    return roundToThousand(convertCurrency(annualValue, "AED", currency.defaultCurrency));
+    const converted = salaryView === "annual" ? monthlyToAnnual(value) : value;
+    return roundToThousand(convertCurrency(converted, "AED", currency.defaultCurrency));
   };
   
   const formatCompact = (value: number) => {

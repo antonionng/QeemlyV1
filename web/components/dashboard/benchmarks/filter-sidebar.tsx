@@ -226,13 +226,13 @@ export function FilterSidebar({ className }: FilterSidebarProps) {
             </label>
             <div className="flex gap-1.5">
               {[
-                { value: "local", label: "Local" },
+                { value: "national", label: "National" },
                 { value: "expat", label: "Expat" },
               ].map((option) => (
                 <button
                   key={option.value}
                   type="button"
-                  onClick={() => handleFieldChange("employmentType", option.value as "local" | "expat")}
+                  onClick={() => handleFieldChange("employmentType", option.value as "national" | "expat")}
                   className={clsx(
                     "flex-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
                     formData.employmentType === option.value

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/chip";
 import { Input } from "@/components/ui/input";
+import { RoleSearchAutocomplete } from "@/components/marketing/role-search-autocomplete";
 import { AiExplainTooltip } from "@/components/ui/ai-explain-tooltip";
 import { SectionModal } from "@/components/ui/section-modal";
 import { AiChecksVisual, GulfFocusedVisual, HireSmarterVisual, KnowMarketVisual } from "@/components/marketing/jigsaw-visuals";
@@ -109,18 +110,13 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               <form action="/preview" className="space-y-2">
                 <div className="rounded-3xl bg-white/80 shadow-[0_8px_30px_rgba(15,23,42,0.06)] ring-1 ring-border/70 backdrop-blur-sm focus-within:ring-brand-200">
                   <div className="overflow-hidden rounded-3xl divide-y divide-border/60">
-                    {/* Role (top row) */}
-                    <div className="flex items-center gap-3 px-3.5 py-2.5">
-                      <Search className="h-4 w-4 text-brand-400" />
-                      <Input
-                        name="role"
-                        fullWidth
-                        defaultValue={selectedRole}
-                        placeholder="Search role (e.g. Backend Engineer)"
-                        className="h-8 border-none bg-transparent px-0 text-sm placeholder:text-brand-500 focus:border-none focus-visible:outline-none focus-visible:ring-0 rounded-none"
-                        aria-label="Role"
-                      />
-                    </div>
+                    {/* Role (top row) - Typeahead search */}
+                    <RoleSearchAutocomplete
+                      defaultValue={selectedRole}
+                      location={selectedLocation}
+                      level={selectedLevel}
+                      currency={selectedCurrency}
+                    />
 
                     {/* Filters (second row) */}
                     <div className="grid grid-cols-1 divide-y divide-border/60 lg:grid-cols-[1fr_0.7fr_0.7fr_auto] lg:divide-x lg:divide-y-0">
@@ -197,18 +193,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               </form>
 
               <div className="flex flex-wrap items-center gap-2 text-sm text-brand-600">
-                <span className="font-semibold text-brand-700">Popular:</span>
-                {popularRoles.map((role) => (
-                  <Link
-                    key={role}
-                    href={{
-                      pathname: "/home",
-                      query: { role, location: selectedLocation, level: selectedLevel, currency: selectedCurrency },
-                    }}
-                  >
-                    <Chip className="cursor-pointer hover:bg-brand-100">{role}</Chip>
-                  </Link>
-                ))}
+                <span className="font-semibold text-brand-700">Try:</span>
+                <span className="text-brand-500">Start typing a role above to see suggestions</span>
               </div>
             </div>
 

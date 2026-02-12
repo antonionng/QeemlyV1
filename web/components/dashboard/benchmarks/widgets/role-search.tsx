@@ -20,7 +20,9 @@ export function RoleSearchWidget() {
     selectedLocationId,
     selectedLevelId,
     selectRole,
+    salaryView,
   } = useBenchmarksContext();
+  const multiplier = salaryView === "annual" ? 12 : 1;
 
   // Generate role previews with benchmark data
   const rolePreviews = useMemo(() => {
@@ -109,7 +111,7 @@ export function RoleSearchWidget() {
                 <div>
                   <p className="text-[10px] text-accent-500">Median</p>
                   <p className="text-sm font-bold text-brand-900">
-                    {formatCurrencyK(benchmark.currency, benchmark.percentiles.p50)}
+                    {formatCurrencyK(benchmark.currency, benchmark.percentiles.p50 * multiplier)}
                   </p>
                 </div>
                 <span

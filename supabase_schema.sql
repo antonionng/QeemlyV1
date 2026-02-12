@@ -184,7 +184,7 @@ CREATE TABLE IF NOT EXISTS employees (
   currency TEXT DEFAULT 'GBP',
   -- Status
   status TEXT DEFAULT 'active' CHECK (status IN ('active', 'inactive')),
-  employment_type TEXT DEFAULT 'local' CHECK (employment_type IN ('local', 'expat')),
+  employment_type TEXT DEFAULT 'national' CHECK (employment_type IN ('national', 'expat')),
   hire_date DATE,
   last_review_date DATE,
   performance_rating TEXT CHECK (performance_rating IN ('low', 'meets', 'exceeds', 'exceptional')),
@@ -332,3 +332,212 @@ CREATE INDEX IF NOT EXISTS idx_salary_benchmarks_lookup ON salary_benchmarks(rol
 
 CREATE INDEX IF NOT EXISTS idx_data_uploads_workspace ON data_uploads(workspace_id);
 CREATE INDEX IF NOT EXISTS idx_compensation_history_employee ON compensation_history(employee_id);
+
+-- ============================================================================
+-- INTEGRATIONS TABLES
+-- ============================================================================
+
+-- 10. Integrations - Connected third-party services per workspace
+CREATE TABLE IF NOT EXISTS integrations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE NOT NULL,
+  -- Provider info
+  provider TEXT NOT NULL, -- e.g. 'slack', 'teams', 'merge_hris', 'zenhr', 'bayzat'
+  category TEXT NOT NULL CHECK (category IN ('notification', 'hris', 'ats')),
+  -- Connection state
+  status TEXT DEFAULT 'disconnected' CHECK (status IN ('connected', 'disconnected', 'error', 'syncing')),
+  config JSONB DEFAULT '{}', -- Channel IDs, sync preferences, field mappings
+  -- Auth tokens (encrypted at application layer)
+  access_token TEXT,
+  refresh_token TEXT,
+  merge_account_token TEXT, -- For Merge.dev integrations
+  -- Sync metadata
+  last_sync_at TIMESTAMPTZ,
+  sync_frequency TEXT DEFAULT 'daily' CHECK (sync_frequency IN ('realtime', 'hourly', 'daily', 'weekly', 'manual')),
+  -- Timestamps
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  -- One active integration per provider per workspace
+  UNIQUE(workspace_id, provider)
+);
+
+-- 11. Integration Sync Logs - Audit trail for data syncs
+CREATE TABLE IF NOT EXISTS integration_sync_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  integration_id UUID REFERENCES integrations(id) ON DELETE CASCADE NOT NULL,
+  -- Sync details
+  sync_type TEXT NOT NULL CHECK (sync_type IN ('full', 'incremental', 'webhook')),
+  status TEXT NOT NULL CHECK (status IN ('success', 'partial', 'failed')),
+  -- Results
+  records_created INTEGER DEFAULT 0,
+  records_updated INTEGER DEFAULT 0,
+  records_failed INTEGER DEFAULT 0,
+  error_message TEXT,
+  -- Timing
+  started_at TIMESTAMPTZ DEFAULT now(),
+  completed_at TIMESTAMPTZ
+);
+
+-- 12. Notification Rules - Configurable event triggers for connected notification integrations
+CREATE TABLE IF NOT EXISTS notification_rules (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE NOT NULL,
+  integration_id UUID REFERENCES integrations(id) ON DELETE CASCADE NOT NULL,
+  -- Rule config
+  event_type TEXT NOT NULL, -- e.g. 'sync_complete', 'out_of_band_alert', 'review_cycle_reminder'
+  channel TEXT, -- Slack channel ID, Teams channel, etc.
+  enabled BOOLEAN DEFAULT true,
+  config JSONB DEFAULT '{}', -- Thresholds, filters, custom message templates
+  -- Timestamps
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  -- One rule per event type per integration
+  UNIQUE(integration_id, event_type)
+);
+
+-- 13. API Keys - Customer API keys for the public Qeemly API
+CREATE TABLE IF NOT EXISTS api_keys (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE NOT NULL,
+  -- Key info
+  name TEXT NOT NULL, -- User-defined label, e.g. 'Production Key'
+  key_prefix TEXT NOT NULL, -- First 8 chars for display, e.g. 'qeem_ab12'
+  key_hash TEXT NOT NULL, -- Hashed full key (never store plaintext)
+  -- Permissions
+  scopes JSONB DEFAULT '["employees:read"]', -- e.g. ["employees:read", "employees:write", "benchmarks:read"]
+  -- Lifecycle
+  last_used_at TIMESTAMPTZ,
+  expires_at TIMESTAMPTZ, -- Nullable, null = never expires
+  revoked_at TIMESTAMPTZ, -- Nullable, null = active
+  -- Metadata
+  created_by UUID REFERENCES profiles(id),
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- 14. API Request Logs - Usage tracking for API keys
+CREATE TABLE IF NOT EXISTS api_request_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  api_key_id UUID REFERENCES api_keys(id) ON DELETE SET NULL,
+  workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE NOT NULL,
+  -- Request info
+  endpoint TEXT NOT NULL,
+  method TEXT NOT NULL,
+  status_code INTEGER NOT NULL,
+  -- Timing
+  request_at TIMESTAMPTZ DEFAULT now(),
+  response_ms INTEGER
+);
+
+-- 15. Outgoing Webhooks - Customer-configured webhook endpoints
+CREATE TABLE IF NOT EXISTS outgoing_webhooks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE NOT NULL,
+  -- Webhook config
+  url TEXT NOT NULL,
+  secret TEXT NOT NULL, -- For HMAC signature verification
+  events JSONB DEFAULT '[]', -- Event types to subscribe to
+  enabled BOOLEAN DEFAULT true,
+  -- Metadata
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- 16. Webhook Delivery Logs - Track outgoing webhook deliveries
+CREATE TABLE IF NOT EXISTS webhook_delivery_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  webhook_id UUID REFERENCES outgoing_webhooks(id) ON DELETE CASCADE NOT NULL,
+  -- Delivery details
+  event_type TEXT NOT NULL,
+  payload JSONB NOT NULL,
+  status_code INTEGER,
+  response_body TEXT,
+  -- Timing
+  attempted_at TIMESTAMPTZ DEFAULT now(),
+  duration_ms INTEGER,
+  -- Retry tracking
+  attempt_number INTEGER DEFAULT 1,
+  next_retry_at TIMESTAMPTZ
+);
+
+-- Enable RLS on integration tables
+ALTER TABLE integrations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE integration_sync_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notification_rules ENABLE ROW LEVEL SECURITY;
+ALTER TABLE api_keys ENABLE ROW LEVEL SECURITY;
+ALTER TABLE api_request_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE outgoing_webhooks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE webhook_delivery_logs ENABLE ROW LEVEL SECURITY;
+
+-- Policies for Integrations
+CREATE POLICY "Users can view their workspace integrations"
+ON integrations FOR SELECT
+USING (workspace_id IN (SELECT workspace_id FROM profiles WHERE id = auth.uid()));
+
+CREATE POLICY "Admins can manage workspace integrations"
+ON integrations FOR ALL
+USING (workspace_id IN (SELECT workspace_id FROM profiles WHERE id = auth.uid() AND role = 'admin'));
+
+-- Policies for Integration Sync Logs
+CREATE POLICY "Users can view their workspace sync logs"
+ON integration_sync_logs FOR SELECT
+USING (integration_id IN (
+  SELECT id FROM integrations WHERE workspace_id IN (
+    SELECT workspace_id FROM profiles WHERE id = auth.uid()
+  )
+));
+
+-- Policies for Notification Rules
+CREATE POLICY "Users can view their workspace notification rules"
+ON notification_rules FOR SELECT
+USING (workspace_id IN (SELECT workspace_id FROM profiles WHERE id = auth.uid()));
+
+CREATE POLICY "Admins can manage notification rules"
+ON notification_rules FOR ALL
+USING (workspace_id IN (SELECT workspace_id FROM profiles WHERE id = auth.uid() AND role = 'admin'));
+
+-- Policies for API Keys
+CREATE POLICY "Users can view their workspace API keys"
+ON api_keys FOR SELECT
+USING (workspace_id IN (SELECT workspace_id FROM profiles WHERE id = auth.uid()));
+
+CREATE POLICY "Admins can manage API keys"
+ON api_keys FOR ALL
+USING (workspace_id IN (SELECT workspace_id FROM profiles WHERE id = auth.uid() AND role = 'admin'));
+
+-- Policies for API Request Logs
+CREATE POLICY "Users can view their workspace API logs"
+ON api_request_logs FOR SELECT
+USING (workspace_id IN (SELECT workspace_id FROM profiles WHERE id = auth.uid()));
+
+-- Policies for Outgoing Webhooks
+CREATE POLICY "Users can view their workspace webhooks"
+ON outgoing_webhooks FOR SELECT
+USING (workspace_id IN (SELECT workspace_id FROM profiles WHERE id = auth.uid()));
+
+CREATE POLICY "Admins can manage outgoing webhooks"
+ON outgoing_webhooks FOR ALL
+USING (workspace_id IN (SELECT workspace_id FROM profiles WHERE id = auth.uid() AND role = 'admin'));
+
+-- Policies for Webhook Delivery Logs
+CREATE POLICY "Users can view their workspace webhook deliveries"
+ON webhook_delivery_logs FOR SELECT
+USING (webhook_id IN (
+  SELECT id FROM outgoing_webhooks WHERE workspace_id IN (
+    SELECT workspace_id FROM profiles WHERE id = auth.uid()
+  )
+));
+
+-- Indexes for integration tables
+CREATE INDEX IF NOT EXISTS idx_integrations_workspace ON integrations(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_integrations_provider ON integrations(provider);
+CREATE INDEX IF NOT EXISTS idx_integration_sync_logs_integration ON integration_sync_logs(integration_id);
+CREATE INDEX IF NOT EXISTS idx_integration_sync_logs_started ON integration_sync_logs(started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notification_rules_workspace ON notification_rules(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_api_keys_workspace ON api_keys(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_api_keys_prefix ON api_keys(key_prefix);
+CREATE INDEX IF NOT EXISTS idx_api_request_logs_key ON api_request_logs(api_key_id);
+CREATE INDEX IF NOT EXISTS idx_api_request_logs_workspace ON api_request_logs(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_api_request_logs_request_at ON api_request_logs(request_at DESC);
+CREATE INDEX IF NOT EXISTS idx_outgoing_webhooks_workspace ON outgoing_webhooks(workspace_id);
+CREATE INDEX IF NOT EXISTS idx_webhook_delivery_logs_webhook ON webhook_delivery_logs(webhook_id);
+CREATE INDEX IF NOT EXISTS idx_webhook_delivery_logs_attempted ON webhook_delivery_logs(attempted_at DESC);

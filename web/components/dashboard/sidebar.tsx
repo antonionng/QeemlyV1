@@ -14,6 +14,7 @@ import {
   Globe2,
   Home,
   LogOut,
+  Plug,
   Settings,
   ShieldCheck,
   Upload,
@@ -55,6 +56,7 @@ const navSections: NavSection[] = [
     items: [
       { href: "/dashboard/relocation", label: "CoL Calculator", icon: Globe2 },
       { href: "/dashboard/upload", label: "Upload Data", icon: Upload },
+      { href: "/dashboard/integrations", label: "Integrations", icon: Plug },
     ],
   },
 ];
@@ -192,7 +194,7 @@ export function DashboardSidebar({
                 </span>
               </>
             ) : (
-              <Logo compact />
+              <Logo compact href={null} />
             )}
           </Link>
         )}

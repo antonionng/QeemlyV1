@@ -4,12 +4,13 @@ import { useState } from "react";
 import { AreaChart } from "@tremor/react";
 import clsx from "clsx";
 import { useBenchmarksContext } from "@/lib/benchmarks/context";
+// SalaryViewToggle is now in the global topbar
 import { formatCurrency, formatPercentage } from "@/lib/dashboard/dummy-data";
 
 type TimeRange = "3m" | "6m" | "12m";
 
 export function TrendChartWidget() {
-  const { selectedBenchmark, selectedRole } = useBenchmarksContext();
+  const { selectedBenchmark, selectedRole, salaryView, setSalaryView } = useBenchmarksContext();
   const [timeRange, setTimeRange] = useState<TimeRange>("12m");
 
   if (!selectedBenchmark || !selectedRole) {
@@ -31,17 +32,19 @@ export function TrendChartWidget() {
 
   const trendData = getFilteredTrend();
 
+  const multiplier = salaryView === "annual" ? 12 : 1;
+
   // Calculate period change
-  const startValue = trendData[0]?.p50 || 0;
-  const endValue = trendData[trendData.length - 1]?.p50 || 0;
+  const startValue = (trendData[0]?.p50 || 0) * multiplier;
+  const endValue = (trendData[trendData.length - 1]?.p50 || 0) * multiplier;
   const periodChange = startValue > 0 ? ((endValue - startValue) / startValue) * 100 : 0;
 
   // Prepare chart data
   const chartData = trendData.map((d) => ({
     month: d.month,
-    P25: d.p25,
-    Median: d.p50,
-    P75: d.p75,
+    P25: d.p25 * multiplier,
+    Median: d.p50 * multiplier,
+    P75: d.p75 * multiplier,
   }));
 
   return (
@@ -53,22 +56,24 @@ export function TrendChartWidget() {
           <p className="text-xs text-accent-500">Salary trend over time</p>
         </div>
 
-        <div className="flex gap-1 rounded-lg bg-brand-100/50 p-1">
-          {(["3m", "6m", "12m"] as TimeRange[]).map((range) => (
-            <button
-              key={range}
-              type="button"
-              onClick={() => setTimeRange(range)}
-              className={clsx(
-                "rounded-md px-3 py-1 text-xs font-semibold transition-colors",
-                timeRange === range
-                  ? "bg-white text-brand-900 shadow-sm"
-                  : "text-brand-600 hover:text-brand-800"
-              )}
-            >
-              {range.toUpperCase()}
-            </button>
-          ))}
+        <div className="flex items-center gap-2">
+          <div className="flex gap-1 rounded-lg bg-brand-100/50 p-1">
+            {(["3m", "6m", "12m"] as TimeRange[]).map((range) => (
+              <button
+                key={range}
+                type="button"
+                onClick={() => setTimeRange(range)}
+                className={clsx(
+                  "rounded-md px-3 py-1 text-xs font-semibold transition-colors",
+                  timeRange === range
+                    ? "bg-white text-brand-900 shadow-sm"
+                    : "text-brand-600 hover:text-brand-800"
+                )}
+              >
+                {range.toUpperCase()}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -102,8 +107,8 @@ export function TrendChartWidget() {
         </div>
       </div>
 
-      {/* Area Chart */}
-      <div className="min-h-[200px] flex-1">
+      {/* Line Chart (AreaChart with hidden fill) */}
+      <div className="min-h-[200px] flex-1 [&_.recharts-area-area]:!opacity-0">
         <AreaChart
           className="h-full"
           data={chartData}
@@ -113,6 +118,7 @@ export function TrendChartWidget() {
           valueFormatter={(v) => formatCurrency(selectedBenchmark.currency, v)}
           showLegend={true}
           showGridLines={false}
+          showGradient={false}
           curveType="monotone"
           yAxisWidth={80}
         />

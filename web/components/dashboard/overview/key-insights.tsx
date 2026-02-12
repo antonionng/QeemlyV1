@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import clsx from "clsx";
 import { type CompanyMetrics, type DepartmentSummary, formatAEDCompact } from "@/lib/employees";
+import { useSalaryView, applyViewMode } from "@/lib/salary-view-store";
 
 interface KeyInsightsProps {
   metrics: CompanyMetrics;
@@ -23,6 +24,9 @@ interface Insight {
 }
 
 export function KeyInsights({ metrics, departmentSummaries }: KeyInsightsProps) {
+  const { salaryView } = useSalaryView();
+  const fmt = (v: number) => formatAEDCompact(applyViewMode(v, salaryView));
+
   // Generate insights based on metrics
   const insights: Insight[] = [];
 
@@ -33,7 +37,7 @@ export function KeyInsights({ metrics, departmentSummaries }: KeyInsightsProps) 
       type: metrics.rolesOutsideBand > 20 ? "danger" : "warning",
       icon: AlertCircle,
       message: `${metrics.rolesOutsideBand} employees outside compensation band`,
-      impact: `Potential ${formatAEDCompact(estimatedImpact)} adjustment needed`,
+      impact: `Potential ${fmt(estimatedImpact)} adjustment needed`,
       actionLabel: "Review employees",
       actionHref: "/dashboard/salary-review?filter=outside-band",
       priority: metrics.rolesOutsideBand > 20 ? 1 : 2,
@@ -51,7 +55,7 @@ export function KeyInsights({ metrics, departmentSummaries }: KeyInsightsProps) 
       type: "info",
       icon: TrendingUp,
       message: `${deptName} is ${avgOver.toFixed(0)}% above market benchmark`,
-      impact: `~${formatAEDCompact(excessCost)} above market rate`,
+      impact: `~${fmt(excessCost)} above market rate`,
       actionLabel: `View ${deptName}`,
       actionHref: `/dashboard/salary-review?department=${deptName}`,
       priority: 3,
@@ -81,7 +85,7 @@ export function KeyInsights({ metrics, departmentSummaries }: KeyInsightsProps) 
       type: metrics.payrollRiskFlags > 10 ? "danger" : "warning",
       icon: AlertTriangle,
       message: `${metrics.payrollRiskFlags} payroll risk indicators detected`,
-      impact: `Addressing could save ${formatAEDCompact(savingsEstimate)}/year`,
+      impact: `Addressing could save ${fmt(savingsEstimate)}${salaryView === "monthly" ? "/mo" : "/year"}`,
       actionLabel: "View risks",
       actionHref: "/dashboard/salary-review?filter=above-band",
       priority: metrics.payrollRiskFlags > 10 ? 1 : 2,

@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { type BenchmarkResult } from "@/lib/benchmarks/benchmark-state";
 import { useCompanySettings, getCompanyInitials } from "@/lib/company";
 import { useCurrencyFormatter, convertCurrency, monthlyToAnnual, roundToThousand } from "@/lib/utils/currency";
+import { useSalaryView } from "@/lib/salary-view-store";
 import { getMarketBreakdownAverages } from "@/lib/dashboard/dummy-data";
 
 interface OfferBuilderViewProps {
@@ -32,6 +33,7 @@ export function OfferBuilderView({ result }: OfferBuilderViewProps) {
   const companySettings = useCompanySettings();
   const currency = useCurrencyFormatter();
   const [offerTarget, setOfferTarget] = useState<number>(companySettings.targetPercentile);
+  const { salaryView } = useSalaryView();
   
   // Get market averages for the level
   const marketAverages = getMarketBreakdownAverages(level.id);
@@ -41,10 +43,10 @@ export function OfferBuilderView({ result }: OfferBuilderViewProps) {
   const hasCompanyLogo = !!companySettings.companyLogo;
   const companyInitials = getCompanyInitials(companySettings.companyName);
   
-  // Convert from monthly AED to company's default currency (annual)
+  // Convert from monthly AED to company's default currency
   const convertToDefault = (value: number) => {
-    const annualValue = monthlyToAnnual(value);
-    return roundToThousand(convertCurrency(annualValue, "AED", currency.defaultCurrency));
+    const adjusted = salaryView === "annual" ? monthlyToAnnual(value) : value;
+    return roundToThousand(convertCurrency(adjusted, "AED", currency.defaultCurrency));
   };
   
   const formatValue = (value: number) => currency.format(value);
@@ -107,9 +109,11 @@ export function OfferBuilderView({ result }: OfferBuilderViewProps) {
         </div>
       </div>
 
-      <p className="text-xs text-brand-500 mb-4">
-        {role.title} - {level.name} • {companySettings.companyName}
-      </p>
+      <div className="flex items-center justify-between mb-4">
+        <p className="text-xs text-brand-500">
+          {role.title} - {level.name} • {companySettings.companyName}
+        </p>
+      </div>
 
       {/* Slider */}
       <div className="rounded-xl bg-brand-50 p-4 mb-4">
@@ -143,7 +147,7 @@ export function OfferBuilderView({ result }: OfferBuilderViewProps) {
           <span className="text-2xl font-extrabold text-brand-900">
             {formatValue(offerValue)}
           </span>
-          <span className="text-sm text-brand-500">/year</span>
+          <span className="text-sm text-brand-500">/{salaryView === "annual" ? "year" : "month"}</span>
         </div>
         <div className="mt-2 flex items-center gap-2">
           <span className="text-xs text-brand-500">Negotiation range:</span>

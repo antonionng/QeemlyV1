@@ -20,7 +20,9 @@ export function AIGuidanceWidget() {
     selectedRole,
     selectedLocation,
     offerTarget,
+    salaryView,
   } = useBenchmarksContext();
+  const multiplier = salaryView === "annual" ? 12 : 1;
 
   // Generate dynamic insights based on benchmark data
   const insights = useMemo<Insight[]>(() => {
@@ -194,7 +196,7 @@ export function AIGuidanceWidget() {
       <div className="rounded-lg bg-gradient-to-br from-brand-500 to-purple-600 p-3 text-white">
         <p className="text-xs font-medium opacity-90">Quick Summary</p>
         <p className="mt-1 text-xs">
-          Target <strong>{formatCurrencyK(selectedBenchmark.currency, selectedBenchmark.percentiles.p75)}</strong> (P75) for competitive offers in {selectedLocation?.city || "this market"}.
+          Target <strong>{formatCurrencyK(selectedBenchmark.currency, selectedBenchmark.percentiles.p75 * multiplier)}</strong> (P75) for competitive offers in {selectedLocation?.city || "this market"}.
         </p>
       </div>
     </div>

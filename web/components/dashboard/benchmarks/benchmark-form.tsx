@@ -175,13 +175,13 @@ export function BenchmarkForm() {
             </label>
             <div className="flex gap-3">
               {[
-                { value: "local", label: "Local" },
+                { value: "national", label: "National" },
                 { value: "expat", label: "Expat" },
               ].map((option) => (
                 <button
                   key={option.value}
                   type="button"
-                  onClick={() => updateFormField("employmentType", option.value as "local" | "expat")}
+                  onClick={() => updateFormField("employmentType", option.value as "national" | "expat")}
                   className={`flex-1 px-4 py-2.5 rounded-full text-sm font-medium transition-all ${
                     formData.employmentType === option.value
                       ? "bg-brand-500 text-white"

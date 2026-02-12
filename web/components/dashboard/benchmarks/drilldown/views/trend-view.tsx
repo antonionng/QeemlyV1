@@ -2,9 +2,11 @@
 
 import { useState } from "react";
 import { TrendingUp, TrendingDown } from "lucide-react";
+import { AreaChart } from "@tremor/react";
 import clsx from "clsx";
 import { Card } from "@/components/ui/card";
 import { type BenchmarkResult } from "@/lib/benchmarks/benchmark-state";
+import { useSalaryView } from "@/lib/salary-view-store";
 
 type TimeRange = "3m" | "6m" | "12m";
 
@@ -15,9 +17,10 @@ interface TrendViewProps {
 export function TrendView({ result }: TrendViewProps) {
   const { benchmark, role } = result;
   const [timeRange, setTimeRange] = useState<TimeRange>("12m");
+  const { salaryView } = useSalaryView();
   
-  // Convert from monthly AED to annual AED
-  const convertToAnnual = (value: number) => Math.round(value * 12 / 1000) * 1000;
+  // Convert from monthly AED based on salary view mode
+  const convertValue = (value: number) => salaryView === "annual" ? Math.round(value * 12 / 1000) * 1000 : Math.round(value / 100) * 100;
   
   const formatAED = (value: number) => {
     if (value >= 1000) {
@@ -39,8 +42,8 @@ export function TrendView({ result }: TrendViewProps) {
   const trendData = getFilteredTrend();
 
   // Calculate period change
-  const startValue = convertToAnnual(trendData[0]?.p50 || 0);
-  const endValue = convertToAnnual(trendData[trendData.length - 1]?.p50 || 0);
+  const startValue = convertValue(trendData[0]?.p50 || 0);
+  const endValue = convertValue(trendData[trendData.length - 1]?.p50 || 0);
   const periodChange = startValue > 0 ? ((endValue - startValue) / startValue) * 100 : 0;
 
   return (
@@ -107,34 +110,26 @@ export function TrendView({ result }: TrendViewProps) {
         </div>
       </div>
 
-      {/* Simple bar chart visualization */}
-      <div className="space-y-2">
-        {trendData.map((point, index) => {
-          const value = convertToAnnual(point.p50);
-          const maxValue = Math.max(...trendData.map(t => convertToAnnual(t.p50)));
-          const percentage = (value / maxValue) * 100;
-          const isLast = index === trendData.length - 1;
-          
-          return (
-            <div key={point.month} className="flex items-center gap-3">
-              <div className="w-10 text-xs font-medium text-brand-600">
-                {point.month}
-              </div>
-              <div className="flex-1 h-6 bg-brand-50 rounded-full overflow-hidden">
-                <div
-                  className={clsx(
-                    "h-full rounded-full transition-all",
-                    isLast ? "bg-brand-500" : "bg-brand-300"
-                  )}
-                  style={{ width: `${percentage}%` }}
-                />
-              </div>
-              <div className="w-16 text-right text-xs font-medium text-brand-700">
-                {formatAED(value)}
-              </div>
-            </div>
-          );
-        })}
+      {/* Line Chart */}
+      <div className="min-h-[220px] [&_.recharts-area-area]:!opacity-0">
+        <AreaChart
+          className="h-56"
+          data={trendData.map((point) => ({
+            month: point.month,
+            P25: convertValue(point.p25),
+            Median: convertValue(point.p50),
+            P75: convertValue(point.p75),
+          }))}
+          index="month"
+          categories={["P25", "Median", "P75"]}
+          colors={["slate", "violet", "slate"]}
+          valueFormatter={(v) => formatAED(v)}
+          showLegend={true}
+          showGridLines={false}
+          showGradient={false}
+          curveType="monotone"
+          yAxisWidth={72}
+        />
       </div>
 
       {/* Trend insights */}

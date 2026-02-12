@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from "react";
 import { getDefaultBenchmarkLayout, getBenchmarkPreset, BENCHMARK_PRESET_LAYOUTS, type GridLayoutItem } from "./preset-layouts";
 import { ALL_BENCHMARK_WIDGET_IDS } from "./widget-registry";
 import { generateBenchmark, LOCATIONS, LEVELS, ROLES } from "@/lib/dashboard/dummy-data";
+import { useSalaryView } from "@/lib/salary-view-store";
 
 // Version the storage keys to invalidate cache when layout structure changes
 const STORAGE_VERSION = "v2";
@@ -64,6 +65,7 @@ export function useBenchmarks() {
   const [selectedLevelId, setSelectedLevelId] = useState("ic3");
   const [searchQuery, setSearchQuery] = useState("");
   const [offerTarget, setOfferTarget] = useState(75);
+  const { salaryView, setSalaryView } = useSalaryView();
 
   // Computed benchmark data
   const selectedBenchmark = useMemo(() => {
@@ -176,6 +178,7 @@ export function useBenchmarks() {
     selectedLevelId,
     searchQuery,
     offerTarget,
+    salaryView,
     
     // Computed data
     selectedBenchmark,
@@ -199,6 +202,7 @@ export function useBenchmarks() {
     setSelectedLevelId,
     setSearchQuery,
     setOfferTarget,
+    setSalaryView,
   };
 }
 

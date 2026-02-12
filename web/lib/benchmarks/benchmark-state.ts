@@ -25,7 +25,7 @@ export interface BenchmarkFormData {
   roleId: string | null;
   levelId: string | null;
   locationId: string | null;
-  employmentType: "local" | "expat";
+  employmentType: "national" | "expat";
   
   // Current salary (for existing/relocating)
   currentSalaryLow: number | null;
@@ -114,7 +114,7 @@ const DEFAULT_FORM_DATA: BenchmarkFormData = {
   roleId: null,
   levelId: null,
   locationId: null,
-  employmentType: "local",
+  employmentType: "national",
   currentSalaryLow: null,
   currentSalaryHigh: null,
   industry: null,
@@ -179,10 +179,11 @@ export const useBenchmarkState = create<BenchmarkState>()(
           flag: "GB",
         };
         
-        // Generate benchmark (use dubai as proxy for now, will convert currency)
+        // Generate benchmark (use dubai as proxy for non-GCC locations)
+        const isGccLocation = LOCATIONS.some(l => l.id === formData.locationId);
         const benchmark = generateBenchmark(
           formData.roleId,
-          formData.locationId === "london" ? "dubai" : formData.locationId,
+          isGccLocation ? formData.locationId : "dubai",
           formData.levelId
         );
         

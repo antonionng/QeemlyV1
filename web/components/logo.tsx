@@ -3,7 +3,7 @@ import Link from "next/link";
 import Image from "next/image";
 
 type LogoProps = {
-  href?: string;
+  href?: string | null;
   compact?: boolean;
   className?: string;
 };

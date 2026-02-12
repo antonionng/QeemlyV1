@@ -6,6 +6,7 @@ import { AlertTriangle, AlertCircle, AlertOctagon, Info, ArrowRight } from "luci
 import Link from "next/link";
 import clsx from "clsx";
 import { type CompanyMetrics, type DepartmentSummary, formatAEDCompact } from "@/lib/employees";
+import { useSalaryView, applyViewMode } from "@/lib/salary-view-store";
 
 interface RiskBreakdownProps {
   metrics: CompanyMetrics;
@@ -13,6 +14,7 @@ interface RiskBreakdownProps {
 }
 
 export function RiskBreakdown({ metrics, departmentSummaries }: RiskBreakdownProps) {
+  const { salaryView } = useSalaryView();
   // Get severity icon
   const getSeverityIcon = (severity: string) => {
     switch (severity) {
@@ -124,7 +126,7 @@ export function RiskBreakdown({ metrics, departmentSummaries }: RiskBreakdownPro
               <div>
                 <p className="text-xs font-medium text-rose-700">Estimated Annual Overpayment</p>
                 <p className="text-lg font-bold text-rose-800">
-                  {formatAEDCompact(estimatedOverpayment)}
+                  {formatAEDCompact(applyViewMode(estimatedOverpayment, salaryView))}
                 </p>
               </div>
               <div className="text-right">
@@ -132,7 +134,7 @@ export function RiskBreakdown({ metrics, departmentSummaries }: RiskBreakdownPro
                   Addressing these risks could save
                 </p>
                 <p className="text-xs font-semibold text-rose-700">
-                  up to {formatAEDCompact(estimatedOverpayment * 0.6)} annually
+                  up to {formatAEDCompact(applyViewMode(estimatedOverpayment * 0.6, salaryView))} {salaryView === "monthly" ? "monthly" : "annually"}
                 </p>
               </div>
             </div>

@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { TrendingUp, TrendingDown } from "lucide-react";
 import clsx from "clsx";
 import { formatAEDCompact, type CompanyMetrics } from "@/lib/employees";
+import { useSalaryView, applyViewMode } from "@/lib/salary-view-store";
 import { useState } from "react";
 
 interface PayrollTrendProps {
@@ -14,6 +15,7 @@ interface PayrollTrendProps {
 type TimeRange = "3m" | "6m" | "12m";
 
 export function PayrollTrend({ metrics }: PayrollTrendProps) {
+  const { salaryView } = useSalaryView();
   const [timeRange, setTimeRange] = useState<TimeRange>("12m");
 
   // Filter data based on time range
@@ -68,14 +70,14 @@ export function PayrollTrend({ metrics }: PayrollTrendProps) {
         <div>
           <p className="text-xs font-medium text-brand-600">Current</p>
           <p className="text-xl font-bold text-brand-900">
-            {formatAEDCompact(endValue)}
+            {formatAEDCompact(applyViewMode(endValue, salaryView))}
           </p>
         </div>
         <div className="h-8 w-px bg-brand-200" />
         <div>
           <p className="text-xs font-medium text-brand-600">Period Start</p>
           <p className="text-lg font-semibold text-brand-700">
-            {formatAEDCompact(startValue)}
+            {formatAEDCompact(applyViewMode(startValue, salaryView))}
           </p>
         </div>
         <div className="h-8 w-px bg-brand-200" />
@@ -107,7 +109,7 @@ export function PayrollTrend({ metrics }: PayrollTrendProps) {
           index="month"
           categories={["Payroll"]}
           colors={["violet"]}
-          valueFormatter={v => formatAEDCompact(v)}
+          valueFormatter={v => formatAEDCompact(applyViewMode(v, salaryView))}
           showLegend={false}
           showGridLines={false}
           curveType="monotone"

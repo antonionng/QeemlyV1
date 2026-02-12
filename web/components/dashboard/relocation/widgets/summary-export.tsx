@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Check, Download, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { RelocationResult, formatCurrency, CompApproach } from "@/lib/relocation/calculator";
+import { useSalaryView, applyViewMode } from "@/lib/salary-view-store";
 
 interface SummaryExportWidgetProps {
   result: RelocationResult | null;
@@ -23,6 +24,7 @@ export function SummaryExportWidget({
   hybridCap,
 }: SummaryExportWidgetProps) {
   const [copied, setCopied] = useState(false);
+  const { salaryView } = useSalaryView();
 
   const handleCopyLink = async () => {
     if (!result) return;
@@ -75,13 +77,13 @@ export function SummaryExportWidget({
           <div className="rounded-xl bg-white/10 p-3 backdrop-blur-sm">
             <p className="text-[10px] font-bold uppercase tracking-widest text-white/60">Base Salary</p>
             <p className="text-lg font-bold">
-              {formatCurrency(result.baseSalary)}
+              {formatCurrency(applyViewMode(result.baseSalary, salaryView))}
             </p>
           </div>
           <div className="rounded-xl bg-white/10 p-3 backdrop-blur-sm">
             <p className="text-[10px] font-bold uppercase tracking-widest text-white/60">Recommended</p>
             <p className="text-lg font-bold leading-tight">
-              {formatCurrency(result.recommendedRange.min)}
+              {formatCurrency(applyViewMode(result.recommendedRange.min, salaryView))}
             </p>
           </div>
           <div className="rounded-xl bg-white/10 p-3 backdrop-blur-sm">

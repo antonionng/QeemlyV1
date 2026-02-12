@@ -1,6 +1,5 @@
 "use client";
 
-import { DonutChart } from "@tremor/react";
 import { Card } from "@/components/ui/card";
 import { TrendingUp, TrendingDown, CheckCircle, AlertCircle, XCircle } from "lucide-react";
 import clsx from "clsx";
@@ -28,12 +27,6 @@ export function HealthScore({ metrics }: HealthScoreProps) {
   const { label, color, icon: StatusIcon } = getScoreLabel(metrics.healthScore);
   const scoreColor = getScoreColor(metrics.healthScore);
   
-  // Create donut data for the gauge effect
-  const gaugeData = [
-    { name: "Score", value: metrics.healthScore },
-    { name: "Remaining", value: 100 - metrics.healthScore },
-  ];
-
   // Contributing factors breakdown
   const factors = [
     {
@@ -87,16 +80,44 @@ export function HealthScore({ metrics }: HealthScoreProps) {
       <div className="flex items-center gap-6">
         {/* Gauge chart */}
         <div className="relative flex-shrink-0">
-          <DonutChart
-            data={gaugeData}
-            category="value"
-            index="name"
-            colors={[scoreColor, "slate"]}
-            className="h-32 w-32"
-            showLabel={false}
-            showAnimation={true}
-            showTooltip={false}
-          />
+          {(() => {
+            const radius = 52;
+            const stroke = 10;
+            const circumference = 2 * Math.PI * radius;
+            const progress = (metrics.healthScore / 100) * circumference;
+            const strokeColor =
+              scoreColor === "emerald"
+                ? "#10b981"
+                : scoreColor === "blue"
+                ? "#3b82f6"
+                : scoreColor === "amber"
+                ? "#f59e0b"
+                : "#f43f5e";
+            return (
+              <svg width={128} height={128} viewBox="0 0 128 128" className="h-32 w-32">
+                <circle
+                  cx="64"
+                  cy="64"
+                  r={radius}
+                  fill="none"
+                  stroke="#e2e8f0"
+                  strokeWidth={stroke}
+                />
+                <circle
+                  cx="64"
+                  cy="64"
+                  r={radius}
+                  fill="none"
+                  stroke={strokeColor}
+                  strokeWidth={stroke}
+                  strokeDasharray={`${progress} ${circumference - progress}`}
+                  strokeDashoffset={circumference * 0.25}
+                  strokeLinecap="round"
+                  className="transition-all duration-500"
+                />
+              </svg>
+            );
+          })()}
           {/* Center score display */}
           <div className="absolute inset-0 flex flex-col items-center justify-center">
             <span className={clsx("text-3xl font-bold", color)}>

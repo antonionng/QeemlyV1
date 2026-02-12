@@ -10,6 +10,7 @@ import {
   formatCurrency,
   getLocation,
 } from "@/lib/dashboard/dummy-data";
+import { useSalaryView } from "@/lib/salary-view-store";
 
 export function CompMixWidget() {
   const [selectedRole, setSelectedRole] = useState(ROLES[0].id);
@@ -18,6 +19,8 @@ export function CompMixWidget() {
 
   const data = getCompMix(selectedRole, selectedLocation, selectedLevel);
   const location = getLocation(selectedLocation);
+  const { salaryView } = useSalaryView();
+  const multiplier = salaryView === "annual" ? 12 : 1;
 
   return (
     <div className="flex h-full flex-col gap-4">
@@ -52,7 +55,7 @@ export function CompMixWidget() {
           data={data}
           index="name"
           category="value"
-          valueFormatter={(v) => formatCurrency(location?.currency || "AED", v)}
+          valueFormatter={(v) => formatCurrency(location?.currency || "AED", v * multiplier)}
           colors={["brand-600", "amber-500", "violet-500"]}
           className="h-48"
         />
@@ -72,7 +75,7 @@ export function CompMixWidget() {
                 </div>
                 <p className={`text-lg font-bold ${textColors[i]}`}>{percentage}%</p>
                 <p className="text-[10px] text-brand-400 font-medium">
-                  {formatCurrency(location?.currency || "AED", item.value)}
+                  {formatCurrency(location?.currency || "AED", item.value * multiplier)}
                 </p>
               </div>
             );

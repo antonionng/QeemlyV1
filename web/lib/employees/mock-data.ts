@@ -17,7 +17,7 @@ export type Department =
 
 export type BandPosition = "below" | "in-band" | "above";
 
-export type EmploymentType = "local" | "expat";
+export type EmploymentType = "national" | "expat";
 
 export type PerformanceRating = "low" | "meets" | "exceeds" | "exceptional";
 
@@ -259,7 +259,7 @@ function generateEmployees(count: number): Employee[] {
     const status = random() > 0.05 ? "active" : "inactive";
     
     // Employment type
-    const employmentType: EmploymentType = random() > 0.85 ? "expat" : "local";
+    const employmentType: EmploymentType = random() > 0.85 ? "expat" : "national";
     
     // Performance rating (only for employees with review)
     const hasReview = random() > 0.2;
@@ -504,3 +504,213 @@ export function formatAEDCompact(amount: number): string {
 // Legacy aliases for backwards compatibility - these now use AED
 export const formatGBP = formatAED;
 export const formatGBPCompact = formatAEDCompact;
+
+// ─── Compensation History ─────────────────────────────────────────────────────
+
+export type ChangeReason = "hire" | "annual-review" | "promotion" | "market-adjustment";
+
+export interface CompensationHistoryEntry {
+  effectiveDate: Date;
+  baseSalary: number;
+  previousSalary: number;
+  changePercentage: number;
+  changeReason: ChangeReason;
+}
+
+/**
+ * Generate a realistic compensation history working backwards from the
+ * employee's current salary to their hire date.
+ */
+export function generateCompensationHistory(employee: Employee): CompensationHistoryEntry[] {
+  const random = seededRandom(hashString(employee.id));
+  const entries: CompensationHistoryEntry[] = [];
+
+  const hireYear = employee.hireDate.getFullYear();
+  const hireMonth = employee.hireDate.getMonth();
+  const now = new Date();
+  const currentYear = now.getFullYear();
+
+  // Walk backwards from current salary
+  let salary = employee.baseSalary;
+  const yearsEmployed = Math.max(0, currentYear - hireYear);
+
+  // Generate one entry per year of employment (most recent first)
+  for (let y = 0; y < yearsEmployed; y++) {
+    const effectiveYear = currentYear - y;
+    const effectiveMonth = (hireMonth + 3) % 12; // Review ~3 months after hire anniversary
+
+    // Determine raise percentage and reason
+    let changePercent: number;
+    let reason: ChangeReason;
+
+    if (y === yearsEmployed - 1) {
+      // The first entry (hire)
+      reason = "hire";
+      changePercent = 0;
+    } else {
+      const roll = random();
+      if (roll < 0.15) {
+        reason = "promotion";
+        changePercent = 10 + Math.round(random() * 10); // 10-20%
+      } else if (roll < 0.3) {
+        reason = "market-adjustment";
+        changePercent = 3 + Math.round(random() * 5); // 3-8%
+      } else {
+        reason = "annual-review";
+        changePercent = 2 + Math.round(random() * 6); // 2-8%
+      }
+    }
+
+    const previousSalary = reason === "hire"
+      ? salary
+      : Math.round(salary / (1 + changePercent / 100) / 1000) * 1000;
+
+    entries.push({
+      effectiveDate: new Date(effectiveYear, effectiveMonth, 1),
+      baseSalary: salary,
+      previousSalary,
+      changePercentage: changePercent,
+      changeReason: reason,
+    });
+
+    salary = previousSalary;
+  }
+
+  // Always add an initial hire entry if not already present
+  if (entries.length === 0 || entries[entries.length - 1].changeReason !== "hire") {
+    entries.push({
+      effectiveDate: new Date(employee.hireDate),
+      baseSalary: salary,
+      previousSalary: salary,
+      changePercentage: 0,
+      changeReason: "hire",
+    });
+  }
+
+  return entries; // Most recent first
+}
+
+/** Simple string-to-number hash for deterministic seed per employee. */
+function hashString(str: string): number {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) {
+    h = (h * 31 + str.charCodeAt(i)) & 0x7fffffff;
+  }
+  return h || 1;
+}
+
+// ─── Attrition Risk Scoring ───────────────────────────────────────────────────
+
+export type AttritionRiskLevel = "low" | "medium" | "high" | "critical";
+
+export interface AttritionRiskAssessment {
+  overall: AttritionRiskLevel;
+  score: number; // 0-100, higher = more risk
+  factors: {
+    label: string;
+    signal: "positive" | "neutral" | "warning" | "danger";
+    detail: string;
+  }[];
+}
+
+/**
+ * Compute a composite attrition-risk score from band position, market
+ * comparison, tenure, performance, and compensation history.
+ */
+export function computeAttritionRisk(employee: Employee): AttritionRiskAssessment {
+  const factors: AttritionRiskAssessment["factors"] = [];
+  let score = 0;
+
+  // 1. Band position
+  if (employee.bandPosition === "below") {
+    score += 25;
+    factors.push({ label: "Band Position", signal: "danger", detail: "Below band — underpaid relative to range" });
+  } else if (employee.bandPosition === "above") {
+    score += 5;
+    factors.push({ label: "Band Position", signal: "neutral", detail: "Above band — may attract external offers" });
+  } else {
+    factors.push({ label: "Band Position", signal: "positive", detail: "In band — well-positioned" });
+  }
+
+  // 2. Market comparison
+  if (employee.marketComparison < -10) {
+    score += 25;
+    factors.push({ label: "Market Position", signal: "danger", detail: `${employee.marketComparison}% vs market median` });
+  } else if (employee.marketComparison < 0) {
+    score += 10;
+    factors.push({ label: "Market Position", signal: "warning", detail: `${employee.marketComparison}% vs market median` });
+  } else {
+    factors.push({ label: "Market Position", signal: "positive", detail: `+${employee.marketComparison}% vs market median` });
+  }
+
+  // 3. Tenure
+  const tenureYears = (Date.now() - employee.hireDate.getTime()) / (365.25 * 24 * 60 * 60 * 1000);
+  if (tenureYears < 1) {
+    score += 10;
+    factors.push({ label: "Tenure", signal: "warning", detail: "Less than 1 year — still in settling period" });
+  } else if (tenureYears > 5) {
+    // Long tenure with no recent increase is risky
+    const history = generateCompensationHistory(employee);
+    const recentIncrease = history.find(h => h.changeReason !== "hire" && h.changePercentage > 0);
+    if (!recentIncrease || recentIncrease.effectiveDate.getFullYear() < new Date().getFullYear() - 1) {
+      score += 20;
+      factors.push({ label: "Tenure", signal: "danger", detail: `${Math.round(tenureYears)}y tenure — no recent salary increase` });
+    } else {
+      factors.push({ label: "Tenure", signal: "positive", detail: `${Math.round(tenureYears)}y tenure` });
+    }
+  } else {
+    factors.push({ label: "Tenure", signal: "positive", detail: `${tenureYears.toFixed(1)}y tenure` });
+  }
+
+  // 4. Performance vs compensation alignment
+  if (
+    (employee.performanceRating === "exceptional" || employee.performanceRating === "exceeds") &&
+    employee.bandPosition === "below"
+  ) {
+    score += 25;
+    factors.push({ label: "Performance Alignment", signal: "danger", detail: "High performer paid below band — strong flight risk" });
+  } else if (employee.performanceRating === "low" && employee.bandPosition === "above") {
+    score -= 10; // Less attrition risk (overpaid underperformer unlikely to leave)
+    factors.push({ label: "Performance Alignment", signal: "warning", detail: "Low performer above band — overpayment concern" });
+  } else if (employee.performanceRating === "exceptional") {
+    score += 10;
+    factors.push({ label: "Performance Alignment", signal: "warning", detail: "Exceptional performer — high external demand" });
+  } else if (employee.performanceRating) {
+    factors.push({ label: "Performance Alignment", signal: "positive", detail: "Performance aligned with compensation" });
+  } else {
+    factors.push({ label: "Performance Alignment", signal: "neutral", detail: "No performance review on file" });
+  }
+
+  // Clamp
+  score = Math.max(0, Math.min(100, score));
+
+  let overall: AttritionRiskLevel;
+  if (score >= 60) overall = "critical";
+  else if (score >= 40) overall = "high";
+  else if (score >= 20) overall = "medium";
+  else overall = "low";
+
+  return { overall, score, factors };
+}
+
+// ─── Tenure Helper ────────────────────────────────────────────────────────────
+
+export interface TenureInfo {
+  years: number;
+  months: number;
+  totalMonths: number;
+  label: string;
+}
+
+export function computeTenure(hireDate: Date): TenureInfo {
+  const now = new Date();
+  let years = now.getFullYear() - hireDate.getFullYear();
+  let months = now.getMonth() - hireDate.getMonth();
+  if (months < 0) {
+    years--;
+    months += 12;
+  }
+  const totalMonths = years * 12 + months;
+  const label = years > 0 ? `${years}y ${months}m` : `${months}m`;
+  return { years, months, totalMonths, label };
+}

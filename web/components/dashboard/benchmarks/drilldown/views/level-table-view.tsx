@@ -5,6 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { type BenchmarkResult } from "@/lib/benchmarks/benchmark-state";
 import { LEVELS, generateBenchmark, generateSalaryBreakdown } from "@/lib/dashboard/dummy-data";
+import { useSalaryView } from "@/lib/salary-view-store";
 
 interface LevelTableViewProps {
   result: BenchmarkResult;
@@ -13,9 +14,10 @@ interface LevelTableViewProps {
 export function LevelTableView({ result }: LevelTableViewProps) {
   const { role, level, location } = result;
   const [showBasic, setShowBasic] = useState(false);
+  const { salaryView } = useSalaryView();
   
-  // Convert from monthly AED to annual AED
-  const convertToAnnual = (value: number) => Math.round(value * 12 / 1000) * 1000;
+  // Convert from monthly AED based on salary view mode
+  const convertValue = (value: number) => salaryView === "annual" ? Math.round(value * 12 / 1000) * 1000 : Math.round(value / 100) * 100;
   
   const formatAED = (value: number) => {
     if (value >= 1000) {
@@ -43,17 +45,17 @@ export function LevelTableView({ result }: LevelTableViewProps) {
     return {
       level: lvl,
       // Total salary values
-      p25Total: convertToAnnual(bench.percentiles.p25),
-      p50Total: convertToAnnual(bench.percentiles.p50),
-      p75Total: convertToAnnual(bench.percentiles.p75),
-      p85Total: convertToAnnual(p85Total),
-      p90Total: convertToAnnual(bench.percentiles.p90),
+      p25Total: convertValue(bench.percentiles.p25),
+      p50Total: convertValue(bench.percentiles.p50),
+      p75Total: convertValue(bench.percentiles.p75),
+      p85Total: convertValue(p85Total),
+      p90Total: convertValue(bench.percentiles.p90),
       // Basic salary values
-      p25Basic: convertToAnnual(p25Breakdown.basic),
-      p50Basic: convertToAnnual(p50Breakdown.basic),
-      p75Basic: convertToAnnual(p75Breakdown.basic),
-      p85Basic: convertToAnnual(p85Breakdown.basic),
-      p90Basic: convertToAnnual(p90Breakdown.basic),
+      p25Basic: convertValue(p25Breakdown.basic),
+      p50Basic: convertValue(p50Breakdown.basic),
+      p75Basic: convertValue(p75Breakdown.basic),
+      p85Basic: convertValue(p85Breakdown.basic),
+      p90Basic: convertValue(p90Breakdown.basic),
       // Basic percentage (for display)
       basicPercent: p50Breakdown.basicPercent,
       isSelected: lvl.id === level.id,

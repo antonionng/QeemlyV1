@@ -3,6 +3,7 @@
 import clsx from "clsx";
 import { ArrowRight } from "lucide-react";
 import { RelocationResult, formatCurrency } from "@/lib/relocation/calculator";
+import { useSalaryView, applyViewMode } from "@/lib/salary-view-store";
 
 interface PurchasingPowerWidgetProps {
   result: RelocationResult | null;
@@ -17,6 +18,7 @@ export function PurchasingPowerWidget({ result }: PurchasingPowerWidgetProps) {
     );
   }
 
+  const { salaryView } = useSalaryView();
   const difference = result.purchasingPowerSalary - result.baseSalary;
   const percentChange = ((difference / result.baseSalary) * 100).toFixed(0);
 
@@ -26,14 +28,14 @@ export function PurchasingPowerWidget({ result }: PurchasingPowerWidgetProps) {
         Equivalent Salary Needed
       </p>
       <p className="mt-2 text-4xl font-extrabold text-brand-900">
-        {formatCurrency(result.purchasingPowerSalary)}
+        {formatCurrency(applyViewMode(result.purchasingPowerSalary, salaryView))}
       </p>
 
       <div className="mt-6 flex items-center gap-4 rounded-2xl bg-brand-50/50 p-4 ring-1 ring-brand-100 shadow-sm">
         <div className="text-center">
           <p className="text-[10px] font-bold uppercase tracking-tighter text-accent-400">{result.homeCity.name}</p>
           <p className="text-lg font-bold text-brand-900">
-            {formatCurrency(result.baseSalary, true)}
+            {formatCurrency(applyViewMode(result.baseSalary, salaryView), true)}
           </p>
         </div>
         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-brand-100">
@@ -42,7 +44,7 @@ export function PurchasingPowerWidget({ result }: PurchasingPowerWidgetProps) {
         <div className="text-center">
           <p className="text-[10px] font-bold uppercase tracking-tighter text-accent-400">{result.targetCity.name}</p>
           <p className="text-lg font-bold text-brand-900">
-            {formatCurrency(result.purchasingPowerSalary, true)}
+            {formatCurrency(applyViewMode(result.purchasingPowerSalary, salaryView), true)}
           </p>
         </div>
         <div

@@ -3,6 +3,7 @@
 import clsx from "clsx";
 import { ArrowDownRight, ArrowUpRight, Layers, MapPin, TrendingUp } from "lucide-react";
 import { useBenchmarksContext } from "@/lib/benchmarks/context";
+// SalaryViewToggle is now in the global topbar
 import {
   formatCurrency,
   formatCurrencyK,
@@ -21,6 +22,8 @@ export function SalaryOverviewWidget() {
     selectedLevelId,
     setSelectedLocationId,
     setSelectedLevelId,
+    salaryView,
+    setSalaryView,
   } = useBenchmarksContext();
 
   if (!selectedBenchmark || !selectedRole) {
@@ -56,6 +59,8 @@ export function SalaryOverviewWidget() {
         </span>
       </div>
 
+      {/* Salary view is controlled by the global toggle in the topbar */}
+
       {/* Filter dropdowns */}
       <div className="flex gap-2">
         <div className="relative flex-1">
@@ -90,15 +95,35 @@ export function SalaryOverviewWidget() {
 
       {/* Main salary display */}
       <div className="rounded-xl bg-brand-50 p-4">
-        <p className="text-xs font-medium text-accent-600">Monthly Cash Compensation</p>
+        <p className="text-xs font-medium text-accent-600">
+          {salaryView === "annual" ? "Annual" : "Monthly"} Cash Compensation
+        </p>
         <div className="mt-1 flex items-baseline gap-2">
           <span className="text-3xl font-extrabold text-brand-900">
-            {formatCurrency(selectedBenchmark.currency, selectedBenchmark.percentiles.p50)}
+            {formatCurrency(
+              selectedBenchmark.currency,
+              salaryView === "annual"
+                ? selectedBenchmark.percentiles.p50 * 12
+                : selectedBenchmark.percentiles.p50
+            )}
           </span>
           <span className="text-sm font-medium text-accent-600">P50</span>
         </div>
         <p className="mt-1 text-xs text-accent-500">
-          Range {formatCurrencyK(selectedBenchmark.currency, selectedBenchmark.percentiles.p25)} – {formatCurrencyK(selectedBenchmark.currency, selectedBenchmark.percentiles.p75)}
+          Range{" "}
+          {formatCurrencyK(
+            selectedBenchmark.currency,
+            salaryView === "annual"
+              ? selectedBenchmark.percentiles.p25 * 12
+              : selectedBenchmark.percentiles.p25
+          )}{" "}
+          –{" "}
+          {formatCurrencyK(
+            selectedBenchmark.currency,
+            salaryView === "annual"
+              ? selectedBenchmark.percentiles.p75 * 12
+              : selectedBenchmark.percentiles.p75
+          )}
         </p>
       </div>
 

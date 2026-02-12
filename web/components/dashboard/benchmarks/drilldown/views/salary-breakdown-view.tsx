@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Sparkles, Wallet, Home, Car, MoreHorizontal } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { type BenchmarkResult } from "@/lib/benchmarks/benchmark-state";
+import { useSalaryView } from "@/lib/salary-view-store";
 import { generateSalaryBreakdown, getMarketBreakdownAverages, LEVELS } from "@/lib/dashboard/dummy-data";
 
 interface SalaryBreakdownViewProps {
@@ -15,9 +16,13 @@ type PercentileKey = "p25" | "p50" | "p75" | "p90";
 export function SalaryBreakdownView({ result }: SalaryBreakdownViewProps) {
   const { role, level, location, benchmark } = result;
   const [selectedPercentile, setSelectedPercentile] = useState<PercentileKey>("p50");
+  const { salaryView } = useSalaryView();
   
-  // Convert from monthly AED to annual AED
-  const convertToAnnual = (value: number) => Math.round(value * 12 / 1000) * 1000;
+  // Convert from monthly AED based on salary view
+  const convertValue = (value: number) => {
+    if (salaryView === "annual") return Math.round(value * 12 / 1000) * 1000;
+    return Math.round(value / 100) * 100;
+  };
   
   const formatAED = (value: number) => {
     if (value >= 1000) {
@@ -44,11 +49,11 @@ export function SalaryBreakdownView({ result }: SalaryBreakdownViewProps) {
   const breakdown = generateSalaryBreakdown(totalMonthly, level.id);
   const marketAverages = getMarketBreakdownAverages(level.id);
 
-  // Convert breakdown values to annual AED
+  // Convert breakdown values based on salary view
   const breakdownData = [
     { 
       name: "Basic Salary", 
-      value: convertToAnnual(breakdown.basic), 
+      value: convertValue(breakdown.basic), 
       percent: breakdown.basicPercent,
       icon: Wallet,
       color: "bg-brand-500",
@@ -57,7 +62,7 @@ export function SalaryBreakdownView({ result }: SalaryBreakdownViewProps) {
     },
     { 
       name: "Housing", 
-      value: convertToAnnual(breakdown.housing), 
+      value: convertValue(breakdown.housing), 
       percent: breakdown.housingPercent,
       icon: Home,
       color: "bg-blue-500",
@@ -66,7 +71,7 @@ export function SalaryBreakdownView({ result }: SalaryBreakdownViewProps) {
     },
     { 
       name: "Transport", 
-      value: convertToAnnual(breakdown.transport), 
+      value: convertValue(breakdown.transport), 
       percent: breakdown.transportPercent,
       icon: Car,
       color: "bg-amber-500",
@@ -75,7 +80,7 @@ export function SalaryBreakdownView({ result }: SalaryBreakdownViewProps) {
     },
     { 
       name: "Other Allowances", 
-      value: convertToAnnual(breakdown.other), 
+      value: convertValue(breakdown.other), 
       percent: breakdown.otherPercent,
       icon: MoreHorizontal,
       color: "bg-gray-400",
@@ -84,7 +89,7 @@ export function SalaryBreakdownView({ result }: SalaryBreakdownViewProps) {
     },
   ];
 
-  const totalAnnual = convertToAnnual(breakdown.total);
+  const totalDisplay = convertValue(breakdown.total);
   const levelIndex = LEVELS.findIndex(l => l.id === level.id);
 
   // Percentile options for the selector
@@ -102,6 +107,7 @@ export function SalaryBreakdownView({ result }: SalaryBreakdownViewProps) {
           <Wallet className="h-4 w-4 text-brand-600" />
           <h3 className="text-sm font-semibold text-brand-900">UAE Salary Breakdown</h3>
         </div>
+        <div className="flex items-center gap-2">
         {/* Percentile Selector */}
         <div className="flex items-center gap-1 p-1 bg-brand-50 rounded-lg">
           {percentileOptions.map((option) => (
@@ -117,6 +123,7 @@ export function SalaryBreakdownView({ result }: SalaryBreakdownViewProps) {
               {option.label}
             </button>
           ))}
+        </div>
         </div>
       </div>
       
@@ -168,8 +175,10 @@ export function SalaryBreakdownView({ result }: SalaryBreakdownViewProps) {
 
       {/* Total */}
       <div className="mt-4 pt-4 border-t border-border flex items-center justify-between">
-        <span className="text-sm font-semibold text-brand-900">Total Annual Salary</span>
-        <span className="text-lg font-bold text-brand-900">{formatAED(totalAnnual)}</span>
+        <span className="text-sm font-semibold text-brand-900">
+          Total {salaryView === "annual" ? "Annual" : "Monthly"} Salary
+        </span>
+        <span className="text-lg font-bold text-brand-900">{formatAED(totalDisplay)}</span>
       </div>
 
       {/* AI Guidance Panel */}
@@ -202,7 +211,7 @@ export function SalaryBreakdownView({ result }: SalaryBreakdownViewProps) {
             <p className="text-xs font-semibold text-amber-800 mb-0.5">End-of-Service Benefits</p>
             <p className="text-[11px] text-amber-700">
               UAE end-of-service gratuity is calculated on <strong>basic salary only</strong>. 
-              At {breakdown.basicPercent}% basic, the annual basic is {formatAED(convertToAnnual(breakdown.basic))}.
+              At {breakdown.basicPercent}% basic, the annual basic is {formatAED(Math.round(breakdown.basic * 12 / 1000) * 1000)}.
               Companies typically aim for 50-65% basic to balance competitive offers with exit costs.
             </p>
           </div>

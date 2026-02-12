@@ -27,7 +27,9 @@ export function OfferBuilderWidget() {
     offerValue,
     offerRange,
     setOfferTarget,
+    salaryView,
   } = useBenchmarksContext();
+  const multiplier = salaryView === "annual" ? 12 : 1;
 
   if (!selectedBenchmark || !selectedRole) {
     return (
@@ -87,14 +89,14 @@ export function OfferBuilderWidget() {
         <p className="text-xs font-medium text-accent-600">Recommended Offer</p>
         <div className="mt-1 flex items-baseline gap-2">
           <span className="text-2xl font-extrabold text-brand-900">
-            {formatCurrency(selectedBenchmark.currency, offerValue)}
+            {formatCurrency(selectedBenchmark.currency, offerValue * multiplier)}
           </span>
-          <span className="text-sm text-accent-500">/month</span>
+          <span className="text-sm text-accent-500">/{salaryView === "annual" ? "year" : "month"}</span>
         </div>
         <div className="mt-2 flex items-center gap-2">
           <span className="text-xs text-accent-500">Negotiation range:</span>
           <span className="text-xs font-semibold text-brand-700">
-            {formatCurrencyK(selectedBenchmark.currency, offerRange.low)} – {formatCurrencyK(selectedBenchmark.currency, offerRange.high)}
+            {formatCurrencyK(selectedBenchmark.currency, offerRange.low * multiplier)} – {formatCurrencyK(selectedBenchmark.currency, offerRange.high * multiplier)}
           </span>
         </div>
       </div>

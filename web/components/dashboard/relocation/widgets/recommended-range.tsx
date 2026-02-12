@@ -2,6 +2,7 @@
 
 import clsx from "clsx";
 import { RelocationResult, formatCurrency, CompApproach, getApproachExplanation } from "@/lib/relocation/calculator";
+import { useSalaryView, applyViewMode } from "@/lib/salary-view-store";
 
 interface RecommendedRangeWidgetProps {
   result: RelocationResult | null;
@@ -28,6 +29,7 @@ export function RecommendedRangeWidget({
     );
   }
 
+  const { salaryView } = useSalaryView();
   const { min, max } = result.recommendedRange;
   const midpoint = result.recommendedSalary;
 
@@ -46,13 +48,13 @@ export function RecommendedRangeWidget({
 
       <div className="mt-6">
         <p className="text-xs font-bold uppercase tracking-widest text-accent-500">
-          Recommended Annual Salary
+          Recommended {salaryView === "monthly" ? "Monthly" : "Annual"} Salary
         </p>
         <p className="mt-2 text-3xl font-extrabold text-brand-900">
-          {formatCurrency(min)} – {formatCurrency(max)}
+          {formatCurrency(applyViewMode(min, salaryView))} – {formatCurrency(applyViewMode(max, salaryView))}
         </p>
         <p className="mt-2 text-sm font-bold text-brand-600">
-          Target Midpoint: {formatCurrency(midpoint)}
+          Target Midpoint: {formatCurrency(applyViewMode(midpoint, salaryView))}
         </p>
       </div>
 
@@ -74,9 +76,9 @@ export function RecommendedRangeWidget({
           />
         </div>
         <div className="mt-2 flex items-center justify-between text-xs font-bold text-brand-900">
-          <span>{formatCurrency(min, true)}</span>
-          <span>{formatCurrency(midpoint, true)}</span>
-          <span>{formatCurrency(max, true)}</span>
+          <span>{formatCurrency(applyViewMode(min, salaryView), true)}</span>
+          <span>{formatCurrency(applyViewMode(midpoint, salaryView), true)}</span>
+          <span>{formatCurrency(applyViewMode(max, salaryView), true)}</span>
         </div>
       </div>
 

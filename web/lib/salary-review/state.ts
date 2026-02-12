@@ -7,6 +7,7 @@ import {
   MOCK_EMPLOYEES, 
   getCompanyMetrics,
   type PerformanceRating,
+  computeTenure,
 } from "../employees";
 import { type ReviewCycle } from "../company";
 
@@ -57,40 +58,74 @@ export interface SalaryReviewState {
   resetReview: () => void;
 }
 
-// Generate guidance for an employee
+// Generate guidance for an employee, factoring in performance + tenure
 function generateGuidance(employee: Employee): ReviewEmployee["guidance"] {
+  const tenure = computeTenure(employee.hireDate);
+  const tenureYears = tenure.years + tenure.months / 12;
+
+  // High performer + below band + long tenure = strong retention risk
+  if (
+    (employee.performanceRating === "exceeds" || employee.performanceRating === "exceptional") &&
+    employee.bandPosition === "below" &&
+    tenureYears >= 2
+  ) {
+    return {
+      type: "retention-risk",
+      message: `Strong retention risk — ${employee.performanceRating} performer below band with ${tenure.label} tenure`,
+    };
+  }
+
+  // New hire (< 1 year) + exceptional = fast-track signal
+  if (employee.performanceRating === "exceptional" && tenureYears < 1) {
+    return {
+      type: "promotion-signal",
+      message: "Fast-track candidate — exceptional performer in first year",
+    };
+  }
+
   // High performer at top of band
   if (employee.performanceRating === "exceptional" && employee.bandPercentile > 80) {
     return {
       type: "promotion-signal",
-      message: "Consider promotion - exceptional performer at top of band",
+      message: "Consider promotion — exceptional performer at top of band",
     };
   }
-  
-  // High performer below band - retention risk
-  if ((employee.performanceRating === "exceeds" || employee.performanceRating === "exceptional") && employee.bandPosition === "below") {
+
+  // High performer below band (shorter tenure)
+  if (
+    (employee.performanceRating === "exceeds" || employee.performanceRating === "exceptional") &&
+    employee.bandPosition === "below"
+  ) {
     return {
       type: "retention-risk",
-      message: "Retention risk - strong performer below market",
+      message: "Retention risk — strong performer below market",
     };
   }
-  
-  // Low performer above band
+
+  // Low performer above band = overpayment flag
   if (employee.performanceRating === "low" && employee.bandPosition === "above") {
     return {
       type: "flag",
-      message: "Review alignment - below performance at above-market pay",
+      message: "Overpayment concern — low performance at above-market pay",
     };
   }
-  
-  // Low performer getting significant increase
+
+  // Low performer getting significant comp vs market
   if (employee.performanceRating === "low" && employee.marketComparison > 5) {
     return {
       type: "flag",
-      message: "Consider: performance not aligned with current compensation",
+      message: "Performance not aligned with current compensation level",
     };
   }
-  
+
+  // Long tenure (5+ years) with no recent review — may need attention
+  if (tenureYears >= 5 && !employee.lastReviewDate) {
+    return {
+      type: "retention-risk",
+      message: `${tenure.label} tenure with no performance review on file`,
+    };
+  }
+
   return undefined;
 }
 

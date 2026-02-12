@@ -120,9 +120,9 @@ export const EMPLOYEE_FIELDS: FieldDefinition[] = [
     key: "employmentType",
     label: "Employment Type",
     required: false,
-    aliases: ["employment type", "type", "local expat", "contract type", "employee type"],
+    aliases: ["employment type", "type", "local expat", "national expat", "contract type", "employee type"],
     type: "enum",
-    enumValues: ["local", "expat"],
+    enumValues: ["national", "expat"],
   },
   {
     key: "hireDate",

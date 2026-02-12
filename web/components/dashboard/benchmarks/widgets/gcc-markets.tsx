@@ -17,7 +17,9 @@ export function GCCMarketsWidget() {
     selectedLocationId,
     selectedLevelId,
     setSelectedLocationId,
+    salaryView,
   } = useBenchmarksContext();
+  const multiplier = salaryView === "annual" ? 12 : 1;
 
   if (!selectedRoleId || !selectedRole) {
     return (
@@ -103,7 +105,7 @@ export function GCCMarketsWidget() {
                 <div>
                   <p className="text-xs text-accent-500">Median</p>
                   <p className="text-lg font-bold text-brand-900">
-                    {formatCurrencyK(benchmark.currency, benchmark.percentiles.p50)}
+                    {formatCurrencyK(benchmark.currency, benchmark.percentiles.p50 * multiplier)}
                   </p>
                 </div>
                 <span
@@ -144,7 +146,7 @@ export function GCCMarketsWidget() {
             <strong className="text-brand-900">
               {sortedMarkets[0]?.location.city} ({formatCurrencyK(
                 sortedMarkets[0]?.benchmark.currency || "AED",
-                sortedMarkets[0]?.benchmark.percentiles.p50 || 0
+                (sortedMarkets[0]?.benchmark.percentiles.p50 || 0) * multiplier
               )})
             </strong>
           </span>
@@ -153,7 +155,7 @@ export function GCCMarketsWidget() {
             <strong className="text-brand-900">
               {sortedMarkets[sortedMarkets.length - 1]?.location.city} ({formatCurrencyK(
                 sortedMarkets[sortedMarkets.length - 1]?.benchmark.currency || "AED",
-                sortedMarkets[sortedMarkets.length - 1]?.benchmark.percentiles.p50 || 0
+                (sortedMarkets[sortedMarkets.length - 1]?.benchmark.percentiles.p50 || 0) * multiplier
               )})
             </strong>
           </span>

@@ -11,6 +11,7 @@ import { UploadModal } from "@/components/dashboard/upload";
 import { useSalaryReview, type BudgetType } from "@/lib/salary-review";
 import { REVIEW_CYCLES, type ReviewCycle } from "@/lib/company";
 import { formatAED, formatAEDCompact } from "@/lib/employees";
+import { useSalaryView, applyViewMode } from "@/lib/salary-view-store";
 
 export default function SalaryReviewPage() {
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -27,6 +28,7 @@ export default function SalaryReviewPage() {
     resetReview,
   } = useSalaryReview();
 
+  const { salaryView } = useSalaryView();
   const [showSettings, setShowSettings] = useState(true);
 
   const budget = settings.budgetType === "percentage"
@@ -196,21 +198,21 @@ export default function SalaryReviewPage() {
       <div className="grid gap-4 md:grid-cols-4">
         <Card className="p-5">
           <div className="text-sm font-medium text-brand-600 mb-1">Current Payroll</div>
-          <div className="text-2xl font-bold text-brand-900">{formatAEDCompact(totalCurrentPayroll)}</div>
+          <div className="text-2xl font-bold text-brand-900">{formatAEDCompact(applyViewMode(totalCurrentPayroll, salaryView))}</div>
           <div className="text-xs text-brand-500 mt-1">{employees.length} employees</div>
         </Card>
         
         <Card className="p-5">
           <div className="text-sm font-medium text-brand-600 mb-1">Proposed Payroll</div>
-          <div className="text-2xl font-bold text-brand-900">{formatAEDCompact(totalProposedPayroll)}</div>
+          <div className="text-2xl font-bold text-brand-900">{formatAEDCompact(applyViewMode(totalProposedPayroll, salaryView))}</div>
           <div className="text-xs text-emerald-600 mt-1">
-            +{formatAEDCompact(totalIncrease)} increase
+            +{formatAEDCompact(applyViewMode(totalIncrease, salaryView))} increase
           </div>
         </Card>
         
         <Card className="p-5">
           <div className="text-sm font-medium text-brand-600 mb-1">Budget Allocation</div>
-          <div className="text-2xl font-bold text-brand-900">{formatAEDCompact(budget)}</div>
+          <div className="text-2xl font-bold text-brand-900">{formatAEDCompact(applyViewMode(budget, salaryView))}</div>
           <div className="text-xs text-brand-500 mt-1">
             {settings.budgetType === "percentage" ? `${settings.budgetPercentage}%` : "Fixed"} budget
           </div>
@@ -219,7 +221,7 @@ export default function SalaryReviewPage() {
         <Card className={`p-5 ${isOverBudget ? "ring-2 ring-red-500" : ""}`}>
           <div className="text-sm font-medium text-brand-600 mb-1">Budget Status</div>
           <div className={`text-2xl font-bold ${isOverBudget ? "text-red-600" : budgetRemaining < budget * 0.1 ? "text-amber-600" : "text-emerald-600"}`}>
-            {isOverBudget ? "-" : ""}{formatAEDCompact(Math.abs(budgetRemaining))}
+            {isOverBudget ? "-" : ""}{formatAEDCompact(applyViewMode(Math.abs(budgetRemaining), salaryView))}
           </div>
           <div className="text-xs mt-1 flex items-center gap-1">
             {isOverBudget ? (
@@ -242,7 +244,7 @@ export default function SalaryReviewPage() {
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm font-medium text-brand-700">Budget Usage</span>
           <span className="text-sm font-medium text-brand-900">
-            {formatAED(budgetUsed)} / {formatAED(budget)} ({budgetUsedPercentage.toFixed(1)}%)
+            {formatAED(applyViewMode(budgetUsed, salaryView))} / {formatAED(applyViewMode(budget, salaryView))} ({budgetUsedPercentage.toFixed(1)}%)
           </span>
         </div>
         <div className="h-3 bg-brand-100 rounded-full overflow-hidden">

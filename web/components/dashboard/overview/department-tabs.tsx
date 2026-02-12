@@ -11,6 +11,7 @@ import {
   type DepartmentSummary, 
   formatAEDCompact,
 } from "@/lib/employees";
+import { useSalaryView, applyViewMode } from "@/lib/salary-view-store";
 
 interface DepartmentTabsProps {
   summaries: DepartmentSummary[];
@@ -19,6 +20,7 @@ interface DepartmentTabsProps {
 type ViewMode = "overview" | "payroll" | "band";
 
 export function DepartmentTabs({ summaries }: DepartmentTabsProps) {
+  const { salaryView } = useSalaryView();
   const [selectedDept, setSelectedDept] = useState<Department | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("overview");
   
@@ -72,7 +74,7 @@ export function DepartmentTabs({ summaries }: DepartmentTabsProps) {
 
   const getValueFormatter = () => {
     switch (viewMode) {
-      case "payroll": return (v: number) => formatAEDCompact(v);
+      case "payroll": return (v: number) => formatAEDCompact(applyViewMode(v, salaryView));
       case "band": return (v: number) => `${v}%`;
       default: return (v: number) => v.toString();
     }
@@ -222,7 +224,7 @@ export function DepartmentTabs({ summaries }: DepartmentTabsProps) {
             <div className="flex items-center justify-between p-4 rounded-xl bg-muted">
               <span className="text-sm font-medium text-brand-700">Department Payroll</span>
               <span className="text-lg font-bold text-brand-900">
-                {formatAEDCompact(selectedSummary.totalPayroll)}
+                {formatAEDCompact(applyViewMode(selectedSummary.totalPayroll, salaryView))}
               </span>
             </div>
 

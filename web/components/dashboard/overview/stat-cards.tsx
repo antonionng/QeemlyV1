@@ -4,6 +4,7 @@ import { Users, Banknote, Target, AlertTriangle, TrendingUp, TrendingDown } from
 import { SparkAreaChart, DonutChart } from "@tremor/react";
 import { Card } from "@/components/ui/card";
 import { formatAEDCompact, type CompanyMetrics } from "@/lib/employees";
+import { useSalaryView, applyViewMode } from "@/lib/salary-view-store";
 import clsx from "clsx";
 
 interface StatCardsProps {
@@ -11,6 +12,7 @@ interface StatCardsProps {
 }
 
 export function StatCards({ metrics }: StatCardsProps) {
+  const { salaryView } = useSalaryView();
   // Prepare sparkline data for headcount
   const headcountSparkData = metrics.headcountTrend.map(d => ({
     month: d.month,
@@ -55,8 +57,8 @@ export function StatCards({ metrics }: StatCardsProps) {
     },
     {
       label: "Total Payroll",
-      value: formatAEDCompact(metrics.totalPayroll),
-      subtext: "Annual compensation",
+      value: formatAEDCompact(applyViewMode(metrics.totalPayroll, salaryView)),
+      subtext: salaryView === "monthly" ? "Monthly compensation" : "Annual compensation",
       icon: Banknote,
       color: "text-emerald-600",
       bgColor: "bg-emerald-50",

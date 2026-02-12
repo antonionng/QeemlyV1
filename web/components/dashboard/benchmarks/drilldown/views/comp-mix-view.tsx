@@ -4,6 +4,7 @@ import { PieChart } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { type BenchmarkResult } from "@/lib/benchmarks/benchmark-state";
 import { getCompMix, LEVELS } from "@/lib/dashboard/dummy-data";
+import { useSalaryView } from "@/lib/salary-view-store";
 
 interface CompMixViewProps {
   result: BenchmarkResult;
@@ -11,9 +12,10 @@ interface CompMixViewProps {
 
 export function CompMixView({ result }: CompMixViewProps) {
   const { role, level, location, benchmark } = result;
+  const { salaryView } = useSalaryView();
   
-  // Convert from monthly AED to annual AED
-  const convertToAnnual = (value: number) => Math.round(value * 12 / 1000) * 1000;
+  // Convert from monthly AED based on salary view mode
+  const convertValue = (value: number) => salaryView === "annual" ? Math.round(value * 12 / 1000) * 1000 : Math.round(value / 100) * 100;
   
   const formatAED = (value: number) => {
     if (value >= 1000) {
@@ -30,7 +32,7 @@ export function CompMixView({ result }: CompMixViewProps) {
   const compMixData = getCompMix(role.id, location.id === "london" ? "dubai" : location.id, level.id)
     .map(item => ({
       ...item,
-      value: convertToAnnual(item.value),
+      value: convertValue(item.value),
     }));
 
   const totalComp = compMixData.reduce((sum, item) => sum + item.value, 0);

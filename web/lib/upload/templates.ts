@@ -33,7 +33,7 @@ export const EMPLOYEE_TEMPLATE: Template = {
     { header: "equity", description: "Annual equity value", required: false, example: "50000" },
     { header: "currency", description: "Currency code (e.g., AED, SAR)", required: false, example: "AED" },
     { header: "status", description: "Employment status (active/inactive)", required: false, example: "active" },
-    { header: "employment_type", description: "Type (local/expat)", required: false, example: "local" },
+    { header: "employment_type", description: "Type (national/expat)", required: false, example: "national" },
     { header: "hire_date", description: "Date of hire (YYYY-MM-DD)", required: false, example: "2023-01-15" },
     { header: "performance_rating", description: "Rating (low/meets/exceeds/exceptional)", required: false, example: "exceeds" },
   ],

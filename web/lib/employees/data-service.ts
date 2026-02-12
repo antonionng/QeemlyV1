@@ -121,7 +121,7 @@ export async function fetchDbEmployees(): Promise<Employee[]> {
         level,
         location,
         status: emp.status as "active" | "inactive",
-        employmentType: emp.employment_type as "local" | "expat",
+        employmentType: emp.employment_type as "national" | "expat",
         baseSalary,
         bonus: bonus > 0 ? bonus : undefined,
         equity: equity > 0 ? equity : undefined,

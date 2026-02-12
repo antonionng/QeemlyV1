@@ -21,6 +21,8 @@ import {
   DropdownItem,
   DropdownDivider,
 } from "@/components/ui/dropdown-menu";
+import { SalaryViewToggle } from "@/components/ui/salary-view-toggle";
+import { useSalaryView } from "@/lib/salary-view-store";
 import { createClient } from "@/lib/supabase/client";
 
 type DashboardTopBarProps = {
@@ -60,6 +62,8 @@ export function DashboardTopBar({
     await supabase.auth.signOut();
     router.push("/login");
   };
+
+  const { salaryView, setSalaryView } = useSalaryView();
 
   const userInitial = profile?.full_name 
     ? profile.full_name.charAt(0).toUpperCase() 
@@ -106,6 +110,9 @@ export function DashboardTopBar({
           >
             <Search className="h-4 w-4 text-brand-700" />
           </button>
+
+          {/* Salary View Toggle */}
+          <SalaryViewToggle value={salaryView} onChange={setSalaryView} />
 
           {/* AI Chat Button */}
           <button
