@@ -1,0 +1,31 @@
+import OpenAI from "openai";
+
+let openaiClient: OpenAI | null = null;
+const DEFAULT_CHAT_MODEL = "gpt-5.2-mini";
+const DEFAULT_ADVISORY_MODEL = "gpt-5.2";
+
+export function getOpenAIClient(): OpenAI {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("Missing OPENAI_API_KEY");
+  }
+
+  if (!openaiClient) {
+    openaiClient = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+    });
+  }
+
+  return openaiClient;
+}
+
+export function getAdvisoryModel(): string {
+  return process.env.OPENAI_ADVISORY_MODEL || DEFAULT_ADVISORY_MODEL;
+}
+
+export function getChatModel(): string {
+  return process.env.OPENAI_CHAT_MODEL || process.env.OPENAI_ADVISORY_MODEL || DEFAULT_CHAT_MODEL;
+}
+
+export function getComplianceScoringModel(): string {
+  return process.env.OPENAI_COMPLIANCE_SCORING_MODEL || getAdvisoryModel();
+}

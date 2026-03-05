@@ -21,7 +21,15 @@ export function PayrollTrend({ metrics }: PayrollTrendProps) {
   // Filter data based on time range
   const getFilteredData = () => {
     const months = timeRange === "3m" ? 3 : timeRange === "6m" ? 6 : 12;
-    return metrics.payrollTrend.slice(-months);
+    const sliced = metrics.payrollTrend.slice(-months);
+
+    // Figma shows fewer x-axis labels (e.g., Mar/May/Jul/Sep/Nov/Jan on 12m).
+    // We downsample the 12m view to encourage the same tick density.
+    if (timeRange === "12m" && sliced.length > 6) {
+      return sliced.filter((_, idx) => idx % 2 === 0);
+    }
+
+    return sliced;
   };
 
   const trendData = getFilteredData();
@@ -31,6 +39,14 @@ export function PayrollTrend({ metrics }: PayrollTrendProps) {
   const endValue = trendData[trendData.length - 1]?.value || 0;
   const periodChange = startValue > 0 ? ((endValue - startValue) / startValue) * 100 : 0;
 
+  const formatHeaderValue = (value: number) => `AED ${formatAEDCompact(applyViewMode(value, salaryView))}`;
+  const formatAxisValue = (value: number) => {
+    const v = applyViewMode(value, salaryView);
+    if (!Number.isFinite(v)) return "AED 0";
+    if (Math.abs(v) < 1_000_000) return `AED ${Math.round(v).toLocaleString("en-AE")}`;
+    return `AED ${(v / 1_000_000).toFixed(1)}M`;
+  };
+
   // Prepare chart data
   const chartData = trendData.map(d => ({
     month: d.month,
@@ -38,25 +54,25 @@ export function PayrollTrend({ metrics }: PayrollTrendProps) {
   }));
 
   return (
-    <Card className="p-5">
+    <Card className="dash-card p-5">
       <div className="flex items-start justify-between mb-4">
         <div>
-          <h3 className="text-sm font-semibold text-brand-900">Payroll Trend</h3>
-          <p className="text-xs text-brand-500 mt-0.5">Total compensation over time</p>
+          <h3 className="text-sm font-semibold text-accent-900">Payroll Trend</h3>
+          <p className="text-xs text-accent-500 mt-0.5">Total compensation over time</p>
         </div>
         
         {/* Time range selector */}
-        <div className="flex gap-1 rounded-lg bg-brand-100/50 p-1">
+        <div className="flex gap-1 rounded-full bg-accent-100 p-1">
           {(["3m", "6m", "12m"] as TimeRange[]).map(range => (
             <button
               key={range}
               type="button"
               onClick={() => setTimeRange(range)}
               className={clsx(
-                "rounded-md px-3 py-1 text-xs font-semibold transition-colors",
+                "rounded-full px-3 py-1 text-xs font-semibold transition-colors",
                 timeRange === range
-                  ? "bg-white text-brand-900 shadow-sm"
-                  : "text-brand-600 hover:text-brand-800"
+                  ? "bg-white text-accent-900 shadow-sm"
+                  : "text-accent-600 hover:text-accent-800"
               )}
             >
               {range.toUpperCase()}
@@ -66,73 +82,57 @@ export function PayrollTrend({ metrics }: PayrollTrendProps) {
       </div>
 
       {/* Period summary */}
-      <div className="flex items-center gap-6 mb-4 rounded-xl bg-brand-50 px-4 py-3">
+      <div className="flex items-baseline gap-10 mb-4">
         <div>
-          <p className="text-xs font-medium text-brand-600">Current</p>
-          <p className="text-xl font-bold text-brand-900">
-            {formatAEDCompact(applyViewMode(endValue, salaryView))}
+          <p className="text-xs font-medium text-accent-500">Period Start</p>
+          <p className="text-[28px] leading-none font-extrabold text-accent-900">
+            {formatHeaderValue(startValue)}
           </p>
         </div>
-        <div className="h-8 w-px bg-brand-200" />
         <div>
-          <p className="text-xs font-medium text-brand-600">Period Start</p>
-          <p className="text-lg font-semibold text-brand-700">
-            {formatAEDCompact(applyViewMode(startValue, salaryView))}
-          </p>
-        </div>
-        <div className="h-8 w-px bg-brand-200" />
-        <div className="flex items-center gap-2">
-          {periodChange >= 0 ? (
-            <TrendingUp className="h-4 w-4 text-emerald-600" />
-          ) : (
-            <TrendingDown className="h-4 w-4 text-rose-600" />
-          )}
-          <div>
-            <p className="text-xs font-medium text-brand-600">Change</p>
-            <p
-              className={clsx(
-                "text-lg font-bold",
-                periodChange >= 0 ? "text-emerald-600" : "text-rose-600"
-              )}
-            >
+          <div className="flex items-center gap-2">
+            <p className="text-xs font-medium text-accent-500">Current</p>
+            <span className={clsx(
+              "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold",
+              periodChange >= 0 ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"
+            )}>
+              {periodChange >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
               {periodChange >= 0 ? "+" : ""}{periodChange.toFixed(1)}%
-            </p>
+            </span>
           </div>
+          <p className="text-[28px] leading-none font-extrabold text-accent-900">
+            {formatHeaderValue(endValue)}
+          </p>
         </div>
       </div>
 
       {/* Area Chart */}
-      <div className="h-[180px]">
+      <div
+        className={clsx(
+          "h-[180px]",
+          // Figma: neutral grey gradient area, no visible line, no tooltip.
+          "[&_.recharts-area-curve]:!opacity-0",
+          "[&_.recharts-dot]:!opacity-0",
+          "[&_.recharts-tooltip-wrapper]:!hidden",
+          "[&_.recharts-area-area]:!opacity-100"
+        )}
+      >
         <AreaChart
           className="h-full"
           data={chartData}
           index="month"
           categories={["Payroll"]}
-          colors={["violet"]}
-          valueFormatter={v => formatAEDCompact(applyViewMode(v, salaryView))}
+          colors={["gray"]}
+          valueFormatter={(v) => formatAxisValue(v)}
           showLegend={false}
           showGridLines={false}
+          showGradient={true}
           curveType="monotone"
           yAxisWidth={80}
-          showAnimation={true}
+          showAnimation={false}
         />
       </div>
 
-      {/* Insights footer */}
-      <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-border">
-        <div className="flex items-center gap-2 rounded-full bg-brand-100 px-3 py-1.5">
-          <span className="h-2 w-2 rounded-full bg-brand-500" />
-          <span className="text-xs font-medium text-brand-700">
-            Avg monthly: {formatAEDCompact(endValue / 12)}
-          </span>
-        </div>
-        <div className="flex items-center gap-2 rounded-full bg-emerald-100 px-3 py-1.5">
-          <span className="h-2 w-2 rounded-full bg-emerald-500" />
-          <span className="text-xs font-medium text-emerald-700">
-            YoY growth: +{metrics.payrollChange}%
-          </span>
-        </div>
-      </div>
     </Card>
   );
 }

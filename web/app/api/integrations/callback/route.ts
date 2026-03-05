@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { verifyOAuthState } from "@/lib/security/oauth-state";
 
 /**
  * GET /api/integrations/callback
@@ -33,14 +34,13 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // TODO: Parse state to get provider and workspace context
-    // TODO: Exchange code for tokens based on provider
-    // TODO: Store tokens in integrations table
-
-    // Placeholder: decode state
-    let stateData: { provider: string; workspace_id: string };
+    let stateData: {
+      provider: string;
+      workspace_id: string;
+      integration_id: string;
+    };
     try {
-      stateData = JSON.parse(Buffer.from(state, "base64").toString());
+      stateData = verifyOAuthState(state);
     } catch {
       return NextResponse.redirect(
         new URL("/dashboard/integrations?error=invalid_state", request.url)
@@ -48,13 +48,38 @@ export async function GET(request: NextRequest) {
     }
 
     const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+
+    if (!user) {
+      return NextResponse.redirect(
+        new URL("/dashboard/integrations?error=unauthorized", request.url)
+      );
+    }
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("workspace_id, role")
+      .eq("id", user.id)
+      .single();
+
+    if (!profile?.workspace_id || profile.role !== "admin") {
+      return NextResponse.redirect(
+        new URL("/dashboard/integrations?error=forbidden", request.url)
+      );
+    }
+
+    if (profile.workspace_id !== stateData.workspace_id) {
+      return NextResponse.redirect(
+        new URL("/dashboard/integrations?error=workspace_mismatch", request.url)
+      );
+    }
 
     // TODO: Actual token exchange
     // For Slack:  POST https://slack.com/api/oauth.v2.access
     // For Teams:  POST https://login.microsoftonline.com/.../oauth2/v2.0/token
 
     // Update integration record
-    await supabase
+    const { data: integration, error: updateError } = await supabase
       .from("integrations")
       .update({
         status: "connected",
@@ -62,8 +87,17 @@ export async function GET(request: NextRequest) {
         // refresh_token: tokens.refresh_token,
         updated_at: new Date().toISOString(),
       })
+      .eq("id", stateData.integration_id)
       .eq("workspace_id", stateData.workspace_id)
-      .eq("provider", stateData.provider);
+      .eq("provider", stateData.provider)
+      .select("id")
+      .single();
+
+    if (updateError || !integration) {
+      return NextResponse.redirect(
+        new URL("/dashboard/integrations?error=integration_not_found", request.url)
+      );
+    }
 
     return NextResponse.redirect(
       new URL("/dashboard/integrations?connected=" + stateData.provider, request.url)

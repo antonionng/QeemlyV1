@@ -1,7 +1,28 @@
 "use client";
 
-import { type ReactNode } from "react";
+import { type ReactNode, useState } from "react";
 import clsx from "clsx";
+
+const PROVIDER_DOMAINS: Record<string, string> = {
+  slack: "slack.com",
+  teams: "microsoft.com",
+  bamboohr: "bamboohr.com",
+  workday: "workday.com",
+  sap_successfactors: "sap.com",
+  hibob: "hibob.com",
+  personio: "personio.com",
+  gusto: "gusto.com",
+  rippling: "rippling.com",
+  deel: "deel.com",
+  zenhr: "zenhr.com",
+  bayzat: "bayzat.com",
+  gulfhr: "gulfhr.com",
+  remotepass: "remotepass.com",
+  greenhouse: "greenhouse.io",
+  lever: "lever.co",
+  ashby: "ashby.com",
+  workable: "workable.com",
+};
 
 type Props = {
   id: string;
@@ -269,17 +290,33 @@ function FallbackLogo({ name, size }: { name: string; size: number }) {
 }
 
 export function ProviderLogo({ id, size = 40, className }: Props) {
+  const [imgFailed, setImgFailed] = useState(false);
+  const domain = PROVIDER_DOMAINS[id];
   const logo = LOGOS[id];
+
+  const fallback = logo ? (
+    <div className="h-full w-full">{logo}</div>
+  ) : (
+    <FallbackLogo name={id} size={size} />
+  );
 
   return (
     <div
       className={clsx("shrink-0 overflow-hidden rounded-xl", className)}
       style={{ width: size, height: size }}
     >
-      {logo ? (
-        <div className="h-full w-full">{logo}</div>
+      {domain && !imgFailed ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={`https://logo.clearbit.com/${domain}?size=${size * 2}`}
+          alt=""
+          width={size}
+          height={size}
+          className="h-full w-full object-contain"
+          onError={() => setImgFailed(true)}
+        />
       ) : (
-        <FallbackLogo name={id} size={size} />
+        fallback
       )}
     </div>
   );

@@ -104,32 +104,146 @@ for (const lv of LEVELS) {
   levelByNorm.set(normalize(lv.name), lv);
 }
 
+// ILO ISIC sector codes -> canonical role_id (for ILOSTAT adapter)
+const SECTOR_TO_ROLE: Record<string, string> = {
+  J: "swe",
+  K: "data-analyst",
+  M: "pm",
+  P: "ux-researcher",
+};
+
+// Economic activity names -> role_id (for Qatar/Bahrain government data)
+const ACTIVITY_TO_ROLE: Record<string, string> = {
+  ict: "swe",
+  "information and communication": "swe",
+  "information & communication": "swe",
+  financial: "data-analyst",
+  "financial and insurance": "data-analyst",
+  "financial and insurance activities": "data-analyst",
+  "real estate": "pm",
+  "real estate activities": "pm",
+  professional: "pm",
+  "professional, scientific": "pm",
+  "professional,scientific and technical activities": "pm",
+  administrative: "data-analyst",
+  "administrative and support": "data-analyst",
+  construction: "swe-devops",
+  "mining and quarrying": "data-scientist",
+  manufacturing: "qa",
+  education: "ux-researcher",
+  "human health": "ux-researcher",
+  "transportation and storage": "swe-devops",
+};
+
+// BLS SOC codes -> role_id (for US BLS data)
+const SOC_TO_ROLE: Record<string, string> = {
+  "15-1252": "swe",
+  "15-2051": "data-scientist",
+  "15-1211": "data-analyst",
+  "11-3021": "pm",
+  "27-1021": "designer",
+  "15-1253": "qa",
+  "15-1244": "swe-devops",
+  "15-1212": "security",
+  "19-3051": "ux-researcher",
+};
+
+// Profession keyword phrases -> role_id (for KAPSARC and similar survey data)
+const PROFESSION_KEYWORDS: Array<{ keywords: string[]; roleId: string }> = [
+  { keywords: ["scientific", "technical", "specialist"], roleId: "pm" },
+  { keywords: ["scientific", "technical", "technician"], roleId: "swe" },
+  { keywords: ["clerical"], roleId: "data-analyst" },
+  { keywords: ["manager", "senior"], roleId: "pm" },
+  { keywords: ["engineer", "computer"], roleId: "swe" },
+  { keywords: ["programmer", "developer"], roleId: "swe" },
+  { keywords: ["designer"], roleId: "designer" },
+  { keywords: ["analyst", "data"], roleId: "data-analyst" },
+  { keywords: ["software", "developer"], roleId: "swe" },
+  { keywords: ["data", "scientist"], roleId: "data-scientist" },
+  { keywords: ["product", "manager"], roleId: "pm" },
+  { keywords: ["security"], roleId: "security" },
+  { keywords: ["devops"], roleId: "swe-devops" },
+  { keywords: ["quality", "assurance"], roleId: "qa" },
+];
+
 /**
  * Match a role string to a known role ID
+ * Supports: direct role names, ILO sector codes, BLS SOC codes, 
+ * economic activity names (Qatar/Bahrain), and profession keywords
  */
 export function matchRole(roleStr: string): string | null {
-  const normalized = normalize(roleStr);
+  const trimmed = roleStr.trim();
+  if (!trimmed) return null;
+
+  // Skip macro indicator markers from World Bank adapter
+  if (trimmed === "__macro_indicator__" || trimmed === "__macro__") {
+    return null;
+  }
+
+  const normalized = normalize(trimmed);
   const role = roleByNorm.get(normalized);
   if (role) return role.id;
+
+  // ILO sector code (single letter like J, K, M, P)
+  if (trimmed.length === 1) {
+    const sectorId = SECTOR_TO_ROLE[trimmed.toUpperCase()];
+    if (sectorId) return sectorId;
+  }
+
+  // BLS SOC code (format: XX-XXXX)
+  const socMatch = trimmed.match(/^\d{2}-\d{4}$/);
+  if (socMatch) {
+    const socRole = SOC_TO_ROLE[trimmed];
+    if (socRole) return socRole;
+  }
+
+  // Economic activity matching (Qatar/Bahrain government data)
+  const activityRole = ACTIVITY_TO_ROLE[normalized];
+  if (activityRole) return activityRole;
   
-  // Try partial matching
+  // Partial activity matching
+  for (const [key, roleId] of Object.entries(ACTIVITY_TO_ROLE)) {
+    if (normalized.includes(key) || key.includes(normalized)) {
+      return roleId;
+    }
+  }
+
+  // Profession keyword matching (KAPSARC-style)
+  const lower = normalized;
+  for (const { keywords, roleId } of PROFESSION_KEYWORDS) {
+    if (keywords.every((k) => lower.includes(k))) return roleId;
+  }
+  
+  // Fallback keyword matching
+  if (lower.includes("technician") || lower.includes("technical")) return "swe";
+  if (lower.includes("specialist")) return "pm";
+  if (lower.includes("information") || lower.includes("ict") || lower.includes("software")) return "swe";
+  if (lower.includes("financial") || lower.includes("insurance") || lower.includes("bank")) return "data-analyst";
+  if (lower.includes("professional") || lower.includes("scientific")) return "pm";
+
+  // Try partial matching against known roles
   for (const [key, value] of roleByNorm) {
     if (normalized.includes(key) || key.includes(normalized)) {
       return value.id;
     }
   }
-  
-  // Return the original string if no match (for custom roles)
-  return roleStr.trim() || null;
+
+  return null;
 }
 
 /**
  * Match a location string to a known location ID
+ * Also handles special locations like "USA (National)" from BLS data
  */
 export function matchLocation(locationStr: string): string | null {
   const normalized = normalize(locationStr);
   const location = locationByNorm.get(normalized);
   if (location) return location.id;
+  
+  // Handle special locations for international benchmarks
+  if (normalized.includes("usa") || normalized.includes("united states") || normalized.includes("national")) {
+    return "usa-national";
+  }
   
   // Try partial matching
   for (const [key, value] of locationByNorm) {

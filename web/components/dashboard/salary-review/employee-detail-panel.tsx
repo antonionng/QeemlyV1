@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   X,
   MapPin,
   Briefcase,
   Calendar,
   TrendingUp,
-  TrendingDown,
   Clock,
   AlertTriangle,
   ShieldCheck,
@@ -15,27 +14,27 @@ import {
   Shield,
   ArrowUpRight,
   Star,
+  ChevronDown,
+  CheckCircle2,
+  Circle,
+  Sparkles,
+  Send,
 } from "lucide-react";
-import { Card } from "@/components/ui/card";
-import { type ReviewEmployee } from "@/lib/salary-review";
+import { type ReviewEmployee, useSalaryReview } from "@/lib/salary-review";
 import {
   formatAED,
   generateCompensationHistory,
   computeAttritionRisk,
   computeTenure,
-  type CompensationHistoryEntry,
   type AttritionRiskLevel,
 } from "@/lib/employees";
 import { useSalaryView, applyViewMode } from "@/lib/salary-view-store";
-
-// ─── Props ────────────────────────────────────────────────────────────────────
+import { generateAdvisory } from "@/lib/advisory/generator";
 
 interface EmployeeDetailPanelProps {
   employee: ReviewEmployee;
   onClose: () => void;
 }
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function formatDate(date: Date): string {
   return date.toLocaleDateString("en-GB", {
@@ -64,6 +63,18 @@ const REASON_LABELS: Record<string, string> = {
   "market-adjustment": "Market Adjustment",
 };
 
+type PanelHistoryEntry = {
+  effectiveDate: Date;
+  baseSalary: number;
+  previousSalary: number;
+  changePercentage: number;
+  changeReason: "hire" | "annual-review" | "promotion" | "market-adjustment";
+};
+
+type SectionKey = "history" | "actions" | "advisory" | "chat" | "risk";
+
+const OPEN_AI_DRAWER_EVENT = "qeemly:open-ai-drawer";
+
 const RISK_CONFIG: Record<
   AttritionRiskLevel,
   { bg: string; text: string; border: string; icon: typeof ShieldCheck; label: string }
@@ -76,7 +87,7 @@ const RISK_CONFIG: Record<
 
 const SIGNAL_DOT: Record<string, string> = {
   positive: "bg-emerald-500",
-  neutral: "bg-brand-300",
+  neutral: "bg-accent-300",
   warning: "bg-amber-500",
   danger: "bg-red-500",
 };
@@ -88,13 +99,41 @@ const PERFORMANCE_BADGE: Record<string, { bg: string; text: string; label: strin
   low: { bg: "bg-red-100", text: "text-red-700", label: "Low" },
 };
 
-// ─── Component ────────────────────────────────────────────────────────────────
+function normalizeReason(reason: string | null | undefined): PanelHistoryEntry["changeReason"] {
+  const normalized = (reason || "").toLowerCase().replaceAll("_", "-");
+  if (normalized === "promotion") return "promotion";
+  if (normalized === "market-adjustment") return "market-adjustment";
+  if (normalized === "annual-review") return "annual-review";
+  return "hire";
+}
+
+function estimateSuggestedIncrease(employee: ReviewEmployee): number {
+  let pct = 3;
+  if (employee.bandPosition === "below") pct += 2;
+  if (employee.bandPosition === "above") pct -= 1;
+  if (employee.performanceRating === "exceptional") pct += 3;
+  if (employee.performanceRating === "exceeds") pct += 2;
+  if (employee.performanceRating === "low") pct -= 2;
+  const clampedPct = Math.max(0, Math.min(15, pct));
+  return Math.round(((employee.baseSalary * clampedPct) / 100) / 100) * 100;
+}
 
 export function EmployeeDetailPanel({ employee, onClose }: EmployeeDetailPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const { salaryView } = useSalaryView();
+  const { workflowByEmployee, updateEmployeeWorkflow, applySuggestedIncrease } = useSalaryReview();
+  const [sections, setSections] = useState<Record<SectionKey, boolean>>({
+    history: true,
+    actions: true,
+    advisory: true,
+    chat: true,
+    risk: false,
+  });
+  const [question, setQuestion] = useState("");
+  const [liveHistory, setLiveHistory] = useState<PanelHistoryEntry[] | null>(null);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
 
-  // Close on Escape
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -103,14 +142,12 @@ export function EmployeeDetailPanel({ employee, onClose }: EmployeeDetailPanelPr
     return () => document.removeEventListener("keydown", handler);
   }, [onClose]);
 
-  // Close on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
         onClose();
       }
     };
-    // Delay listener to avoid the click that opened the panel from immediately closing it
     const id = setTimeout(() => document.addEventListener("mousedown", handler), 50);
     return () => {
       clearTimeout(id);
@@ -118,191 +155,530 @@ export function EmployeeDetailPanel({ employee, onClose }: EmployeeDetailPanelPr
     };
   }, [onClose]);
 
-  const tenure = computeTenure(employee.hireDate);
-  const history = generateCompensationHistory(employee);
-  const risk = computeAttritionRisk(employee);
+  useEffect(() => {
+    let isMounted = true;
 
-  // Last salary increase (first non-hire entry)
+    async function loadHistory() {
+      setLoadingHistory(true);
+      setHistoryError(null);
+      setLiveHistory(null);
+      try {
+        const response = await fetch(`/api/salary-review/history/${employee.id}`);
+        if (!response.ok) {
+          throw new Error("Failed to load compensation history");
+        }
+        const payload = await response.json();
+        const rows: Array<{
+          effectiveDate: string;
+          baseSalary: number;
+          changeReason: string | null;
+          changePercentage: number | null;
+        }> = payload?.history ?? [];
+
+        const mapped = rows.map((row, idx) => {
+          const nextRow = rows[idx + 1];
+          const previousSalary = nextRow ? Number(nextRow.baseSalary) : Number(row.baseSalary);
+          const inferredPct = previousSalary > 0
+            ? ((Number(row.baseSalary) - previousSalary) / previousSalary) * 100
+            : 0;
+          const reason = normalizeReason(row.changeReason);
+
+          return {
+            effectiveDate: new Date(row.effectiveDate),
+            baseSalary: Number(row.baseSalary) || 0,
+            previousSalary,
+            changePercentage: row.changePercentage ?? Math.max(0, Number(inferredPct.toFixed(1))),
+            changeReason: reason,
+          } as PanelHistoryEntry;
+        });
+
+        if (isMounted) {
+          setLiveHistory(mapped);
+        }
+      } catch {
+        if (isMounted) {
+          setHistoryError("Using generated history");
+          setLiveHistory([]);
+        }
+      } finally {
+        if (isMounted) {
+          setLoadingHistory(false);
+        }
+      }
+    }
+
+    loadHistory();
+    return () => {
+      isMounted = false;
+    };
+  }, [employee.id]);
+
+  const history = useMemo<PanelHistoryEntry[]>(() => {
+    if (liveHistory && liveHistory.length > 0) return liveHistory;
+    return generateCompensationHistory(employee);
+  }, [employee, liveHistory]);
+
+  const tenure = computeTenure(employee.hireDate);
+  const risk = computeAttritionRisk(employee);
+  const workflow = workflowByEmployee[employee.id];
+  const suggestedIncrease = estimateSuggestedIncrease(employee);
+
+  const advisory = useMemo(
+    () =>
+      generateAdvisory({
+        id: employee.id,
+        firstName: employee.firstName,
+        lastName: employee.lastName,
+        baseSalary: employee.baseSalary,
+        bandPosition: employee.bandPosition,
+        bandPercentile: employee.bandPercentile,
+        marketComparison: employee.marketComparison,
+        performanceRating: employee.performanceRating,
+        employmentType: employee.employmentType,
+        department: employee.department,
+        roleName: employee.role.title,
+        levelName: employee.level.name,
+        hireDate: employee.hireDate,
+        lastReviewDate: employee.lastReviewDate,
+        proposedIncrease: employee.proposedIncrease,
+      }),
+    [employee]
+  );
+
   const lastIncrease = history.find(
     (h) => h.changeReason !== "hire" && h.changePercentage > 0
   );
 
   const riskCfg = RISK_CONFIG[risk.overall];
   const RiskIcon = riskCfg.icon;
+  const toggleSection = (key: SectionKey) =>
+    setSections((prev) => ({ ...prev, [key]: !prev[key] }));
+  const askEmployeeQuestion = () => {
+    const prompt = question.trim();
+    if (!prompt) return;
+
+    window.dispatchEvent(
+      new CustomEvent(OPEN_AI_DRAWER_EVENT, {
+        detail: {
+          mode: "employee",
+          employeeId: employee.id,
+          employee: {
+            id: employee.id,
+            name: `${employee.firstName} ${employee.lastName}`.trim(),
+            role: employee.role.title,
+            department: employee.department,
+          },
+          message: prompt,
+        },
+      })
+    );
+    setQuestion("");
+    onClose();
+  };
+  const completeActionsCount =
+    Number(Boolean(workflow?.managerFollowUpDone)) +
+    Number(Boolean(workflow?.recommendationReady));
 
   return (
     <>
-      {/* Backdrop */}
-      <div className="fixed inset-0 z-40 bg-black/20 backdrop-blur-[2px] transition-opacity" />
+      <div className="fixed inset-0 z-40 bg-black/15 backdrop-blur-[1px] transition-opacity" />
 
-      {/* Panel */}
       <div
         ref={panelRef}
-        className="fixed right-0 top-0 z-50 h-full w-full max-w-md overflow-y-auto border-l border-border bg-white shadow-2xl animate-in slide-in-from-right duration-200"
+        className="fixed right-0 top-0 z-50 h-full w-full max-w-[420px] overflow-y-auto border-l border-border/60 bg-white shadow-2xl animate-in slide-in-from-right duration-200"
       >
-        {/* ── Header ──────────────────────────────────────────────── */}
-        <div className="sticky top-0 z-10 border-b border-border bg-white px-6 py-5">
+        {/* Header */}
+        <div className="sticky top-0 z-10 bg-white px-6 py-5 border-b border-border/40">
           <button
             type="button"
             onClick={onClose}
-            className="absolute right-4 top-4 rounded-lg p-1.5 text-brand-400 hover:bg-brand-100 hover:text-brand-700 transition-colors"
+            className="absolute right-4 top-4 rounded-xl p-1.5 text-accent-400 hover:bg-accent-100 hover:text-accent-700 transition-colors"
           >
             <X className="h-5 w-5" />
           </button>
 
           <div className="flex items-start gap-4">
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-brand-100 text-brand-700 font-bold text-base">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-brand-100 text-brand-700 font-bold text-base">
               {employee.firstName[0]}
               {employee.lastName[0]}
             </div>
-            <div className="min-w-0">
-              <h2 className="text-lg font-semibold text-brand-900 truncate">
+            <div className="min-w-0 flex-1">
+              <h2 className="text-lg font-bold text-accent-900 truncate">
                 {employee.firstName} {employee.lastName}
               </h2>
-              <p className="text-sm text-brand-500">{employee.role.title}</p>
-              <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-brand-500">
-                <span className="flex items-center gap-1">
-                  <Briefcase className="h-3.5 w-3.5" />
-                  {employee.department}
-                </span>
-                <span className="flex items-center gap-1">
-                  <MapPin className="h-3.5 w-3.5" />
-                  {employee.location.city}, {employee.location.country}
-                </span>
-                <span className="flex items-center gap-1">
-                  <Clock className="h-3.5 w-3.5" />
-                  {tenure.label} tenure
-                </span>
-              </div>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                {employee.performanceRating && (
-                  <span
-                    className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${PERFORMANCE_BADGE[employee.performanceRating].bg} ${PERFORMANCE_BADGE[employee.performanceRating].text}`}
-                  >
-                    <Star className="h-3 w-3" />
-                    {PERFORMANCE_BADGE[employee.performanceRating].label}
-                  </span>
-                )}
-                <span className="text-xs text-brand-400">{employee.level.name}</span>
-              </div>
+              <p className="text-sm text-accent-500">{employee.role.title}</p>
             </div>
+          </div>
+
+          {/* Meta pills */}
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1 rounded-full bg-accent-100 px-2.5 py-1 text-xs text-accent-600">
+              <Briefcase className="h-3 w-3" />
+              {employee.department}
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-accent-100 px-2.5 py-1 text-xs text-accent-600">
+              <MapPin className="h-3 w-3" />
+              {employee.location.city}
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-full bg-accent-100 px-2.5 py-1 text-xs text-accent-600">
+              <Clock className="h-3 w-3" />
+              {tenure.label}
+            </span>
+            {employee.performanceRating && (
+              <span
+                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${PERFORMANCE_BADGE[employee.performanceRating].bg} ${PERFORMANCE_BADGE[employee.performanceRating].text}`}
+              >
+                <Star className="h-3 w-3" />
+                {PERFORMANCE_BADGE[employee.performanceRating].label}
+              </span>
+            )}
           </div>
         </div>
 
-        <div className="space-y-6 px-6 py-6">
-          {/* ── Section 1: Last Salary Increase ───────────────────── */}
-          <section>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-brand-500 mb-3">
-              Last Salary Increase
-            </h3>
-            {lastIncrease ? (
-              <Card className="p-4">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <TrendingUp className="h-4 w-4 text-emerald-500" />
-                      <span className="text-lg font-bold text-emerald-600">
-                        +{lastIncrease.changePercentage}%
-                      </span>
+        <div className="space-y-5 px-6 py-5">
+          <section className="rounded-xl border border-border/50 bg-white">
+            <button
+              type="button"
+              onClick={() => toggleSection("history")}
+              className="flex w-full items-center justify-between px-4 py-3"
+            >
+              <div>
+                <h3 className="text-[11px] font-semibold uppercase tracking-widest text-accent-400 text-left">
+                  Salary History
+                </h3>
+                <p className="mt-1 text-xs text-accent-500 text-left">
+                  {loadingHistory ? "Loading live history..." : `${history.length} timeline event(s)`}
+                </p>
+              </div>
+              <ChevronDown
+                className={`h-4 w-4 text-accent-400 transition-transform ${
+                  sections.history ? "rotate-180" : ""
+                }`}
+              />
+            </button>
+
+            {sections.history && (
+              <div className="border-t border-border/40 px-4 py-4">
+                <div className="mb-3 rounded-lg border border-border/50 bg-accent-50/50 p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wider text-accent-500">
+                    Last Salary Increase
+                  </p>
+                  {lastIncrease ? (
+                    <div className="mt-2 flex items-start justify-between">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <TrendingUp className="h-4 w-4 text-emerald-500" />
+                          <span className="text-lg font-bold text-emerald-600">
+                            +{lastIncrease.changePercentage}%
+                          </span>
+                        </div>
+                        <p className="mt-1 text-sm text-accent-700">
+                          {formatAED(applyViewMode(lastIncrease.previousSalary, salaryView))}
+                          <ArrowUpRight className="mx-1 inline h-3 w-3 text-accent-400" />
+                          {formatAED(applyViewMode(lastIncrease.baseSalary, salaryView))}
+                        </p>
+                      </div>
+                      <div className="text-right text-xs text-accent-500">
+                        <div className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          {formatDate(lastIncrease.effectiveDate)}
+                        </div>
+                        <p className="mt-1 text-[11px] text-accent-400">
+                          {relativeTime(lastIncrease.effectiveDate)}
+                        </p>
+                      </div>
                     </div>
-                    <p className="mt-1 text-sm text-brand-700">
-                      {formatAED(applyViewMode(lastIncrease.previousSalary, salaryView))}
-                      <ArrowUpRight className="inline h-3 w-3 mx-1 text-brand-400" />
-                      {formatAED(applyViewMode(lastIncrease.baseSalary, salaryView))}
-                    </p>
-                    <p className="text-xs text-brand-400 mt-1">
-                      {REASON_LABELS[lastIncrease.changeReason]}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <div className="flex items-center gap-1 text-sm text-brand-600">
-                      <Calendar className="h-3.5 w-3.5" />
-                      {formatDate(lastIncrease.effectiveDate)}
-                    </div>
-                    <p className="text-xs text-brand-400 mt-0.5">
-                      {relativeTime(lastIncrease.effectiveDate)}
-                    </p>
+                  ) : (
+                    <p className="mt-2 text-sm text-accent-400">No salary increases on record</p>
+                  )}
+                </div>
+
+                {historyError && (
+                  <p className="mb-3 text-xs text-amber-600">{historyError}</p>
+                )}
+
+                <div className="relative">
+                  <div className="absolute left-[9px] top-2 bottom-2 w-px bg-border/60" />
+                  <div className="space-y-0">
+                    {history.map((entry, i) => (
+                      <TimelineEntry
+                        key={`${entry.effectiveDate.toISOString()}-${entry.baseSalary}-${i}`}
+                        entry={entry}
+                        isFirst={i === 0}
+                        salaryView={salaryView}
+                      />
+                    ))}
                   </div>
                 </div>
-              </Card>
-            ) : (
-              <Card className="p-4">
-                <p className="text-sm text-brand-400">No salary increases on record</p>
-              </Card>
+              </div>
             )}
           </section>
 
-          {/* ── Section 2: Compensation History ───────────────────── */}
-          <section>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-brand-500 mb-3">
-              Compensation History
-            </h3>
-            <div className="relative">
-              {/* Timeline line */}
-              <div className="absolute left-[9px] top-2 bottom-2 w-px bg-border" />
-
-              <div className="space-y-0">
-                {history.map((entry, i) => (
-                  <TimelineEntry
-                    key={i}
-                    entry={entry}
-                    isFirst={i === 0}
-                    isLast={i === history.length - 1}
-                    salaryView={salaryView}
-                  />
-                ))}
+          <section className="rounded-xl border border-border/50 bg-white">
+            <button
+              type="button"
+              onClick={() => toggleSection("actions")}
+              className="flex w-full items-center justify-between px-4 py-3"
+            >
+              <div>
+                <h3 className="text-[11px] font-semibold uppercase tracking-widest text-accent-400 text-left">
+                  Action Items
+                </h3>
+                <p className="mt-1 text-xs text-accent-500 text-left">
+                  {completeActionsCount}/2 completed
+                </p>
               </div>
-            </div>
+              <ChevronDown
+                className={`h-4 w-4 text-accent-400 transition-transform ${
+                  sections.actions ? "rotate-180" : ""
+                }`}
+              />
+            </button>
+            {sections.actions && (
+              <div className="space-y-2 border-t border-border/40 px-4 py-4">
+                <button
+                  type="button"
+                  onClick={() => applySuggestedIncrease(employee.id)}
+                  className="flex w-full items-center justify-between rounded-lg border border-brand-200 bg-brand-50 px-3 py-2 text-left"
+                >
+                  <div>
+                    <p className="text-sm font-semibold text-brand-800">Apply suggested salary increase</p>
+                    <p className="text-xs text-brand-600">
+                      Suggested: {formatAED(applyViewMode(suggestedIncrease, salaryView))} this cycle
+                    </p>
+                  </div>
+                  <Sparkles className="h-4 w-4 text-brand-500" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    updateEmployeeWorkflow(employee.id, {
+                      managerFollowUpDone: !workflow?.managerFollowUpDone,
+                    })
+                  }
+                  className="flex w-full items-start gap-2 rounded-lg border border-border/50 bg-accent-50/40 px-3 py-2 text-left"
+                >
+                  {workflow?.managerFollowUpDone ? (
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-600" />
+                  ) : (
+                    <Circle className="mt-0.5 h-4 w-4 text-accent-400" />
+                  )}
+                  <div>
+                    <p className="text-sm font-medium text-accent-800">Manager follow-up conversation</p>
+                    <p className="text-xs text-accent-500">
+                      Capture rationale and confirm employee messaging.
+                    </p>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    updateEmployeeWorkflow(employee.id, {
+                      calibrationNeeded: !workflow?.calibrationNeeded,
+                    })
+                  }
+                  className="flex w-full items-start gap-2 rounded-lg border border-border/50 bg-accent-50/40 px-3 py-2 text-left"
+                >
+                  {workflow?.calibrationNeeded ? (
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-600" />
+                  ) : (
+                    <Circle className="mt-0.5 h-4 w-4 text-accent-400" />
+                  )}
+                  <div>
+                    <p className="text-sm font-medium text-accent-800">Calibration review required</p>
+                    <p className="text-xs text-accent-500">
+                      Include this case in calibration if equity or risk flags exist.
+                    </p>
+                  </div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() =>
+                    updateEmployeeWorkflow(employee.id, {
+                      recommendationReady: !workflow?.recommendationReady,
+                    })
+                  }
+                  className="flex w-full items-start gap-2 rounded-lg border border-border/50 bg-accent-50/40 px-3 py-2 text-left"
+                >
+                  {workflow?.recommendationReady ? (
+                    <CheckCircle2 className="mt-0.5 h-4 w-4 text-emerald-600" />
+                  ) : (
+                    <Circle className="mt-0.5 h-4 w-4 text-accent-400" />
+                  )}
+                  <div>
+                    <p className="text-sm font-medium text-accent-800">Final recommendation ready</p>
+                    <p className="text-xs text-accent-500">
+                      Mark once proposal and narrative are complete.
+                    </p>
+                  </div>
+                </button>
+              </div>
+            )}
           </section>
 
-          {/* ── Section 3: Attrition Risk ─────────────────────────── */}
-          <section>
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-brand-500 mb-3">
-              Attrition Risk Indicators
-            </h3>
-
-            {/* Overall risk badge */}
-            <div className={`rounded-xl border ${riskCfg.border} ${riskCfg.bg} p-4 mb-4`}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <RiskIcon className={`h-5 w-5 ${riskCfg.text}`} />
-                  <span className={`text-sm font-bold ${riskCfg.text}`}>{riskCfg.label}</span>
+          <section className="rounded-xl border border-border/50 bg-white">
+            <button
+              type="button"
+              onClick={() => toggleSection("advisory")}
+              className="flex w-full items-center justify-between px-4 py-3"
+            >
+              <div>
+                <h3 className="text-[11px] font-semibold uppercase tracking-widest text-accent-400 text-left">
+                  Qeemly Advisory
+                </h3>
+                <p className="mt-1 text-xs text-accent-500 text-left">
+                  Confidence {advisory.confidence_score}/100
+                </p>
+              </div>
+              <ChevronDown
+                className={`h-4 w-4 text-accent-400 transition-transform ${
+                  sections.advisory ? "rotate-180" : ""
+                }`}
+              />
+            </button>
+            {sections.advisory && (
+              <div className="space-y-3 border-t border-border/40 px-4 py-4">
+                <div className="rounded-lg bg-brand-50 px-3 py-2">
+                  <p className="text-sm text-brand-900">{advisory.recommendation_summary}</p>
                 </div>
-                <span className={`text-2xl font-bold ${riskCfg.text}`}>{risk.score}</span>
-              </div>
-              <div className="mt-2 h-2 rounded-full bg-white/60 overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all ${
-                    risk.score >= 60
-                      ? "bg-red-500"
-                      : risk.score >= 40
-                        ? "bg-orange-500"
-                        : risk.score >= 20
+                <div className="h-2 rounded-full bg-accent-100">
+                  <div
+                    className={`h-full rounded-full ${
+                      advisory.confidence_score >= 80
+                        ? "bg-emerald-500"
+                        : advisory.confidence_score >= 60
                           ? "bg-amber-500"
-                          : "bg-emerald-500"
-                  }`}
-                  style={{ width: `${risk.score}%` }}
-                />
-              </div>
-            </div>
-
-            {/* Factor list */}
-            <div className="space-y-2">
-              {risk.factors.map((f, i) => (
-                <div
-                  key={i}
-                  className="flex items-start gap-3 rounded-lg border border-border p-3"
-                >
-                  <span
-                    className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${SIGNAL_DOT[f.signal]}`}
+                          : "bg-red-500"
+                    }`}
+                    style={{ width: `${advisory.confidence_score}%` }}
                   />
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-brand-800">{f.label}</p>
-                    <p className="text-xs text-brand-500">{f.detail}</p>
+                </div>
+                <div className="space-y-1">
+                  {advisory.rationale.slice(0, 2).map((item, idx) => (
+                    <p key={idx} className="text-xs text-accent-600">
+                      • {item.point}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+
+          <section className="rounded-xl border border-border/50 bg-white">
+            <button
+              type="button"
+              onClick={() => toggleSection("risk")}
+              className="flex w-full items-center justify-between px-4 py-3"
+            >
+              <div>
+                <h3 className="text-[11px] font-semibold uppercase tracking-widest text-accent-400 text-left">
+                  Attrition Risk
+                </h3>
+                <p className="mt-1 text-xs text-accent-500 text-left">
+                  {riskCfg.label} ({risk.score}/100)
+                </p>
+              </div>
+              <ChevronDown
+                className={`h-4 w-4 text-accent-400 transition-transform ${
+                  sections.risk ? "rotate-180" : ""
+                }`}
+              />
+            </button>
+            {sections.risk && (
+              <div className="space-y-3 border-t border-border/40 px-4 py-4">
+                <div className={`rounded-xl border ${riskCfg.border} ${riskCfg.bg} p-4`}>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <RiskIcon className={`h-5 w-5 ${riskCfg.text}`} />
+                      <span className={`text-sm font-bold ${riskCfg.text}`}>{riskCfg.label}</span>
+                    </div>
+                    <span className={`text-2xl font-bold ${riskCfg.text}`}>{risk.score}</span>
+                  </div>
+                  <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/60">
+                    <div
+                      className={`h-full rounded-full transition-all ${
+                        risk.score >= 60
+                          ? "bg-red-500"
+                          : risk.score >= 40
+                            ? "bg-orange-500"
+                            : risk.score >= 20
+                              ? "bg-amber-500"
+                              : "bg-emerald-500"
+                      }`}
+                      style={{ width: `${risk.score}%` }}
+                    />
                   </div>
                 </div>
-              ))}
-            </div>
+
+                <div className="space-y-1.5">
+                  {risk.factors.map((f, i) => (
+                    <div
+                      key={i}
+                      className="flex items-start gap-3 rounded-xl border border-border/40 bg-white p-3"
+                    >
+                      <span
+                        className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${SIGNAL_DOT[f.signal]}`}
+                      />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-accent-800">{f.label}</p>
+                        <p className="text-xs text-accent-500">{f.detail}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+
+          <section className="rounded-xl border border-border/50 bg-white">
+            <button
+              type="button"
+              onClick={() => toggleSection("chat")}
+              className="flex w-full items-center justify-between px-4 py-3"
+            >
+              <div>
+                <h3 className="text-[11px] font-semibold uppercase tracking-widest text-accent-400 text-left">
+                  Ask About This Employee
+                </h3>
+                <p className="mt-1 text-xs text-accent-500 text-left">
+                  Open AI side chat in employee context
+                </p>
+              </div>
+              <ChevronDown
+                className={`h-4 w-4 text-accent-400 transition-transform ${
+                  sections.chat ? "rotate-180" : ""
+                }`}
+              />
+            </button>
+            {sections.chat && (
+              <div className="space-y-3 border-t border-border/40 px-4 py-4">
+                <div className="flex gap-2">
+                  <input
+                    value={question}
+                    onChange={(e) => setQuestion(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key !== "Enter") return;
+                      e.preventDefault();
+                      askEmployeeQuestion();
+                    }}
+                    placeholder="Ask a compensation question for this employee..."
+                    className="flex-1 h-10 rounded-lg border border-border bg-white px-3 text-sm text-accent-900 focus:border-brand-300 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={askEmployeeQuestion}
+                    disabled={!question.trim()}
+                    className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-brand-500 px-3 text-xs font-semibold text-white hover:bg-brand-600 disabled:opacity-60"
+                  >
+                    <Send className="h-3.5 w-3.5" />
+                    Ask
+                  </button>
+                </div>
+              </div>
+            )}
           </section>
         </div>
       </div>
@@ -310,49 +686,43 @@ export function EmployeeDetailPanel({ employee, onClose }: EmployeeDetailPanelPr
   );
 }
 
-// ─── Timeline Entry ───────────────────────────────────────────────────────────
-
 function TimelineEntry({
   entry,
   isFirst,
-  isLast,
   salaryView,
 }: {
-  entry: CompensationHistoryEntry;
+  entry: PanelHistoryEntry;
   isFirst: boolean;
-  isLast: boolean;
   salaryView: "annual" | "monthly";
 }) {
   const isHire = entry.changeReason === "hire";
   const isPromotion = entry.changeReason === "promotion";
 
   return (
-    <div className="relative flex gap-4 pb-4 last:pb-0">
-      {/* Dot */}
+    <div className="relative flex gap-4 pb-3.5 last:pb-0">
       <div
         className={`relative z-10 mt-1 h-[18px] w-[18px] shrink-0 rounded-full border-2 ${
           isFirst
             ? "border-brand-500 bg-brand-500"
             : isHire
-              ? "border-brand-300 bg-white"
+              ? "border-accent-300 bg-white"
               : isPromotion
                 ? "border-purple-400 bg-purple-50"
-                : "border-brand-300 bg-brand-50"
+                : "border-accent-300 bg-accent-50"
         }`}
       />
 
-      {/* Content */}
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-medium text-brand-600">
+          <span className="text-xs font-medium text-accent-600">
             {formatDate(entry.effectiveDate)}
           </span>
-          <span className="inline-flex items-center rounded-md px-1.5 py-0.5 text-[10px] font-medium bg-brand-50 text-brand-600">
+          <span className="inline-flex items-center rounded-md bg-accent-100 px-1.5 py-0.5 text-[10px] font-medium text-accent-600">
             {REASON_LABELS[entry.changeReason]}
           </span>
         </div>
 
-        <p className="mt-1 text-sm font-semibold text-brand-900">
+        <p className="mt-0.5 text-sm font-semibold text-accent-900">
           {formatAED(applyViewMode(entry.baseSalary, salaryView))}
         </p>
 
@@ -361,7 +731,7 @@ function TimelineEntry({
             <span className="flex items-center gap-0.5 text-emerald-600">
               <TrendingUp className="h-3 w-3" />+{entry.changePercentage}%
             </span>
-            <span className="text-brand-400">
+            <span className="text-accent-400">
               from {formatAED(applyViewMode(entry.previousSalary, salaryView))}
             </span>
           </div>

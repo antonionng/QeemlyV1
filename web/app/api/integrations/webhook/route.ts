@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { verifyHmacSha256Signature } from "@/lib/security/webhook-signature";
 
 /**
  * POST /api/integrations/webhook
@@ -13,18 +13,19 @@ import { createClient } from "@/lib/supabase/server";
  */
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
+    const rawBody = await request.text();
+    const body = JSON.parse(rawBody) as Record<string, unknown>;
 
     // Determine the source from headers or payload
     const mergeSignature = request.headers.get("x-merge-webhook-signature");
     const slackSignature = request.headers.get("x-slack-signature");
 
     if (mergeSignature) {
-      return handleMergeWebhook(body, mergeSignature);
+      return handleMergeWebhook(body, rawBody, mergeSignature);
     }
 
     if (slackSignature) {
-      return handleSlackWebhook(body, slackSignature);
+      return handleSlackWebhook(body, rawBody, slackSignature);
     }
 
     // Unknown webhook source
@@ -39,9 +40,15 @@ export async function POST(request: NextRequest) {
 // Merge.dev Webhook Handler
 // ============================================================================
 
-async function handleMergeWebhook(body: Record<string, unknown>, signature: string) {
-  // TODO: Verify signature with Merge webhook secret
-  // TODO: Validate payload structure
+async function handleMergeWebhook(
+  body: Record<string, unknown>,
+  rawBody: string,
+  signature: string
+) {
+  const secret = process.env.MERGE_WEBHOOK_SECRET;
+  if (!secret || !verifyHmacSha256Signature(rawBody, signature, secret)) {
+    return NextResponse.json({ error: "Invalid Merge webhook signature" }, { status: 401 });
+  }
 
   const event = body.event as string;
   const data = body.data as Record<string, unknown>;
@@ -73,9 +80,15 @@ async function handleMergeWebhook(body: Record<string, unknown>, signature: stri
 // Slack Webhook Handler
 // ============================================================================
 
-async function handleSlackWebhook(body: Record<string, unknown>, signature: string) {
-  // TODO: Verify Slack request signature
-  // TODO: Handle Slack events (URL verification, event callbacks)
+async function handleSlackWebhook(
+  body: Record<string, unknown>,
+  rawBody: string,
+  signature: string
+) {
+  const secret = process.env.SLACK_WEBHOOK_SECRET;
+  if (!secret || !verifyHmacSha256Signature(rawBody, signature, secret)) {
+    return NextResponse.json({ error: "Invalid Slack webhook signature" }, { status: 401 });
+  }
 
   // Slack URL verification challenge
   if (body.type === "url_verification") {

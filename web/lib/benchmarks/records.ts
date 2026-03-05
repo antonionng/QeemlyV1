@@ -1,7 +1,5 @@
 import {
-  generateBenchmark,
   generateTrendData,
-  getBenchmarkAttributes,
   getConfidence,
   getRole,
   type Level,
@@ -12,35 +10,13 @@ import {
 import { makeBenchmarkKey, type UploadedBenchmark } from "@/lib/benchmarks/uploaded-data";
 import type { BenchmarkRecord } from "@/lib/benchmarks/filters";
 
-function buildRecordFromBenchmark(
-  base: SalaryBenchmark,
-  attributes: ReturnType<typeof getBenchmarkAttributes>,
-  roleFamily: string
-): BenchmarkRecord {
-  return {
-    ...base,
-    ...attributes,
-    roleFamily,
-    source: "dummy",
-  };
-}
-
 export function buildDummyBenchmarkRecords(params: {
   roles: Role[];
   locations: Location[];
   levels: Level[];
 }) {
-  const records: BenchmarkRecord[] = [];
-  for (const role of params.roles) {
-    for (const location of params.locations) {
-      for (const level of params.levels) {
-        const benchmark = generateBenchmark(role.id, location.id, level.id);
-        const attributes = getBenchmarkAttributes(role.id, location.id, level.id);
-        records.push(buildRecordFromBenchmark(benchmark, attributes, role.family));
-      }
-    }
-  }
-  return records;
+  void params;
+  return [] as BenchmarkRecord[];
 }
 
 export function buildUploadedBenchmarkRecord(uploaded: UploadedBenchmark): BenchmarkRecord {

@@ -10,7 +10,7 @@ export async function login(formData: FormData) {
   const email = formData.get("email") as string;
   const password = formData.get("password") as string;
 
-  const { error } = await supabase.auth.signInWithPassword({
+  const { data, error } = await supabase.auth.signInWithPassword({
     email,
     password,
   });
@@ -19,8 +19,22 @@ export async function login(formData: FormData) {
     return { error: error.message };
   }
 
+  // Determine redirect based on role
+  let dest = "/dashboard";
+  if (data.user) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", data.user.id)
+      .single();
+
+    if (profile?.role === "employee") {
+      dest = "/dashboard/me";
+    }
+  }
+
   revalidatePath("/", "layout");
-  redirect("/dashboard");
+  redirect(dest);
 }
 
 export async function signup(formData: FormData) {

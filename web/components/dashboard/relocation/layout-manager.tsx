@@ -22,6 +22,12 @@ type RelocationLayoutManagerProps = {
   onRemoveWidget: (widgetId: string) => void;
 };
 
+type RelocationWidgetProps = {
+  result: RelocationResult | null;
+  compApproach: CompApproach;
+  hybridCap?: number;
+};
+
 // Layout configuration
 const layout = [
   { i: "comparison", x: 0, y: 0, w: 8, h: 2 },
@@ -39,8 +45,7 @@ export function RelocationLayoutManager({
   activeWidgets,
   onRemoveWidget,
 }: RelocationLayoutManagerProps) {
-  
-  const WIDGET_COMPONENTS: Record<string, React.ComponentType<any>> = {
+  const WIDGET_COMPONENTS: Record<string, React.ComponentType<RelocationWidgetProps>> = {
     "comparison": ComparisonWidget,
     "col-index": ColIndexWidget,
     "purchasing-power": PurchasingPowerWidget,
@@ -79,9 +84,9 @@ export function RelocationLayoutManager({
         layouts={layouts}
         breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
         cols={{ lg: 12, md: 12, sm: 4, xs: 2, xxs: 1 }}
-        rowHeight={120}
+        rowHeight={112}
         draggableHandle=".drag-handle"
-        margin={[16, 16]}
+        margin={[18, 18]}
         containerPadding={[0, 0]}
         compactType="vertical"
         useCSSTransforms={true}

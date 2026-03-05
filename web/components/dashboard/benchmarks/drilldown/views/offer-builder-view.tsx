@@ -1,310 +1,467 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo, useEffect } from "react";
 import clsx from "clsx";
-import { Sparkles, Target, Calculator, Wallet, Home, Car, MoreHorizontal } from "lucide-react";
-import { Card } from "@/components/ui/card";
+import { ArrowRight } from "lucide-react";
 import { type BenchmarkResult } from "@/lib/benchmarks/benchmark-state";
-import { useCompanySettings, getCompanyInitials } from "@/lib/company";
-import { useCurrencyFormatter, convertCurrency, monthlyToAnnual, roundToThousand } from "@/lib/utils/currency";
+import { useCompanySettings } from "@/lib/company";
+import { fetchDbEmployees } from "@/lib/employees/data-service";
+import {
+  formatBenchmarkCompact,
+  formatCurrency,
+  toBenchmarkDisplayValue,
+} from "@/lib/utils/currency";
 import { useSalaryView } from "@/lib/salary-view-store";
-import { getMarketBreakdownAverages } from "@/lib/dashboard/dummy-data";
+import { LEVELS, type SalaryBenchmark } from "@/lib/dashboard/dummy-data";
+import { useOffersStore } from "@/lib/offers/store";
+import type { OfferExportPayload } from "@/lib/offers/types";
+import { getBenchmark } from "@/lib/benchmarks/data-service";
 
 interface OfferBuilderViewProps {
   result: BenchmarkResult;
 }
 
-const PERCENTILE_LABELS: Record<number, string> = {
-  25: "Entry-level",
-  50: "Market median",
-  75: "Competitive",
-  90: "Premium",
-};
-
-const PERCENTILE_DESCRIPTIONS: Record<number, string> = {
-  25: "Suitable for entry-level or budget-constrained hiring",
-  50: "Matches market expectations for typical candidates",
-  75: "Attracts experienced candidates and reduces time-to-fill",
-  90: "Secures top talent in competitive markets",
-};
+const BREAKDOWN_COLORS = [
+  { bg: "bg-brand-500", label: "text-brand-700", name: "Basic Salary" },
+  { bg: "bg-teal-400", label: "text-teal-700", name: "Housing" },
+  { bg: "bg-amber-400", label: "text-amber-700", name: "Transport" },
+  { bg: "bg-pink-400", label: "text-pink-700", name: "Other Allowances" },
+];
 
 export function OfferBuilderView({ result }: OfferBuilderViewProps) {
-  const { benchmark, role, level } = result;
+  const { benchmark, role, level, location } = result;
   const companySettings = useCompanySettings();
-  const currency = useCurrencyFormatter();
-  const [offerTarget, setOfferTarget] = useState<number>(companySettings.targetPercentile);
   const { salaryView } = useSalaryView();
-  
-  // Get market averages for the level
-  const marketAverages = getMarketBreakdownAverages(level.id);
-  const [basicPercent, setBasicPercent] = useState<number>(marketAverages.basicRange.typical);
-  
-  // Company branding
-  const hasCompanyLogo = !!companySettings.companyLogo;
-  const companyInitials = getCompanyInitials(companySettings.companyName);
-  
-  // Convert from monthly AED to company's default currency
-  const convertToDefault = (value: number) => {
-    const adjusted = salaryView === "annual" ? monthlyToAnnual(value) : value;
-    return roundToThousand(convertCurrency(adjusted, "AED", currency.defaultCurrency));
-  };
-  
-  const formatValue = (value: number) => currency.format(value);
+  const { createOffer } = useOffersStore();
+  const targetCurrency = location.currency;
+  const [offerTarget] = useState<number>(
+    companySettings.targetPercentile,
+  );
+  const [recipientMode, setRecipientMode] = useState<"employee" | "manual">("manual");
+  const [employeeOptions, setEmployeeOptions] = useState<
+    { id: string; name: string; email: string }[]
+  >([]);
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>("");
+  const [recipientName, setRecipientName] = useState<string>("");
+  const [recipientEmail, setRecipientEmail] = useState<string>("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
+  const [lastExportPayload, setLastExportPayload] = useState<OfferExportPayload | null>(null);
+  const [lastOfferId, setLastOfferId] = useState<string | null>(null);
+  const [levelBenchmarks, setLevelBenchmarks] = useState<Record<string, SalaryBenchmark>>({});
 
-  // Calculate offer value based on percentile
+  const [basicPercent] = useState<number>(100);
+
+  useEffect(() => {
+    const loadEmployees = async () => {
+      const employees = await fetchDbEmployees();
+      const normalized = employees
+        .filter((employee) => employee.id)
+        .map((employee) => ({
+          id: employee.id,
+          name: `${employee.firstName} ${employee.lastName}`.trim(),
+          email: employee.email,
+        }));
+      setEmployeeOptions(normalized);
+
+      if (normalized.length > 0) {
+        setSelectedEmployeeId(normalized[0].id);
+      }
+    };
+    void loadEmployees();
+  }, []);
+
+  const convertToMarket = (value: number, sourceCurrency: string = benchmark.currency) => {
+    return toBenchmarkDisplayValue(value, {
+      salaryView,
+      sourceCurrency,
+      targetCurrency,
+    });
+  };
+
+  const formatValue = (value: number) => formatCurrency(value, targetCurrency);
+  const formatShort = (v: number) => {
+    return formatBenchmarkCompact(v, targetCurrency);
+  };
+
   const getOfferValue = (percentile: number): number => {
-    const p25 = benchmark.percentiles.p25;
-    const p50 = benchmark.percentiles.p50;
-    const p75 = benchmark.percentiles.p75;
-    const p90 = benchmark.percentiles.p90;
-    
-    // Linear interpolation
+    const { p25, p50, p75, p90 } = benchmark.percentiles;
     if (percentile <= 25) return p25;
-    if (percentile <= 50) return p25 + ((p50 - p25) * (percentile - 25) / 25);
-    if (percentile <= 75) return p50 + ((p75 - p50) * (percentile - 50) / 25);
-    if (percentile <= 90) return p75 + ((p90 - p75) * (percentile - 75) / 15);
+    if (percentile <= 50) return p25 + ((p50 - p25) * (percentile - 25)) / 25;
+    if (percentile <= 75) return p50 + ((p75 - p50) * (percentile - 50)) / 25;
+    if (percentile <= 90) return p75 + ((p90 - p75) * (percentile - 75)) / 15;
     return p90;
   };
 
-  const offerValue = convertToDefault(getOfferValue(offerTarget));
-  const negotiationBuffer = 0.04; // 4%
+  const offerValue = convertToMarket(getOfferValue(offerTarget));
+  const negotiationBuffer = 0.04;
   const offerRange = {
     low: Math.round(offerValue * (1 - negotiationBuffer)),
     high: Math.round(offerValue * (1 + negotiationBuffer)),
   };
 
-  // Map slider value to nearest percentile label
-  const displayPercentile = offerTarget >= 90 ? 90 : offerTarget >= 75 ? 75 : offerTarget >= 50 ? 50 : 25;
+  /* Salary breakdown */
+  const remainingPercent = 100 - basicPercent;
+  const housingPercent = Math.round(remainingPercent * 0.6);
+  const transportPercent = Math.round(remainingPercent * 0.25);
+  const otherPercent = remainingPercent - housingPercent - transportPercent;
+
+  const breakdownItems = [
+    { ...BREAKDOWN_COLORS[0], percent: basicPercent, amount: Math.round((offerValue * basicPercent) / 100) },
+    { ...BREAKDOWN_COLORS[1], percent: housingPercent, amount: Math.round((offerValue * housingPercent) / 100) },
+    { ...BREAKDOWN_COLORS[2], percent: transportPercent, amount: Math.round((offerValue * transportPercent) / 100) },
+    { ...BREAKDOWN_COLORS[3], percent: otherPercent, amount: offerValue - Math.round((offerValue * basicPercent) / 100) - Math.round((offerValue * housingPercent) / 100) - Math.round((offerValue * transportPercent) / 100) },
+  ];
+
+  /* Box plot data for adjacent levels */
+  const shownLevels = useMemo(() => {
+    const idx = LEVELS.findIndex((l) => l.id === level.id);
+    const start = Math.max(0, idx - 1);
+    const end = Math.min(LEVELS.length, idx + 2);
+    return LEVELS.slice(start, end);
+  }, [level.id]);
+
+  useEffect(() => {
+    const run = async () => {
+      const entries = await Promise.all(
+        shownLevels.map(async (lvl) => {
+          const bm = await getBenchmark(role.id, location.id, lvl.id);
+          return bm ? { levelId: lvl.id, benchmark: bm } : null;
+        }),
+      );
+      const next: Record<string, SalaryBenchmark> = {};
+      for (const entry of entries) {
+        if (!entry) continue;
+        next[entry.levelId] = entry.benchmark;
+      }
+      setLevelBenchmarks(next);
+    };
+    void run();
+  }, [location.id, role.id, shownLevels]);
+
+  const downloadExportPayload = (payload: OfferExportPayload, offerId: string) => {
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `qeemly_offer_${offerId}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleCreateOffer = async () => {
+    setIsSubmitting(true);
+    setSubmitError(null);
+    setSubmitSuccess(null);
+
+    const isEmployeeMode = recipientMode === "employee";
+    if (isEmployeeMode && !selectedEmployeeId) {
+      setIsSubmitting(false);
+      setSubmitError("Select an employee recipient.");
+      return;
+    }
+    if (!isEmployeeMode && (!recipientName.trim() || !recipientEmail.trim())) {
+      setIsSubmitting(false);
+      setSubmitError("Enter recipient name and email.");
+      return;
+    }
+
+    const breakdownSnapshot = {
+      basic: { percent: basicPercent, amount: Math.round((offerValue * basicPercent) / 100) },
+      housing: { percent: housingPercent, amount: Math.round((offerValue * housingPercent) / 100) },
+      transport: { percent: transportPercent, amount: Math.round((offerValue * transportPercent) / 100) },
+      other: { percent: otherPercent, amount: offerValue - Math.round((offerValue * basicPercent) / 100) - Math.round((offerValue * housingPercent) / 100) - Math.round((offerValue * transportPercent) / 100) },
+      total_compensation: offerValue,
+    };
+
+    const created = await createOffer({
+      employee_id: isEmployeeMode ? selectedEmployeeId : null,
+      recipient_name: isEmployeeMode ? null : recipientName.trim(),
+      recipient_email: isEmployeeMode ? null : recipientEmail.trim(),
+      role_id: role.id,
+      level_id: level.id,
+      location_id: location.id,
+      employment_type: result.formData.employmentType,
+      target_percentile: offerTarget,
+      offer_value: offerValue,
+      offer_low: offerRange.low,
+      offer_high: offerRange.high,
+      currency: targetCurrency,
+      salary_breakdown: breakdownSnapshot,
+      benchmark_snapshot: {
+        benchmark_percentiles: benchmark.percentiles,
+        role,
+        level,
+        location,
+        form_data: result.formData,
+      },
+      export_format: "JSON",
+      status: "ready",
+    });
+
+    setIsSubmitting(false);
+    if (!created) {
+      setSubmitError("Unable to create offer. Please try again.");
+      return;
+    }
+
+    setLastOfferId(created.offer.id);
+    setLastExportPayload(created.exportPayload);
+    setSubmitSuccess("Offer created successfully.");
+  };
 
   return (
-    <Card className="p-6">
-      {/* Header with company branding */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <Calculator className="h-4 w-4 text-brand-600" />
-          <h3 className="text-sm font-semibold text-brand-900">Offer Builder</h3>
+    <div id="offer-builder-view" className="space-y-6">
+      {/* ── Top: Context + Summary ── */}
+      <div className="bench-section">
+        <div className="text-xs text-brand-500 mb-4">
+          {role.title} · {level.name} · {location.city}, {location.country} ·{" "}
+          {result.formData.employmentType === "expat" ? "Expat" : "National"}
         </div>
-        <div className="flex items-center gap-2">
-          {companySettings.isConfigured && (
-            hasCompanyLogo ? (
-              <div className="flex h-6 w-6 items-center justify-center rounded-md bg-white border border-border overflow-hidden">
-                <img 
-                  src={companySettings.companyLogo!} 
-                  alt={companySettings.companyName}
-                  className="h-full w-full object-contain"
-                />
-              </div>
-            ) : (
-              <div 
-                className="flex h-6 w-6 items-center justify-center rounded-md text-white font-bold text-[10px]"
-                style={{ backgroundColor: companySettings.primaryColor }}
-              >
-                {companyInitials}
-              </div>
-            )
-          )}
-          <span className="rounded-full bg-brand-100 px-3 py-1 text-sm font-bold text-brand-700">
-            P{displayPercentile}
-          </span>
-        </div>
-      </div>
 
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-xs text-brand-500">
-          {role.title} - {level.name} • {companySettings.companyName}
-        </p>
-      </div>
-
-      {/* Slider */}
-      <div className="rounded-xl bg-brand-50 p-4 mb-4">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-medium text-brand-600">Target Percentile</span>
-          <span className="text-xs font-semibold text-brand-700">
-            {PERCENTILE_LABELS[displayPercentile]}
-          </span>
-        </div>
-        <input
-          type="range"
-          min={25}
-          max={90}
-          step={1}
-          value={offerTarget}
-          onChange={(e) => setOfferTarget(Number(e.target.value))}
-          className="mt-2 w-full accent-brand-500"
-        />
-        <div className="mt-1 flex justify-between text-[10px] text-brand-400">
-          <span>P25</span>
-          <span>P50</span>
-          <span>P75</span>
-          <span>P90</span>
-        </div>
-      </div>
-
-      {/* Offer value */}
-      <div className="rounded-xl bg-white p-4 ring-1 ring-brand-200 mb-4">
-        <p className="text-xs font-medium text-brand-600">Recommended Offer</p>
-        <div className="mt-1 flex items-baseline gap-2">
-          <span className="text-2xl font-extrabold text-brand-900">
-            {formatValue(offerValue)}
-          </span>
-          <span className="text-sm text-brand-500">/{salaryView === "annual" ? "year" : "month"}</span>
-        </div>
-        <div className="mt-2 flex items-center gap-2">
-          <span className="text-xs text-brand-500">Negotiation range:</span>
-          <span className="text-xs font-semibold text-brand-700">
-            {formatValue(offerRange.low)} – {formatValue(offerRange.high)}
-          </span>
-        </div>
-      </div>
-
-      {/* Guidance */}
-      <div
-        className={clsx(
-          "flex items-start gap-3 rounded-xl p-3 mb-4",
-          displayPercentile >= 75 ? "bg-emerald-50" : displayPercentile >= 50 ? "bg-amber-50" : "bg-rose-50"
-        )}
-      >
-        <Sparkles
-          className={clsx(
-            "mt-0.5 h-4 w-4 shrink-0",
-            displayPercentile >= 75 ? "text-emerald-600" : displayPercentile >= 50 ? "text-amber-600" : "text-rose-600"
-          )}
-        />
-        <div>
-          <p
-            className={clsx(
-              "text-xs font-semibold",
-              displayPercentile >= 75 ? "text-emerald-800" : displayPercentile >= 50 ? "text-amber-800" : "text-rose-800"
-            )}
-          >
-            {PERCENTILE_LABELS[displayPercentile]}
-          </p>
-          <p
-            className={clsx(
-              "mt-0.5 text-xs",
-              displayPercentile >= 75 ? "text-emerald-700" : displayPercentile >= 50 ? "text-amber-700" : "text-rose-700"
-            )}
-          >
-            {PERCENTILE_DESCRIPTIONS[displayPercentile]}
-          </p>
-        </div>
-      </div>
-
-      {/* Percentile quick select */}
-      <div className="grid grid-cols-4 gap-1 mb-6">
-        {[25, 50, 75, 90].map((p) => (
-          <button
-            key={p}
-            onClick={() => setOfferTarget(p)}
-            className={clsx(
-              "rounded-lg py-2 text-xs font-semibold transition-colors",
-              displayPercentile === p
-                ? "bg-brand-500 text-white"
-                : "bg-brand-50 text-brand-700 hover:bg-brand-100"
-            )}
-          >
-            P{p}
-          </button>
-        ))}
-      </div>
-
-      {/* UAE Salary Breakdown Preview */}
-      <div className="border-t border-border pt-4">
-        <div className="flex items-center gap-2 mb-3">
-          <Wallet className="h-4 w-4 text-blue-600" />
-          <h4 className="text-sm font-semibold text-brand-900">Salary Breakdown Preview</h4>
-        </div>
-        
-        {/* Basic % Slider */}
-        <div className="rounded-xl bg-blue-50 p-3 mb-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs font-medium text-blue-700">Basic Salary Percentage</span>
-            <span className="text-xs font-bold text-blue-800">{basicPercent}%</span>
+        <div className="flex flex-col sm:flex-row gap-6">
+          {/* Negotiation range */}
+          <div className="flex-1 rounded-xl bg-brand-50 p-5">
+            <p className="text-xs font-semibold text-brand-700 mb-1">
+              recommended offer
+            </p>
+            <p className="text-xs font-semibold text-brand-700">
+              negotiation range
+            </p>
+            <div className="mt-3 text-lg font-bold text-brand-900">
+              {formatValue(offerRange.low)} – {formatValue(offerRange.high)}
+            </div>
           </div>
-          <input
-            type="range"
-            min={50}
-            max={65}
-            step={1}
-            value={basicPercent}
-            onChange={(e) => setBasicPercent(Number(e.target.value))}
-            className="w-full accent-blue-500"
-          />
-          <div className="mt-1 flex justify-between text-[10px] text-blue-400">
-            <span>50% (Lower exit costs)</span>
-            <span>65% (Higher EOS)</span>
-          </div>
-        </div>
 
-        {/* Breakdown Calculation */}
-        {(() => {
-          // Calculate breakdown based on basic percentage
-          const remainingPercent = 100 - basicPercent;
-          // Distribute remaining: ~60% housing, ~25% transport, ~15% other
-          const housingPercent = Math.round(remainingPercent * 0.6);
-          const transportPercent = Math.round(remainingPercent * 0.25);
-          const otherPercent = remainingPercent - housingPercent - transportPercent;
-          
-          const basicAmount = Math.round(offerValue * basicPercent / 100);
-          const housingAmount = Math.round(offerValue * housingPercent / 100);
-          const transportAmount = Math.round(offerValue * transportPercent / 100);
-          const otherAmount = offerValue - basicAmount - housingAmount - transportAmount;
-          
-          const breakdownItems = [
-            { name: "Basic", icon: Wallet, percent: basicPercent, amount: basicAmount, color: "bg-brand-500", textColor: "text-brand-700" },
-            { name: "Housing", icon: Home, percent: housingPercent, amount: housingAmount, color: "bg-blue-500", textColor: "text-blue-700" },
-            { name: "Transport", icon: Car, percent: transportPercent, amount: transportAmount, color: "bg-amber-500", textColor: "text-amber-700" },
-            { name: "Other", icon: MoreHorizontal, percent: otherPercent, amount: otherAmount, color: "bg-gray-400", textColor: "text-gray-700" },
-          ];
-          
-          return (
-            <>
-              {/* Stacked bar */}
-              <div className="h-6 rounded-full overflow-hidden flex mb-3">
-                {breakdownItems.map((item) => (
-                  <div
-                    key={item.name}
-                    className={`h-full ${item.color} transition-all`}
-                    style={{ width: `${item.percent}%` }}
-                    title={`${item.name}: ${formatValue(item.amount)}`}
-                  />
-                ))}
-              </div>
-              
-              {/* Breakdown table */}
-              <div className="space-y-2">
+          {/* Breakdown card */}
+          <div className="flex-1">
+            <p className="text-xs font-semibold text-brand-700 mb-2">
+              Salary Breakdown
+            </p>
+            <p className="text-[10px] text-brand-400 mb-3">
+              {level.name} · {location.city} · at P{offerTarget}
+            </p>
+
+            <div className="flex items-start gap-5">
+              {/* Legend + values */}
+              <div className="flex-1 space-y-2">
                 {breakdownItems.map((item) => {
-                  const Icon = item.icon;
                   return (
-                    <div key={item.name} className="flex items-center justify-between text-xs">
+                    <div
+                      key={item.name}
+                      className="flex items-center justify-between text-xs"
+                    >
                       <div className="flex items-center gap-2">
-                        <div className={`w-5 h-5 rounded ${item.color} flex items-center justify-center`}>
-                          <Icon className="h-3 w-3 text-white" />
-                        </div>
-                        <span className={`font-medium ${item.textColor}`}>{item.name}</span>
+                        <div
+                          className={`w-3 h-3 rounded-sm ${item.bg}`}
+                        />
+                        <span className={`font-medium ${item.label}`}>
+                          {item.name}
+                        </span>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-3">
                         <span className="text-brand-400">{item.percent}%</span>
-                        <span className="font-semibold text-brand-900 w-20 text-right">
-                          {formatValue(item.amount)}
+                        <span className="font-semibold text-brand-900 w-16 text-right">
+                          {formatShort(item.amount)}
                         </span>
                       </div>
                     </div>
                   );
                 })}
+
+                <div className="pt-2 border-t border-border flex items-center justify-between text-xs font-semibold text-brand-900">
+                  <span>Total Compensation</span>
+                  <span>{formatShort(offerValue)}</span>
+                </div>
               </div>
-              
-              {/* EOS Note */}
-              <div className="mt-3 p-2 rounded-lg bg-amber-50 border border-amber-100">
-                <p className="text-[10px] text-amber-700">
-                  <strong>End-of-Service:</strong> Based on {formatValue(basicAmount)} annual basic 
-                  ({formatValue(Math.round(basicAmount / 12))} monthly)
-                </p>
+
+              {/* Donut placeholder */}
+              <div className="bench-donut shrink-0" style={{
+                background: `conic-gradient(
+                  var(--color-brand-500) 0% ${basicPercent}%,
+                  #2dd4bf ${basicPercent}% ${basicPercent + housingPercent}%,
+                  #fbbf24 ${basicPercent + housingPercent}% ${basicPercent + housingPercent + transportPercent}%,
+                  #f472b6 ${basicPercent + housingPercent + transportPercent}% 100%
+                )`,
+              }}>
+                <div className="absolute inset-3 rounded-full bg-white" />
               </div>
-            </>
-          );
-        })()}
+            </div>
+          </div>
+        </div>
       </div>
-    </Card>
+
+      {/* ── Offer recipient + submit ── */}
+      <div className="bench-section space-y-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setRecipientMode("employee")}
+            className={clsx(
+              "rounded-full px-3 py-1 text-xs font-semibold",
+              recipientMode === "employee"
+                ? "bg-brand-500 text-white"
+                : "bg-brand-50 text-brand-700"
+            )}
+          >
+            Employee recipient
+          </button>
+          <button
+            type="button"
+            onClick={() => setRecipientMode("manual")}
+            className={clsx(
+              "rounded-full px-3 py-1 text-xs font-semibold",
+              recipientMode === "manual"
+                ? "bg-brand-500 text-white"
+                : "bg-brand-50 text-brand-700"
+            )}
+          >
+            Manual recipient
+          </button>
+        </div>
+
+        {recipientMode === "employee" ? (
+          <div className="space-y-2">
+            <label className="block text-xs font-semibold text-brand-700">
+              Select employee
+            </label>
+            <select
+              value={selectedEmployeeId}
+              onChange={(e) => setSelectedEmployeeId(e.target.value)}
+              className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-brand-900"
+            >
+              {employeeOptions.length === 0 ? (
+                <option value="">No employees found. Use Manual recipient.</option>
+              ) : (
+                employeeOptions.map((employee) => (
+                  <option key={employee.id} value={employee.id}>
+                    {employee.name} {employee.email ? `(${employee.email})` : ""}
+                  </option>
+                ))
+              )}
+            </select>
+          </div>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-brand-700">
+                Recipient name
+              </label>
+              <input
+                value={recipientName}
+                onChange={(e) => setRecipientName(e.target.value)}
+                className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-brand-900"
+                placeholder="Candidate name"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-semibold text-brand-700">
+                Recipient email
+              </label>
+              <input
+                type="email"
+                value={recipientEmail}
+                onChange={(e) => setRecipientEmail(e.target.value)}
+                className="w-full rounded-lg border border-border bg-white px-3 py-2 text-sm text-brand-900"
+                placeholder="candidate@company.com"
+              />
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={handleCreateOffer}
+            disabled={isSubmitting}
+            className="bench-cta max-w-xs disabled:cursor-not-allowed disabled:opacity-70"
+          >
+            {isSubmitting ? "Creating..." : "Create Offer"} <ArrowRight className="h-4 w-4" />
+          </button>
+
+          {lastExportPayload && lastOfferId && (
+            <button
+              type="button"
+              onClick={() => downloadExportPayload(lastExportPayload, lastOfferId)}
+              className="rounded-full border border-border bg-white px-4 py-2 text-sm font-semibold text-brand-700"
+            >
+              Download Export JSON
+            </button>
+          )}
+        </div>
+
+        {submitError && <p className="text-sm font-medium text-red-600">{submitError}</p>}
+        {submitSuccess && <p className="text-sm font-medium text-emerald-700">{submitSuccess}</p>}
+      </div>
+
+      {/* ── Box Plots for adjacent levels ── */}
+      <div className="bench-section">
+        <div className="space-y-8">
+          {shownLevels.map((lvl) => {
+            const bench = levelBenchmarks[lvl.id];
+            if (!bench) return null;
+            const p10 = convertToMarket(bench.percentiles.p10, bench.currency);
+            const p25 = convertToMarket(bench.percentiles.p25, bench.currency);
+            const p50 = convertToMarket(bench.percentiles.p50, bench.currency);
+            const p75 = convertToMarket(bench.percentiles.p75, bench.currency);
+            const p90 = convertToMarket(bench.percentiles.p90, bench.currency);
+
+            const gMin = p10 * 0.85;
+            const gMax = p90 * 1.15;
+            const pct = (v: number) =>
+              Math.max(0, Math.min(100, ((v - gMin) / (gMax - gMin)) * 100));
+
+            const isSelected = lvl.id === level.id;
+            const tgtVal = isSelected ? convertToMarket(getOfferValue(offerTarget)) : p50;
+
+            return (
+              <div key={lvl.id}>
+                <div className="text-xs font-medium text-brand-700 mb-2">
+                  {lvl.name}
+                </div>
+
+                <div className="relative h-10">
+                  {/* whisker line */}
+                  <div
+                    className="absolute top-1/2 h-[2px] bg-brand-300 -translate-y-1/2"
+                    style={{
+                      left: `${pct(p10)}%`,
+                      width: `${pct(p90) - pct(p10)}%`,
+                    }}
+                  />
+                  <div className="bench-boxplot-whisker" style={{ left: `${pct(p10)}%` }} />
+                  <div className="bench-boxplot-whisker" style={{ left: `${pct(p90)}%` }} />
+                  <div
+                    className="bench-boxplot-box"
+                    style={{
+                      left: `${pct(p25)}%`,
+                      width: `${pct(p75) - pct(p25)}%`,
+                    }}
+                  />
+                  <div className="bench-boxplot-median" style={{ left: `${pct(p50)}%` }} />
+                  {isSelected && (
+                    <div className="bench-boxplot-target" style={{ left: `${pct(tgtVal)}%` }}>
+                      {offerTarget}
+                    </div>
+                  )}
+                </div>
+
+                {/* Axis ticks */}
+                <div className="flex justify-between text-[9px] text-brand-400 mt-1">
+                  <span>{formatShort(p10)}</span>
+                  <span>{formatShort(p25)}</span>
+                  <span>{formatShort(p50)}</span>
+                  <span>{formatShort(p75)}</span>
+                  <span>{formatShort(p90)}</span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
   );
 }

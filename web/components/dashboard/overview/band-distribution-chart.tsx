@@ -1,9 +1,7 @@
 "use client";
 
-import { BarChart } from "@tremor/react";
 import { Card } from "@/components/ui/card";
-import { Target, TrendingUp } from "lucide-react";
-import clsx from "clsx";
+import { ArrowRight } from "lucide-react";
 import { type CompanyMetrics, type DepartmentSummary } from "@/lib/employees";
 
 interface BandDistributionChartProps {
@@ -11,128 +9,109 @@ interface BandDistributionChartProps {
   departmentSummaries: DepartmentSummary[];
 }
 
-export function BandDistributionChart({ metrics, departmentSummaries }: BandDistributionChartProps) {
-  // Prepare data for company-wide overview
-  const companyData = [
+export function BandDistributionChart({ metrics }: BandDistributionChartProps) {
+  const { inBand, below, above } = metrics.bandDistribution;
+  const total = metrics.activeEmployees;
+
+  const inBandCount = Math.round(total * inBand / 100);
+  const aboveCount = Math.round(total * above / 100);
+  const belowCount = Math.round(total * below / 100);
+
+  const targetInBand = 75;
+  const gap = targetInBand - inBand;
+  const progressPct = Math.min(100, (inBand / targetInBand) * 100);
+
+  const donutTotal = Math.max(total, 1);
+  const donutGradient = [
+    `var(--success) 0deg ${(inBandCount / donutTotal) * 360}deg`,
+    `var(--warning) ${(inBandCount / donutTotal) * 360}deg ${((inBandCount + aboveCount) / donutTotal) * 360}deg`,
+    `#fb7185 ${((inBandCount + aboveCount) / donutTotal) * 360}deg 360deg`,
+  ].join(", ");
+
+  const rows = [
     {
-      category: "Company",
-      "In Band": metrics.bandDistribution.inBand,
-      "Below Band": metrics.bandDistribution.below,
-      "Above Band": metrics.bandDistribution.above,
+      label: "In Band",
+      pct: inBand,
+      count: inBandCount,
+      color: "bg-emerald-500",
+      textColor: "text-emerald-700",
+      bgColor: "bg-emerald-50",
+    },
+    {
+      label: "Above Band",
+      pct: above,
+      count: aboveCount,
+      color: "bg-amber-400",
+      textColor: "text-amber-700",
+      bgColor: "bg-amber-50",
+    },
+    {
+      label: "Below Band",
+      pct: below,
+      count: belowCount,
+      color: "bg-orange-400",
+      textColor: "text-orange-700",
+      bgColor: "bg-orange-50",
     },
   ];
 
-  // Prepare data for department breakdown
-  const departmentData = departmentSummaries.map(d => ({
-    category: d.department,
-    "In Band": Math.round((d.inBandCount / d.activeCount) * 100),
-    "Below Band": Math.round((d.belowBandCount / d.activeCount) * 100),
-    "Above Band": Math.round((d.aboveBandCount / d.activeCount) * 100),
-  }));
-
-  // Target distribution
-  const targetInBand = 75;
-  const gap = targetInBand - metrics.bandDistribution.inBand;
-
   return (
-    <Card className="p-5">
-      <div className="flex items-start justify-between mb-4">
-        <div>
-          <h3 className="text-sm font-semibold text-brand-900">Band Distribution</h3>
-          <p className="text-xs text-brand-500 mt-0.5">Employees by compensation band position</p>
+    <Card className="dash-card p-5">
+      <div className="mb-4">
+        <h3 className="text-sm font-semibold text-accent-900">Band Distribution</h3>
+        <p className="text-xs text-accent-500 mt-0.5">Employees by compensation band position</p>
+      </div>
+
+      {/* Donut + Rows */}
+      <div className="flex items-start gap-6 mb-5">
+        {/* Donut */}
+        <div className="relative shrink-0">
+          <div
+            className="h-32 w-32 rounded-full"
+            style={{ background: `conic-gradient(${donutGradient})` }}
+          />
+          <div className="pointer-events-none absolute inset-4 rounded-full bg-white" />
         </div>
-        <div className="flex items-center gap-2 text-xs">
-          <Target className="h-3.5 w-3.5 text-brand-500" />
-          <span className="text-brand-600">Target: {targetInBand}% in band</span>
+
+        {/* Rows */}
+        <div className="flex-1 space-y-3 pt-1">
+          {rows.map((row) => (
+            <div key={row.label} className={`flex items-center gap-3 rounded-xl ${row.bgColor} px-4 py-2.5`}>
+              <div className={`h-3 w-3 rounded-full ${row.color} shrink-0`} />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-baseline gap-2">
+                  <span className={`text-lg font-bold ${row.textColor}`}>{row.pct}%</span>
+                  <span className="text-xs text-accent-500">{row.label}</span>
+                </div>
+                <p className="text-[11px] text-accent-400">{row.count} employees</p>
+              </div>
+              <ArrowRight className="h-4 w-4 text-accent-400 shrink-0" />
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* Company-wide summary */}
-      <div className="grid grid-cols-3 gap-3 mb-5">
-        <div className="rounded-xl bg-emerald-50 p-3 text-center">
-          <div className="text-2xl font-bold text-emerald-700">
-            {metrics.bandDistribution.inBand}%
-          </div>
-          <div className="text-xs text-emerald-600 font-medium">In Band</div>
-          <div className="text-[10px] text-emerald-500 mt-0.5">
-            {Math.round(metrics.activeEmployees * metrics.bandDistribution.inBand / 100)} employees
-          </div>
-        </div>
-        <div className="rounded-xl bg-amber-50 p-3 text-center">
-          <div className="text-2xl font-bold text-amber-700">
-            {metrics.bandDistribution.below}%
-          </div>
-          <div className="text-xs text-amber-600 font-medium">Below Band</div>
-          <div className="text-[10px] text-amber-500 mt-0.5">
-            {Math.round(metrics.activeEmployees * metrics.bandDistribution.below / 100)} employees
-          </div>
-        </div>
-        <div className="rounded-xl bg-rose-50 p-3 text-center">
-          <div className="text-2xl font-bold text-rose-700">
-            {metrics.bandDistribution.above}%
-          </div>
-          <div className="text-xs text-rose-600 font-medium">Above Band</div>
-          <div className="text-[10px] text-rose-500 mt-0.5">
-            {Math.round(metrics.activeEmployees * metrics.bandDistribution.above / 100)} employees
-          </div>
-        </div>
-      </div>
-
-      {/* Progress toward target */}
-      <div className="mb-5 p-3 rounded-xl bg-brand-50">
+      {/* Target progress bar */}
+      <div className="border-t border-border/40 pt-4">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xs font-medium text-brand-700">Progress to Target</span>
-          <span className={clsx(
-            "text-xs font-semibold",
-            gap <= 0 ? "text-emerald-600" : "text-amber-600"
-          )}>
+          <span className="text-xs font-semibold text-accent-800">Target</span>
+          <span className="text-xs text-accent-500">
             {gap <= 0 ? "Target met!" : `${gap}% to go`}
           </span>
         </div>
-        <div className="h-2 bg-brand-200 rounded-full overflow-hidden">
-          <div 
-            className={clsx(
-              "h-full rounded-full transition-all duration-500",
-              metrics.bandDistribution.inBand >= targetInBand ? "bg-emerald-500" : "bg-brand-500"
-            )}
-            style={{ width: `${Math.min(100, (metrics.bandDistribution.inBand / targetInBand) * 100)}%` }}
-          />
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-medium text-accent-700 whitespace-nowrap">
+            {targetInBand}% In Band
+          </span>
+          <div className="flex-1 h-3 rounded-full overflow-hidden bg-accent-100">
+            <div
+              className={`h-full rounded-full transition-all duration-500 ${
+                inBand >= targetInBand ? "bg-emerald-500" : "bg-emerald-400"
+              }`}
+              style={{ width: `${progressPct}%` }}
+            />
+          </div>
         </div>
-        <div className="flex justify-between mt-1 text-[10px] text-brand-500">
-          <span>0%</span>
-          <span>Target: {targetInBand}%</span>
-          <span>100%</span>
-        </div>
-      </div>
-
-      {/* Department comparison chart */}
-      <div>
-        <h4 className="text-xs font-semibold text-brand-600 uppercase tracking-wider mb-3">
-          By Department
-        </h4>
-        <div className="h-[200px]">
-          <BarChart
-            className="h-full"
-            data={departmentData}
-            index="category"
-            categories={["In Band", "Below Band", "Above Band"]}
-            colors={["emerald", "amber", "rose"]}
-            valueFormatter={(v) => `${v}%`}
-            showLegend={true}
-            showGridLines={false}
-            stack={true}
-            showAnimation={true}
-            layout="vertical"
-          />
-        </div>
-      </div>
-
-      {/* Trend indicator */}
-      <div className="flex items-center gap-2 mt-4 pt-4 border-t border-border">
-        <TrendingUp className="h-4 w-4 text-emerald-500" />
-        <span className="text-xs text-brand-600">
-          In-band rate improved by <span className="font-semibold text-emerald-600">+{metrics.inBandChange}%</span> vs last year
-        </span>
       </div>
     </Card>
   );

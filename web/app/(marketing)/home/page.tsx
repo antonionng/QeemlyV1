@@ -11,7 +11,8 @@ import { RoleSearchAutocomplete } from "@/components/marketing/role-search-autoc
 import { AiExplainTooltip } from "@/components/ui/ai-explain-tooltip";
 import { SectionModal } from "@/components/ui/section-modal";
 import { AiChecksVisual, GulfFocusedVisual, HireSmarterVisual, KnowMarketVisual } from "@/components/marketing/jigsaw-visuals";
-import { SAMPLE_BENCHMARK, formatMoney } from "@/lib/sample-benchmark";
+import { formatMoney } from "@/lib/format-money";
+import { createClient } from "@/lib/supabase/server";
 import {
   ModalHeroAiSafeguards,
   ModalHeroBenchmarkOutput,
@@ -84,6 +85,19 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const selectedLocation = firstParam(resolvedSearchParams, "location") ?? "Dubai, UAE";
   const selectedLevel = firstParam(resolvedSearchParams, "level") ?? "IC3";
   const selectedCurrency = firstParam(resolvedSearchParams, "currency") ?? "AED";
+  const supabase = await createClient();
+  const { data: row } = await supabase
+    .from("public_benchmark_snapshots")
+    .select("*")
+    .eq("is_public", true)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const sampleBenchmark = {
+    role: row?.role_label || "No role data",
+    location: row?.location_label || "No location data",
+    p50: Number(row?.p50 || 0),
+  };
 
   return (
     <div className="mx-auto w-full max-w-7xl space-y-20">
@@ -186,7 +200,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                   <div className="px-3.5 pb-3 pt-2">
                     <AiExplainTooltip
                       label="What do P25 / P50 / P75 mean?"
-                      message={`Percentiles summarize the salary range:\n- P25 = lower end (25% earn below)\n- P50 = typical/median\n- P75 = upper end (75% earn below)\n\nConfidence reflects data quality (sample size, freshness, and consistency).\n\nExample: ${SAMPLE_BENCHMARK.role} · ${SAMPLE_BENCHMARK.location.split(",")[0]} → Typical (P50) ${formatMoney(selectedCurrency, SAMPLE_BENCHMARK.p50)} / month • High confidence`}
+                      message={`Percentiles summarize the salary range:\n- P25 = lower end (25% earn below)\n- P50 = typical/median\n- P75 = upper end (75% earn below)\n\nConfidence reflects data quality (sample size, freshness, and consistency).\n\nExample: ${sampleBenchmark.role} · ${sampleBenchmark.location.split(",")[0]} → Typical (P50) ${formatMoney(selectedCurrency, sampleBenchmark.p50)} / month • High confidence`}
                     />
                   </div>
                 </div>

@@ -1,6 +1,15 @@
 import clsx from "clsx";
 import { CheckCircle2, Download, Layers, ShieldCheck } from "lucide-react";
-import { SAMPLE_BENCHMARK, formatMoneyK } from "@/lib/sample-benchmark";
+
+const LIVE_MARKET = {
+  city: "Live market",
+  level: "Current level",
+  currency: "AED",
+  p25: "Live P25",
+  p50: "Live P50",
+  p75: "Live P75",
+  trend: "Live trend",
+};
 
 type VisualProps = { className?: string };
 
@@ -83,21 +92,21 @@ export function ModalHeroBenchmarkOutput({ className }: VisualProps) {
           </div>
 
           <div className="mt-3 flex flex-wrap gap-2">
-            <MiniChip label={SAMPLE_BENCHMARK.location.split(",")[0]} active />
-            <MiniChip label={SAMPLE_BENCHMARK.level} />
-            <MiniChip label={SAMPLE_BENCHMARK.currency} />
+            <MiniChip label={LIVE_MARKET.city} active />
+            <MiniChip label={LIVE_MARKET.level} />
+            <MiniChip label={LIVE_MARKET.currency} />
             <MiniChip label="Monthly" />
           </div>
 
           <div className="mt-4 grid gap-2">
             {[
-              { k: "P25", v: SAMPLE_BENCHMARK.p25 },
-              { k: "P50", v: SAMPLE_BENCHMARK.p50 },
-              { k: "P75", v: SAMPLE_BENCHMARK.p75 },
+              { k: "P25", v: LIVE_MARKET.p25 },
+              { k: "P50", v: LIVE_MARKET.p50 },
+              { k: "P75", v: LIVE_MARKET.p75 },
             ].map((row) => (
               <div key={row.k} className="flex items-center justify-between rounded-xl bg-muted p-3 ring-1 ring-border/60">
                 <div className="text-xs font-bold text-accent-700">{row.k}</div>
-                <div className="text-sm font-semibold text-brand-900">{formatMoneyK(SAMPLE_BENCHMARK.currency, row.v)}</div>
+                <div className="text-sm font-semibold text-brand-900">{row.v}</div>
               </div>
             ))}
           </div>
@@ -133,7 +142,7 @@ export function ModalHeroBenchmarkOutput({ className }: VisualProps) {
           </div>
           <div className="mt-4 rounded-xl bg-white p-3 ring-1 ring-border/70">
             <div className="text-[11px] font-semibold uppercase tracking-wide text-accent-600">Notable</div>
-            <div className="mt-2 text-sm font-semibold text-brand-900">+{SAMPLE_BENCHMARK.trendDelta}</div>
+            <div className="mt-2 text-sm font-semibold text-brand-900">{LIVE_MARKET.trend}</div>
             <div className="mt-1 text-xs text-accent-600">Market movement (90d)</div>
           </div>
         </CardShell>

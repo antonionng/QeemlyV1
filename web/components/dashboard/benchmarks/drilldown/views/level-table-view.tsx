@@ -1,11 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { useEffect, useState } from "react";
 import { type BenchmarkResult } from "@/lib/benchmarks/benchmark-state";
-import { LEVELS, generateBenchmark, generateSalaryBreakdown } from "@/lib/dashboard/dummy-data";
+import { LEVELS } from "@/lib/dashboard/dummy-data";
 import { useSalaryView } from "@/lib/salary-view-store";
+import { getBenchmark } from "@/lib/benchmarks/data-service";
 
 interface LevelTableViewProps {
   result: BenchmarkResult;
@@ -14,157 +13,106 @@ interface LevelTableViewProps {
 export function LevelTableView({ result }: LevelTableViewProps) {
   const { role, level, location } = result;
   const [showBasic, setShowBasic] = useState(false);
+  const [rows, setRows] = useState<
+    Array<{
+      level: (typeof LEVELS)[number];
+      p25: number;
+      p50: number;
+      p75: number;
+      p85: number;
+      p90: number;
+      isSelected: boolean;
+    }>
+  >([]);
   const { salaryView } = useSalaryView();
-  
-  // Convert from monthly AED based on salary view mode
-  const convertValue = (value: number) => salaryView === "annual" ? Math.round(value * 12 / 1000) * 1000 : Math.round(value / 100) * 100;
-  
+
+  const convertValue = (value: number) =>
+    salaryView === "annual"
+      ? Math.round((value * 12) / 1000) * 1000
+      : Math.round(value / 100) * 100;
+
   const formatAED = (value: number) => {
-    if (value >= 1000) {
-      return `AED ${(value / 1000).toFixed(0)}k`;
-    }
-    return new Intl.NumberFormat("en-AE", {
-      style: "currency",
-      currency: "AED",
-      maximumFractionDigits: 0,
-    }).format(value);
+    if (value >= 1000) return `AED ${(value / 1000).toFixed(0)}k`;
+    return new Intl.NumberFormat("en-AE", { style: "currency", currency: "AED", maximumFractionDigits: 0 }).format(value);
   };
 
-  // Generate level comparison data with breakdown
-  const levelData = LEVELS.filter(l => l.category === "IC" || l.category === "Manager").slice(0, 6).map(lvl => {
-    const bench = generateBenchmark(role.id, location.id === "london" ? "dubai" : location.id, lvl.id);
-    
-    // Generate breakdowns for each percentile
-    const p25Breakdown = generateSalaryBreakdown(bench.percentiles.p25, lvl.id);
-    const p50Breakdown = generateSalaryBreakdown(bench.percentiles.p50, lvl.id);
-    const p75Breakdown = generateSalaryBreakdown(bench.percentiles.p75, lvl.id);
-    const p85Total = bench.percentiles.p75 * 1.08;
-    const p85Breakdown = generateSalaryBreakdown(p85Total, lvl.id);
-    const p90Breakdown = generateSalaryBreakdown(bench.percentiles.p90, lvl.id);
-    
-    return {
-      level: lvl,
-      // Total salary values
-      p25Total: convertValue(bench.percentiles.p25),
-      p50Total: convertValue(bench.percentiles.p50),
-      p75Total: convertValue(bench.percentiles.p75),
-      p85Total: convertValue(p85Total),
-      p90Total: convertValue(bench.percentiles.p90),
-      // Basic salary values
-      p25Basic: convertValue(p25Breakdown.basic),
-      p50Basic: convertValue(p50Breakdown.basic),
-      p75Basic: convertValue(p75Breakdown.basic),
-      p85Basic: convertValue(p85Breakdown.basic),
-      p90Basic: convertValue(p90Breakdown.basic),
-      // Basic percentage (for display)
-      basicPercent: p50Breakdown.basicPercent,
-      isSelected: lvl.id === level.id,
+  useEffect(() => {
+    const run = async () => {
+      const sourceLocationId =
+        location.id === "london" || location.id === "manchester" ? "dubai" : location.id;
+      const targetLevels = LEVELS.filter((l) => l.category === "IC" || l.category === "Manager").slice(0, 6);
+      const benchmarks = await Promise.all(
+        targetLevels.map(async (lvl) => ({
+          level: lvl,
+          benchmark: await getBenchmark(role.id, sourceLocationId, lvl.id),
+        })),
+      );
+      const nextRows = benchmarks
+        .filter((entry) => entry.benchmark)
+        .map((entry) => {
+          const benchmark = entry.benchmark!;
+          const p85 = benchmark.percentiles.p75 + (benchmark.percentiles.p90 - benchmark.percentiles.p75) * 0.5;
+          return {
+            level: entry.level,
+            p25: benchmark.percentiles.p25,
+            p50: benchmark.percentiles.p50,
+            p75: benchmark.percentiles.p75,
+            p85,
+            p90: benchmark.percentiles.p90,
+            isSelected: entry.level.id === level.id,
+          };
+        });
+      setRows(nextRows);
     };
-  });
+    void run();
+  }, [level.id, location.id, role.id]);
 
   return (
-    <Card className="p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-brand-900">Percentile by Level</h3>
-        {/* Total/Basic Toggle */}
-        <div className="flex items-center gap-1 p-1 bg-brand-50 rounded-lg">
-          <button
-            onClick={() => setShowBasic(false)}
-            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-              !showBasic
-                ? "bg-white text-brand-900 shadow-sm"
-                : "text-brand-600 hover:text-brand-800"
-            }`}
-          >
-            Total Salary
+    <div className="bench-section p-0 overflow-hidden">
+      <div className="flex items-center justify-between p-5 pb-4">
+        <h3 className="bench-section-header pb-0">Level Data</h3>
+        <div className="bench-toggle text-xs">
+          <button type="button" data-active={!showBasic} onClick={() => setShowBasic(false)}>
+            Total
           </button>
-          <button
-            onClick={() => setShowBasic(true)}
-            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-              showBasic
-                ? "bg-white text-brand-900 shadow-sm"
-                : "text-brand-600 hover:text-brand-800"
-            }`}
-          >
-            Basic Salary
+          <button type="button" data-active={showBasic} onClick={() => setShowBasic(true)}>
+            Basic
           </button>
         </div>
       </div>
-      
-      {showBasic && (
-        <p className="text-xs text-brand-500 mb-3">
-          Showing basic salary component only (typically 50-65% of total). Used for end-of-service benefit calculations.
-        </p>
-      )}
-      <div className="overflow-x-auto">
-        <table className="w-full">
+
+      {showBasic && <p className="text-xs text-brand-500 px-5 pt-2">Basic split unavailable for this workspace dataset.</p>}
+
+      <div className="overflow-x-auto mt-3">
+        <table className="bench-table">
           <thead>
-            <tr className="border-b border-border">
-              <th className="text-left py-3 px-4 text-xs font-semibold text-brand-600 uppercase tracking-wider">
-                Level
-              </th>
-              <th className="text-right py-3 px-4 text-xs font-semibold text-brand-600 uppercase tracking-wider">
-                P25{showBasic && " (Basic)"}
-              </th>
-              <th className="text-right py-3 px-4 text-xs font-semibold text-brand-600 uppercase tracking-wider">
-                P50{showBasic && " (Basic)"}
-              </th>
-              <th className="text-right py-3 px-4 text-xs font-semibold text-brand-600 uppercase tracking-wider">
-                P75{showBasic && " (Basic)"}
-              </th>
-              <th className="text-right py-3 px-4 text-xs font-semibold text-brand-600 uppercase tracking-wider">
-                P85{showBasic && " (Basic)"}
-              </th>
-              <th className="text-right py-3 px-4 text-xs font-semibold text-brand-600 uppercase tracking-wider">
-                P90{showBasic && " (Basic)"}
-              </th>
+            <tr>
+              <th>Level</th>
+              <th className="text-right">P25</th>
+              <th className="text-right">P50</th>
+              <th className="text-right">P75</th>
+              <th className="text-right">P85</th>
+              <th className="text-right">P90</th>
             </tr>
           </thead>
           <tbody>
-            {levelData.map((row) => (
-              <tr
-                key={row.level.id}
-                className={`border-b border-border/50 ${
-                  row.isSelected ? "bg-brand-50" : "hover:bg-muted/50"
-                }`}
-              >
-                <td className="py-3 px-4">
-                  <div className="flex items-center gap-2">
-                    <span className={`text-sm font-medium ${row.isSelected ? "text-brand-900" : "text-brand-700"}`}>
-                      {row.level.name}
-                    </span>
-                    {row.isSelected && (
-                      <Badge variant="brand" className="text-xs">
-                        Selected
-                      </Badge>
-                    )}
-                    {showBasic && (
-                      <span className="text-[10px] text-brand-400">
-                        {row.basicPercent}%
-                      </span>
-                    )}
-                  </div>
+            {rows.map((row) => (
+              <tr key={row.level.id} className={row.isSelected ? "bench-row-highlight" : ""}>
+                <td>
+                  <span className={`font-medium ${row.isSelected ? "text-brand-900" : "text-brand-700"}`}>
+                    {row.level.name}
+                  </span>
                 </td>
-                <td className="text-right py-3 px-4 text-sm text-brand-700">
-                  {formatAED(showBasic ? row.p25Basic : row.p25Total)}
-                </td>
-                <td className="text-right py-3 px-4 text-sm font-medium text-brand-900">
-                  {formatAED(showBasic ? row.p50Basic : row.p50Total)}
-                </td>
-                <td className="text-right py-3 px-4 text-sm text-brand-700">
-                  {formatAED(showBasic ? row.p75Basic : row.p75Total)}
-                </td>
-                <td className="text-right py-3 px-4 text-sm text-brand-700">
-                  {formatAED(showBasic ? row.p85Basic : row.p85Total)}
-                </td>
-                <td className="text-right py-3 px-4 text-sm text-brand-700">
-                  {formatAED(showBasic ? row.p90Basic : row.p90Total)}
-                </td>
+                <td className="text-right">{formatAED(convertValue(row.p25))}</td>
+                <td className="text-right font-medium">{formatAED(convertValue(row.p50))}</td>
+                <td className="text-right">{formatAED(convertValue(row.p75))}</td>
+                <td className="text-right">{formatAED(convertValue(row.p85))}</td>
+                <td className="text-right">{formatAED(convertValue(row.p90))}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-    </Card>
+    </div>
   );
 }

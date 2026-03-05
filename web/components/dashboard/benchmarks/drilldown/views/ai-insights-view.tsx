@@ -3,10 +3,9 @@
 import { useMemo } from "react";
 import clsx from "clsx";
 import { Brain, Lightbulb, Sparkles, TrendingUp, Zap, AlertTriangle, Target } from "lucide-react";
-import { Card } from "@/components/ui/card";
 import { type BenchmarkResult } from "@/lib/benchmarks/benchmark-state";
 import { useCompanySettings, getCompanyInitials } from "@/lib/company";
-import { useCurrencyFormatter, convertCurrency, monthlyToAnnual, roundToThousand } from "@/lib/utils/currency";
+import { formatCurrency, toBenchmarkDisplayValue } from "@/lib/utils/currency";
 import { useSalaryView } from "@/lib/salary-view-store";
 
 interface AIInsightsViewProps {
@@ -22,23 +21,23 @@ type Insight = {
 };
 
 export function AIInsightsView({ result }: AIInsightsViewProps) {
-  const { benchmark, role, location, level, formData } = result;
+  const { benchmark, role, location, formData } = result;
   const companySettings = useCompanySettings();
-  const currency = useCurrencyFormatter();
   const { salaryView } = useSalaryView();
   const targetPercentile = formData.targetPercentile || companySettings.targetPercentile;
+  const targetCurrency = location.currency;
 
   // Company branding
   const hasCompanyLogo = !!companySettings.companyLogo;
   const companyInitials = getCompanyInitials(companySettings.companyName);
 
-  // Convert from monthly AED to company's default currency (respects salary view mode)
-  const convertToDefault = (value: number) => {
-    const converted = salaryView === "annual" ? monthlyToAnnual(value) : value;
-    return roundToThousand(convertCurrency(converted, "AED", currency.defaultCurrency));
-  };
-  
-  const formatValue = (value: number) => currency.format(value);
+  const convertToMarket = (value: number) =>
+    toBenchmarkDisplayValue(value, {
+      salaryView,
+      sourceCurrency: benchmark.currency,
+      targetCurrency,
+    });
+  const formatValue = (value: number) => formatCurrency(value, targetCurrency);
 
   // Generate dynamic insights
   const insights = useMemo<Insight[]>(() => {
@@ -166,17 +165,8 @@ export function AIInsightsView({ result }: AIInsightsViewProps) {
   const targetValue = benchmark.percentiles[`p${targetPercentile}` as keyof typeof benchmark.percentiles] || benchmark.percentiles.p50;
 
   return (
-    <Card className="p-6">
-      {/* Header */}
-      <div className="flex items-center gap-2 mb-4">
-        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-brand-500 to-purple-600">
-          <Sparkles className="h-4 w-4 text-white" />
-        </div>
-        <div>
-          <h3 className="text-sm font-semibold text-brand-900">AI Insights</h3>
-          <p className="text-[10px] text-brand-500">Powered by Qeemly AI</p>
-        </div>
-      </div>
+    <div className="bench-section">
+      <h3 className="bench-section-header">AI Insights</h3>
 
       {/* Insights */}
       <div className="space-y-3 mb-4">
@@ -226,9 +216,9 @@ export function AIInsightsView({ result }: AIInsightsViewProps) {
           <p className="text-xs font-medium opacity-90">Quick Summary for {companySettings.companyName}</p>
         </div>
         <p className="text-sm">
-          Target <strong>{formatValue(convertToDefault(targetValue))}</strong> (P{targetPercentile}) for {role.title} in {location.city}.
+          Target <strong>{formatValue(convertToMarket(targetValue))}</strong> (P{targetPercentile}) for {role.title} in {location.city}.
         </p>
       </div>
-    </Card>
+    </div>
   );
 }

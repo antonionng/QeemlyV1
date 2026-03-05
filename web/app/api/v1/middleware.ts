@@ -11,20 +11,12 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createServiceClient } from "@/lib/supabase/service";
+import { buildApiKeyPrefix, hashApiKey, isApiKeyFormat } from "@/lib/security/api-key";
 
 // Use service role for API key validation (bypasses RLS)
 function getServiceClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  if (!serviceKey) {
-    // Fallback to anon key for development
-    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-    return createClient(url, anonKey);
-  }
-
-  return createClient(url, serviceKey);
+  return createServiceClient();
 }
 
 type AuthResult =
@@ -51,7 +43,7 @@ export async function authenticateApiKey(
 
   const apiKey = authHeader.slice(7); // Remove "Bearer "
 
-  if (!apiKey.startsWith("qeem_")) {
+  if (!isApiKeyFormat(apiKey)) {
     return {
       error: NextResponse.json(
         { error: "Invalid API key format" },
@@ -60,16 +52,16 @@ export async function authenticateApiKey(
     };
   }
 
-  const prefix = apiKey.slice(0, 13) + "...";
+  const prefix = buildApiKeyPrefix(apiKey);
+  const keyHash = hashApiKey(apiKey);
   const supabase = getServiceClient();
 
-  // Look up API key by prefix
-  // In production, you'd hash the full key and compare hashes.
-  // For now, we match by prefix (sufficient for development).
+  // Look up by prefix + full hash to prevent prefix-only auth bypass.
   const { data: keyRecord } = await supabase
     .from("api_keys")
-    .select("id, workspace_id, scopes, revoked_at, expires_at")
+    .select("id, workspace_id, scopes, revoked_at, expires_at, key_hash")
     .eq("key_prefix", prefix)
+    .eq("key_hash", keyHash)
     .single();
 
   if (!keyRecord) {

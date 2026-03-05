@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { 
   Save, 
   Building2, 
@@ -14,7 +14,11 @@ import {
   TrendingUp,
   BarChart3,
   Info,
+  Users,
+  Loader2,
+  AlertCircle,
 } from "lucide-react";
+import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,83 +40,193 @@ import {
   type VestingSchedule,
   type BenefitsTier,
 } from "@/lib/company";
-import { INDUSTRIES, COMPANY_SIZES, generateBenchmark } from "@/lib/dashboard/dummy-data";
-import { MOCK_EMPLOYEES } from "@/lib/employees";
+import { INDUSTRIES, COMPANY_SIZES } from "@/lib/dashboard/dummy-data";
+import { getEmployees, type Employee } from "@/lib/employees";
+import { getBenchmark } from "@/lib/benchmarks/data-service";
 import clsx from "clsx";
 
 type SettingsTab = "profile" | "compensation" | "indices";
 type IndexView = "family" | "family-level";
 
 export default function SettingsPage() {
-  const settings = useCompanySettings();
+  const zustandSettings = useCompanySettings();
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<SettingsTab>("profile");
   
   // Company Profile state
-  const [companyName, setCompanyName] = useState(settings.companyName);
-  const [companyLogo, setCompanyLogo] = useState(settings.companyLogo);
-  const [companyWebsite, setCompanyWebsite] = useState(settings.companyWebsite);
-  const [companyDescription, setCompanyDescription] = useState(settings.companyDescription);
-  const [primaryColor, setPrimaryColor] = useState(settings.primaryColor);
-  const [industry, setIndustry] = useState(settings.industry);
-  const [companySize, setCompanySize] = useState(settings.companySize);
-  const [fundingStage, setFundingStage] = useState(settings.fundingStage);
-  const [headquartersCountry, setHeadquartersCountry] = useState(settings.headquartersCountry);
-  const [headquartersCity, setHeadquartersCity] = useState(settings.headquartersCity);
+  const [companyName, setCompanyName] = useState("");
+  const [companyLogo, setCompanyLogo] = useState<string | null>(null);
+  const [companyWebsite, setCompanyWebsite] = useState("");
+  const [companyDescription, setCompanyDescription] = useState("");
+  const [primaryColor, setPrimaryColor] = useState("#5C45FD");
+  const [industry, setIndustry] = useState("");
+  const [companySize, setCompanySize] = useState("");
+  const [fundingStage, setFundingStage] = useState<FundingStage>("Seed");
+  const [headquartersCountry, setHeadquartersCountry] = useState("AE");
+  const [headquartersCity, setHeadquartersCity] = useState("");
   
   // Compensation Defaults state
-  const [targetPercentile, setTargetPercentile] = useState(settings.targetPercentile);
-  const [reviewCycle, setReviewCycle] = useState(settings.reviewCycle);
-  const [defaultCurrency, setDefaultCurrency] = useState(settings.defaultCurrency);
-  const [fiscalYearStart, setFiscalYearStart] = useState(settings.fiscalYearStart);
-  const [defaultBonusPercentage, setDefaultBonusPercentage] = useState(settings.defaultBonusPercentage);
-  const [equityVestingSchedule, setEquityVestingSchedule] = useState(settings.equityVestingSchedule);
-  const [benefitsTier, setBenefitsTier] = useState(settings.benefitsTier);
+  const [targetPercentile, setTargetPercentile] = useState<TargetPercentile>(50);
+  const [reviewCycle, setReviewCycle] = useState<ReviewCycle>("annual");
+  const [defaultCurrency, setDefaultCurrency] = useState("AED");
+  const [fiscalYearStart, setFiscalYearStart] = useState(1);
+  const [defaultBonusPercentage, setDefaultBonusPercentage] = useState<number | null>(15);
+  const [equityVestingSchedule, setEquityVestingSchedule] = useState<VestingSchedule>("4-year-1-cliff");
+  const [benefitsTier, setBenefitsTier] = useState<BenefitsTier>("standard");
+  const [compSplitBasicPct, setCompSplitBasicPct] = useState(60);
+  const [compSplitHousingPct, setCompSplitHousingPct] = useState(25);
+  const [compSplitTransportPct, setCompSplitTransportPct] = useState(10);
+  const [compSplitOtherPct, setCompSplitOtherPct] = useState(5);
 
-  // Sync form state with store on mount
+  // Load settings from API on mount
+  const loadSettings = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const res = await fetch("/api/settings");
+      if (!res.ok) {
+        throw new Error("Failed to load settings");
+      }
+      const data = await res.json();
+      const s = data.settings;
+      
+      setCompanyName(s.company_name || data.workspace_name || "");
+      setCompanyLogo(s.company_logo ?? null);
+      setCompanyWebsite(s.company_website || "");
+      setCompanyDescription(s.company_description || "");
+      setPrimaryColor(s.primary_color || "#5C45FD");
+      setIndustry(s.industry || "");
+      setCompanySize(s.company_size || "");
+      setFundingStage((s.funding_stage as FundingStage) || "Seed");
+      setHeadquartersCountry(s.headquarters_country || "AE");
+      setHeadquartersCity(s.headquarters_city || "");
+      setTargetPercentile((s.target_percentile as TargetPercentile) || 50);
+      setReviewCycle((s.review_cycle as ReviewCycle) || "annual");
+      setDefaultCurrency(s.default_currency || "AED");
+      setFiscalYearStart(s.fiscal_year_start || 1);
+      setDefaultBonusPercentage(Number(s.default_bonus_percentage) || 15);
+      setEquityVestingSchedule((s.equity_vesting_schedule as VestingSchedule) || "4-year-1-cliff");
+      setBenefitsTier((s.benefits_tier as BenefitsTier) || "standard");
+      setCompSplitBasicPct(s.comp_split_basic_pct ?? 60);
+      setCompSplitHousingPct(s.comp_split_housing_pct ?? 25);
+      setCompSplitTransportPct(s.comp_split_transport_pct ?? 10);
+      setCompSplitOtherPct(s.comp_split_other_pct ?? 5);
+      
+      // Also sync to Zustand store for sidebar
+      zustandSettings.updateSettings({
+        companyName: s.company_name || data.workspace_name || "",
+        companyLogo: s.company_logo || "",
+        companyWebsite: s.company_website || "",
+        companyDescription: s.company_description || "",
+        primaryColor: s.primary_color || "#5C45FD",
+        industry: s.industry || "",
+        companySize: s.company_size || "",
+        fundingStage: (s.funding_stage as FundingStage) || "Seed",
+        headquartersCountry: s.headquarters_country || "AE",
+        headquartersCity: s.headquarters_city || "",
+        targetPercentile: (s.target_percentile as TargetPercentile) || 50,
+        reviewCycle: (s.review_cycle as ReviewCycle) || "annual",
+        defaultCurrency: s.default_currency || "AED",
+        fiscalYearStart: s.fiscal_year_start || 1,
+        defaultBonusPercentage: Number(s.default_bonus_percentage) || 15,
+        equityVestingSchedule: (s.equity_vesting_schedule as VestingSchedule) || "4-year-1-cliff",
+        benefitsTier: (s.benefits_tier as BenefitsTier) || "standard",
+        compSplitBasicPct: s.comp_split_basic_pct ?? 60,
+        compSplitHousingPct: s.comp_split_housing_pct ?? 25,
+        compSplitTransportPct: s.comp_split_transport_pct ?? 10,
+        compSplitOtherPct: s.comp_split_other_pct ?? 5,
+      });
+      if (s.is_configured) {
+        zustandSettings.markAsConfigured();
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load settings");
+    } finally {
+      setLoading(false);
+    }
+  }, [zustandSettings]);
+
   useEffect(() => {
-    setCompanyName(settings.companyName);
-    setCompanyLogo(settings.companyLogo);
-    setCompanyWebsite(settings.companyWebsite);
-    setCompanyDescription(settings.companyDescription);
-    setPrimaryColor(settings.primaryColor);
-    setIndustry(settings.industry);
-    setCompanySize(settings.companySize);
-    setFundingStage(settings.fundingStage);
-    setHeadquartersCountry(settings.headquartersCountry);
-    setHeadquartersCity(settings.headquartersCity);
-    setTargetPercentile(settings.targetPercentile);
-    setReviewCycle(settings.reviewCycle);
-    setDefaultCurrency(settings.defaultCurrency);
-    setFiscalYearStart(settings.fiscalYearStart);
-    setDefaultBonusPercentage(settings.defaultBonusPercentage);
-    setEquityVestingSchedule(settings.equityVestingSchedule);
-    setBenefitsTier(settings.benefitsTier);
-  }, [settings]);
+    loadSettings();
+  }, [loadSettings]);
 
-  const handleSave = () => {
-    settings.updateSettings({
-      companyName,
-      companyLogo,
-      companyWebsite,
-      companyDescription,
-      primaryColor,
-      industry,
-      companySize,
-      fundingStage,
-      headquartersCountry,
-      headquartersCity,
-      targetPercentile,
-      reviewCycle,
-      defaultCurrency,
-      fiscalYearStart,
-      defaultBonusPercentage,
-      equityVestingSchedule,
-      benefitsTier,
-    });
-    settings.markAsConfigured();
-    setSaved(true);
-    setTimeout(() => setSaved(false), 3000);
+  const handleSave = async () => {
+    try {
+      setSaving(true);
+      setError(null);
+      
+      const payload = {
+        company_name: companyName,
+        company_logo: companyLogo,
+        company_website: companyWebsite,
+        company_description: companyDescription,
+        primary_color: primaryColor,
+        industry,
+        company_size: companySize,
+        funding_stage: fundingStage,
+        headquarters_country: headquartersCountry,
+        headquarters_city: headquartersCity,
+        target_percentile: targetPercentile,
+        review_cycle: reviewCycle,
+        default_currency: defaultCurrency,
+        fiscal_year_start: fiscalYearStart,
+        default_bonus_percentage: defaultBonusPercentage,
+        equity_vesting_schedule: equityVestingSchedule,
+        benefits_tier: benefitsTier,
+        comp_split_basic_pct: compSplitBasicPct,
+        comp_split_housing_pct: compSplitHousingPct,
+        comp_split_transport_pct: compSplitTransportPct,
+        comp_split_other_pct: compSplitOtherPct,
+        is_configured: true,
+      };
+      
+      const res = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to save settings");
+      }
+      
+      // Sync to Zustand store for sidebar
+      zustandSettings.updateSettings({
+        companyName,
+        companyLogo,
+        companyWebsite,
+        companyDescription,
+        primaryColor,
+        industry,
+        companySize,
+        fundingStage,
+        headquartersCountry,
+        headquartersCity,
+        targetPercentile,
+        reviewCycle,
+        defaultCurrency,
+        fiscalYearStart,
+        defaultBonusPercentage,
+        equityVestingSchedule,
+        benefitsTier,
+        compSplitBasicPct,
+        compSplitHousingPct,
+        compSplitTransportPct,
+        compSplitOtherPct,
+      });
+      zustandSettings.markAsConfigured();
+      
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save settings");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const tabs = [
@@ -121,14 +235,39 @@ export default function SettingsPage() {
     { id: "indices" as const, label: "Compensation Index", icon: BarChart3 },
   ];
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-brand-500 mx-auto" />
+          <p className="mt-3 text-brand-600">Loading settings...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 max-w-4xl">
+      {/* Error Banner */}
+      {error && (
+        <div className="flex items-center gap-3 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-red-700">
+          <AlertCircle className="h-5 w-5 flex-shrink-0" />
+          <p className="text-sm">{error}</p>
+          <button
+            onClick={() => setError(null)}
+            className="ml-auto text-red-500 hover:text-red-700"
+          >
+            ×
+          </button>
+        </div>
+      )}
+
       {/* Page Header */}
       <div>
-        <h1 className="text-3xl font-bold tracking-tight text-brand-900">
+        <h1 className="page-title">
           Company Settings
         </h1>
-        <p className="mt-2 text-[15px] leading-relaxed text-brand-700/80">
+        <p className="page-subtitle">
           Configure your company profile and compensation defaults. These settings are used across all benchmarks and reports.
         </p>
       </div>
@@ -154,6 +293,13 @@ export default function SettingsPage() {
             </button>
           );
         })}
+        <Link
+          href="/dashboard/settings/employees"
+          className="flex items-center gap-2 px-4 py-3 text-sm font-medium transition-all border-b-2 -mb-px border-transparent text-brand-600 hover:text-brand-800 hover:border-brand-200"
+        >
+          <Users className="h-4 w-4" />
+          Employee Accounts
+        </Link>
       </div>
 
       {/* Company Profile Tab */}
@@ -215,18 +361,24 @@ export default function SettingsPage() {
               {/* Description */}
               <div>
                 <label className="block text-sm font-medium text-brand-700 mb-2">
-                  Company Tagline
+                  Company Description
                 </label>
                 <Textarea
                   value={companyDescription}
                   onChange={(e) => setCompanyDescription(e.target.value)}
-                  placeholder="A brief description of your company..."
-                  rows={2}
+                  placeholder="Tell us about your company, mission, and what makes your workplace unique..."
+                  rows={5}
                   className="rounded-xl resize-none"
+                  maxLength={500}
                 />
-                <p className="text-xs text-brand-500 mt-1">
-                  Optional. Appears in exported reports and comparisons.
-                </p>
+                <div className="flex justify-between mt-1">
+                  <p className="text-xs text-brand-500">
+                    Optional. Appears in exported reports and comparisons.
+                  </p>
+                  <p className="text-xs text-brand-400">
+                    {companyDescription.length}/500
+                  </p>
+                </div>
               </div>
 
               {/* Brand Color */}
@@ -607,6 +759,98 @@ export default function SettingsPage() {
               </p>
             </div>
           </Card>
+
+          {/* Compensation Split Card */}
+          <Card className="p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-100 text-sky-600">
+                <BarChart3 className="h-5 w-5" />
+              </div>
+              <div>
+                <h2 className="text-lg font-semibold text-brand-900">Compensation Split</h2>
+                <p className="text-sm text-brand-600">Define your base vs allowance breakdown</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-brand-500 mb-4">
+              Set how total compensation is split between basic salary and allowances.
+              This is used for salary breakdowns across benchmarks and salary reviews.
+              Percentages must total 100%.
+            </p>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-brand-700 mb-2">Basic Salary %</label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={compSplitBasicPct}
+                  onChange={(e) => setCompSplitBasicPct(Number(e.target.value))}
+                  className="rounded-xl text-center"
+                  fullWidth
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-brand-700 mb-2">Housing %</label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={compSplitHousingPct}
+                  onChange={(e) => setCompSplitHousingPct(Number(e.target.value))}
+                  className="rounded-xl text-center"
+                  fullWidth
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-brand-700 mb-2">Transport %</label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={compSplitTransportPct}
+                  onChange={(e) => setCompSplitTransportPct(Number(e.target.value))}
+                  className="rounded-xl text-center"
+                  fullWidth
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-brand-700 mb-2">Other %</label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={compSplitOtherPct}
+                  onChange={(e) => setCompSplitOtherPct(Number(e.target.value))}
+                  className="rounded-xl text-center"
+                  fullWidth
+                />
+              </div>
+            </div>
+
+            {compSplitBasicPct + compSplitHousingPct + compSplitTransportPct + compSplitOtherPct !== 100 && (
+              <div className="mt-3 flex items-center gap-2 text-sm text-amber-600">
+                <AlertCircle className="h-4 w-4" />
+                <span>
+                  Total is {compSplitBasicPct + compSplitHousingPct + compSplitTransportPct + compSplitOtherPct}% — must equal 100%
+                </span>
+              </div>
+            )}
+
+            <div className="mt-4 flex h-4 rounded-full overflow-hidden">
+              <div className="bg-brand-500" style={{ width: `${compSplitBasicPct}%` }} title={`Basic ${compSplitBasicPct}%`} />
+              <div className="bg-brand-300" style={{ width: `${compSplitHousingPct}%` }} title={`Housing ${compSplitHousingPct}%`} />
+              <div className="bg-brand-200" style={{ width: `${compSplitTransportPct}%` }} title={`Transport ${compSplitTransportPct}%`} />
+              <div className="bg-brand-100" style={{ width: `${compSplitOtherPct}%` }} title={`Other ${compSplitOtherPct}%`} />
+            </div>
+            <div className="flex justify-between mt-1 text-[10px] text-brand-500">
+              <span>Basic {compSplitBasicPct}%</span>
+              <span>Housing {compSplitHousingPct}%</span>
+              <span>Transport {compSplitTransportPct}%</span>
+              <span>Other {compSplitOtherPct}%</span>
+            </div>
+          </Card>
         </div>
       )}
 
@@ -622,15 +866,19 @@ export default function SettingsPage() {
               <span>Settings saved successfully</span>
             </div>
           )}
-          {settings.isConfigured && !saved && (
+          {zustandSettings.isConfigured && !saved && (
             <div className="flex items-center gap-2 text-xs text-brand-500">
-              <span>Last updated: {new Date(settings.lastUpdated).toLocaleDateString("en-GB")}</span>
+              <span>Last updated: {new Date(zustandSettings.lastUpdated).toLocaleDateString("en-GB")}</span>
             </div>
           )}
         </div>
-        <Button onClick={handleSave} className="px-8">
-          <Save className="mr-2 h-4 w-4" />
-          Save Settings
+        <Button onClick={handleSave} disabled={saving} className="px-8">
+          {saving ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Save className="mr-2 h-4 w-4" />
+          )}
+          {saving ? "Saving..." : "Save Settings"}
         </Button>
       </div>
     </div>
@@ -674,77 +922,92 @@ const SENIORITY_LEVELS = [
 ];
 
 function CompensationIndexPanel({ targetPercentile }: { targetPercentile: number }) {
+  type PercentileKey = "p10" | "p25" | "p50" | "p75" | "p90";
+  const resolvePercentileKey = (percentile: number): PercentileKey => {
+    if (percentile >= 90) return "p90";
+    if (percentile >= 75) return "p75";
+    if (percentile >= 50) return "p50";
+    if (percentile >= 25) return "p25";
+    return "p10";
+  };
   const [indexView, setIndexView] = useState<IndexView>("family-level");
+  const [activeEmployees, setActiveEmployees] = useState<Employee[]>([]);
 
-  // Compute indices from employee data vs benchmarks
-  const indexData = useMemo(() => {
-    const activeEmployees = MOCK_EMPLOYEES.filter((e) => e.status === "active");
+  useEffect(() => {
+    let isMounted = true;
+    void getEmployees().then((employees) => {
+      if (!isMounted) return;
+      setActiveEmployees(employees.filter((e) => e.status === "active"));
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
-    // Group employees by job family
-    const familyGroups: Record<string, typeof activeEmployees> = {};
-    for (const emp of activeEmployees) {
-      const family = emp.role.family;
-      if (!familyGroups[family]) familyGroups[family] = [];
-      familyGroups[family].push(emp);
-    }
-
-    const families = Object.keys(familyGroups).sort();
-
-    // For each family (and optionally seniority), compute index
-    const result: {
+  const [indexData, setIndexData] = useState<
+    {
       family: string;
       bySeniority: Record<string, { rating: IndexRating; count: number } | null>;
       overall: { rating: IndexRating; count: number };
-    }[] = [];
+    }[]
+  >([]);
 
-    for (const family of families) {
-      const employees = familyGroups[family];
-      const bySeniority: Record<string, { rating: IndexRating; count: number } | null> = {};
-
-      for (const senLevel of SENIORITY_LEVELS) {
-        const matchingEmps = employees.filter((e) =>
-          senLevel.levelIds.includes(e.level.id)
-        );
-
-        if (matchingEmps.length === 0) {
-          bySeniority[senLevel.id] = null;
-          continue;
-        }
-
-        // Get average salary for these employees
-        const avgSalary = matchingEmps.reduce((s, e) => s + e.baseSalary, 0) / matchingEmps.length;
-
-        // Get benchmark target for this role/level combo
-        const sampleRole = matchingEmps[0].role;
-        const sampleLevel = senLevel.levelIds[0];
-        const sampleLocation = matchingEmps[0].location.id;
-        const benchmark = generateBenchmark(sampleRole.id, sampleLocation, sampleLevel);
-
-        const targetKey = `p${targetPercentile}` as keyof typeof benchmark.percentiles;
-        const targetValue = benchmark.percentiles[targetKey] || benchmark.percentiles.p50;
-
-        const ratio = targetValue > 0 ? avgSalary / targetValue : 1;
-        bySeniority[senLevel.id] = { rating: getIndexRating(ratio), count: matchingEmps.length };
+  useEffect(() => {
+    const run = async () => {
+      const familyGroups: Record<string, typeof activeEmployees> = {};
+      for (const emp of activeEmployees) {
+        const family = emp.role.family;
+        if (!familyGroups[family]) familyGroups[family] = [];
+        familyGroups[family].push(emp);
       }
 
-      // Overall for family
-      const avgSalary = employees.reduce((s, e) => s + e.baseSalary, 0) / employees.length;
-      const sampleRole = employees[0].role;
-      const sampleLocation = employees[0].location.id;
-      const benchmark = generateBenchmark(sampleRole.id, sampleLocation, "ic3");
-      const targetKey = `p${targetPercentile}` as keyof typeof benchmark.percentiles;
-      const targetValue = benchmark.percentiles[targetKey] || benchmark.percentiles.p50;
-      const ratio = targetValue > 0 ? avgSalary / targetValue : 1;
+      const families = Object.keys(familyGroups).sort();
+      const next: {
+        family: string;
+        bySeniority: Record<string, { rating: IndexRating; count: number } | null>;
+        overall: { rating: IndexRating; count: number };
+      }[] = [];
 
-      result.push({
-        family,
-        bySeniority,
-        overall: { rating: getIndexRating(ratio), count: employees.length },
-      });
-    }
+      for (const family of families) {
+        const employees = familyGroups[family];
+        const bySeniority: Record<string, { rating: IndexRating; count: number } | null> = {};
 
-    return result;
-  }, [targetPercentile]);
+        for (const senLevel of SENIORITY_LEVELS) {
+          const matchingEmps = employees.filter((e) => senLevel.levelIds.includes(e.level.id));
+          if (matchingEmps.length === 0) {
+            bySeniority[senLevel.id] = null;
+            continue;
+          }
+          const avgSalary = matchingEmps.reduce((s, e) => s + e.baseSalary, 0) / matchingEmps.length;
+          const sampleRole = matchingEmps[0].role;
+          const sampleLevel = senLevel.levelIds[0];
+          const sampleLocation = matchingEmps[0].location.id;
+          const benchmark = await getBenchmark(sampleRole.id, sampleLocation, sampleLevel);
+          const targetKey = resolvePercentileKey(targetPercentile);
+          const targetValue = benchmark ? benchmark.percentiles[targetKey] || benchmark.percentiles.p50 : avgSalary;
+          const ratio = targetValue > 0 ? avgSalary / targetValue : 1;
+          bySeniority[senLevel.id] = { rating: getIndexRating(ratio), count: matchingEmps.length };
+        }
+
+        const avgSalary = employees.reduce((s, e) => s + e.baseSalary, 0) / employees.length;
+        const sampleRole = employees[0].role;
+        const sampleLocation = employees[0].location.id;
+        const benchmark = await getBenchmark(sampleRole.id, sampleLocation, "ic3");
+        const targetKey = resolvePercentileKey(targetPercentile);
+        const targetValue = benchmark ? benchmark.percentiles[targetKey] || benchmark.percentiles.p50 : avgSalary;
+        const ratio = targetValue > 0 ? avgSalary / targetValue : 1;
+
+        next.push({
+          family,
+          bySeniority,
+          overall: { rating: getIndexRating(ratio), count: employees.length },
+        });
+      }
+
+      setIndexData(next);
+    };
+    void run();
+  }, [activeEmployees, targetPercentile]);
 
   const RatingBadge = ({ rating, count }: { rating: IndexRating; count: number }) => {
     const colors = INDEX_COLORS[rating];

@@ -1,24 +1,124 @@
 "use client";
 
-import { createContext, useContext, type ReactNode } from "react";
-import { useCompliance, type ComplianceState } from "./use-compliance";
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import type {
+  AuditLogItem,
+  DeadlineItem,
+  DocumentItem,
+  EquityLevel,
+  PolicyItem,
+  RegulatoryUpdate,
+  RiskItem,
+  VisaStat,
+  VisaTimelineItem,
+} from "./data";
 
-const ComplianceContext = createContext<ComplianceState | null>(null);
+type PayEquityKpi = {
+  id: string;
+  label: string;
+  value: string;
+  subtitle: string;
+  delta?: string;
+  deltaDirection?: "up" | "down";
+};
+
+type ComplianceContextState = {
+  loading: boolean;
+  refreshing: boolean;
+  complianceScore: number;
+  riskItems: RiskItem[];
+  payEquityKpis: PayEquityKpi[];
+  equityLevels: EquityLevel[];
+  policyItems: PolicyItem[];
+  regulatoryUpdates: RegulatoryUpdate[];
+  deadlineItems: DeadlineItem[];
+  visaStats: VisaStat[];
+  visaTimeline: VisaTimelineItem[];
+  documentItems: DocumentItem[];
+  auditLogItems: AuditLogItem[];
+  refresh: () => Promise<void>;
+};
+
+const ComplianceContext = createContext<ComplianceContextState | null>(null);
+
+const DEFAULT_STATE: ComplianceContextState = {
+  loading: true,
+  refreshing: false,
+  complianceScore: 0,
+  riskItems: [],
+  payEquityKpis: [],
+  equityLevels: [],
+  policyItems: [],
+  regulatoryUpdates: [],
+  deadlineItems: [],
+  visaStats: [],
+  visaTimeline: [],
+  documentItems: [],
+  auditLogItems: [],
+  refresh: async () => {},
+};
 
 export function ComplianceProvider({ children }: { children: ReactNode }) {
-  const compliance = useCompliance();
-  
-  return (
-    <ComplianceContext.Provider value={compliance}>
-      {children}
-    </ComplianceContext.Provider>
+  const [state, setState] = useState<ComplianceContextState>(DEFAULT_STATE);
+
+  const loadCompliance = async (triggerRefresh: boolean) => {
+    try {
+      if (triggerRefresh) {
+        await fetch("/api/compliance/refresh", { method: "POST" });
+      }
+      const res = await fetch("/api/compliance");
+      if (!res.ok) throw new Error("Failed to load compliance data");
+      const data = await res.json();
+      setState((prev) => ({
+        ...prev,
+        loading: false,
+        refreshing: false,
+        complianceScore: Number(data.compliance_score || 0),
+        riskItems: data.risk_items || [],
+        payEquityKpis: data.pay_equity_kpis || [],
+        equityLevels: data.equity_levels || [],
+        policyItems: data.policy_items || [],
+        regulatoryUpdates: data.regulatory_updates || [],
+        deadlineItems: data.deadline_items || [],
+        visaStats: data.visa_stats || [],
+        visaTimeline: data.visa_timeline || [],
+        documentItems: data.document_items || [],
+        auditLogItems: data.audit_log_items || [],
+      }));
+    } catch {
+      setState((prev) => ({ ...prev, loading: false, refreshing: false }));
+    }
+  };
+
+  useEffect(() => {
+    let isMounted = true;
+    void loadCompliance(false).then(() => {
+      if (!isMounted) return;
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const refresh = async () => {
+    setState((prev) => ({ ...prev, refreshing: true }));
+    await loadCompliance(true);
+  };
+
+  const value = useMemo(
+    () => ({
+      ...state,
+      refresh,
+    }),
+    [state]
   );
+  return <ComplianceContext.Provider value={value}>{children}</ComplianceContext.Provider>;
 }
 
 export function useComplianceContext() {
   const context = useContext(ComplianceContext);
   if (!context) {
-    throw new Error("useComplianceContext must be used within a ComplianceProvider");
+    throw new Error("useComplianceContext must be used within ComplianceProvider");
   }
   return context;
 }

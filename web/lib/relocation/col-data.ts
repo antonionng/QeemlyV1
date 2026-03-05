@@ -189,18 +189,28 @@ export const CITIES: City[] = [
 ];
 
 // Helper functions
+let runtimeCities: City[] | null = null;
+
+export function setRelocationCities(cities: City[]) {
+  runtimeCities = cities;
+}
+
+export function getRelocationCities(): City[] {
+  return runtimeCities && runtimeCities.length > 0 ? runtimeCities : CITIES;
+}
+
 export function getCity(cityId: string): City | undefined {
-  return CITIES.find((c) => c.id === cityId);
+  return getRelocationCities().find((c) => c.id === cityId);
 }
 
 export function getCitiesByRegion(region: Region): City[] {
-  return CITIES.filter((c) => c.region === region);
+  return getRelocationCities().filter((c) => c.region === region);
 }
 
 export function searchCities(query: string): City[] {
   const q = query.toLowerCase().trim();
-  if (!q) return CITIES;
-  return CITIES.filter(
+  if (!q) return getRelocationCities();
+  return getRelocationCities().filter(
     (c) =>
       c.name.toLowerCase().includes(q) ||
       c.country.toLowerCase().includes(q)

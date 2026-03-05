@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -28,6 +29,10 @@ export default function ProfilePage() {
           .select("*")
           .eq("id", user.id)
           .single();
+
+        if (error) {
+          setMessage({ type: "error", text: error.message });
+        }
 
         if (profile) {
           setProfile(profile);
@@ -71,11 +76,13 @@ export default function ProfilePage() {
 
       const file = event.target.files[0];
       const fileExt = file.name.split(".").pop();
-      const filePath = `${user.id}-${Math.random()}.${fileExt}`;
+      const filePath = `${user.id}/${crypto.randomUUID()}.${fileExt}`;
 
       const { error: uploadError } = await supabase.storage
         .from("avatars")
-        .upload(filePath, file);
+        .upload(filePath, file, {
+          upsert: true,
+        });
 
       if (uploadError) {
         throw uploadError;
@@ -117,7 +124,7 @@ export default function ProfilePage() {
   return (
     <div className="max-w-4xl space-y-8">
       <div>
-        <h1 className="text-2xl font-bold text-brand-900">Profile Settings</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-accent-800 sm:text-3xl">Profile Settings</h1>
         <p className="text-brand-600">Manage your personal information and how you appear to your team.</p>
       </div>
 

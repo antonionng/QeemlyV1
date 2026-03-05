@@ -1,14 +1,7 @@
-// Data service layer for employees
-// Provides database-backed data with fallback to mock data
+// Data service layer for employees (database only)
 
 import { createClient } from "@/lib/supabase/client";
-import type { Employee, CompanyMetrics, DepartmentSummary, Department } from "./mock-data";
-import { 
-  MOCK_EMPLOYEES, 
-  getCompanyMetrics as getMockCompanyMetrics,
-  getDepartmentSummaries as getMockDepartmentSummaries,
-  getEmployeesByDepartment as getMockEmployeesByDepartment,
-} from "./mock-data";
+import type { Employee, CompanyMetrics, DepartmentSummary, Department, PerformanceRating } from "./mock-data";
 import { LOCATIONS, LEVELS, ROLES } from "@/lib/dashboard/dummy-data";
 
 // Cache for database employee count check
@@ -88,15 +81,69 @@ export async function fetchDbEmployees(): Promise<Employee[]> {
 
     if (!profile?.workspace_id) return [];
 
-    const { data: dbEmployees } = await supabase
-      .from("employees")
-      .select("*")
-      .eq("workspace_id", profile.workspace_id);
+    const [employeesResult, benchmarksResult] = await Promise.all([
+      supabase
+        .from("employees")
+        .select("*")
+        .eq("workspace_id", profile.workspace_id),
+      supabase
+        .from("salary_benchmarks")
+        .select("role_id, location_id, level_id, p10, p25, p50, p75, p90, valid_from, created_at")
+        .eq("workspace_id", profile.workspace_id)
+        .order("valid_from", { ascending: false })
+        .order("created_at", { ascending: false }),
+    ]);
+
+    const dbEmployees = employeesResult.data;
+    const dbBenchmarks = benchmarksResult.data ?? [];
 
     if (!dbEmployees || dbEmployees.length === 0) return [];
 
+    type BenchmarkRow = {
+      role_id: string;
+      location_id: string;
+      level_id: string;
+      p10: number;
+      p25: number;
+      p50: number;
+      p75: number;
+      p90: number;
+    };
+
+    const exactBenchmarkMap = new Map<string, BenchmarkRow>();
+    const roleLevelFallbackMap = new Map<string, BenchmarkRow>();
+    for (const row of dbBenchmarks) {
+      const exactKey = `${row.role_id}::${row.location_id}::${row.level_id}`;
+      if (!exactBenchmarkMap.has(exactKey)) {
+        exactBenchmarkMap.set(exactKey, row as BenchmarkRow);
+      }
+      const roleLevelKey = `${row.role_id}::${row.level_id}`;
+      if (!roleLevelFallbackMap.has(roleLevelKey)) {
+        roleLevelFallbackMap.set(roleLevelKey, row as BenchmarkRow);
+      }
+    }
+
+    const toAnnual = (value: number): number => {
+      // Benchmarks are typically monthly in this product, while employee compensation is annual.
+      return value < 100_000 ? value * 12 : value;
+    };
+
+    const percentileFromComp = (comp: number, b: BenchmarkRow): number => {
+      const p10 = toAnnual(Number(b.p10) || 0);
+      const p25 = toAnnual(Number(b.p25) || 0);
+      const p50 = toAnnual(Number(b.p50) || 0);
+      const p75 = toAnnual(Number(b.p75) || 0);
+      const p90 = toAnnual(Number(b.p90) || 0);
+      if (comp <= p10) return 10;
+      if (comp >= p90) return 90;
+      if (comp <= p25) return 10 + ((comp - p10) / Math.max(1, p25 - p10)) * 15;
+      if (comp <= p50) return 25 + ((comp - p25) / Math.max(1, p50 - p25)) * 25;
+      if (comp <= p75) return 50 + ((comp - p50) / Math.max(1, p75 - p50)) * 25;
+      return 75 + ((comp - p75) / Math.max(1, p90 - p75)) * 15;
+    };
+
     // Transform database records to Employee type
-    return dbEmployees.map((emp, index) => {
+    return dbEmployees.map((emp) => {
       const location = LOCATIONS.find(l => l.id === emp.location_id) || LOCATIONS[0];
       const level = LEVELS.find(l => l.id === emp.level_id) || LEVELS[2];
       const role = ROLES.find(r => r.id === emp.role_id) || ROLES[0];
@@ -106,10 +153,27 @@ export async function fetchDbEmployees(): Promise<Employee[]> {
       const equity = Number(emp.equity) || 0;
       const totalComp = baseSalary + bonus + equity;
 
-      // Calculate band position (simplified - would need benchmark data for accurate calc)
-      const bandPosition = "in-band" as const;
-      const bandPercentile = 50;
-      const marketComparison = 0;
+      const exactKey = `${emp.role_id}::${emp.location_id}::${emp.level_id}`;
+      const fallbackKey = `${emp.role_id}::${emp.level_id}`;
+      const benchmark = exactBenchmarkMap.get(exactKey) ?? roleLevelFallbackMap.get(fallbackKey);
+
+      let bandPosition: "below" | "in-band" | "above" = "in-band";
+      let bandPercentile = 50;
+      let marketComparison = 0;
+      let hasBenchmark = false;
+      if (benchmark) {
+        const p25Annual = toAnnual(Number(benchmark.p25) || 0);
+        const p50Annual = toAnnual(Number(benchmark.p50) || 0);
+        const p75Annual = toAnnual(Number(benchmark.p75) || 0);
+        if (p50Annual > 0) {
+          hasBenchmark = true;
+          marketComparison = Math.round(((totalComp - p50Annual) / p50Annual) * 100);
+          if (totalComp < p25Annual) bandPosition = "below";
+          else if (totalComp > p75Annual) bandPosition = "above";
+          else bandPosition = "in-band";
+          bandPercentile = Math.round(percentileFromComp(totalComp, benchmark));
+        }
+      }
 
       return {
         id: emp.id,
@@ -129,9 +193,10 @@ export async function fetchDbEmployees(): Promise<Employee[]> {
         bandPosition,
         bandPercentile,
         marketComparison,
+        hasBenchmark,
         hireDate: emp.hire_date ? new Date(emp.hire_date) : new Date(),
         lastReviewDate: emp.last_review_date ? new Date(emp.last_review_date) : undefined,
-        performanceRating: emp.performance_rating as any,
+        performanceRating: (emp.performance_rating as PerformanceRating | null) ?? undefined,
       };
     });
   } catch {
@@ -140,14 +205,10 @@ export async function fetchDbEmployees(): Promise<Employee[]> {
 }
 
 /**
- * Get all employees (database or mock)
+ * Get all employees from database
  */
 export async function getEmployees(): Promise<Employee[]> {
-  const hasDb = await hasDbEmployees();
-  if (hasDb) {
-    return fetchDbEmployees();
-  }
-  return MOCK_EMPLOYEES;
+  return fetchDbEmployees();
 }
 
 // Note: getCompanyMetrics, getDepartmentSummaries, getEmployeesByDepartment
@@ -155,24 +216,48 @@ export async function getEmployees(): Promise<Employee[]> {
 // Use async versions below when database access is needed
 
 // Helper to generate trend data for async metrics
-function generateAsyncTrendData(baseValue: number, volatility: number, trend: number): { month: string; value: number }[] {
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  const currentMonth = new Date().getMonth();
-  
-  const data: { month: string; value: number }[] = [];
-  let value = baseValue * (1 - trend * 0.12);
-  
-  for (let i = 0; i < 12; i++) {
-    const monthIndex = (currentMonth - 11 + i + 12) % 12;
-    const monthVariation = (Math.random() - 0.5) * volatility * baseValue;
-    value = value * (1 + trend / 12) + monthVariation;
-    data.push({
-      month: months[monthIndex],
-      value: Math.round(value),
-    });
+function buildLast12MonthStarts(): Date[] {
+  const now = new Date();
+  const starts: Date[] = [];
+  for (let i = 11; i >= 0; i--) {
+    starts.push(new Date(now.getFullYear(), now.getMonth() - i, 1));
   }
-  
-  return data;
+  return starts;
+}
+
+function formatMonthLabel(date: Date): string {
+  return date.toLocaleString("en-US", { month: "short" });
+}
+
+function calculateHeadcountTrend(activeEmployees: Employee[]): { month: string; value: number }[] {
+  const monthStarts = buildLast12MonthStarts();
+  return monthStarts.map((start) => {
+    const value = activeEmployees.filter((e) => {
+      const hire = new Date(e.hireDate);
+      return hire <= start;
+    }).length;
+    return { month: formatMonthLabel(start), value };
+  });
+}
+
+function calculatePayrollTrend(activeEmployees: Employee[]): { month: string; value: number }[] {
+  const monthStarts = buildLast12MonthStarts();
+  return monthStarts.map((start) => {
+    const value = activeEmployees
+      .filter((e) => {
+        const hire = new Date(e.hireDate);
+        return hire <= start;
+      })
+      .reduce((sum, e) => sum + e.totalComp, 0);
+    return { month: formatMonthLabel(start), value: Math.round(value) };
+  });
+}
+
+function percentChangeFromTrend(trend: { value: number }[]): number {
+  const first = trend[0]?.value ?? 0;
+  const last = trend[trend.length - 1]?.value ?? 0;
+  if (first <= 0) return 0;
+  return Math.round(((last - first) / first) * 1000) / 10;
 }
 
 // Helper to calculate risk breakdown
@@ -211,33 +296,63 @@ function calculateAsyncHealthScore(
 }
 
 /**
+ * Async version of getDepartmentSummaries that uses database when available
+ */
+export async function getDepartmentSummariesAsync(): Promise<DepartmentSummary[]> {
+  const employees = await getEmployees();
+
+  const activeEmployees = employees.filter(e => e.status === "active");
+  const departments = [...new Set(activeEmployees.map(e => e.department))] as Department[];
+  
+  return departments.map(dept => {
+    const deptEmployees = activeEmployees.filter(e => e.department === dept);
+    const benchmarkedDeptEmployees = deptEmployees.filter((e) => e.hasBenchmark);
+    const avgVsMarket = benchmarkedDeptEmployees.length > 0
+      ? benchmarkedDeptEmployees.reduce((sum, e) => sum + e.marketComparison, 0) / benchmarkedDeptEmployees.length
+      : 0;
+    const inBandCount = benchmarkedDeptEmployees.filter(e => e.bandPosition === "in-band").length;
+    const belowBandCount = benchmarkedDeptEmployees.filter(e => e.bandPosition === "below").length;
+    const aboveBandCount = benchmarkedDeptEmployees.filter(e => e.bandPosition === "above").length;
+    const totalPayroll = deptEmployees.reduce((sum, e) => sum + e.totalComp, 0);
+    
+    return {
+      department: dept,
+      headcount: deptEmployees.length,
+      activeCount: deptEmployees.length,
+      inBandCount,
+      belowBandCount,
+      aboveBandCount,
+      totalPayroll,
+      avgVsMarket: Math.round(avgVsMarket * 10) / 10,
+    };
+  });
+}
+
+/**
  * Async version of getCompanyMetrics that uses database when available
  */
 export async function getCompanyMetricsAsync(): Promise<CompanyMetrics> {
   const employees = await getEmployees();
-  
-  if (employees === MOCK_EMPLOYEES) {
-    return getMockCompanyMetrics();
-  }
 
   const activeEmployees = employees.filter(e => e.status === "active");
+  const benchmarkedEmployees = activeEmployees.filter((e) => e.hasBenchmark);
   const totalPayroll = activeEmployees.reduce((sum, e) => sum + e.totalComp, 0);
   
-  const inBandCount = activeEmployees.filter(e => e.bandPosition === "in-band").length;
-  const belowBandCount = activeEmployees.filter(e => e.bandPosition === "below").length;
-  const aboveBandCount = activeEmployees.filter(e => e.bandPosition === "above").length;
-  const outOfBandCount = activeEmployees.length - inBandCount;
+  const inBandCount = benchmarkedEmployees.filter(e => e.bandPosition === "in-band").length;
+  const belowBandCount = benchmarkedEmployees.filter(e => e.bandPosition === "below").length;
+  const aboveBandCount = benchmarkedEmployees.filter(e => e.bandPosition === "above").length;
+  const outOfBandCount = benchmarkedEmployees.length - inBandCount;
   
-  const avgMarketPosition = activeEmployees.length > 0
-    ? activeEmployees.reduce((sum, e) => sum + e.marketComparison, 0) / activeEmployees.length
+  const avgMarketPosition = benchmarkedEmployees.length > 0
+    ? benchmarkedEmployees.reduce((sum, e) => sum + e.marketComparison, 0) / benchmarkedEmployees.length
     : 0;
   
   const rolesOutsideBand = outOfBandCount;
   
   // Calculate department metrics
-  const departments = [...new Set(activeEmployees.map(e => e.department))];
+  const departments = [...new Set(benchmarkedEmployees.map(e => e.department))];
   const deptMetrics = departments.map(dept => {
-    const deptEmployees = activeEmployees.filter(e => e.department === dept);
+    const deptEmployees = benchmarkedEmployees.filter(e => e.department === dept);
     const avgVsMarket = deptEmployees.length > 0
       ? deptEmployees.reduce((sum, e) => sum + e.marketComparison, 0) / deptEmployees.length
       : 0;
@@ -245,27 +360,27 @@ export async function getCompanyMetricsAsync(): Promise<CompanyMetrics> {
   });
   
   const departmentsOverBenchmark = deptMetrics.filter(d => d.avgVsMarket > 5).length;
-  const payrollRiskFlags = activeEmployees.filter(e => e.marketComparison > 15).length;
+  const payrollRiskFlags = benchmarkedEmployees.filter(e => e.marketComparison > 15).length;
   
-  const inBandPercentage = activeEmployees.length > 0 
-    ? Math.round((inBandCount / activeEmployees.length) * 100)
+  const inBandPercentage = benchmarkedEmployees.length > 0 
+    ? Math.round((inBandCount / benchmarkedEmployees.length) * 100)
     : 0;
   
-  // Generate extended metrics
-  const headcountTrend = generateAsyncTrendData(activeEmployees.length, 0.03, 0.08);
-  const payrollTrend = generateAsyncTrendData(totalPayroll, 0.02, 0.12);
-  const riskBreakdown = calculateAsyncRiskBreakdown(activeEmployees);
+  // Real-data-only trends derived from employee records.
+  const headcountTrend = calculateHeadcountTrend(activeEmployees);
+  const payrollTrend = calculatePayrollTrend(activeEmployees);
+  const riskBreakdown = calculateAsyncRiskBreakdown(benchmarkedEmployees);
   const healthScore = calculateAsyncHealthScore(
     inBandPercentage,
     avgMarketPosition,
     payrollRiskFlags,
-    activeEmployees.length
+    Math.max(1, benchmarkedEmployees.length)
   );
   
   const bandDistribution = {
-    below: activeEmployees.length > 0 ? Math.round((belowBandCount / activeEmployees.length) * 100) : 0,
+    below: benchmarkedEmployees.length > 0 ? Math.round((belowBandCount / benchmarkedEmployees.length) * 100) : 0,
     inBand: inBandPercentage,
-    above: activeEmployees.length > 0 ? Math.round((aboveBandCount / activeEmployees.length) * 100) : 0,
+    above: benchmarkedEmployees.length > 0 ? Math.round((aboveBandCount / benchmarkedEmployees.length) * 100) : 0,
   };
   
   return {
@@ -273,8 +388,8 @@ export async function getCompanyMetricsAsync(): Promise<CompanyMetrics> {
     activeEmployees: activeEmployees.length,
     totalPayroll,
     inBandPercentage,
-    outOfBandPercentage: activeEmployees.length > 0
-      ? Math.round((outOfBandCount / activeEmployees.length) * 100)
+    outOfBandPercentage: benchmarkedEmployees.length > 0
+      ? Math.round((outOfBandCount / benchmarkedEmployees.length) * 100)
       : 0,
     avgMarketPosition: Math.round(avgMarketPosition * 10) / 10,
     rolesOutsideBand,
@@ -286,8 +401,8 @@ export async function getCompanyMetricsAsync(): Promise<CompanyMetrics> {
     payrollTrend,
     riskBreakdown,
     bandDistribution,
-    headcountChange: 8.2,
-    payrollChange: 12.4,
-    inBandChange: 3.5,
+    headcountChange: percentChangeFromTrend(headcountTrend),
+    payrollChange: percentChangeFromTrend(payrollTrend),
+    inBandChange: 0,
   };
 }

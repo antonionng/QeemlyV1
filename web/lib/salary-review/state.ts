@@ -4,12 +4,12 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { 
   type Employee, 
-  MOCK_EMPLOYEES, 
-  getCompanyMetrics,
-  type PerformanceRating,
+  getCompanyMetricsAsync,
+  getEmployees,
   computeTenure,
 } from "../employees";
 import { type ReviewCycle } from "../company";
+import { type SalaryReviewAiPlanResponse } from "./ai-plan";
 
 // Types
 export type BudgetType = "percentage" | "absolute";
@@ -34,12 +34,75 @@ export interface ReviewEmployee extends Employee {
   };
 }
 
+export interface EmployeeWorkflowState {
+  managerFollowUpDone: boolean;
+  calibrationNeeded: boolean;
+  recommendationReady: boolean;
+  updatedAt: string;
+}
+
+export type ColumnKey =
+  | "name"
+  | "role"
+  | "department"
+  | "location"
+  | "current"
+  | "basic"
+  | "housing"
+  | "transport"
+  | "other"
+  | "proposed"
+  | "increase"
+  | "band"
+  | "performance"
+  | "guidance";
+
+export const ALL_COLUMNS: { key: ColumnKey; label: string }[] = [
+  { key: "name", label: "Name" },
+  { key: "role", label: "Role" },
+  { key: "department", label: "Department" },
+  { key: "location", label: "Location" },
+  { key: "current", label: "Current Salary" },
+  { key: "basic", label: "Basic" },
+  { key: "housing", label: "Housing" },
+  { key: "transport", label: "Transport" },
+  { key: "other", label: "Other Allowances" },
+  { key: "proposed", label: "Proposed" },
+  { key: "increase", label: "Increase %" },
+  { key: "band", label: "Band Position" },
+  { key: "performance", label: "Performance" },
+  { key: "guidance", label: "Guidance" },
+];
+
+export const DEFAULT_VISIBLE_COLUMNS: ColumnKey[] = [
+  "name",
+  "role",
+  "department",
+  "location",
+  "current",
+  "basic",
+  "housing",
+  "transport",
+  "other",
+  "proposed",
+  "increase",
+  "band",
+  "performance",
+  "guidance",
+];
+
 export interface SalaryReviewState {
   // Settings
   settings: ReviewSettings;
   
+  // Column visibility
+  visibleColumns: ColumnKey[];
+  
   // Employees
   employees: ReviewEmployee[];
+  workflowByEmployee: Record<string, EmployeeWorkflowState>;
+  isLoading: boolean;
+  isUsingMockData: boolean;
   
   // Computed
   totalCurrentPayroll: number;
@@ -52,10 +115,19 @@ export interface SalaryReviewState {
   updateSettings: (settings: Partial<ReviewSettings>) => void;
   updateEmployeeIncrease: (employeeId: string, increase: number) => void;
   toggleEmployeeSelection: (employeeId: string) => void;
+  toggleColumnVisibility: (column: ColumnKey) => void;
+  resetColumns: () => void;
   selectAll: () => void;
   deselectAll: () => void;
   applyDefaultIncreases: () => void;
   resetReview: () => void;
+  loadEmployeesFromDb: () => Promise<void>;
+  updateEmployeeWorkflow: (
+    employeeId: string,
+    updates: Partial<Omit<EmployeeWorkflowState, "updatedAt">>
+  ) => void;
+  applySuggestedIncrease: (employeeId: string) => void;
+  applyAiProposal: (plan: SalaryReviewAiPlanResponse, selectedEmployeeIds?: string[]) => void;
 }
 
 // Generate guidance for an employee, factoring in performance + tenure
@@ -129,18 +201,40 @@ function generateGuidance(employee: Employee): ReviewEmployee["guidance"] {
   return undefined;
 }
 
-// Initialize employees with review data
-function initializeEmployees(): ReviewEmployee[] {
-  const activeEmployees = MOCK_EMPLOYEES.filter(e => e.status === "active");
-  
-  return activeEmployees.map(employee => ({
-    ...employee,
-    proposedIncrease: 0,
-    proposedPercentage: 0,
-    newSalary: employee.baseSalary,
-    isSelected: true,
-    guidance: generateGuidance(employee),
-  }));
+function defaultWorkflowState(employee: Employee): EmployeeWorkflowState {
+  const guidance = generateGuidance(employee);
+  return {
+    managerFollowUpDone: false,
+    calibrationNeeded: guidance?.type === "flag" || guidance?.type === "retention-risk",
+    recommendationReady: false,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function buildWorkflowMap(employees: Employee[]): Record<string, EmployeeWorkflowState> {
+  return Object.fromEntries(
+    employees.map((employee) => [employee.id, defaultWorkflowState(employee)])
+  );
+}
+
+function computeSuggestedIncrease(employee: Employee): number {
+  const tenure = computeTenure(employee.hireDate);
+  let suggestedPct = 3;
+
+  if (employee.bandPosition === "below") suggestedPct += 2;
+  if (employee.bandPosition === "in-band") suggestedPct += 1;
+  if (employee.bandPosition === "above") suggestedPct -= 1;
+
+  if (employee.performanceRating === "exceptional") suggestedPct += 3;
+  else if (employee.performanceRating === "exceeds") suggestedPct += 2;
+  else if (employee.performanceRating === "low") suggestedPct -= 2;
+
+  if (tenure.totalMonths >= 36) suggestedPct += 1;
+  if (tenure.totalMonths < 12) suggestedPct -= 1;
+
+  const clampedPct = Math.max(0, Math.min(15, suggestedPct));
+  const rawIncrease = (employee.baseSalary * clampedPct) / 100;
+  return Math.round(rawIncrease / 100) * 100;
 }
 
 const DEFAULT_SETTINGS: ReviewSettings = {
@@ -152,31 +246,93 @@ const DEFAULT_SETTINGS: ReviewSettings = {
   includeBonus: false,
 };
 
+// Transform employees into review employees
+function transformToReviewEmployees(employees: Employee[]): ReviewEmployee[] {
+  const activeEmployees = employees.filter(e => e.status === "active");
+  return activeEmployees.map(employee => ({
+    ...employee,
+    proposedIncrease: 0,
+    proposedPercentage: 0,
+    newSalary: employee.baseSalary,
+    isSelected: true,
+    guidance: generateGuidance(employee),
+  }));
+}
+
 export const useSalaryReview = create<SalaryReviewState>()(
   persist(
     (set, get) => {
-      const initialEmployees = initializeEmployees();
-      const metrics = getCompanyMetrics();
-      const totalCurrentPayroll = metrics.totalPayroll;
+      const initialEmployees: ReviewEmployee[] = [];
+      const initialWorkflowByEmployee = buildWorkflowMap(initialEmployees);
+      const totalCurrentPayroll = 0;
       
       return {
         settings: DEFAULT_SETTINGS,
+        visibleColumns: DEFAULT_VISIBLE_COLUMNS,
         employees: initialEmployees,
+        workflowByEmployee: initialWorkflowByEmployee,
+        isLoading: false,
+        isUsingMockData: false,
         totalCurrentPayroll,
         totalProposedPayroll: totalCurrentPayroll,
         totalIncrease: 0,
         budgetUsed: 0,
         budgetRemaining: totalCurrentPayroll * (DEFAULT_SETTINGS.budgetPercentage / 100),
         
+        toggleColumnVisibility: (column) => set((state) => {
+          const isVisible = state.visibleColumns.includes(column);
+          if (column === "name") return state;
+          return {
+            visibleColumns: isVisible
+              ? state.visibleColumns.filter((c) => c !== column)
+              : [...state.visibleColumns, column],
+          };
+        }),
+
+        resetColumns: () => set({ visibleColumns: DEFAULT_VISIBLE_COLUMNS }),
+
         updateSettings: (newSettings) => set((state) => {
+          const oldCycle = state.settings.cycle;
           const updatedSettings = { ...state.settings, ...newSettings };
           const budget = updatedSettings.budgetType === "percentage"
             ? state.totalCurrentPayroll * (updatedSettings.budgetPercentage / 100)
             : updatedSettings.budgetAbsolute;
-          
+
+          let employees = state.employees;
+          let totalIncrease = state.totalIncrease;
+
+          if (newSettings.cycle && newSettings.cycle !== oldCycle) {
+            const isToMonthly = newSettings.cycle === 'monthly' && oldCycle !== 'monthly';
+            const isFromMonthly = oldCycle === 'monthly' && newSettings.cycle !== 'monthly';
+
+            if (isToMonthly || isFromMonthly) {
+              const factor = isToMonthly ? 1 / 12 : 12;
+              employees = state.employees.map(emp => {
+                const proposedIncrease = Math.round(emp.proposedIncrease * factor);
+                const newSalary = Math.round(emp.baseSalary * factor) + proposedIncrease;
+                const proposedPercentage = emp.baseSalary > 0
+                  ? (proposedIncrease / Math.round(emp.baseSalary * factor)) * 100
+                  : 0;
+                return {
+                  ...emp,
+                  proposedIncrease,
+                  proposedPercentage,
+                  newSalary,
+                };
+              });
+              totalIncrease = employees
+                .filter(e => e.isSelected)
+                .reduce((sum, e) => sum + e.proposedIncrease, 0);
+            }
+          }
+
           return {
             settings: updatedSettings,
-            budgetRemaining: budget - state.totalIncrease,
+            employees,
+            totalIncrease,
+            totalProposedPayroll: state.totalCurrentPayroll + totalIncrease,
+            budgetUsed: totalIncrease,
+            budgetRemaining: budget - totalIncrease,
           };
         }),
         
@@ -282,9 +438,143 @@ export const useSalaryReview = create<SalaryReviewState>()(
         
         resetReview: () => set({
           settings: DEFAULT_SETTINGS,
-          employees: initializeEmployees(),
+          employees: initialEmployees,
+          workflowByEmployee: initialWorkflowByEmployee,
           totalIncrease: 0,
           budgetUsed: 0,
+        }),
+        
+        loadEmployeesFromDb: async () => {
+          set({ isLoading: true });
+          try {
+            const [employees, metrics] = await Promise.all([
+              getEmployees(),
+              getCompanyMetricsAsync(),
+            ]);
+            
+            const reviewEmployees = transformToReviewEmployees(employees);
+            const previousWorkflow = get().workflowByEmployee;
+            const workflowByEmployee = Object.fromEntries(
+              reviewEmployees.map((employee) => [
+                employee.id,
+                previousWorkflow[employee.id] ?? defaultWorkflowState(employee),
+              ])
+            );
+            const totalCurrentPayroll = metrics.totalPayroll;
+            const budget = get().settings.budgetType === "percentage"
+              ? totalCurrentPayroll * (get().settings.budgetPercentage / 100)
+              : get().settings.budgetAbsolute;
+            
+            set({
+              employees: reviewEmployees,
+              workflowByEmployee,
+              isUsingMockData: false,
+              totalCurrentPayroll,
+              totalProposedPayroll: totalCurrentPayroll,
+              totalIncrease: 0,
+              budgetUsed: 0,
+              budgetRemaining: budget,
+              isLoading: false,
+            });
+          } catch (error) {
+            console.error("Failed to load employees:", error);
+            set({ isLoading: false });
+          }
+        },
+
+        updateEmployeeWorkflow: (employeeId, updates) => set((state) => {
+          const existing = state.workflowByEmployee[employeeId];
+          const employee = state.employees.find((emp) => emp.id === employeeId);
+          if (!employee && !existing) return state;
+
+          const baseState = existing ?? defaultWorkflowState(employee!);
+
+          return {
+            workflowByEmployee: {
+              ...state.workflowByEmployee,
+              [employeeId]: {
+                ...baseState,
+                ...updates,
+                updatedAt: new Date().toISOString(),
+              },
+            },
+          };
+        }),
+
+        applySuggestedIncrease: (employeeId) => set((state) => {
+          const employees = state.employees.map((employee) => {
+            if (employee.id !== employeeId) return employee;
+            const proposedIncrease = computeSuggestedIncrease(employee);
+            const proposedPercentage = employee.baseSalary > 0
+              ? (proposedIncrease / employee.baseSalary) * 100
+              : 0;
+            return {
+              ...employee,
+              proposedIncrease,
+              proposedPercentage,
+              newSalary: employee.baseSalary + proposedIncrease,
+            };
+          });
+
+          const totalIncrease = employees
+            .filter(e => e.isSelected)
+            .reduce((sum, e) => sum + e.proposedIncrease, 0);
+
+          const budget = state.settings.budgetType === "percentage"
+            ? state.totalCurrentPayroll * (state.settings.budgetPercentage / 100)
+            : state.settings.budgetAbsolute;
+
+          return {
+            employees,
+            totalIncrease,
+            totalProposedPayroll: state.totalCurrentPayroll + totalIncrease,
+            budgetUsed: totalIncrease,
+            budgetRemaining: budget - totalIncrease,
+          };
+        }),
+
+        applyAiProposal: (plan, selectedEmployeeIds) => set((state) => {
+          const selectedSet =
+            selectedEmployeeIds && selectedEmployeeIds.length > 0
+              ? new Set(selectedEmployeeIds)
+              : null;
+          const proposalMap = new Map(
+            plan.items.map((item) => [item.employeeId, Math.max(0, item.proposedIncrease)])
+          );
+
+          const employees = state.employees.map((employee) => {
+            const hasProposal = proposalMap.has(employee.id);
+            if (!hasProposal) return employee;
+            if (selectedSet && !selectedSet.has(employee.id)) return employee;
+
+            const proposedIncrease = proposalMap.get(employee.id) ?? 0;
+            const proposedPercentage =
+              employee.baseSalary > 0 ? (proposedIncrease / employee.baseSalary) * 100 : 0;
+
+            return {
+              ...employee,
+              proposedIncrease,
+              proposedPercentage,
+              newSalary: employee.baseSalary + proposedIncrease,
+            };
+          });
+
+          const totalIncrease = employees
+            .filter((employee) => employee.isSelected)
+            .reduce((sum, employee) => sum + employee.proposedIncrease, 0);
+
+          const budget =
+            state.settings.budgetType === "percentage"
+              ? state.totalCurrentPayroll * (state.settings.budgetPercentage / 100)
+              : state.settings.budgetAbsolute;
+
+          return {
+            employees,
+            totalIncrease,
+            totalProposedPayroll: state.totalCurrentPayroll + totalIncrease,
+            budgetUsed: totalIncrease,
+            budgetRemaining: budget - totalIncrease,
+          };
         }),
       };
     },
@@ -292,6 +582,8 @@ export const useSalaryReview = create<SalaryReviewState>()(
       name: "qeemly:salary-review",
       partialize: (state) => ({
         settings: state.settings,
+        visibleColumns: state.visibleColumns,
+        workflowByEmployee: state.workflowByEmployee,
       }),
     }
   )

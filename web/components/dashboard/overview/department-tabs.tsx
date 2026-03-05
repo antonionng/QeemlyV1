@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { Users, Target, TrendingUp, TrendingDown, ArrowRight } from "lucide-react";
-import { BarList, DonutChart } from "@tremor/react";
 import { Card } from "@/components/ui/card";
 import Link from "next/link";
 import clsx from "clsx";
@@ -21,75 +20,21 @@ type ViewMode = "overview" | "payroll" | "band";
 
 export function DepartmentTabs({ summaries }: DepartmentTabsProps) {
   const { salaryView } = useSalaryView();
-  const [selectedDept, setSelectedDept] = useState<Department | null>(null);
+  const [selectedDept, setSelectedDept] = useState<Department | null>(summaries[0]?.department ?? null);
   const [viewMode, setViewMode] = useState<ViewMode>("overview");
   
   const selectedSummary = selectedDept ? summaries.find(s => s.department === selectedDept) : null;
-  
-  // Prepare data for bar list visualization
-  const headcountData = summaries.map(s => ({
-    name: s.department,
-    value: s.activeCount,
-    icon: () => (
-      <div className={clsx(
-        "w-2 h-2 rounded-full mr-2",
-        s.avgVsMarket > 5 ? "bg-rose-400" : s.avgVsMarket < -5 ? "bg-amber-400" : "bg-emerald-400"
-      )} />
-    ),
-  }));
-
-  const payrollData = summaries.map(s => ({
-    name: s.department,
-    value: s.totalPayroll,
-    icon: () => (
-      <div className={clsx(
-        "w-2 h-2 rounded-full mr-2",
-        s.avgVsMarket > 5 ? "bg-rose-400" : s.avgVsMarket < -5 ? "bg-amber-400" : "bg-emerald-400"
-      )} />
-    ),
-  }));
-
-  const bandHealthData = summaries.map(s => ({
-    name: s.department,
-    value: Math.round((s.inBandCount / s.activeCount) * 100),
-    icon: () => {
-      const inBandPct = Math.round((s.inBandCount / s.activeCount) * 100);
-      return (
-        <div className={clsx(
-          "w-2 h-2 rounded-full mr-2",
-          inBandPct >= 70 ? "bg-emerald-400" : inBandPct >= 50 ? "bg-amber-400" : "bg-rose-400"
-        )} />
-      );
-    },
-  }));
-
-  // Get current view data
-  const getCurrentData = () => {
-    switch (viewMode) {
-      case "payroll": return payrollData;
-      case "band": return bandHealthData;
-      default: return headcountData;
-    }
-  };
-
-  const getValueFormatter = () => {
-    switch (viewMode) {
-      case "payroll": return (v: number) => formatAEDCompact(applyViewMode(v, salaryView));
-      case "band": return (v: number) => `${v}%`;
-      default: return (v: number) => v.toString();
-    }
-  };
 
   return (
-    <Card className="p-5">
-      <div className="flex items-start justify-between mb-4">
+    <Card className="dash-card p-6 lg:p-7">
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h3 className="text-sm font-semibold text-brand-900">Department Breakdown</h3>
-          <p className="text-xs text-brand-500 mt-0.5">Click a department for details</p>
+          <h3 className="text-base font-semibold text-accent-900">Department Breakdown</h3>
+          <p className="mt-1 text-xs text-accent-500">Click a department for details</p>
         </div>
         
         {/* View mode selector */}
-        <div className="flex gap-1 rounded-lg bg-brand-100/50 p-1">
+        <div className="flex w-full flex-wrap gap-1 rounded-xl bg-accent-100 p-1 sm:w-auto sm:flex-nowrap">
           {([
             { id: "overview", label: "Headcount" },
             { id: "payroll", label: "Payroll" },
@@ -100,10 +45,10 @@ export function DepartmentTabs({ summaries }: DepartmentTabsProps) {
               type="button"
               onClick={() => setViewMode(mode.id)}
               className={clsx(
-                "rounded-md px-3 py-1 text-xs font-semibold transition-colors",
+                "rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors",
                 viewMode === mode.id
-                  ? "bg-white text-brand-900 shadow-sm"
-                  : "text-brand-600 hover:text-brand-800"
+                  ? "bg-white text-accent-900 shadow-sm"
+                  : "text-accent-500 hover:text-accent-700"
               )}
             >
               {mode.label}
@@ -113,7 +58,7 @@ export function DepartmentTabs({ summaries }: DepartmentTabsProps) {
       </div>
 
       {/* Department pills for quick selection */}
-      <div className="flex flex-wrap gap-2 mb-5 pb-4 border-b border-border">
+      <div className="mb-6 flex flex-wrap gap-2 rounded-xl bg-surface-2 p-3">
         {summaries.map((summary) => {
           const inBandPct = Math.round((summary.inBandCount / summary.activeCount) * 100);
           return (
@@ -125,8 +70,8 @@ export function DepartmentTabs({ summaries }: DepartmentTabsProps) {
               className={clsx(
                 "px-3 py-1.5 rounded-full text-sm font-medium transition-all",
                 selectedDept === summary.department
-                  ? "bg-brand-500 text-white ring-2 ring-brand-500 ring-offset-2"
-                  : "bg-brand-50 text-brand-700 hover:bg-brand-100"
+                  ? "bg-accent-800 text-white ring-2 ring-accent-800 ring-offset-2"
+                  : "bg-accent-100 text-accent-700 hover:bg-accent-200"
               )}
             >
               <span className="flex items-center gap-2">
@@ -142,46 +87,77 @@ export function DepartmentTabs({ summaries }: DepartmentTabsProps) {
         })}
       </div>
 
-      {/* Bar chart visualization */}
-      {!selectedDept && (
-        <div className="space-y-4">
-          <BarList
-            data={getCurrentData()}
-            valueFormatter={getValueFormatter()}
-            color="violet"
-            showAnimation={true}
-            onValueChange={(item) => setSelectedDept(item.name as Department)}
-            className="cursor-pointer"
-          />
-          
-          {/* Legend */}
-          <div className="flex items-center gap-4 pt-3 border-t border-border text-xs">
-            <div className="flex items-center gap-1.5">
-              <div className="w-2 h-2 rounded-full bg-emerald-400" />
-              <span className="text-brand-600">On target</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-2 h-2 rounded-full bg-amber-400" />
-              <span className="text-brand-600">Below market</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-2 h-2 rounded-full bg-rose-400" />
-              <span className="text-brand-600">Above market</span>
-            </div>
+      {/* Department list visualization */}
+      <div className="space-y-5">
+        <div className="grid gap-2.5 xl:grid-cols-2">
+          {summaries.map((summary) => {
+            const inBandPct = Math.round((summary.inBandCount / summary.activeCount) * 100);
+            const statusColor =
+              inBandPct >= 70 ? "bg-emerald-500" : inBandPct >= 50 ? "bg-amber-400" : "bg-rose-400";
+            const value =
+              viewMode === "payroll"
+                ? formatAEDCompact(applyViewMode(summary.totalPayroll, salaryView))
+                : viewMode === "band"
+                  ? `${inBandPct}%`
+                  : `${summary.activeCount}`;
+            const label =
+              viewMode === "payroll"
+                ? "payroll"
+                : viewMode === "band"
+                  ? "in band"
+                  : "headcount";
+            return (
+              <button
+                key={summary.department}
+                type="button"
+                onClick={() => setSelectedDept(summary.department)}
+                className={clsx(
+                  "flex w-full items-center justify-between rounded-xl px-4 py-3 text-left transition-colors",
+                  selectedDept === summary.department
+                    ? "bg-brand-50 ring-1 ring-brand-200"
+                    : "bg-surface-3 hover:bg-accent-100",
+                )}
+              >
+                <span className="flex items-center gap-2">
+                  <span className={clsx("h-2 w-2 rounded-full", statusColor)} />
+                  <span className="text-sm font-medium text-text-primary">{summary.department}</span>
+                  <span className="text-xs text-text-tertiary">({summary.activeCount})</span>
+                </span>
+                <span className="shrink-0 text-xs font-semibold text-text-secondary">
+                  {value} <span className="text-text-tertiary">{label}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        
+        {/* Legend */}
+        <div className="flex flex-wrap items-center gap-4 border-t border-border pt-4 text-xs">
+          <div className="flex items-center gap-1.5">
+            <div className="h-2 w-2 rounded-full bg-emerald-400" />
+            <span className="text-accent-500">On target</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="h-2 w-2 rounded-full bg-amber-400" />
+            <span className="text-accent-500">Below market</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="h-2 w-2 rounded-full bg-rose-400" />
+            <span className="text-accent-500">Above market</span>
           </div>
         </div>
-      )}
+      </div>
 
       {/* Selected department detail view */}
       {selectedSummary && (
-        <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
+        <div className="mt-6 space-y-4 border-t border-border pt-5 animate-in fade-in slide-in-from-top-2 duration-200">
           {/* Stats row */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-brand-50">
-              <Users className="h-4 w-4 text-brand-600" />
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-accent-50">
+              <Users className="h-4 w-4 text-accent-600" />
               <div>
-                <div className="text-lg font-bold text-brand-900">{selectedSummary.activeCount}</div>
-                <div className="text-xs text-brand-600">Headcount</div>
+                <div className="text-lg font-bold text-accent-900">{selectedSummary.activeCount}</div>
+                <div className="text-xs text-accent-500">Headcount</div>
               </div>
             </div>
             
@@ -218,43 +194,51 @@ export function DepartmentTabs({ summaries }: DepartmentTabsProps) {
             </div>
           </div>
 
-          {/* Payroll and Donut chart row */}
+          {/* Payroll + band split row */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Payroll */}
-            <div className="flex items-center justify-between p-4 rounded-xl bg-muted">
-              <span className="text-sm font-medium text-brand-700">Department Payroll</span>
-              <span className="text-lg font-bold text-brand-900">
+            <div className="flex items-center justify-between p-4 rounded-xl bg-accent-50">
+              <span className="text-sm font-medium text-accent-700">Department Payroll</span>
+              <span className="text-lg font-bold text-accent-900">
                 {formatAEDCompact(applyViewMode(selectedSummary.totalPayroll, salaryView))}
               </span>
             </div>
 
-            {/* Band distribution donut */}
-            <div className="flex items-center gap-4 p-4 rounded-xl bg-muted">
-              <DonutChart
-                data={[
-                  { name: "In Band", value: selectedSummary.inBandCount },
-                  { name: "Below", value: selectedSummary.belowBandCount },
-                  { name: "Above", value: selectedSummary.aboveBandCount },
-                ]}
-                category="value"
-                index="name"
-                colors={["emerald", "amber", "rose"]}
-                className="h-16 w-16"
-                showLabel={false}
-                showAnimation={true}
-              />
+            {/* Band distribution ring */}
+            <div className="flex items-center gap-4 rounded-xl bg-accent-50 p-4">
+              <div className="relative h-16 w-16 shrink-0">
+                <div
+                  className="h-full w-full rounded-full"
+                  style={{
+                    background: `conic-gradient(var(--success) 0deg ${(
+                      (selectedSummary.inBandCount / selectedSummary.activeCount) * 360
+                    ).toFixed(2)}deg, var(--warning) ${(
+                      (selectedSummary.inBandCount / selectedSummary.activeCount) * 360
+                    ).toFixed(2)}deg ${(
+                      ((selectedSummary.inBandCount + selectedSummary.belowBandCount) /
+                        selectedSummary.activeCount) *
+                      360
+                    ).toFixed(2)}deg, #fb7185 ${(
+                      ((selectedSummary.inBandCount + selectedSummary.belowBandCount) /
+                        selectedSummary.activeCount) *
+                      360
+                    ).toFixed(2)}deg 360deg)`,
+                  }}
+                />
+                <div className="pointer-events-none absolute inset-2 rounded-full bg-white" />
+              </div>
               <div className="flex flex-col gap-1 text-xs">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                  <span className="text-brand-600">In Band: {Math.round((selectedSummary.inBandCount / selectedSummary.activeCount) * 100)}%</span>
+                  <span className="text-accent-600">In Band: {Math.round((selectedSummary.inBandCount / selectedSummary.activeCount) * 100)}%</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-amber-500" />
-                  <span className="text-brand-600">Below: {Math.round((selectedSummary.belowBandCount / selectedSummary.activeCount) * 100)}%</span>
+                  <span className="text-accent-600">Below: {Math.round((selectedSummary.belowBandCount / selectedSummary.activeCount) * 100)}%</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-rose-500" />
-                  <span className="text-brand-600">Above: {Math.round((selectedSummary.aboveBandCount / selectedSummary.activeCount) * 100)}%</span>
+                  <span className="text-accent-600">Above: {Math.round((selectedSummary.aboveBandCount / selectedSummary.activeCount) * 100)}%</span>
                 </div>
               </div>
             </div>
@@ -263,12 +247,12 @@ export function DepartmentTabs({ summaries }: DepartmentTabsProps) {
           {/* Action link */}
           <Link 
             href={`/dashboard/salary-review?department=${selectedSummary.department}`}
-            className="flex items-center justify-between p-3 rounded-xl bg-brand-50 hover:bg-brand-100 transition-colors group"
+            className="flex items-center justify-center gap-2 p-3 rounded-xl bg-brand-500 hover:bg-brand-600 transition-colors group text-white"
           >
-            <span className="text-sm font-medium text-brand-700">
+            <span className="text-sm font-medium">
               View {selectedSummary.department} employees
             </span>
-            <ArrowRight className="h-4 w-4 text-brand-500 group-hover:translate-x-1 transition-transform" />
+            <ArrowRight className="h-4 w-4 group-hover:translate-x-1 transition-transform" />
           </Link>
         </div>
       )}

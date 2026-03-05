@@ -8,25 +8,25 @@ import {
   formatPercentage,
   GEO_COMPARISON,
   ROLES,
-  generateBenchmark,
-  LOCATIONS,
 } from "@/lib/dashboard/dummy-data";
 
 export function GeoComparisonWidget() {
   const [selectedRole, setSelectedRole] = useState(ROLES[0].id);
 
-  // Generate comparison data for selected role
-  const comparisonData = LOCATIONS.map(loc => {
-    const benchmark = generateBenchmark(selectedRole, loc.id, "ic3");
-    return {
-      location: loc,
-      medianSalary: benchmark.percentiles.p50,
-      yoyChange: benchmark.yoyChange,
-      sampleSize: benchmark.sampleSize,
-      confidence: benchmark.confidence,
-      currency: benchmark.currency,
-    };
-  }).sort((a, b) => b.medianSalary - a.medianSalary);
+  const comparisonData = GEO_COMPARISON.map((d) => ({
+    ...d,
+    currency: d.location.currency,
+  })).sort((a, b) => b.medianSalary - a.medianSalary);
+
+  if (comparisonData.length === 0) {
+    return (
+      <div className="rounded-2xl border border-dashed border-border bg-surface-1 p-6 text-center">
+        <p className="text-sm text-text-secondary">
+          No geographic comparison data available yet. Run ingestion to populate market comparisons.
+        </p>
+      </div>
+    );
+  }
 
   const chartData = comparisonData.map(d => ({
     city: d.location.city,

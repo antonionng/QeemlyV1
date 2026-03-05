@@ -10,7 +10,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>(
     <input
       ref={ref}
       className={clsx(
-        "h-12 rounded-full border border-border bg-white px-4 text-sm text-foreground placeholder:text-brand-500 focus:border-brand-300 focus:outline-none",
+        "h-12 rounded-[var(--radius-field)] border border-border bg-surface-1 px-4 text-sm text-text-primary placeholder:text-text-tertiary transition-colors focus:border-border-focus focus:outline-none focus:ring-2 focus:ring-brand-100",
         fullWidth && "w-full",
         className,
       )}

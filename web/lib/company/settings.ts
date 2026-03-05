@@ -46,6 +46,12 @@ export interface CompanySettings {
   defaultBonusPercentage: number | null; // Target bonus as % of base, null = no bonus
   equityVestingSchedule: VestingSchedule;
   benefitsTier: BenefitsTier;
+
+  // Compensation Split (base vs allowances)
+  compSplitBasicPct: number;
+  compSplitHousingPct: number;
+  compSplitTransportPct: number;
+  compSplitOtherPct: number;
   
   // Metadata
   lastUpdated: string;
@@ -80,6 +86,11 @@ const DEFAULT_SETTINGS: CompanySettings = {
   defaultBonusPercentage: null, // No bonus by default
   equityVestingSchedule: "4-year-1-cliff",
   benefitsTier: "standard",
+  // Compensation Split
+  compSplitBasicPct: 60,
+  compSplitHousingPct: 25,
+  compSplitTransportPct: 10,
+  compSplitOtherPct: 5,
   // Metadata
   lastUpdated: new Date().toISOString(),
   isConfigured: false,

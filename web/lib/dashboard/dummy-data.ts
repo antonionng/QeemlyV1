@@ -1,7 +1,7 @@
 // Comprehensive dummy data for Qeemly Dashboard
 // Covering GCC markets with realistic compensation data
 
-export type Currency = "AED" | "SAR" | "QAR" | "BHD" | "KWD" | "OMR";
+export type Currency = "AED" | "SAR" | "QAR" | "BHD" | "KWD" | "OMR" | "GBP";
 
 export type Location = {
   id: string;
@@ -52,6 +52,14 @@ export type SalaryBenchmark = {
   lastUpdated: string;
   momChange: number;
   yoyChange: number;
+  nationalsCostBreakdown?: {
+    gpssaPct: number;
+    nafisPct: number;
+    totalCostMultiplier: number;
+    gpssaAmount: number;
+    nafisAmount: number;
+    totalEmployerCost: number;
+  };
   trend: TrendPoint[];
 };
 
@@ -289,6 +297,7 @@ const LOCATION_MULTIPLIERS: Record<string, number> = {
 // Currency conversion from AED
 const CURRENCY_FROM_AED: Record<Currency, number> = {
   "AED": 1,
+  "GBP": 0.215,
   "SAR": 1.02,
   "QAR": 0.99,
   "BHD": 0.103,
@@ -301,11 +310,12 @@ export function generateBenchmark(
   locationId: string,
   levelId: string
 ): SalaryBenchmark {
-  const location = LOCATIONS.find(l => l.id === locationId)!;
+  const fallbackLocation = LOCATIONS.find(l => l.id === "dubai") || LOCATIONS[0];
+  const location = LOCATIONS.find(l => l.id === locationId) || fallbackLocation;
   const baseSalary = BASE_SALARIES[roleId] || 30000;
   const levelMult = LEVEL_MULTIPLIERS[levelId] || 1.0;
   const locMult = LOCATION_MULTIPLIERS[locationId] || 1.0;
-  const currencyMult = CURRENCY_FROM_AED[location.currency];
+  const currencyMult = CURRENCY_FROM_AED[location.currency] || 1;
   
   const adjustedBase = baseSalary * levelMult * locMult * currencyMult;
   const variance = 0.15 + Math.random() * 0.1;
@@ -322,7 +332,23 @@ export function generateBenchmark(
   const sampleSize = Math.floor(15 + Math.random() * 85);
   const momChange = (Math.random() - 0.3) * 5;
   const yoyChange = (Math.random() - 0.2) * 12;
-  
+
+  const isUaeLocation = ['dubai', 'abu-dhabi'].includes(locationId);
+  const nationalsCostBreakdown = isUaeLocation ? (() => {
+    const gpssaPct = 12.5;
+    const nafisPct = locationId === 'abu-dhabi' ? 4 : 0;
+    const totalCostMultiplier = 1 + (gpssaPct + nafisPct) / 100;
+    const annualP50 = p50 * 12;
+    return {
+      gpssaPct,
+      nafisPct,
+      totalCostMultiplier,
+      gpssaAmount: Math.round(annualP50 * gpssaPct / 100),
+      nafisAmount: Math.round(annualP50 * nafisPct / 100),
+      totalEmployerCost: Math.round(annualP50 * totalCostMultiplier),
+    };
+  })() : undefined;
+
   return {
     roleId,
     locationId,
@@ -334,6 +360,7 @@ export function generateBenchmark(
     lastUpdated: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString(),
     momChange: Math.round(momChange * 10) / 10,
     yoyChange: Math.round(yoyChange * 10) / 10,
+    nationalsCostBreakdown,
     trend: generateTrendData(p50),
   };
 }
@@ -342,214 +369,50 @@ export function generateBenchmark(
 
 // Featured benchmarks for dashboard
 export const FEATURED_BENCHMARKS: SalaryBenchmark[] = [
-  generateBenchmark("swe", "dubai", "ic3"),
-  generateBenchmark("swe-be", "dubai", "ic3"),
-  generateBenchmark("pm", "dubai", "ic3"),
-  generateBenchmark("data-scientist", "dubai", "ic3"),
-  generateBenchmark("swe", "riyadh", "ic3"),
-  generateBenchmark("swe-ml", "doha", "ic4"),
+  // Real-data mode: this list is populated from database-backed flows.
 ];
 
 // Market pulse data
 export const MARKET_PULSE = {
-  totalDataPoints: 147892,
+  totalDataPoints: 0,
   lastUpdated: new Date().toISOString(),
-  weeklySubmissions: 2847,
-  activeCompanies: 312,
+  weeklySubmissions: 0,
+  activeCompanies: 0,
   marketsTracked: LOCATIONS.length,
   rolesTracked: ROLES.length,
-  averageConfidence: 0.84,
-  dataFreshness: 0.92,
-  marketTrend: 2.3, // % change
-  volatilityIndex: 0.15,
+  averageConfidence: 0,
+  dataFreshness: 0,
+  marketTrend: 0,
+  volatilityIndex: 0,
 };
 
 // Market Outlook data
 export const MARKET_OUTLOOK = {
-  sentiment: 68, // 0-100 (Candidate to Employer driven)
-  hiringVelocity: "High",
-  velocityValue: 82,
-  topSkillsDemand: ["AI/ML", "Cloud Architecture", "Cybersecurity", "Data Engineering"],
-  marketStatus: "Bullish",
-  summary: "The GCC tech market remains resilient with strong demand for specialized talent, particularly in KSA and UAE's fintech sectors.",
+  sentiment: 0,
+  hiringVelocity: "N/A",
+  velocityValue: 0,
+  topSkillsDemand: [] as string[],
+  marketStatus: "N/A",
+  summary: "No outlook is available until benchmark data is ingested.",
 };
 
 // Geographic comparison data
-export const GEO_COMPARISON = LOCATIONS.map(loc => {
-  const benchmark = generateBenchmark("swe", loc.id, "ic3");
-  return {
-    location: loc,
-    medianSalary: benchmark.percentiles.p50,
-    yoyChange: benchmark.yoyChange,
-    sampleSize: benchmark.sampleSize,
-    confidence: benchmark.confidence,
-  };
-}).sort((a, b) => b.medianSalary - a.medianSalary);
+export const GEO_COMPARISON: Array<{
+  location: Location;
+  medianSalary: number;
+  yoyChange: number;
+  sampleSize: number;
+  confidence: SalaryBenchmark["confidence"];
+}> = [];
 
 // Sample watchlist
-export const SAMPLE_WATCHLIST: WatchlistItem[] = [
-  {
-    id: "w1",
-    roleId: "swe",
-    locationId: "dubai",
-    levelId: "ic3",
-    alertThreshold: 5,
-    createdAt: "2025-11-15T10:00:00Z",
-    lastViewed: "2026-01-07T14:30:00Z",
-  },
-  {
-    id: "w2",
-    roleId: "pm",
-    locationId: "riyadh",
-    levelId: "m1",
-    createdAt: "2025-12-01T09:00:00Z",
-    lastViewed: "2026-01-06T11:00:00Z",
-  },
-  {
-    id: "w3",
-    roleId: "data-scientist",
-    locationId: "doha",
-    levelId: "ic4",
-    alertThreshold: 3,
-    createdAt: "2025-12-20T16:00:00Z",
-    lastViewed: "2026-01-08T09:15:00Z",
-  },
-  {
-    id: "w4",
-    roleId: "swe-ml",
-    locationId: "dubai",
-    levelId: "ic4",
-    createdAt: "2026-01-02T08:00:00Z",
-    lastViewed: "2026-01-08T08:00:00Z",
-  },
-];
+export const SAMPLE_WATCHLIST: WatchlistItem[] = [];
 
 // Sample activity feed
-export const SAMPLE_ACTIVITY: SearchActivity[] = [
-  {
-    id: "a1",
-    userId: "u1",
-    userName: "Sarah Chen",
-    userAvatar: "SC",
-    roleId: "swe",
-    locationId: "dubai",
-    levelId: "ic3",
-    timestamp: "2026-01-08T10:45:00Z",
-    action: "search",
-  },
-  {
-    id: "a2",
-    userId: "u2",
-    userName: "Ahmed Al-Hassan",
-    userAvatar: "AA",
-    roleId: "pm",
-    locationId: "riyadh",
-    levelId: "m1",
-    timestamp: "2026-01-08T10:30:00Z",
-    action: "export",
-  },
-  {
-    id: "a3",
-    userId: "u3",
-    userName: "Maria Santos",
-    userAvatar: "MS",
-    roleId: "data-scientist",
-    locationId: "dubai",
-    levelId: "ic4",
-    timestamp: "2026-01-08T10:15:00Z",
-    action: "compare",
-  },
-  {
-    id: "a4",
-    userId: "u1",
-    userName: "Sarah Chen",
-    userAvatar: "SC",
-    roleId: "swe-ml",
-    locationId: "doha",
-    levelId: "ic3",
-    timestamp: "2026-01-08T09:50:00Z",
-    action: "save",
-  },
-  {
-    id: "a5",
-    userId: "u4",
-    userName: "John Mitchell",
-    userAvatar: "JM",
-    roleId: "designer",
-    locationId: "dubai",
-    levelId: "ic2",
-    timestamp: "2026-01-08T09:30:00Z",
-    action: "search",
-  },
-  {
-    id: "a6",
-    userId: "u2",
-    userName: "Ahmed Al-Hassan",
-    userAvatar: "AA",
-    roleId: "swe-be",
-    locationId: "jeddah",
-    levelId: "ic3",
-    timestamp: "2026-01-08T09:00:00Z",
-    action: "search",
-  },
-];
+export const SAMPLE_ACTIVITY: SearchActivity[] = [];
 
 // AI Insights
-export const SAMPLE_INSIGHTS: Insight[] = [
-  {
-    id: "i1",
-    type: "trend",
-    title: "ML Engineer salaries surging",
-    description: "ML Engineer compensation in Dubai has increased 18% YoY, outpacing all other engineering roles. Consider revising budget allocations.",
-    metric: "+18% YoY",
-    change: 18,
-    priority: "high",
-    relatedRoleId: "swe-ml",
-    relatedLocationId: "dubai",
-  },
-  {
-    id: "i2",
-    type: "opportunity",
-    title: "Riyadh offers 15% premium",
-    description: "Software Engineers in Riyadh command a 15% premium over Dubai. Hiring remotely from UAE could reduce costs.",
-    metric: "15% premium",
-    change: 15,
-    priority: "medium",
-    relatedRoleId: "swe",
-    relatedLocationId: "riyadh",
-  },
-  {
-    id: "i3",
-    type: "anomaly",
-    title: "Data freshness alert",
-    description: "QA Engineer data in Bahrain hasn't been updated in 45 days. Sample size may not reflect current market.",
-    priority: "low",
-    relatedRoleId: "qa",
-    relatedLocationId: "manama",
-  },
-  {
-    id: "i4",
-    type: "risk",
-    title: "Below-market offers detected",
-    description: "3 recent offers for Senior Backend Engineers are 12% below P25. Risk of losing candidates to competitors.",
-    metric: "-12% vs P25",
-    change: -12,
-    priority: "high",
-    relatedRoleId: "swe-be",
-    relatedLocationId: "dubai",
-  },
-  {
-    id: "i5",
-    type: "trend",
-    title: "Product Manager demand rising",
-    description: "PM roles in KSA seeing 25% more searches this month. Salary expectations likely to increase Q2.",
-    metric: "+25% searches",
-    change: 25,
-    priority: "medium",
-    relatedRoleId: "pm",
-    relatedLocationId: "riyadh",
-  },
-];
+export const SAMPLE_INSIGHTS: Insight[] = [];
 
 // Role comparison data
 export function getRoleComparison(roleIds: string[], locationId: string, levelId: string) {

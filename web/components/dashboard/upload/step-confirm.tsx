@@ -22,6 +22,8 @@ import {
   createUploadRecord,
   transformEmployee,
   transformBenchmark,
+  type TransformedEmployee,
+  type TransformedBenchmark,
 } from "@/lib/upload";
 
 type StepConfirmProps = {
@@ -64,13 +66,13 @@ export function StepConfirm({ onSuccess, onClose }: StepConfirmProps) {
       if (dataType === "employees") {
         const employees = rowsToImport
           .map((row) => transformEmployee(row.data))
-          .filter(Boolean) as any[];
+          .filter((employee): employee is TransformedEmployee => employee !== null);
 
         result = await uploadEmployees(employees, setImportProgress);
       } else if (dataType === "benchmarks") {
         const benchmarks = rowsToImport
           .map((row) => transformBenchmark(row.data))
-          .filter(Boolean) as any[];
+          .filter((benchmark): benchmark is TransformedBenchmark => benchmark !== null);
 
         result = await uploadBenchmarks(benchmarks, setImportProgress);
       } else {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import crypto from "crypto";
+import { buildApiKeyPrefix, hashApiKey } from "@/lib/security/api-key";
 
 /**
  * GET /api/developer/api-keys
@@ -89,8 +90,8 @@ export async function POST(request: NextRequest) {
     // Generate a secure API key
     const randomPart = crypto.randomBytes(30).toString("base64url");
     const fullKey = `qeem_${randomPart}`;
-    const keyPrefix = fullKey.slice(0, 13) + "...";
-    const keyHash = crypto.createHash("sha256").update(fullKey).digest("hex");
+    const keyPrefix = buildApiKeyPrefix(fullKey);
+    const keyHash = hashApiKey(fullKey);
 
     const { data: apiKey, error } = await supabase
       .from("api_keys")

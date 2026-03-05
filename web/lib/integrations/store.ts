@@ -1,6 +1,5 @@
 // Integrations Zustand Store
-// Manages integration state with localStorage persistence for the UI layer.
-// In production, this would be backed by Supabase queries.
+// Persists UI state locally while syncing records from backend APIs.
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
@@ -16,22 +15,13 @@ import type {
 } from "./types";
 
 // ============================================================================
-// MOCK DATA (simulates DB state for UI development)
-// ============================================================================
-
-const MOCK_INTEGRATIONS: Integration[] = [];
-
-const MOCK_SYNC_LOGS: IntegrationSyncLog[] = [];
-
-const MOCK_API_KEYS: ApiKey[] = [];
-
-const MOCK_WEBHOOKS: OutgoingWebhook[] = [];
-
-// ============================================================================
 // STORE
 // ============================================================================
 
 interface IntegrationsState {
+  // Lifecycle
+  loadFromApi: () => Promise<void>;
+
   // Connected integrations
   integrations: Integration[];
   syncLogs: IntegrationSyncLog[];
@@ -85,16 +75,38 @@ function generateApiKeyString() {
 export const useIntegrationsStore = create<IntegrationsState>()(
   persist(
     (set, get) => ({
-      integrations: MOCK_INTEGRATIONS,
-      syncLogs: MOCK_SYNC_LOGS,
+      integrations: [],
+      syncLogs: [],
       notificationRules: [],
-      apiKeys: MOCK_API_KEYS,
-      webhooks: MOCK_WEBHOOKS,
+      apiKeys: [],
+      webhooks: [],
       webhookDeliveries: [],
+
+      loadFromApi: async () => {
+        try {
+          const [integrationsRes, keysRes, webhooksRes] = await Promise.all([
+            fetch("/api/integrations"),
+            fetch("/api/developer/api-keys"),
+            fetch("/api/developer/webhooks"),
+          ]);
+
+          const integrationsJson = integrationsRes.ok ? await integrationsRes.json() : { integrations: [] };
+          const keysJson = keysRes.ok ? await keysRes.json() : { keys: [] };
+          const webhooksJson = webhooksRes.ok ? await webhooksRes.json() : { webhooks: [] };
+
+          set({
+            integrations: integrationsJson.integrations || [],
+            apiKeys: keysJson.keys || [],
+            webhooks: webhooksJson.webhooks || [],
+          });
+        } catch {
+          // Keep last local snapshot if API is unavailable.
+        }
+      },
 
       // Integration CRUD
       connectIntegration: (provider, category, config = {}) => {
-        const integration: Integration = {
+        const optimistic: Integration = {
           id: generateId(),
           workspace_id: "current",
           provider,
@@ -107,12 +119,24 @@ export const useIntegrationsStore = create<IntegrationsState>()(
           updated_at: new Date().toISOString(),
         };
         set((s) => ({
-          integrations: [...s.integrations.filter((i) => i.provider !== provider), integration],
+          integrations: [...s.integrations.filter((i) => i.provider !== provider), optimistic],
         }));
-        return integration;
+        void fetch("/api/integrations", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ provider, category, config }),
+        }).then(async (res) => {
+          if (!res.ok) return;
+          const { integration } = await res.json();
+          set((s) => ({
+            integrations: [...s.integrations.filter((i) => i.provider !== provider), integration],
+          }));
+        });
+        return optimistic;
       },
 
       disconnectIntegration: (id) => {
+        void fetch(`/api/integrations/${id}`, { method: "DELETE" });
         set((s) => ({
           integrations: s.integrations.filter((i) => i.id !== id),
           notificationRules: s.notificationRules.filter((r) => r.integration_id !== id),
@@ -120,6 +144,11 @@ export const useIntegrationsStore = create<IntegrationsState>()(
       },
 
       updateIntegrationStatus: (id, status) => {
+        void fetch(`/api/integrations/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status }),
+        });
         set((s) => ({
           integrations: s.integrations.map((i) =>
             i.id === id ? { ...i, status, updated_at: new Date().toISOString() } : i
@@ -128,6 +157,11 @@ export const useIntegrationsStore = create<IntegrationsState>()(
       },
 
       updateIntegrationConfig: (id, config) => {
+        void fetch(`/api/integrations/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ config }),
+        });
         set((s) => ({
           integrations: s.integrations.map((i) =>
             i.id === id ? { ...i, config: { ...i.config, ...config }, updated_at: new Date().toISOString() } : i
@@ -136,6 +170,11 @@ export const useIntegrationsStore = create<IntegrationsState>()(
       },
 
       updateSyncFrequency: (id, frequency) => {
+        void fetch(`/api/integrations/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sync_frequency: frequency }),
+        });
         set((s) => ({
           integrations: s.integrations.map((i) =>
             i.id === id ? { ...i, sync_frequency: frequency, updated_at: new Date().toISOString() } : i
@@ -223,10 +262,23 @@ export const useIntegrationsStore = create<IntegrationsState>()(
           created_at: new Date().toISOString(),
         };
         set((s) => ({ apiKeys: [...s.apiKeys, key] }));
+        void fetch("/api/developer/api-keys", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, scopes }),
+        }).then(async (res) => {
+          if (!res.ok) return;
+          const data = await res.json();
+          if (!data.key) return;
+          set((s) => ({
+            apiKeys: [...s.apiKeys.filter((k) => k.id !== key.id), data.key],
+          }));
+        });
         return { key, fullKey };
       },
 
       revokeApiKey: (id) => {
+        void fetch(`/api/developer/api-keys/${id}`, { method: "DELETE" });
         set((s) => ({
           apiKeys: s.apiKeys.map((k) =>
             k.id === id ? { ...k, revoked_at: new Date().toISOString() } : k
@@ -246,10 +298,27 @@ export const useIntegrationsStore = create<IntegrationsState>()(
           updated_at: new Date().toISOString(),
         };
         set((s) => ({ webhooks: [...s.webhooks, webhook] }));
+        void fetch("/api/developer/webhooks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url, events }),
+        }).then(async (res) => {
+          if (!res.ok) return;
+          const data = await res.json();
+          if (!data.webhook) return;
+          set((s) => ({
+            webhooks: [...s.webhooks.filter((w) => w.id !== webhook.id), data.webhook],
+          }));
+        });
         return webhook;
       },
 
       updateWebhook: (id, updates) => {
+        void fetch("/api/developer/webhooks", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id, ...updates }),
+        });
         set((s) => ({
           webhooks: s.webhooks.map((w) =>
             w.id === id ? { ...w, ...updates, updated_at: new Date().toISOString() } : w
@@ -258,6 +327,7 @@ export const useIntegrationsStore = create<IntegrationsState>()(
       },
 
       deleteWebhook: (id) => {
+        void fetch(`/api/developer/webhooks/${id}`, { method: "DELETE" });
         set((s) => ({
           webhooks: s.webhooks.filter((w) => w.id !== id),
           webhookDeliveries: s.webhookDeliveries.filter((d) => d.webhook_id !== id),

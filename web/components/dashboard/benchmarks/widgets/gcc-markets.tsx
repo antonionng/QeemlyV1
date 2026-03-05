@@ -1,14 +1,16 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import { ArrowDownRight, ArrowUpRight, Globe2 } from "lucide-react";
 import { useBenchmarksContext } from "@/lib/benchmarks/context";
 import {
   LOCATIONS,
-  generateBenchmark,
+  type SalaryBenchmark,
   formatCurrencyK,
   formatPercentage,
 } from "@/lib/dashboard/dummy-data";
+import { getAllDbBenchmarks } from "@/lib/benchmarks/data-service";
 
 export function GCCMarketsWidget() {
   const {
@@ -19,7 +21,31 @@ export function GCCMarketsWidget() {
     setSelectedLocationId,
     salaryView,
   } = useBenchmarksContext();
+  const [benchmarkMap, setBenchmarkMap] = useState<Map<string, SalaryBenchmark>>(new Map());
   const multiplier = salaryView === "annual" ? 12 : 1;
+
+  useEffect(() => {
+    void getAllDbBenchmarks().then(setBenchmarkMap);
+  }, []);
+
+  // Generate benchmarks for all locations
+  const marketComparisons = useMemo(
+    () =>
+      LOCATIONS.map((location) => {
+        const key = `${selectedRoleId}::${location.id}::${selectedLevelId}`;
+        const benchmark = benchmarkMap.get(key);
+        return benchmark ? { location, benchmark } : null;
+      }).filter(Boolean) as Array<{ location: (typeof LOCATIONS)[number]; benchmark: SalaryBenchmark }>,
+    [benchmarkMap, selectedLevelId, selectedRoleId],
+  );
+
+  // Sort by median salary descending
+  const sortedMarkets = [...marketComparisons].sort(
+    (a, b) => b.benchmark.percentiles.p50 - a.benchmark.percentiles.p50
+  );
+
+  // Get the highest salary for comparison
+  const highestMedian = sortedMarkets[0]?.benchmark.percentiles.p50 || 1;
 
   if (!selectedRoleId || !selectedRole) {
     return (
@@ -32,20 +58,6 @@ export function GCCMarketsWidget() {
       </div>
     );
   }
-
-  // Generate benchmarks for all locations
-  const marketComparisons = LOCATIONS.map((location) => {
-    const benchmark = generateBenchmark(selectedRoleId, location.id, selectedLevelId);
-    return { location, benchmark };
-  });
-
-  // Sort by median salary descending
-  const sortedMarkets = [...marketComparisons].sort(
-    (a, b) => b.benchmark.percentiles.p50 - a.benchmark.percentiles.p50
-  );
-
-  // Get the highest salary for comparison
-  const highestMedian = sortedMarkets[0]?.benchmark.percentiles.p50 || 1;
 
   return (
     <div className="flex h-full flex-col gap-4">

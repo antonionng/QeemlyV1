@@ -69,7 +69,7 @@ export function CostBreakdownWidget({ result }: CostBreakdownWidgetProps) {
   const difference = targetTotal - homeTotal;
 
   return (
-    <div className="flex flex-col p-2">
+    <div className="flex flex-col p-1">
       <div className="grid gap-10 lg:grid-cols-2">
         <div className="space-y-8">
           <BreakdownBar
@@ -90,19 +90,19 @@ export function CostBreakdownWidget({ result }: CostBreakdownWidgetProps) {
             {COST_CATEGORIES.map(({ key, label, color }) => (
               <div key={key} className="flex items-center gap-2">
                 <div className={clsx("h-4 w-4 rounded shadow-sm", color)} />
-                <span className="text-xs font-bold uppercase tracking-wider text-accent-600">{label}</span>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-accent-600">{label}</span>
               </div>
             ))}
           </div>
 
           {/* Summary */}
-          <div className="rounded-2xl bg-brand-900 p-6 text-white shadow-xl ring-1 ring-brand-800">
-            <div className="flex items-center justify-between border-b border-white/10 pb-4">
-              <span className="text-xs font-bold uppercase tracking-widest text-white/50">Monthly difference</span>
+          <div className="rounded-2xl border border-border bg-white p-6 shadow-sm">
+            <div className="flex items-center justify-between border-b border-border pb-4">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-accent-500">Monthly difference</span>
               <span
                 className={clsx(
-                  "text-xl font-bold",
-                  difference > 0 ? "text-rose-400" : difference < 0 ? "text-emerald-400" : "text-white"
+                  "text-xl font-semibold",
+                  difference > 0 ? "text-rose-600" : difference < 0 ? "text-emerald-600" : "text-accent-700"
                 )}
               >
                 {difference > 0 ? "+" : ""}
@@ -110,11 +110,11 @@ export function CostBreakdownWidget({ result }: CostBreakdownWidgetProps) {
               </span>
             </div>
             <div className="mt-4 flex items-center justify-between">
-              <span className="text-xs font-bold uppercase tracking-widest text-white/50">Annual difference</span>
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-accent-500">Annual difference</span>
               <span
                 className={clsx(
                   "text-2xl font-bold",
-                  difference > 0 ? "text-rose-400" : difference < 0 ? "text-emerald-400" : "text-white"
+                  difference > 0 ? "text-rose-600" : difference < 0 ? "text-emerald-600" : "text-accent-700"
                 )}
               >
                 {difference > 0 ? "+" : ""}
@@ -132,16 +132,16 @@ export function CostBreakdownWidget({ result }: CostBreakdownWidgetProps) {
           const targetVal = targetBreakdown[key];
           const diff = targetVal - homeVal;
           return (
-            <div key={key} className="rounded-xl bg-brand-50/50 p-4 ring-1 ring-brand-100 shadow-sm transition-all hover:bg-brand-50">
-              <p className="font-bold uppercase tracking-widest text-accent-400 text-[10px] mb-2">{label}</p>
+            <div key={key} className="rounded-xl border border-border bg-accent-50 p-4 transition-all hover:bg-accent-100">
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-accent-500">{label}</p>
               <div className="flex items-baseline gap-1">
-                <span className="text-xs font-bold text-accent-400">{formatCurrency(homeVal, true)}</span>
+                <span className="text-xs font-semibold text-accent-500">{formatCurrency(homeVal, true)}</span>
                 <span className="text-[10px] text-accent-300">→</span>
-                <span className="text-sm font-bold text-brand-900">{formatCurrency(targetVal, true)}</span>
+                <span className="text-sm font-semibold text-brand-900">{formatCurrency(targetVal, true)}</span>
               </div>
               <p
                 className={clsx(
-                  "mt-2 font-bold text-sm",
+                  "mt-2 text-sm font-semibold",
                   diff > 0 ? "text-rose-600" : diff < 0 ? "text-emerald-600" : "text-accent-500"
                 )}
               >

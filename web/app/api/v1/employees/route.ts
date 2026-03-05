@@ -1,12 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateApiKey } from "../middleware";
-import { createClient } from "@supabase/supabase-js";
-
-function getServiceClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  return createClient(url, key);
-}
+import { createServiceClient } from "@/lib/supabase/service";
+import { refreshComplianceSnapshot } from "@/lib/compliance/snapshot-service";
 
 /**
  * GET /api/v1/employees
@@ -24,7 +19,7 @@ export async function GET(request: NextRequest) {
   const department = searchParams.get("department");
   const status = searchParams.get("status");
 
-  const supabase = getServiceClient();
+  const supabase = createServiceClient();
 
   let query = supabase
     .from("employees")
@@ -79,7 +74,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const supabase = getServiceClient();
+  const supabase = createServiceClient();
   let created = 0;
   let updated = 0;
   let failed = 0;
@@ -135,6 +130,14 @@ export async function POST(request: NextRequest) {
       failed++;
     } else {
       created++;
+    }
+  }
+
+  if (created > 0 || updated > 0) {
+    try {
+      await refreshComplianceSnapshot(auth.workspaceId);
+    } catch {
+      // Avoid failing employee ingestion when compliance refresh is unavailable.
     }
   }
 

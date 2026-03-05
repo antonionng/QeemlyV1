@@ -4,6 +4,7 @@ import clsx from "clsx";
 import { Check, ChevronDown, Layout, RotateCcw, Shield, ShieldCheck, Scale, AlertTriangle } from "lucide-react";
 import { useState, useRef, useEffect } from "react";
 import { COMPLIANCE_PRESETS } from "@/lib/compliance/preset-layouts";
+import type { LucideIcon } from "lucide-react";
 
 type CompliancePresetSwitcherProps = {
   currentPresetId: string;
@@ -12,7 +13,7 @@ type CompliancePresetSwitcherProps = {
   onReset: () => void;
 };
 
-const PRESET_ICONS: Record<string, any> = {
+const PRESET_ICONS: Record<string, LucideIcon> = {
   overview: ShieldCheck,
   regulatory: Scale,
   risk: AlertTriangle,

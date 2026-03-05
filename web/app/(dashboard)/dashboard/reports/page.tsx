@@ -1,120 +1,160 @@
 "use client";
 
-import { useState } from "react";
-import { 
-  ALL_REPORT_WIDGET_IDS 
-} from "@/lib/reports/widget-registry";
-import { 
-  Plus, 
-  Calendar, 
-  Download, 
-  LayoutGrid, 
-  Info,
-  ShieldCheck,
-  FileBarChart
-} from "lucide-react";
+import { useState, useEffect } from "react";
+import { Plus, Calendar, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ReportsLayoutManager } from "@/components/dashboard/reports/layout-manager";
-import { ReportsProvider } from "@/lib/reports/context";
+import { ReportStatusBar } from "@/components/dashboard/reports/report-status-bar";
+import { ReportKpiCards } from "@/components/dashboard/reports/report-kpi-cards";
+import { ReportGrid } from "@/components/dashboard/reports/report-grid";
+import { NewReportModal } from "@/components/dashboard/reports/new-report-modal";
+import { TemplateLibraryModal } from "@/components/dashboard/reports/template-library-modal";
+import { ReportDetailPanel } from "@/components/dashboard/reports/report-detail-panel";
+import { useReportsStore } from "@/lib/reports/store";
+import type { Report, ReportTemplate } from "@/lib/reports/types";
+import { exportReportsWorkbook } from "@/lib/reports/export";
 
 export default function ReportsPage() {
-  return (
-    <ReportsProvider>
-      <ReportsContent />
-    </ReportsProvider>
-  );
-}
+  const [showNewReport, setShowNewReport] = useState(false);
+  const [showTemplateLibrary, setShowTemplateLibrary] = useState(false);
+  const [isCreatingFromTemplate, setIsCreatingFromTemplate] = useState(false);
+  const [selectedReport, setSelectedReport] = useState<Report | null>(null);
+  const {
+    loadReports,
+    loadTemplates,
+    createReport,
+    createReportFromTemplate,
+    generateReport,
+    reports,
+    templates,
+    isLoadingTemplates,
+  } = useReportsStore();
 
-function ReportsContent() {
-  const [activeWidgets, setActiveWidgets] = useState<string[]>(ALL_REPORT_WIDGET_IDS);
+  useEffect(() => {
+    loadReports();
+    loadTemplates();
+  }, [loadReports, loadTemplates]);
 
-  const handleRemoveWidget = (widgetId: string) => {
-    setActiveWidgets(prev => prev.filter(id => id !== widgetId));
+  const handleSelectTemplate = () => {
+    setShowNewReport(false);
+    setShowTemplateLibrary(true);
   };
 
-  const handleResetWidgets = () => {
-    setActiveWidgets(ALL_REPORT_WIDGET_IDS);
+  const handleBackToNewReport = () => {
+    setShowTemplateLibrary(false);
+    setShowNewReport(true);
+  };
+
+  const handleExportAll = () => {
+    exportReportsWorkbook(reports);
+  };
+
+  const handleCreateCustom = async () => {
+    const report = await createReport({
+      title: `Custom Report ${new Date().toLocaleDateString("en-GB")}`,
+      type_id: "custom",
+      tags: ["Custom"],
+    });
+    setShowNewReport(false);
+    if (!report) return;
+    setSelectedReport(report);
+    const generated = await generateReport(report.id, { trigger_source: "manual" });
+    if (generated) setSelectedReport(generated);
+  };
+
+  const handleCreateFromTemplate = async (template: ReportTemplate) => {
+    if (isCreatingFromTemplate) return;
+    setIsCreatingFromTemplate(true);
+    try {
+      const report = await createReportFromTemplate(template.id, {
+        title: template.title,
+        tags: template.tags,
+      });
+
+      if (!report) return;
+
+      setSelectedReport(report);
+      const generated = await generateReport(report.id, { trigger_source: "template" });
+      if (generated) setSelectedReport(generated);
+      await loadReports();
+      setShowTemplateLibrary(false);
+      setShowNewReport(false);
+    } finally {
+      setIsCreatingFromTemplate(false);
+    }
   };
 
   return (
-    <div className="bench-results space-y-8 relative z-10">
-      {/* Header Section */}
-      <div className="relative">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-col gap-1">
-            <div className="flex flex-wrap items-center gap-3">
-              <h1 className="text-3xl font-bold tracking-tight text-brand-900">
-                Reports & Analytics
-              </h1>
-              <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-emerald-700 border border-emerald-200">
-                Live Data
-              </span>
-            </div>
-            <p className="mt-2 text-[15px] leading-relaxed text-brand-700/80 max-w-2xl">
-              Generate board-ready compensation summaries, benchmark packs, and compliance updates.
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3 lg:justify-end">
-            <Button variant="ghost" size="sm" onClick={handleResetWidgets} className="h-11 bg-white hover:bg-brand-50 border border-border/40 px-5 font-bold text-brand-700">
-              <LayoutGrid className="mr-2 h-4 w-4" />
-              Reset Layout
-            </Button>
-            <Button variant="outline" size="sm" className="h-11 bg-white border border-border/40 px-5 font-bold text-brand-700">
-              <Calendar className="mr-2 h-4 w-4" />
-              Schedule
-            </Button>
-            <Button size="sm" className="h-11 px-6 font-bold uppercase tracking-widest text-[11px] bg-brand-600 text-white shadow-sm">
-              <Plus className="mr-2 h-4 w-4" />
-              New Report
-            </Button>
-            <Button variant="ghost" className="h-11 bg-white hover:bg-brand-50 border border-border/40 px-5">
-              <Download className="mr-2 h-4 w-4 text-brand-600" />
-              Export
-            </Button>
-          </div>
-        </div>
-
-        {/* Stats Summary Bar */}
-        <div className="mt-8 flex flex-wrap items-center gap-x-8 gap-y-3 rounded-2xl border border-border bg-white p-4 shadow-sm">
-          <div className="flex items-center gap-3 border-r border-border/40 pr-8">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100">
-              <ShieldCheck className="h-4 w-4" />
-            </div>
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-accent-500">Status</p>
-              <p className="text-sm font-bold text-brand-900">Systems Healthy</p>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-3 border-r border-border/40 pr-8">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600 ring-1 ring-blue-100">
-              <FileBarChart className="h-4 w-4" />
-            </div>
-            <div>
-              <p className="text-[10px] font-bold uppercase tracking-wider text-accent-500">Coverage</p>
-              <p className="text-sm font-bold text-brand-900">100% History</p>
-            </div>
-          </div>
-
-          <div className="hidden items-center gap-2 rounded-full bg-brand-50 px-3 py-1 lg:flex">
-            <span className="h-2 w-2 rounded-full bg-brand-500 animate-pulse" />
-            <span className="text-[11px] font-bold text-brand-700 uppercase tracking-tight">Real-time sync active</span>
-          </div>
-
-          <div className="ml-auto text-[11px] font-medium text-accent-400 italic">
-            Next scheduled run: Monday, 9:00 AM
-          </div>
+    <div className="bench-results space-y-6 relative z-10">
+      {/* Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <h1 className="text-2xl font-bold tracking-tight text-accent-800 sm:text-3xl">
+          Reports &amp; Analytics
+        </h1>
+        <div className="flex items-center gap-3">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportAll}
+            className="h-10 gap-2 rounded-full border-border bg-white px-5 text-sm font-semibold text-brand-900"
+          >
+            <ExternalLink className="h-4 w-4" />
+            Export
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const scheduledReport = reports.find(r => r.status === "Scheduled");
+              if (scheduledReport) setSelectedReport(scheduledReport);
+            }}
+            className="h-10 gap-2 rounded-full border-border bg-white px-5 text-sm font-semibold text-brand-900"
+          >
+            <Calendar className="h-4 w-4" />
+            Schedule
+          </Button>
+          <Button
+            size="sm"
+            className="h-10 gap-2 rounded-full bg-brand-500 px-5 text-sm font-semibold text-white shadow-sm hover:bg-brand-600"
+            onClick={() => setShowNewReport(true)}
+          >
+            <Plus className="h-4 w-4" />
+            New Report
+          </Button>
         </div>
       </div>
 
-      {/* Main Widget Grid */}
-      <div className="w-full">
-        <ReportsLayoutManager 
-          activeWidgets={activeWidgets}
-          onRemoveWidget={handleRemoveWidget}
+      {/* Status strip */}
+      <ReportStatusBar />
+
+      {/* KPI cards */}
+      <ReportKpiCards />
+
+      {/* Reports list */}
+      <ReportGrid onOpenReport={setSelectedReport} />
+
+      {/* Report Detail Panel */}
+      {selectedReport && (
+        <ReportDetailPanel
+          report={selectedReport}
+          onClose={() => setSelectedReport(null)}
         />
-      </div>
+      )}
+
+      {/* Modals */}
+      <NewReportModal
+        open={showNewReport}
+        onClose={() => setShowNewReport(false)}
+        onSelectTemplate={handleSelectTemplate}
+        onCreateCustom={handleCreateCustom}
+      />
+      <TemplateLibraryModal
+        open={showTemplateLibrary}
+        onClose={() => setShowTemplateLibrary(false)}
+        onBack={handleBackToNewReport}
+        templates={templates}
+        isLoadingTemplates={isLoadingTemplates || isCreatingFromTemplate}
+        onSelectTemplate={handleCreateFromTemplate}
+      />
     </div>
   );
 }

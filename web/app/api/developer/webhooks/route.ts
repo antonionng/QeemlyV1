@@ -141,6 +141,20 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("workspace_id, role")
+      .eq("id", user.id)
+      .single();
+
+    if (!profile?.workspace_id) {
+      return NextResponse.json({ error: "No workspace found" }, { status: 404 });
+    }
+
+    if (profile.role !== "admin") {
+      return NextResponse.json({ error: "Only admins can update webhooks" }, { status: 403 });
+    }
+
     const body = await request.json();
     const { id, url, events, enabled } = body;
 
@@ -157,6 +171,7 @@ export async function PATCH(request: NextRequest) {
       .from("outgoing_webhooks")
       .update(updates)
       .eq("id", id)
+      .eq("workspace_id", profile.workspace_id)
       .select()
       .single();
 

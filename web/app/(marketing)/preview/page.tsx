@@ -7,7 +7,8 @@ import { Card } from "@/components/ui/card";
 import { Chip } from "@/components/ui/chip";
 import { DashboardSidebar } from "@/components/dashboard/sidebar";
 import { Logo } from "@/components/logo";
-import { SAMPLE_BENCHMARK, formatMoney } from "@/lib/sample-benchmark";
+import { formatMoney } from "@/lib/format-money";
+import { createClient } from "@/lib/supabase/server";
 
 type PreviewPageProps = {
   searchParams?:
@@ -28,15 +29,26 @@ function PreviewTeaser({
   location,
   level,
   currency,
+  sampleBenchmark,
 }: {
   role: string;
   location: string;
   level: string;
   currency: string;
+  sampleBenchmark: {
+    currency: string;
+    p25: number;
+    p50: number;
+    p75: number;
+    momDeltaP25: string;
+    momDeltaP50: string;
+    momDeltaP75: string;
+    submissionsThisWeek: number;
+  };
 }) {
   const chips = [location, level, currency].filter(Boolean);
   const safeRole = role.trim() || "Backend Engineer";
-  const demoCurrency = currency || SAMPLE_BENCHMARK.currency;
+  const demoCurrency = currency || sampleBenchmark.currency;
 
   return (
     <div className="relative">
@@ -73,23 +85,23 @@ function PreviewTeaser({
         <Card className="p-5">
           <div className="text-sm font-semibold text-brand-800/80">Median (P50)</div>
           <div className="mt-3 text-2xl font-semibold text-brand-900">
-            {formatMoney(demoCurrency, SAMPLE_BENCHMARK.p50)}
+            {formatMoney(demoCurrency, sampleBenchmark.p50)}
           </div>
-          <div className="text-xs text-brand-700/80">{`High confidence · ${SAMPLE_BENCHMARK.momDeltaP50}`}</div>
+          <div className="text-xs text-brand-700/80">{`High confidence · ${sampleBenchmark.momDeltaP50}`}</div>
         </Card>
         <Card className="p-5">
           <div className="text-sm font-semibold text-brand-800/80">P25</div>
           <div className="mt-3 text-2xl font-semibold text-brand-900">
-            {formatMoney(demoCurrency, SAMPLE_BENCHMARK.p25)}
+            {formatMoney(demoCurrency, sampleBenchmark.p25)}
           </div>
-          <div className="text-xs text-brand-700/80">{`High confidence · ${SAMPLE_BENCHMARK.momDeltaP25}`}</div>
+          <div className="text-xs text-brand-700/80">{`High confidence · ${sampleBenchmark.momDeltaP25}`}</div>
         </Card>
         <Card className="p-5">
           <div className="text-sm font-semibold text-brand-800/80">P75</div>
           <div className="mt-3 text-2xl font-semibold text-brand-900">
-            {formatMoney(demoCurrency, SAMPLE_BENCHMARK.p75)}
+            {formatMoney(demoCurrency, sampleBenchmark.p75)}
           </div>
-          <div className="text-xs text-brand-700/80">{`High confidence · ${SAMPLE_BENCHMARK.momDeltaP75}`}</div>
+          <div className="text-xs text-brand-700/80">{`High confidence · ${sampleBenchmark.momDeltaP75}`}</div>
         </Card>
       </div>
 
@@ -125,7 +137,7 @@ function PreviewTeaser({
             </div>
             <div className="flex items-center justify-between">
               <span>Submissions</span>
-              <span className="font-semibold">{SAMPLE_BENCHMARK.submissionsThisWeek} this week</span>
+              <span className="font-semibold">{sampleBenchmark.submissionsThisWeek} this week</span>
             </div>
           </div>
         </Card>
@@ -135,6 +147,26 @@ function PreviewTeaser({
 }
 
 export default async function PreviewPage({ searchParams }: PreviewPageProps) {
+  const supabase = await createClient();
+  const { data: row } = await supabase
+    .from("public_benchmark_snapshots")
+    .select("*")
+    .eq("is_public", true)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const sampleBenchmark = {
+    currency: row?.currency || "AED",
+    p25: Number(row?.p25 || 0),
+    p50: Number(row?.p50 || 0),
+    p75: Number(row?.p75 || 0),
+    momDeltaP25: row?.mom_delta_p25 || "0%",
+    momDeltaP50: row?.mom_delta_p50 || "0%",
+    momDeltaP75: row?.mom_delta_p75 || "0%",
+    submissionsThisWeek: Number(row?.submissions_this_week || 0),
+  };
+
   const resolvedSearchParams = (await searchParams) as Record<string, string | string[] | undefined> | undefined;
   const role = firstParam(resolvedSearchParams, "role") ?? "";
   const location = firstParam(resolvedSearchParams, "location") ?? "Dubai, UAE";
@@ -156,7 +188,7 @@ export default async function PreviewPage({ searchParams }: PreviewPageProps) {
             <DashboardSidebar />
           </div>
           <div>
-            <PreviewTeaser role={role} location={location} level={level} currency={currency} />
+            <PreviewTeaser role={role} location={location} level={level} currency={currency} sampleBenchmark={sampleBenchmark} />
           </div>
         </div>
       </div>

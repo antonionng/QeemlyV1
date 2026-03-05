@@ -41,7 +41,7 @@ export type UploadState = {
   // Actions
   setMode: (mode: "page" | "modal") => void;
   setDataType: (type: UploadDataType) => void;
-  setFile: (file: ParsedFile) => void;
+  setFile: (file: ParsedFile | null) => void;
   setMappings: (mappings: ColumnMapping[]) => void;
   updateMapping: (sourceIndex: number, targetField: string | null) => void;
   setValidationResult: (result: ValidationResult) => void;

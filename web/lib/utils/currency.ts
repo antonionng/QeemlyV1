@@ -22,6 +22,14 @@ export interface CurrencyFormatOptions {
   showCurrency?: boolean;
 }
 
+export type BenchmarkSalaryView = "monthly" | "annual";
+
+interface BenchmarkValueOptions {
+  salaryView: BenchmarkSalaryView;
+  sourceCurrency: string;
+  targetCurrency: string;
+}
+
 /**
  * Get currency symbol from currency code
  */
@@ -97,6 +105,19 @@ export function convertCurrency(
   // Convert to USD first, then to target currency
   const usdValue = value / fromRate;
   return usdValue * toRate;
+}
+
+/**
+ * Convert benchmark source value for the active salary view and target market currency.
+ * Assumes source value is monthly.
+ */
+export function toBenchmarkDisplayValue(
+  sourceValue: number,
+  options: BenchmarkValueOptions
+): number {
+  const { salaryView, sourceCurrency, targetCurrency } = options;
+  const periodAdjusted = salaryView === "annual" ? monthlyToAnnual(sourceValue) : sourceValue;
+  return roundToThousand(convertCurrency(periodAdjusted, sourceCurrency, targetCurrency));
 }
 
 /**
@@ -189,4 +210,15 @@ export function roundToThousand(value: number): number {
  */
 export function roundToHundred(value: number): number {
   return Math.round(value / 100) * 100;
+}
+
+/**
+ * Compact benchmark formatter with market-local currency.
+ */
+export function formatBenchmarkCompact(value: number, currencyCode: string): string {
+  return formatCurrency(value, currencyCode, {
+    notation: "compact",
+    maximumFractionDigits: 0,
+    minimumFractionDigits: 0,
+  }).replace("K", "k");
 }

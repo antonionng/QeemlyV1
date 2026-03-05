@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Bell,
   Users,
@@ -8,10 +8,14 @@ import {
   Code2,
   Search,
   Filter,
+  BarChart3,
+  CheckCircle2,
+  Layers,
+  Zap,
 } from "lucide-react";
 import clsx from "clsx";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { IntegrationCard } from "./integration-card";
 import { IntegrationDetailModal } from "./integration-detail-modal";
 import { DeveloperHub } from "./developer/developer-hub";
@@ -24,13 +28,14 @@ import {
 import { useIntegrationsStore } from "@/lib/integrations/store";
 import type { IntegrationProvider } from "@/lib/integrations/types";
 
-type Tab = "all" | "notification" | "hris" | "ats" | "developer";
+type Tab = "all" | "notification" | "hris" | "ats" | "benchmarks" | "developer";
 
 const TABS: { id: Tab; label: string; icon: typeof Bell }[] = [
   { id: "all", label: "All", icon: Filter },
   { id: "notification", label: "Notifications", icon: Bell },
   { id: "hris", label: "HRIS", icon: Users },
   { id: "ats", label: "ATS", icon: Briefcase },
+  { id: "benchmarks", label: "Benchmarks", icon: BarChart3 },
   { id: "developer", label: "Developer", icon: Code2 },
 ];
 
@@ -41,24 +46,40 @@ export function IntegrationsPage() {
   const [showDetailModal, setShowDetailModal] = useState(false);
 
   const store = useIntegrationsStore();
+  const loadFromApi = useIntegrationsStore((state) => state.loadFromApi);
+  useEffect(() => {
+    void loadFromApi();
+  }, [loadFromApi]);
   const notificationProviders = getNotificationProviders();
   const hrisProviders = getHrisProviders();
   const atsProviders = getAtsProviders();
+  const allProviders = [
+    ...notificationProviders,
+    ...hrisProviders.global,
+    ...hrisProviders.gcc,
+    ...hrisProviders.manual,
+    ...atsProviders,
+  ];
 
-  // Filter providers by search
-  const filterBySearch = (providers: IntegrationProvider[]) => {
-    if (!searchQuery) return providers;
-    const q = searchQuery.toLowerCase();
-    return providers.filter(
-      (p) =>
-        p.name.toLowerCase().includes(q) ||
-        p.description.toLowerCase().includes(q)
-    );
-  };
+  const query = searchQuery.trim().toLowerCase();
+
+  const filterBySearch = (providers: IntegrationProvider[]) =>
+    providers.filter((provider) => {
+      if (!query) return true;
+      return (
+        provider.name.toLowerCase().includes(query) ||
+        provider.description.toLowerCase().includes(query) ||
+        provider.features.some((feature) => feature.toLowerCase().includes(query))
+      );
+    });
+
+  const filteredNotificationProviders = filterBySearch(notificationProviders);
+  const filteredGlobalHrisProviders = filterBySearch(hrisProviders.global);
+  const filteredGccHrisProviders = filterBySearch(hrisProviders.gcc);
+  const filteredManualHrisProviders = filterBySearch(hrisProviders.manual);
+  const filteredAtsProviders = filterBySearch(atsProviders);
 
   const handleConnect = (provider: IntegrationProvider) => {
-    // In production: initiate OAuth or Merge Link flow
-    // For now, simulate connection
     store.connectIntegration(provider.id, provider.category as "notification" | "hris" | "ats");
   };
 
@@ -75,11 +96,11 @@ export function IntegrationsPage() {
   };
 
   const renderProviderGrid = (providers: IntegrationProvider[]) => {
-    const filtered = filterBySearch(providers);
-    if (filtered.length === 0) return null;
+    if (providers.length === 0) return null;
+
     return (
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {filtered.map((provider) => {
+        {providers.map((provider) => {
           const integration = store.getIntegration(provider.id);
           return (
             <IntegrationCard
@@ -97,129 +118,244 @@ export function IntegrationsPage() {
     );
   };
 
-  const renderCategorySection = (
-    categoryKey: string,
-    providers: IntegrationProvider[],
-    subsections?: { label: string; providers: IntegrationProvider[] }[]
-  ) => {
-    const category = CATEGORY_LABELS[categoryKey];
-    if (!category) return null;
+  const keywordMatches = (terms: string[]) =>
+    !query || terms.some((term) => term.toLowerCase().includes(query));
 
-    const filtered = subsections
-      ? subsections.some((s) => filterBySearch(s.providers).length > 0)
-      : filterBySearch(providers).length > 0;
+  const showNotificationSection =
+    (activeTab === "all" || activeTab === "notification") &&
+    filteredNotificationProviders.length > 0;
+  const showHrisSection =
+    (activeTab === "all" || activeTab === "hris") &&
+    (filteredGlobalHrisProviders.length > 0 ||
+      filteredGccHrisProviders.length > 0 ||
+      filteredManualHrisProviders.length > 0);
+  const showAtsSection =
+    (activeTab === "all" || activeTab === "ats") &&
+    filteredAtsProviders.length > 0;
+  const showBenchmarksSection =
+    (activeTab === "all" || activeTab === "benchmarks") &&
+    keywordMatches(["salary benchmark", "market data", "benchmark upload", "benchmark api"]);
+  const showDeveloperSection =
+    (activeTab === "all" || activeTab === "developer") &&
+    keywordMatches(["developer", "api", "webhook", "custom integration"]);
 
-    if (!filtered) return null;
+  const hasVisibleResults =
+    showNotificationSection ||
+    showHrisSection ||
+    showAtsSection ||
+    showBenchmarksSection ||
+    showDeveloperSection;
 
-    return (
-      <section key={categoryKey} className="space-y-4">
-        <div>
-          <h2 className="text-lg font-semibold text-brand-900">{category.label}</h2>
-          <p className="text-sm text-brand-600/70 mt-0.5">{category.description}</p>
-        </div>
+  const connectedCount = store.integrations.filter((integration) => integration.status === "connected").length;
+  const comingSoonCount = allProviders.filter((provider) => provider.comingSoon).length;
+  const mergePoweredCount = allProviders.filter((provider) => provider.connectionMethod === "merge_link").length;
 
-        {subsections ? (
-          <div className="space-y-6">
-            {subsections.map((sub) => {
-              const subFiltered = filterBySearch(sub.providers);
-              if (subFiltered.length === 0) return null;
-              return (
-                <div key={sub.label}>
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-brand-500 mb-3">
-                    {sub.label}
-                  </h3>
-                  {renderProviderGrid(sub.providers)}
-                </div>
-              );
-            })}
-          </div>
-        ) : (
-          renderProviderGrid(providers)
-        )}
-      </section>
+  const filterButtonClass = (tab: Tab) =>
+    clsx(
+      "rounded-full px-3 py-1.5 text-xs font-medium transition-colors",
+      activeTab === tab
+        ? "bg-brand-500 text-white"
+        : "bg-surface-2 text-text-secondary hover:bg-surface-3 hover:text-text-primary"
     );
-  };
-
-  const connectedCount = store.integrations.filter((i) => i.status === "connected").length;
 
   return (
-    <div className="space-y-8">
-      {/* Page Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-brand-900">Integrations</h1>
-        <p className="mt-1 text-sm text-brand-600/70">
-          Connect your HRIS, ATS, and notification tools to keep Qeemly in sync.
-          {connectedCount > 0 && (
-            <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700 border border-emerald-200">
-              {connectedCount} connected
-            </span>
-          )}
-        </p>
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <h1 className="text-3xl font-semibold text-text-primary">Integrations</h1>
+          <p className="mt-1 max-w-3xl text-sm text-text-secondary">
+            Connect communication tools, HR systems, ATS platforms, and custom APIs to keep compensation data in sync.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="secondary" size="sm" onClick={() => setActiveTab("developer")}>
+            Open API docs
+          </Button>
+          <Button variant="primary" size="sm">
+            + New key
+          </Button>
+        </div>
       </div>
 
-      {/* Tabs + Search */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        {/* Category Tabs */}
-        <div className="flex items-center gap-1 rounded-xl bg-brand-50 p-1">
-          {TABS.map((tab) => {
-            const Icon = tab.icon;
-            return (
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="rounded-2xl border border-border bg-white p-4">
+          <div className="flex items-center gap-2 text-xs font-medium text-text-secondary">
+            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+            Connected
+          </div>
+          <p className="mt-2 text-2xl font-semibold text-text-primary">{connectedCount}</p>
+        </div>
+
+        <div className="rounded-2xl border border-border bg-white p-4">
+          <div className="flex items-center gap-2 text-xs font-medium text-text-secondary">
+            <Layers className="h-4 w-4 text-brand-500" />
+            Available connectors
+          </div>
+          <p className="mt-2 text-2xl font-semibold text-text-primary">
+            {allProviders.length - comingSoonCount}
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-border bg-white p-4">
+          <div className="flex items-center gap-2 text-xs font-medium text-text-secondary">
+            <Zap className="h-4 w-4 text-amber-500" />
+            Merge-powered
+          </div>
+          <p className="mt-2 text-2xl font-semibold text-text-primary">{mergePoweredCount}</p>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-border bg-white p-4">
+        <div className="mb-3 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div className="relative w-full lg:max-w-lg">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-text-muted" />
+            <Input
+              type="text"
+              placeholder="Search integrations"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              className="pl-9"
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5">
+            {TABS.map((tab) => (
               <button
                 key={tab.id}
+                type="button"
                 onClick={() => setActiveTab(tab.id)}
-                className={clsx(
-                  "flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-all",
-                  activeTab === tab.id
-                    ? "bg-white text-brand-900 shadow-sm"
-                    : "text-brand-600 hover:text-brand-800"
-                )}
+                className={filterButtonClass(tab.id)}
               >
-                <Icon className="h-3.5 w-3.5" />
                 {tab.label}
               </button>
-            );
-          })}
-        </div>
-
-        {/* Search */}
-        <div className="relative w-full sm:w-72">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-400" />
-          <Input
-            type="text"
-            placeholder="Search integrations..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 text-sm"
-          />
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* Content */}
       <div className="space-y-10">
-        {/* Notifications */}
-        {(activeTab === "all" || activeTab === "notification") &&
-          renderCategorySection("notification", notificationProviders)}
-
-        {/* HRIS */}
-        {(activeTab === "all" || activeTab === "hris") &&
-          renderCategorySection("hris", [], [
-            { label: "Global HRIS (50+ supported via Merge)", providers: hrisProviders.global },
-            { label: "GCC / MENA Native", providers: hrisProviders.gcc },
-            { label: "Manual / Fallback", providers: hrisProviders.manual },
-          ])}
-
-        {/* ATS */}
-        {(activeTab === "all" || activeTab === "ats") &&
-          renderCategorySection("ats", atsProviders)}
-
-        {/* Developer Hub */}
-        {(activeTab === "all" || activeTab === "developer") && (
+        {showNotificationSection && (
           <section className="space-y-4">
             <div>
-              <h2 className="text-lg font-semibold text-brand-900">
-                {CATEGORY_LABELS.developer.label}
-              </h2>
-              <p className="text-sm text-brand-600/70 mt-0.5">
+              <h2 className="text-xl font-semibold text-text-primary">{CATEGORY_LABELS.notification.label}</h2>
+              <p className="mt-0.5 text-sm text-text-secondary">
+                {CATEGORY_LABELS.notification.description}
+              </p>
+            </div>
+            {renderProviderGrid(filteredNotificationProviders)}
+          </section>
+        )}
+
+        {showHrisSection && (
+          <section className="space-y-6">
+            <div>
+              <h2 className="text-xl font-semibold text-text-primary">{CATEGORY_LABELS.hris.label}</h2>
+              <p className="mt-0.5 text-sm text-text-secondary">{CATEGORY_LABELS.hris.description}</p>
+            </div>
+
+            {filteredGlobalHrisProviders.length > 0 && (
+              <div className="space-y-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-text-muted">
+                  Global HRIS (via Merge.dev)
+                </h3>
+                {renderProviderGrid(filteredGlobalHrisProviders)}
+              </div>
+            )}
+
+            {filteredGccHrisProviders.length > 0 && (
+              <div className="space-y-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-text-muted">
+                  GCC / MENA native
+                </h3>
+                {renderProviderGrid(filteredGccHrisProviders)}
+              </div>
+            )}
+
+            {filteredManualHrisProviders.length > 0 && (
+              <div className="space-y-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-text-muted">
+                  Manual and fallback
+                </h3>
+                {renderProviderGrid(filteredManualHrisProviders)}
+              </div>
+            )}
+          </section>
+        )}
+
+        {showBenchmarksSection && (
+          <section className="space-y-4">
+            <div>
+              <h2 className="text-xl font-semibold text-text-primary">{CATEGORY_LABELS.benchmarks.label}</h2>
+              <p className="mt-0.5 text-sm text-text-secondary">
+                {CATEGORY_LABELS.benchmarks.description}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
+                <div className="mb-3 flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-100 text-brand-700 font-bold text-sm">
+                    Q
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-text-primary">Qeemly Market Data</p>
+                    <span className="text-xs text-emerald-600">Active</span>
+                  </div>
+                </div>
+                <p className="text-xs text-text-secondary">
+                  Built-in GCC benchmark datasets refreshed continuously for role and location analysis.
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
+                <div className="mb-3 flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-100 text-accent-700 font-bold text-xs">
+                    CSV
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-text-primary">Benchmark Upload</p>
+                    <span className="text-xs text-emerald-600">Available</span>
+                  </div>
+                </div>
+                <p className="text-xs text-text-secondary">
+                  Upload purchased salary surveys and custom benchmark files using CSV or XLSX formats.
+                </p>
+              </div>
+
+              <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
+                <div className="mb-3 flex items-center gap-3">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-100 text-accent-700 font-bold text-xs">
+                    API
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-text-primary">Benchmark API</p>
+                    <span className="text-xs text-emerald-600">Available</span>
+                  </div>
+                </div>
+                <p className="text-xs text-text-secondary">
+                  Push benchmark records via API with scoped write permissions for automated pipelines.
+                </p>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {showAtsSection && (
+          <section className="space-y-4">
+            <div>
+              <h2 className="text-xl font-semibold text-text-primary">{CATEGORY_LABELS.ats.label}</h2>
+              <p className="mt-0.5 text-sm text-text-secondary">{CATEGORY_LABELS.ats.description}</p>
+            </div>
+            {renderProviderGrid(filteredAtsProviders)}
+          </section>
+        )}
+
+        {showDeveloperSection && (
+          <section className="space-y-4">
+            <div>
+              <h2 className="text-xl font-semibold text-text-primary">{CATEGORY_LABELS.developer.label}</h2>
+              <p className="mt-0.5 text-sm text-text-secondary">
                 {CATEGORY_LABELS.developer.description}
               </p>
             </div>
@@ -227,18 +363,16 @@ export function IntegrationsPage() {
           </section>
         )}
 
-        {/* Empty state */}
-        {searchQuery && (
-          <div className="text-center py-12">
-            <Search className="mx-auto h-8 w-8 text-brand-300" />
-            <p className="mt-3 text-sm text-brand-600">
-              No integrations found for &quot;{searchQuery}&quot;
+        {!hasVisibleResults && (
+          <div className="rounded-2xl border border-dashed border-border bg-surface-1 py-12 text-center">
+            <Search className="mx-auto h-8 w-8 text-text-muted" />
+            <p className="mt-3 text-sm text-text-secondary">
+              No integrations found for &quot;{searchQuery}&quot;.
             </p>
           </div>
         )}
       </div>
 
-      {/* Detail Modal */}
       {showDetailModal && selectedProvider && (
         <IntegrationDetailModal
           provider={selectedProvider}

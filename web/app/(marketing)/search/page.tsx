@@ -16,7 +16,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { SAMPLE_BENCHMARK, formatMoney } from "@/lib/sample-benchmark";
+import { formatMoney } from "@/lib/format-money";
+import { createClient } from "@/lib/supabase/server";
 import {
   BenchmarkSearchConfidenceVisual,
   BenchmarkSearchExportVisual,
@@ -37,13 +38,6 @@ const logos = [
   "/images/logo-7.png",
   "/images/logo-8.png",
 ];
-
-const sampleQuery = {
-  role: SAMPLE_BENCHMARK.role,
-  location: SAMPLE_BENCHMARK.location,
-  level: SAMPLE_BENCHMARK.level,
-  currency: SAMPLE_BENCHMARK.currency,
-};
 
 const faqs = [
   {
@@ -72,7 +66,33 @@ const faqs = [
   },
 ];
 
-export default function SearchPage() {
+export default async function SearchPage() {
+  const supabase = await createClient();
+  const { data: row } = await supabase
+    .from("public_benchmark_snapshots")
+    .select("*")
+    .eq("is_public", true)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  const sampleBenchmark = {
+    role: row?.role_label || "No role data",
+    location: row?.location_label || "No location data",
+    level: row?.level_label || "N/A",
+    currency: row?.currency || "AED",
+    p25: Number(row?.p25 || 0),
+    p50: Number(row?.p50 || 0),
+    p75: Number(row?.p75 || 0),
+  };
+
+  const sampleQuery = {
+    role: sampleBenchmark.role,
+    location: sampleBenchmark.location,
+    level: sampleBenchmark.level,
+    currency: sampleBenchmark.currency,
+  };
+
   return (
     <div className="mx-auto w-full max-w-7xl space-y-14">
       {/* HERO */}
@@ -134,7 +154,7 @@ export default function SearchPage() {
             <div className="rounded-2xl border border-dashed border-border px-4 py-4 text-sm text-brand-700/80">
               Try it now:{" "}
               <span className="font-semibold text-brand-900">
-                {SAMPLE_BENCHMARK.role} · {SAMPLE_BENCHMARK.location} · {SAMPLE_BENCHMARK.level} · {SAMPLE_BENCHMARK.currency}
+                {sampleBenchmark.role} · {sampleBenchmark.location} · {sampleBenchmark.level} · {sampleBenchmark.currency}
               </span>
             </div>
 
@@ -243,9 +263,9 @@ export default function SearchPage() {
 
             <div className="grid gap-4 sm:grid-cols-3">
               {([
-                { label: "P25", value: formatMoney(SAMPLE_BENCHMARK.currency, SAMPLE_BENCHMARK.p25) },
-                { label: "Median (P50)", value: formatMoney(SAMPLE_BENCHMARK.currency, SAMPLE_BENCHMARK.p50) },
-                { label: "P75", value: formatMoney(SAMPLE_BENCHMARK.currency, SAMPLE_BENCHMARK.p75) },
+                { label: "P25", value: formatMoney(sampleBenchmark.currency, sampleBenchmark.p25) },
+                { label: "Median (P50)", value: formatMoney(sampleBenchmark.currency, sampleBenchmark.p50) },
+                { label: "P75", value: formatMoney(sampleBenchmark.currency, sampleBenchmark.p75) },
               ] as const).map((item) => (
                 <Card key={item.label} className="p-5">
                   <div className="text-sm font-semibold text-brand-800/80">{item.label}</div>

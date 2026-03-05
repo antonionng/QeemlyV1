@@ -1,7 +1,6 @@
 "use client";
 
 import { Users, Banknote, Target, AlertTriangle, TrendingUp, TrendingDown } from "lucide-react";
-import { SparkAreaChart, DonutChart } from "@tremor/react";
 import { Card } from "@/components/ui/card";
 import { formatAEDCompact, type CompanyMetrics } from "@/lib/employees";
 import { useSalaryView, applyViewMode } from "@/lib/salary-view-store";
@@ -9,36 +8,78 @@ import clsx from "clsx";
 
 interface StatCardsProps {
   metrics: CompanyMetrics;
+  benchmarkCoverage?: {
+    activeEmployees: number;
+    benchmarkedEmployees: number;
+  };
 }
 
-export function StatCards({ metrics }: StatCardsProps) {
+function MiniBarChart({ data, colors }: { data: number[]; colors: string[] }) {
+  const max = Math.max(...data);
+  return (
+    <div className="flex items-end gap-[3px] h-10">
+      {data.map((v, i) => (
+        <div
+          key={i}
+          className="flex-1 rounded-sm min-w-[4px]"
+          style={{
+            height: `${Math.max(12, (v / max) * 100)}%`,
+            backgroundColor: colors[i % colors.length],
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function StackedBar({ segments }: { segments: { pct: number; color: string }[] }) {
+  return (
+    <div className="flex h-4 w-full rounded-full overflow-hidden">
+      {segments.map((s, i) => (
+        <div
+          key={i}
+          style={{ width: `${s.pct}%`, backgroundColor: s.color }}
+          className="transition-all duration-500"
+        />
+      ))}
+    </div>
+  );
+}
+
+export function StatCards({ metrics, benchmarkCoverage }: StatCardsProps) {
   const { salaryView } = useSalaryView();
-  // Prepare sparkline data for headcount
-  const headcountSparkData = metrics.headcountTrend.map(d => ({
-    month: d.month,
-    Headcount: d.value,
-  }));
+  const coveragePct =
+    benchmarkCoverage && benchmarkCoverage.activeEmployees > 0
+      ? Math.round((benchmarkCoverage.benchmarkedEmployees / benchmarkCoverage.activeEmployees) * 100)
+      : null;
+  const coverageBadgeClass =
+    typeof coveragePct !== "number"
+      ? ""
+      : coveragePct >= 90
+        ? "bg-emerald-100 text-emerald-700"
+        : coveragePct >= 60
+          ? "bg-amber-100 text-amber-700"
+          : "bg-rose-100 text-rose-700";
 
-  // Prepare sparkline data for payroll
-  const payrollSparkData = metrics.payrollTrend.map(d => ({
-    month: d.month,
-    Payroll: d.value,
-  }));
+  const headcountBars = metrics.headcountTrend.slice(-6).map(d => d.value);
+  const payrollBars = metrics.payrollTrend.slice(-6).map(d => d.value);
 
-  // Prepare donut data for band distribution
-  const bandDonutData = [
-    { name: "In Band", value: metrics.bandDistribution.inBand },
-    { name: "Below", value: metrics.bandDistribution.below },
-    { name: "Above", value: metrics.bandDistribution.above },
+  const headcountColors = [
+    "var(--color-brand-200)",
+    "var(--color-brand-300)",
+    "var(--color-brand-400)",
+    "var(--color-brand-100)",
+    "var(--color-brand-200)",
+    "var(--color-brand-500)",
   ];
-
-  // Prepare donut data for risk breakdown
-  const riskDonutData = metrics.riskBreakdown
-    .filter(r => r.count > 0)
-    .map(r => ({
-      name: r.label,
-      value: r.count,
-    }));
+  const payrollColors = [
+    "var(--color-brand-200)",
+    "var(--color-brand-300)",
+    "var(--color-brand-500)",
+    "var(--color-brand-200)",
+    "var(--color-brand-400)",
+    "var(--color-brand-600)",
+  ];
 
   const stats = [
     {
@@ -50,10 +91,7 @@ export function StatCards({ metrics }: StatCardsProps) {
       bgColor: "bg-brand-50",
       change: metrics.headcountChange,
       changeLabel: "vs last year",
-      chartType: "sparkline" as const,
-      chartData: headcountSparkData,
-      chartCategory: "Headcount",
-      chartColor: "violet" as const,
+      chart: <MiniBarChart data={headcountBars} colors={headcountColors} />,
     },
     {
       label: "Total Payroll",
@@ -64,56 +102,75 @@ export function StatCards({ metrics }: StatCardsProps) {
       bgColor: "bg-emerald-50",
       change: metrics.payrollChange,
       changeLabel: "vs last year",
-      chartType: "sparkline" as const,
-      chartData: payrollSparkData,
-      chartCategory: "Payroll",
-      chartColor: "emerald" as const,
+      chart: <MiniBarChart data={payrollBars} colors={payrollColors} />,
     },
     {
       label: "In Band",
       value: `${metrics.inBandPercentage}%`,
       subtext: `${metrics.outOfBandPercentage}% outside band`,
+      coverageBadge: coveragePct,
       icon: Target,
-      color: "text-blue-600",
-      bgColor: "bg-blue-50",
+      color: "text-emerald-600",
+      bgColor: "bg-emerald-50",
       change: metrics.inBandChange,
       changeLabel: "vs last year",
-      chartType: "donut" as const,
-      donutData: bandDonutData,
-      donutColors: ["emerald", "amber", "rose"] as const,
+      chart: (
+        <StackedBar
+          segments={[
+            { pct: metrics.bandDistribution.inBand, color: "var(--success)" },
+            { pct: metrics.bandDistribution.above, color: "var(--warning)" },
+            { pct: metrics.bandDistribution.below, color: "var(--danger)" },
+          ]}
+        />
+      ),
     },
     {
       label: "Risk Flags",
       value: metrics.payrollRiskFlags.toString(),
       subtext: "Above market employees",
+      coverageBadge: coveragePct,
       icon: AlertTriangle,
       color: metrics.payrollRiskFlags > 5 ? "text-red-600" : "text-amber-600",
       bgColor: metrics.payrollRiskFlags > 5 ? "bg-red-50" : "bg-amber-50",
-      change: null, // No YoY change for risk flags
-      chartType: "donut" as const,
-      donutData: riskDonutData,
-      donutColors: ["rose", "orange", "amber", "yellow"] as const,
+      change: null,
+      changeLabel: "",
+      chart: null,
     },
   ];
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid gap-4 sm:grid-cols-2 h-full">
       {stats.map((stat) => (
-        <Card key={stat.label} className="p-5 overflow-hidden" glow>
+        <Card key={stat.label} className="dash-card p-5 overflow-hidden flex flex-col" glow>
           <div className="flex items-start justify-between">
-            <div className="flex flex-col gap-1 flex-1 min-w-0">
-              <span className="text-sm font-medium text-brand-600">
+            <div className="flex flex-col gap-0.5 flex-1 min-w-0">
+              <span className="text-sm font-medium text-accent-600">
                 {stat.label}
               </span>
-              <span className="text-2xl font-bold text-brand-900">
+              {typeof stat.coverageBadge === "number" && (
+                <span
+                  className={clsx(
+                    "mt-1 inline-flex w-fit rounded-full px-2 py-0.5 text-[10px] font-semibold",
+                    coverageBadgeClass
+                  )}
+                >
+                  Coverage {stat.coverageBadge}%
+                </span>
+              )}
+              <span className="text-xs text-accent-400">
+                {stat.subtext}
+              </span>
+            </div>
+            <div className={`rounded-xl p-2 ${stat.bgColor} flex-shrink-0`}>
+              <stat.icon className={`h-4 w-4 ${stat.color}`} />
+            </div>
+          </div>
+
+          <div className="mt-3 flex items-end justify-between gap-3 flex-1">
+            <div>
+              <span className="text-2xl font-bold text-accent-900">
                 {stat.value}
               </span>
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-brand-500">
-                  {stat.subtext}
-                </span>
-              </div>
-              {/* Change indicator */}
               {stat.change !== null && (
                 <div className="flex items-center gap-1 mt-1">
                   {stat.change >= 0 ? (
@@ -129,41 +186,15 @@ export function StatCards({ metrics }: StatCardsProps) {
                   >
                     {stat.change >= 0 ? "+" : ""}{stat.change}%
                   </span>
-                  <span className="text-xs text-brand-400">
+                  <span className="text-[10px] text-accent-400">
                     {stat.changeLabel}
                   </span>
                 </div>
               )}
             </div>
-            <div className={`rounded-xl p-2.5 ${stat.bgColor} flex-shrink-0`}>
-              <stat.icon className={`h-5 w-5 ${stat.color}`} />
-            </div>
-          </div>
-          
-          {/* Mini chart */}
-          <div className="mt-4 -mx-1">
-            {stat.chartType === "sparkline" && stat.chartData && (
-              <SparkAreaChart
-                data={stat.chartData}
-                categories={[stat.chartCategory!]}
-                index="month"
-                colors={[stat.chartColor!]}
-                className="h-10 w-full"
-                curveType="monotone"
-              />
-            )}
-            {stat.chartType === "donut" && stat.donutData && stat.donutData.length > 0 && (
-              <div className="flex items-center justify-center">
-                <DonutChart
-                  data={stat.donutData}
-                  category="value"
-                  index="name"
-                  colors={[...stat.donutColors!]}
-                  className="h-16 w-16"
-                  showLabel={false}
-                  showAnimation={true}
-                  showTooltip={true}
-                />
+            {stat.chart && (
+              <div className="w-24 shrink-0">
+                {stat.chart}
               </div>
             )}
           </div>

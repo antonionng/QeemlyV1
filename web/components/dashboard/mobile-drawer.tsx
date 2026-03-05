@@ -78,19 +78,18 @@ export function MobileSidebarDrawer({ open, onOpenChange, returnFocusRef }: Mobi
     <div className="fixed inset-0 z-50 lg:hidden" role="dialog" aria-modal="true" aria-labelledby={labelledById}>
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-brand-900/20 backdrop-blur-sm animate-in fade-in duration-200"
+        className="absolute inset-0 bg-accent-900/25 backdrop-blur-sm animate-in fade-in duration-200"
         onClick={() => onOpenChange(false)}
         aria-hidden="true"
       />
 
-      {/* Panel */}
+      {/* Panel (reference: same nav styling as desktop, clean white) */}
       <div
         ref={panelRef}
         className={clsx(
           "absolute left-0 top-0 h-full w-[85vw] max-w-[320px]",
-          "bg-white/95 backdrop-blur-xl",
-          "border-r border-border/50",
-          "shadow-2xl shadow-brand-900/10",
+          "bg-white border-r border-border",
+          "shadow-xl shadow-accent-900/10",
           "animate-in slide-in-from-left duration-300",
         )}
       >
@@ -98,7 +97,7 @@ export function MobileSidebarDrawer({ open, onOpenChange, returnFocusRef }: Mobi
         <button
           ref={closeBtnRef}
           type="button"
-          className="absolute right-3 top-3 z-10 inline-flex h-9 w-9 items-center justify-center rounded-xl bg-brand-100/70 text-brand-800/80 transition-colors hover:bg-brand-200/70 focus-visible:outline-none"
+          className="absolute right-3 top-3 z-10 inline-flex h-9 w-9 items-center justify-center rounded-lg bg-accent-100 text-accent-700 transition-colors hover:bg-accent-200 focus-visible:outline-none"
           aria-label="Close menu"
           onClick={() => onOpenChange(false)}
         >

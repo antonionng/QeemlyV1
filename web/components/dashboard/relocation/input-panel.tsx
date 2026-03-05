@@ -10,11 +10,10 @@ import {
   Search,
   Wallet,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import {
-  CITIES,
+  getRelocationCities,
   City,
   searchCities,
   REGION_LABELS,
@@ -51,7 +50,7 @@ function CitySelect({
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
 
-  const selectedCity = CITIES.find((c) => c.id === value);
+  const selectedCity = getRelocationCities().find((c) => c.id === value);
 
   const filteredCities = useMemo(() => {
     let cities = searchCities(search);
@@ -86,7 +85,7 @@ function CitySelect({
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         className={clsx(
-          "flex w-full items-center justify-between gap-2 rounded-xl border border-brand-200 bg-white px-4 py-3 text-left transition-all",
+          "flex w-full items-center justify-between gap-2 rounded-xl border border-border bg-white px-4 py-3 text-left transition-all",
           "hover:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-500/20",
           isOpen && "border-brand-400 ring-2 ring-brand-500/20"
         )}
@@ -110,8 +109,8 @@ function CitySelect({
       </button>
 
       {isOpen && (
-        <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-80 overflow-hidden rounded-xl border border-brand-200 bg-white shadow-xl">
-          <div className="border-b border-brand-100 p-2">
+        <div className="absolute left-0 right-0 top-full z-50 mt-2 max-h-80 overflow-hidden rounded-xl border border-border bg-white shadow-xl">
+          <div className="border-b border-border p-2">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-accent-400" />
               <input
@@ -119,7 +118,7 @@ function CitySelect({
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search cities..."
-                className="w-full rounded-lg border border-brand-100 bg-brand-50 py-2 pl-9 pr-3 text-sm focus:border-brand-300 focus:outline-none"
+                className="w-full rounded-lg border border-border bg-accent-50 py-2 pl-9 pr-3 text-sm focus:border-brand-300 focus:outline-none"
                 autoFocus
               />
             </div>
@@ -145,8 +144,8 @@ function CitySelect({
                       className={clsx(
                         "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors",
                         city.id === value
-                          ? "bg-brand-100 text-brand-900"
-                          : "hover:bg-brand-50"
+                          ? "bg-brand-50 text-brand-900"
+                          : "hover:bg-accent-50"
                       )}
                     >
                       <span className="text-lg">{city.flag}</span>
@@ -197,7 +196,7 @@ export function InputPanel({ data, onChange, className }: InputPanelProps) {
   return (
     <Card
       className={clsx(
-        "bg-white p-5 ring-1 ring-brand-200 transition-all",
+        "dash-card bg-white p-5 transition-all",
         className
       )}
     >
@@ -261,7 +260,7 @@ export function InputPanel({ data, onChange, className }: InputPanelProps) {
                 updateField("baseSalary", Number(e.target.value) || 0)
               }
               placeholder="e.g., 450000"
-              className="h-12 rounded-xl pl-10"
+              className="h-11 rounded-xl pl-10"
             />
           </div>
         </div>
@@ -281,7 +280,7 @@ export function InputPanel({ data, onChange, className }: InputPanelProps) {
                   "flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-all",
                   data.compApproach === approach.id
                     ? "border-brand-500 bg-brand-50 ring-1 ring-brand-500"
-                    : "border-brand-200 bg-white hover:border-brand-300"
+                    : "border-border bg-white hover:border-brand-300"
                 )}
               >
                 <div
@@ -307,7 +306,7 @@ export function InputPanel({ data, onChange, className }: InputPanelProps) {
 
         {/* Hybrid Cap Slider */}
         {data.compApproach === "hybrid" && (
-          <div className="rounded-xl bg-brand-50 p-4">
+          <div className="rounded-xl border border-border bg-accent-50 p-4">
             <div className="flex items-center justify-between">
               <label className="text-sm font-semibold text-brand-900">
                 Maximum Adjustment Cap
@@ -351,7 +350,7 @@ export function InputPanel({ data, onChange, className }: InputPanelProps) {
                 )
               }
               placeholder="Monthly rent in AED"
-              className="h-12 rounded-xl pl-10"
+              className="h-11 rounded-xl pl-10"
             />
           </div>
           <p className="mt-1 text-xs text-accent-400">

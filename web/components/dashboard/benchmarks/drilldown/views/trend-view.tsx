@@ -4,7 +4,6 @@ import { useState } from "react";
 import { TrendingUp, TrendingDown } from "lucide-react";
 import { AreaChart } from "@tremor/react";
 import clsx from "clsx";
-import { Card } from "@/components/ui/card";
 import { type BenchmarkResult } from "@/lib/benchmarks/benchmark-state";
 import { useSalaryView } from "@/lib/salary-view-store";
 
@@ -40,6 +39,7 @@ export function TrendView({ result }: TrendViewProps) {
   };
 
   const trendData = getFilteredTrend();
+  const hasTrendData = trendData.length > 1;
 
   // Calculate period change
   const startValue = convertValue(trendData[0]?.p50 || 0);
@@ -47,12 +47,12 @@ export function TrendView({ result }: TrendViewProps) {
   const periodChange = startValue > 0 ? ((endValue - startValue) / startValue) * 100 : 0;
 
   return (
-    <Card className="p-6">
+    <div className="bench-section">
       {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-4">
         <div>
-          <h3 className="text-sm font-semibold text-brand-900">{role.title} Trend</h3>
-          <p className="text-xs text-brand-500">Salary trend over time</p>
+          <h3 className="bench-section-header pb-0">Trend Chart</h3>
+          <p className="text-xs text-brand-500">{role.title} salary trend over time</p>
         </div>
 
         <div className="flex gap-1 rounded-lg bg-brand-100/50 p-1">
@@ -73,6 +73,12 @@ export function TrendView({ result }: TrendViewProps) {
           ))}
         </div>
       </div>
+
+      {!hasTrendData && (
+        <div className="mb-4 rounded-xl bg-amber-50 px-4 py-3 text-xs text-amber-700">
+          Historical trend points are not available for this benchmark row yet.
+        </div>
+      )}
 
       {/* Period summary */}
       <div className="flex items-center gap-4 rounded-xl bg-brand-50 px-4 py-3 mb-4">
@@ -111,26 +117,28 @@ export function TrendView({ result }: TrendViewProps) {
       </div>
 
       {/* Line Chart */}
-      <div className="min-h-[220px] [&_.recharts-area-area]:!opacity-0">
-        <AreaChart
-          className="h-56"
-          data={trendData.map((point) => ({
-            month: point.month,
-            P25: convertValue(point.p25),
-            Median: convertValue(point.p50),
-            P75: convertValue(point.p75),
-          }))}
-          index="month"
-          categories={["P25", "Median", "P75"]}
-          colors={["slate", "violet", "slate"]}
-          valueFormatter={(v) => formatAED(v)}
-          showLegend={true}
-          showGridLines={false}
-          showGradient={false}
-          curveType="monotone"
-          yAxisWidth={72}
-        />
-      </div>
+      {hasTrendData ? (
+        <div className="min-h-[220px] [&_.recharts-area-area]:!opacity-0">
+          <AreaChart
+            className="h-56"
+            data={trendData.map((point) => ({
+              month: point.month,
+              P25: convertValue(point.p25),
+              Median: convertValue(point.p50),
+              P75: convertValue(point.p75),
+            }))}
+            index="month"
+            categories={["P25", "Median", "P75"]}
+            colors={["slate", "violet", "slate"]}
+            valueFormatter={(v) => formatAED(v)}
+            showLegend={true}
+            showGridLines={false}
+            showGradient={false}
+            curveType="monotone"
+            yAxisWidth={72}
+          />
+        </div>
+      ) : null}
 
       {/* Trend insights */}
       <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t border-border">
@@ -162,6 +170,6 @@ export function TrendView({ result }: TrendViewProps) {
           </span>
         </div>
       </div>
-    </Card>
+    </div>
   );
 }

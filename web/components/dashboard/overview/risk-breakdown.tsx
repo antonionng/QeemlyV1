@@ -1,6 +1,6 @@
 "use client";
 
-import { DonutChart, BarList } from "@tremor/react";
+import { BarList } from "@tremor/react";
 import { Card } from "@/components/ui/card";
 import { AlertTriangle, AlertCircle, AlertOctagon, Info, ArrowRight } from "lucide-react";
 import Link from "next/link";
@@ -11,10 +11,26 @@ import { useSalaryView, applyViewMode } from "@/lib/salary-view-store";
 interface RiskBreakdownProps {
   metrics: CompanyMetrics;
   departmentSummaries: DepartmentSummary[];
+  benchmarkCoverage?: {
+    activeEmployees: number;
+    benchmarkedEmployees: number;
+  };
 }
 
-export function RiskBreakdown({ metrics, departmentSummaries }: RiskBreakdownProps) {
+export function RiskBreakdown({ metrics, departmentSummaries, benchmarkCoverage }: RiskBreakdownProps) {
   const { salaryView } = useSalaryView();
+  const coveragePct =
+    benchmarkCoverage && benchmarkCoverage.activeEmployees > 0
+      ? Math.round((benchmarkCoverage.benchmarkedEmployees / benchmarkCoverage.activeEmployees) * 100)
+      : null;
+  const coverageTextClass =
+    typeof coveragePct !== "number"
+      ? ""
+      : coveragePct >= 90
+        ? "text-emerald-600"
+        : coveragePct >= 60
+          ? "text-amber-600"
+          : "text-rose-600";
   // Get severity icon
   const getSeverityIcon = (severity: string) => {
     switch (severity) {
@@ -38,12 +54,6 @@ export function RiskBreakdown({ metrics, departmentSummaries }: RiskBreakdownPro
   const activeRisks = metrics.riskBreakdown.filter(r => r.count > 0);
   const totalRiskEmployees = activeRisks.reduce((sum, r) => sum + r.count, 0);
 
-  // Prepare donut data
-  const donutData = activeRisks.map(r => ({
-    name: r.severity.charAt(0).toUpperCase() + r.severity.slice(1),
-    value: r.count,
-  }));
-
   // Calculate risk by department
   const deptRiskData = departmentSummaries
     .map(d => ({
@@ -55,16 +65,44 @@ export function RiskBreakdown({ metrics, departmentSummaries }: RiskBreakdownPro
 
   // Estimate cost impact (rough calculation)
   const estimatedOverpayment = totalRiskEmployees * 50000; // Assume avg 50k AED overpayment per risk employee
+  const ringSegments = activeRisks.map((risk) => ({
+    value: risk.count,
+    color:
+      risk.severity === "critical"
+        ? "var(--danger)"
+        : risk.severity === "high"
+          ? "var(--warning)"
+          : "var(--color-brand-300)",
+  }));
+  const totalRing = ringSegments.reduce((sum, seg) => sum + seg.value, 0) || 1;
+  const ringGradientParts = ringSegments.reduce<{ cursor: number; parts: string[] }>(
+    (acc, segment) => {
+      const start = (acc.cursor / totalRing) * 360;
+      const nextCursor = acc.cursor + segment.value;
+      const end = (nextCursor / totalRing) * 360;
+      acc.parts.push(`${segment.color} ${start}deg ${end}deg`);
+      return { cursor: nextCursor, parts: acc.parts };
+    },
+    { cursor: 0, parts: [] },
+  );
+  const ringGradient = ringGradientParts.parts.join(", ");
 
   return (
-    <Card className="p-5">
-      <div className="flex items-start justify-between mb-4">
+    <Card className="dash-card p-5">
+      <div className="mb-4 flex items-start justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-brand-900">Risk Analysis</h3>
-          <p className="text-xs text-brand-500 mt-0.5">Compensation risk indicators</p>
+          <h3 className="text-sm font-semibold text-accent-900">Risk Analysis</h3>
+          <p className="text-xs text-accent-500 mt-0.5">
+            Compensation risk indicators
+            {typeof coveragePct === "number" && (
+              <span className={clsx("font-semibold", coverageTextClass)}>
+                {` · Coverage ${coveragePct}%`}
+              </span>
+            )}
+          </p>
         </div>
         {totalRiskEmployees > 0 && (
-          <div className="flex items-center gap-1.5 rounded-full bg-rose-50 px-2.5 py-1">
+          <div className="flex items-center gap-1.5 rounded-full bg-danger-soft px-2.5 py-1">
             <AlertTriangle className="h-3.5 w-3.5 text-rose-600" />
             <span className="text-xs font-semibold text-rose-700">
               {totalRiskEmployees} at risk
@@ -87,23 +125,23 @@ export function RiskBreakdown({ metrics, departmentSummaries }: RiskBreakdownPro
         <div className="space-y-5">
           {/* Severity breakdown with donut */}
           <div className="flex items-center gap-6">
-            <DonutChart
-              data={donutData}
-              category="value"
-              index="name"
-              colors={["rose", "orange", "amber", "yellow"]}
-              className="h-24 w-24 flex-shrink-0"
-              showLabel={false}
-              showAnimation={true}
-            />
+            <div className="relative h-24 w-24 shrink-0">
+              <div
+                className="h-full w-full rounded-full"
+                style={{
+                  background: `conic-gradient(${ringGradient})`,
+                }}
+              />
+              <div className="absolute inset-[16%] rounded-full bg-white" />
+            </div>
             <div className="flex-1 space-y-2">
-              {activeRisks.map(risk => {
+              {activeRisks.map((risk) => {
                 const Icon = getSeverityIcon(risk.severity);
                 const colors = getSeverityColor(risk.severity);
                 return (
                   <div
                     key={risk.severity}
-                    className={clsx("flex items-center justify-between p-2 rounded-lg", colors.bg)}
+                    className={clsx("flex items-center justify-between rounded-lg p-2", colors.bg)}
                   >
                     <div className="flex items-center gap-2">
                       <Icon className={clsx("h-4 w-4", colors.text)} />
@@ -121,7 +159,7 @@ export function RiskBreakdown({ metrics, departmentSummaries }: RiskBreakdownPro
           </div>
 
           {/* Cost impact callout */}
-          <div className="p-3 rounded-xl bg-rose-50 border border-rose-100">
+          <div className="rounded-xl border border-rose-100 bg-rose-50 p-3">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs font-medium text-rose-700">Estimated Annual Overpayment</p>
@@ -155,9 +193,9 @@ export function RiskBreakdown({ metrics, departmentSummaries }: RiskBreakdownPro
           )}
 
           {/* Action link */}
-          <Link 
+          <Link
             href="/dashboard/salary-review?filter=above-band"
-            className="flex items-center justify-between p-3 rounded-xl bg-brand-50 hover:bg-brand-100 transition-colors group"
+            className="group flex items-center justify-between rounded-xl bg-brand-50 p-3 transition-colors hover:bg-brand-100"
           >
             <span className="text-sm font-medium text-brand-700">
               Review all risk employees

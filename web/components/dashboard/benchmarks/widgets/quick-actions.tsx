@@ -19,34 +19,54 @@ type ActionState = {
   alertSet: boolean;
 };
 
+type FeedbackState = {
+  type: "info" | "success";
+  message: string;
+};
+
 export function QuickActionsWidget() {
   const { selectedRole, selectedBenchmark } = useBenchmarksContext();
   const [actionState, setActionState] = useState<ActionState>({
     saved: false,
     alertSet: false,
   });
+  const [feedback, setFeedback] = useState<FeedbackState | null>(null);
 
   const handleSave = () => {
     setActionState((prev) => ({ ...prev, saved: !prev.saved }));
+    setFeedback({
+      type: "success",
+      message: actionState.saved ? "Benchmark removed from watchlist." : "Benchmark saved to watchlist.",
+    });
   };
 
   const handleSetAlert = () => {
     setActionState((prev) => ({ ...prev, alertSet: !prev.alertSet }));
+    setFeedback({
+      type: "success",
+      message: actionState.alertSet ? "Alert turned off." : "Alert configured for this benchmark.",
+    });
   };
 
   const handleExport = () => {
-    // In real app, this would trigger export
-    alert("Exporting benchmark data...");
+    setFeedback({
+      type: "info",
+      message: "Export is queued. Download support will be enabled in the next release.",
+    });
   };
 
   const handleShare = () => {
-    // In real app, this would open share modal
-    alert("Share functionality coming soon!");
+    setFeedback({
+      type: "info",
+      message: "Sharing is not available in GA yet.",
+    });
   };
 
   const handleCompare = () => {
-    // In real app, this would open comparison view
-    alert("Compare mode coming soon!");
+    setFeedback({
+      type: "info",
+      message: "Compare mode is planned for a post-GA release.",
+    });
   };
 
   if (!selectedRole) {
@@ -152,6 +172,18 @@ export function QuickActionsWidget() {
               ? "Benchmark saved to watchlist"
               : "Price alert configured"}
           </p>
+        </div>
+      )}
+      {feedback && (
+        <div
+          className={clsx(
+            "rounded-lg p-3",
+            feedback.type === "success"
+              ? "bg-emerald-50 text-emerald-700"
+              : "bg-accent-100 text-accent-700"
+          )}
+        >
+          <p className="text-xs font-medium">{feedback.message}</p>
         </div>
       )}
     </div>

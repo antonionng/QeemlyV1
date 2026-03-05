@@ -1,9 +1,12 @@
 "use client";
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { FeatureNotEnabled } from "@/components/dashboard/feature-not-enabled";
+import { isFeatureEnabled } from "@/lib/release/ga-scope";
 import { 
   CreditCard, 
   Check, 
@@ -15,67 +18,14 @@ import {
   ArrowUpRight
 } from "lucide-react";
 
-const plans = [
-  {
-    id: "starter",
-    name: "Starter",
-    price: "AED 179",
-    period: "/month",
-    description: "For small teams getting started with compensation benchmarking.",
-    features: [
-      "Up to 5 team members",
-      "500 benchmark lookups/month",
-      "3 saved reports",
-      "Email support",
-    ],
-    cta: "Current Plan",
-    current: true,
-  },
-  {
-    id: "professional",
-    name: "Professional",
-    price: "AED 549",
-    period: "/month",
-    description: "For growing teams that need more power and flexibility.",
-    features: [
-      "Up to 25 team members",
-      "Unlimited benchmark lookups",
-      "Unlimited reports",
-      "Priority support",
-      "Custom exports",
-      "API access",
-    ],
-    cta: "Upgrade",
-    popular: true,
-  },
-  {
-    id: "enterprise",
-    name: "Enterprise",
-    price: "Custom",
-    period: "",
-    description: "For large organizations with custom requirements.",
-    features: [
-      "Unlimited team members",
-      "Dedicated account manager",
-      "Custom integrations",
-      "SLA guarantee",
-      "SSO / SAML",
-      "On-premise option",
-    ],
-    cta: "Contact Sales",
-  },
-];
-
-const invoices = [
-  { id: "INV-001", date: "Jan 1, 2026", amount: "AED 179.00", status: "Paid" },
-  { id: "INV-002", date: "Dec 1, 2025", amount: "AED 179.00", status: "Paid" },
-  { id: "INV-003", date: "Nov 1, 2025", amount: "AED 179.00", status: "Paid" },
-];
-
 export default function BillingPage() {
+  const billingEnabled = isFeatureEnabled("billing");
   const supabase = createClient();
   const [loading, setLoading] = useState(true);
-  const [workspace, setWorkspace] = useState<any>(null);
+  const [workspace, setWorkspace] = useState<{ name?: string } | null>(null);
+  const [plans, setPlans] = useState<any[]>([]);
+  const [invoices, setInvoices] = useState<any[]>([]);
+  const [subscription, setSubscription] = useState<any | null>(null);
 
   useEffect(() => {
     async function getData() {
@@ -90,10 +40,21 @@ export default function BillingPage() {
           setWorkspace(profile.workspaces);
         }
       }
+      const billingRes = await fetch("/api/billing");
+      if (billingRes.ok) {
+        const billingData = await billingRes.json();
+        setPlans(billingData.plans || []);
+        setInvoices(billingData.invoices || []);
+        setSubscription(billingData.subscription);
+      }
       setLoading(false);
     }
     getData();
   }, [supabase]);
+
+  if (!billingEnabled) {
+    return <FeatureNotEnabled featureName="Billing" />;
+  }
 
   if (loading) {
     return (
@@ -107,7 +68,7 @@ export default function BillingPage() {
     <div className="max-w-6xl space-y-10">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-brand-900">Billing & Plans</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-accent-800 sm:text-3xl">Billing & Plans</h1>
         <p className="text-brand-600">Manage your subscription and billing details.</p>
       </div>
 
@@ -120,10 +81,12 @@ export default function BillingPage() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="text-lg font-bold text-brand-900">Starter Plan</h2>
+                <h2 className="text-lg font-bold text-brand-900">{subscription?.billing_plans?.name || "No active plan"}</h2>
                 <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-bold text-green-700">Active</span>
               </div>
-              <p className="text-sm text-brand-600">Your next billing date is <strong>February 1, 2026</strong></p>
+              <p className="text-sm text-brand-600">
+                Your next billing date is <strong>{subscription?.next_billing_at ? new Date(subscription.next_billing_at).toLocaleDateString("en-GB") : "Not scheduled"}</strong>
+              </p>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -144,11 +107,11 @@ export default function BillingPage() {
             </div>
             <div className="flex items-center gap-2 text-brand-600">
               <Calendar size={16} className="text-brand-400" />
-              <span>Billing cycle: Monthly</span>
+              <span>Billing cycle: {subscription?.billing_cycle || "N/A"}</span>
             </div>
             <div className="flex items-center gap-2 text-brand-600">
               <CreditCard size={16} className="text-brand-400" />
-              <span>Visa ending in 4242</span>
+              <span>Card ending in {subscription?.payment_method_last4 || "N/A"}</span>
             </div>
           </div>
         </div>
@@ -158,14 +121,18 @@ export default function BillingPage() {
       <div>
         <h2 className="mb-6 text-lg font-bold text-brand-900">Available Plans</h2>
         <div className="grid gap-6 lg:grid-cols-3">
-          {plans.map((plan) => (
+          {plans.map((plan) => {
+            const isCurrent = subscription?.billing_plans?.code === plan.code;
+            const monthly = Number(plan.monthly_price || 0);
+            const cta = isCurrent ? "Current Plan" : monthly > 0 ? "Upgrade" : "Contact Sales";
+            return (
             <Card 
               key={plan.id} 
               className={`relative overflow-hidden p-6 transition-all hover:shadow-lg ${
-                plan.popular ? "ring-2 ring-brand-500 shadow-lg shadow-brand-500/10" : ""
-              } ${plan.current ? "bg-brand-50/50" : ""}`}
+                plan.code === "professional" ? "ring-2 ring-brand-500 shadow-lg shadow-brand-500/10" : ""
+              } ${isCurrent ? "bg-brand-50/50" : ""}`}
             >
-              {plan.popular && (
+              {plan.code === "professional" && (
                 <div className="absolute -right-8 top-4 rotate-45 bg-brand-500 px-10 py-1 text-xs font-bold text-white shadow-sm">
                   Popular
                 </div>
@@ -173,13 +140,15 @@ export default function BillingPage() {
               <div className="mb-4">
                 <h3 className="text-lg font-bold text-brand-900">{plan.name}</h3>
                 <div className="mt-2 flex items-baseline gap-1">
-                  <span className="text-3xl font-bold text-brand-900">{plan.price}</span>
-                  <span className="text-brand-500">{plan.period}</span>
+                  <span className="text-3xl font-bold text-brand-900">
+                    {monthly > 0 ? `AED ${monthly}` : "Custom"}
+                  </span>
+                  <span className="text-brand-500">{monthly > 0 ? "/month" : ""}</span>
                 </div>
                 <p className="mt-2 text-sm text-brand-600">{plan.description}</p>
               </div>
               <ul className="mb-6 space-y-3">
-                {plan.features.map((feature, i) => (
+                {(plan.features || []).map((feature: string, i: number) => (
                   <li key={i} className="flex items-center gap-2 text-sm text-brand-700">
                     <Check size={16} className="shrink-0 text-green-500" />
                     {feature}
@@ -188,14 +157,14 @@ export default function BillingPage() {
               </ul>
               <Button 
                 fullWidth 
-                variant={plan.current ? "outline" : plan.popular ? "primary" : "ghost"}
-                disabled={plan.current}
+                variant={isCurrent ? "outline" : plan.code === "professional" ? "primary" : "ghost"}
+                disabled={isCurrent}
               >
-                {plan.cta}
-                {!plan.current && <ArrowUpRight size={16} className="ml-1" />}
+                {cta}
+                {!isCurrent && <ArrowUpRight size={16} className="ml-1" />}
               </Button>
             </Card>
-          ))}
+          )})}
         </div>
       </div>
 
@@ -217,13 +186,13 @@ export default function BillingPage() {
               <tbody className="divide-y divide-border/50">
                 {invoices.map((invoice) => (
                   <tr key={invoice.id} className="hover:bg-brand-50/20 transition-colors">
-                    <td className="px-6 py-4 font-medium text-brand-900">{invoice.id}</td>
-                    <td className="px-6 py-4 text-brand-600">{invoice.date}</td>
-                    <td className="px-6 py-4 font-semibold text-brand-900">{invoice.amount}</td>
+                    <td className="px-6 py-4 font-medium text-brand-900">{invoice.invoice_number}</td>
+                    <td className="px-6 py-4 text-brand-600">{new Date(invoice.issued_at).toLocaleDateString("en-GB")}</td>
+                    <td className="px-6 py-4 font-semibold text-brand-900">{`${invoice.currency} ${Number(invoice.amount).toFixed(2)}`}</td>
                     <td className="px-6 py-4">
                       <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-1 text-xs font-bold text-green-700">
                         <Check size={12} />
-                        {invoice.status}
+                        {String(invoice.status || "").toUpperCase()}
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">

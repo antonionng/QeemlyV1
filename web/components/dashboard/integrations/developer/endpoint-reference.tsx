@@ -37,7 +37,7 @@ const METHOD_COLORS: Record<HttpMethod, { bg: string; text: string }> = {
 
 const ENDPOINTS: { group: string; endpoints: ApiEndpoint[] }[] = [
   {
-    group: "Employees",
+    group: "Employee Data",
     endpoints: [
       {
         method: "GET",
@@ -120,7 +120,7 @@ const ENDPOINTS: { group: string; endpoints: ApiEndpoint[] }[] = [
     ],
   },
   {
-    group: "Benchmarks",
+    group: "Salary Benchmarks",
     endpoints: [
       {
         method: "GET",

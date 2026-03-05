@@ -40,6 +40,7 @@ export interface Employee {
   bandPosition: BandPosition;
   bandPercentile: number; // 0-100, where they sit in the band
   marketComparison: number; // % vs market median (-20 to +30)
+  hasBenchmark?: boolean; // true when band/market fields were computed from real benchmark data
   hireDate: Date;
   lastReviewDate?: Date;
   performanceRating?: PerformanceRating;
@@ -300,8 +301,8 @@ function generateEmployees(count: number): Employee[] {
   return employees;
 }
 
-// Generate 150 employees
-export const MOCK_EMPLOYEES: Employee[] = generateEmployees(150);
+// Real-data mode: keep this empty to avoid synthetic fallback records.
+export const MOCK_EMPLOYEES: Employee[] = [];
 
 // Calculate department summaries
 export function getDepartmentSummaries(): DepartmentSummary[] {
@@ -407,7 +408,9 @@ export function getCompanyMetrics(): CompanyMetrics {
   const aboveBandCount = activeEmployees.filter(e => e.bandPosition === "above").length;
   const outOfBandCount = activeEmployees.length - inBandCount;
   
-  const avgMarketPosition = activeEmployees.reduce((sum, e) => sum + e.marketComparison, 0) / activeEmployees.length;
+  const avgMarketPosition = activeEmployees.length > 0
+    ? activeEmployees.reduce((sum, e) => sum + e.marketComparison, 0) / activeEmployees.length
+    : 0;
   
   // Roles outside band = employees below or above band
   const rolesOutsideBand = outOfBandCount;
@@ -419,7 +422,9 @@ export function getCompanyMetrics(): CompanyMetrics {
   // Payroll risk flags = employees significantly above band (>15% above market)
   const payrollRiskFlags = activeEmployees.filter(e => e.marketComparison > 15).length;
   
-  const inBandPercentage = Math.round((inBandCount / activeEmployees.length) * 100);
+  const inBandPercentage = activeEmployees.length > 0
+    ? Math.round((inBandCount / activeEmployees.length) * 100)
+    : 0;
   
   // Generate trend data
   const headcountTrend = generateTrendData(activeEmployees.length, 0.03, 0.08);
@@ -438,9 +443,9 @@ export function getCompanyMetrics(): CompanyMetrics {
   
   // Band distribution as percentages
   const bandDistribution = {
-    below: Math.round((belowBandCount / activeEmployees.length) * 100),
+    below: activeEmployees.length > 0 ? Math.round((belowBandCount / activeEmployees.length) * 100) : 0,
     inBand: inBandPercentage,
-    above: Math.round((aboveBandCount / activeEmployees.length) * 100),
+    above: activeEmployees.length > 0 ? Math.round((aboveBandCount / activeEmployees.length) * 100) : 0,
   };
   
   return {
@@ -448,7 +453,9 @@ export function getCompanyMetrics(): CompanyMetrics {
     activeEmployees: activeEmployees.length,
     totalPayroll,
     inBandPercentage,
-    outOfBandPercentage: Math.round((outOfBandCount / activeEmployees.length) * 100),
+    outOfBandPercentage: activeEmployees.length > 0
+      ? Math.round((outOfBandCount / activeEmployees.length) * 100)
+      : 0,
     avgMarketPosition: Math.round(avgMarketPosition * 10) / 10,
     rolesOutsideBand,
     departmentsOverBenchmark,

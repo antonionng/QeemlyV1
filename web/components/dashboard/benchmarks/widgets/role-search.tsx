@@ -1,16 +1,17 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import clsx from "clsx";
 import { ArrowDownRight, ArrowUpRight, Filter, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useBenchmarksContext } from "@/lib/benchmarks/context";
 import {
   ROLES,
-  generateBenchmark,
+  type SalaryBenchmark,
   formatCurrencyK,
   formatPercentage,
 } from "@/lib/dashboard/dummy-data";
+import { getAllDbBenchmarks } from "@/lib/benchmarks/data-service";
 
 export function RoleSearchWidget() {
   const {
@@ -22,15 +23,21 @@ export function RoleSearchWidget() {
     selectRole,
     salaryView,
   } = useBenchmarksContext();
+  const [benchmarkMap, setBenchmarkMap] = useState<Map<string, SalaryBenchmark>>(new Map());
   const multiplier = salaryView === "annual" ? 12 : 1;
 
-  // Generate role previews with benchmark data
+  useEffect(() => {
+    void getAllDbBenchmarks().then(setBenchmarkMap);
+  }, []);
+
+  // Role previews from real benchmark rows only
   const rolePreviews = useMemo(() => {
     return ROLES.map((role) => {
-      const benchmark = generateBenchmark(role.id, selectedLocationId, selectedLevelId);
-      return { role, benchmark };
-    });
-  }, [selectedLocationId, selectedLevelId]);
+      const key = `${role.id}::${selectedLocationId}::${selectedLevelId}`;
+      const benchmark = benchmarkMap.get(key);
+      return benchmark ? { role, benchmark } : null;
+    }).filter(Boolean) as Array<{ role: (typeof ROLES)[number]; benchmark: SalaryBenchmark }>;
+  }, [benchmarkMap, selectedLocationId, selectedLevelId]);
 
   // Filter roles based on search
   const filteredRoles = useMemo(() => {
@@ -73,7 +80,7 @@ export function RoleSearchWidget() {
         </span>
         {searchQuery && (
           <span className="text-xs text-brand-600">
-            Showing matches for "{searchQuery}"
+            Showing matches for &quot;{searchQuery}&quot;
           </span>
         )}
       </div>

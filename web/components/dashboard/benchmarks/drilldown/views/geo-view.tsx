@@ -1,13 +1,12 @@
 "use client";
 
-import { MapPin } from "lucide-react";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { useEffect, useState } from "react";
 import { type BenchmarkResult } from "@/lib/benchmarks/benchmark-state";
-import { LOCATIONS, generateBenchmark } from "@/lib/dashboard/dummy-data";
+import { LOCATIONS, type SalaryBenchmark } from "@/lib/dashboard/dummy-data";
 import { useCompanySettings, getCompanyInitials } from "@/lib/company";
-import { useCurrencyFormatter, convertCurrency, monthlyToAnnual, roundToThousand } from "@/lib/utils/currency";
+import { convertCurrency, formatBenchmarkCompact, toBenchmarkDisplayValue } from "@/lib/utils/currency";
 import { useSalaryView } from "@/lib/salary-view-store";
+import { getBenchmark } from "@/lib/benchmarks/data-service";
 
 interface GeoViewProps {
   result: BenchmarkResult;
@@ -15,64 +14,84 @@ interface GeoViewProps {
 
 // Extended locations including UK
 const ALL_LOCATIONS = [
-  { id: "london", city: "London", country: "United Kingdom", countryCode: "GB", currency: "AED" as const, flag: "GB" },
-  { id: "manchester", city: "Manchester", country: "United Kingdom", countryCode: "GB", currency: "AED" as const, flag: "GB" },
+  { id: "london", city: "London", country: "United Kingdom", countryCode: "GB", currency: "GBP" as const, flag: "GB" },
+  { id: "manchester", city: "Manchester", country: "United Kingdom", countryCode: "GB", currency: "GBP" as const, flag: "GB" },
   ...LOCATIONS,
 ];
 
 export function GeoView({ result }: GeoViewProps) {
   const { role, level, location } = result;
   const companySettings = useCompanySettings();
-  const currency = useCurrencyFormatter();
   const { salaryView } = useSalaryView();
+  const [benchmarksByLocation, setBenchmarksByLocation] = useState<Record<string, SalaryBenchmark>>({});
   
   // Company branding
   const hasCompanyLogo = !!companySettings.companyLogo;
   const companyInitials = getCompanyInitials(companySettings.companyName);
   
-  // Convert from monthly AED to company's default currency (respects salary view mode)
-  const convertToDefault = (value: number) => {
-    const converted = salaryView === "annual" ? monthlyToAnnual(value) : value;
-    return roundToThousand(convertCurrency(converted, "AED", currency.defaultCurrency));
-  };
-  
-  const formatCompact = (value: number) => {
-    if (value >= 1000) {
-      return `${currency.symbol}${(value / 1000).toFixed(0)}k`;
-    }
-    return currency.format(value);
-  };
+  useEffect(() => {
+    const run = async () => {
+      const entries = await Promise.all(
+        ALL_LOCATIONS.map(async (loc) => {
+          const sourceLocationId = loc.id === "london" || loc.id === "manchester" ? "dubai" : loc.id;
+          const benchmark = await getBenchmark(role.id, sourceLocationId, level.id);
+          return benchmark ? { locationId: loc.id, benchmark } : null;
+        }),
+      );
+      const next: Record<string, SalaryBenchmark> = {};
+      for (const entry of entries) {
+        if (!entry) continue;
+        next[entry.locationId] = entry.benchmark;
+      }
+      setBenchmarksByLocation(next);
+    };
+    void run();
+  }, [level.id, role.id]);
 
-  // Generate comparison data for all locations
-  const locationData = ALL_LOCATIONS.map(loc => {
-    const locationId = loc.id === "london" || loc.id === "manchester" ? "dubai" : loc.id;
-    const bench = generateBenchmark(role.id, locationId, level.id);
-    const median = convertToDefault(bench.percentiles.p50);
+  // Build comparison data for locations where real rows exist
+  const locationData = ALL_LOCATIONS.map((loc) => {
+    const bench = benchmarksByLocation[loc.id];
+    if (!bench) return null;
+    const sourceCurrency = bench.currency;
+    const targetCurrency = loc.currency;
+    let sourceMedian = bench.percentiles.p50;
     
     // Apply location adjustments
-    let adjustedMedian = median;
-    if (loc.id === "london") adjustedMedian = Math.round(median * 1.1);
-    if (loc.id === "manchester") adjustedMedian = Math.round(median * 0.85);
+    if (loc.id === "london") sourceMedian = Math.round(sourceMedian * 1.1);
+    if (loc.id === "manchester") sourceMedian = Math.round(sourceMedian * 0.85);
+    const median = toBenchmarkDisplayValue(sourceMedian, {
+      salaryView,
+      sourceCurrency,
+      targetCurrency,
+    });
+    const relativeMedianAed = convertCurrency(sourceMedian, sourceCurrency, "AED");
     
     return {
       location: loc,
-      median: adjustedMedian,
+      median,
+      relativeMedianAed,
+      currency: targetCurrency,
       yoyChange: bench.yoyChange,
       sampleSize: bench.sampleSize,
       isSelected: loc.id === location.id,
     };
-  }).sort((a, b) => b.median - a.median);
+  }).filter(Boolean).sort((a, b) => b!.relativeMedianAed - a!.relativeMedianAed) as Array<{
+    location: (typeof ALL_LOCATIONS)[number];
+    median: number;
+    relativeMedianAed: number;
+    currency: string;
+    yoyChange: number;
+    sampleSize: number;
+    isSelected: boolean;
+  }>;
 
-  const maxMedian = locationData[0]?.median || 1;
+  const maxMedian = locationData[0]?.relativeMedianAed || 1;
 
   return (
-    <Card className="p-6">
+    <div className="bench-section">
       {/* Header with company branding */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <MapPin className="h-4 w-4 text-brand-600" />
-          <h3 className="text-sm font-semibold text-brand-900">Geographic Comparison</h3>
-        </div>
+      <div className="flex items-center justify-between pb-4">
+        <h3 className="bench-section-header pb-0">Geographic Comparison</h3>
         {companySettings.isConfigured && (
           <div className="flex items-center gap-2">
             {hasCompanyLogo ? (
@@ -97,12 +116,12 @@ export function GeoView({ result }: GeoViewProps) {
       </div>
       
       <p className="text-xs text-brand-500 mb-4">
-        {role.title} ({level.name}) salaries across markets in {currency.defaultCurrency}
+        {role.title} ({level.name}) salaries across markets in local currencies
       </p>
 
       <div className="space-y-3">
         {locationData.map((item) => {
-          const percentage = (item.median / maxMedian) * 100;
+          const percentage = (item.relativeMedianAed / maxMedian) * 100;
           
           return (
             <div
@@ -138,16 +157,16 @@ export function GeoView({ result }: GeoViewProps) {
               </div>
               <div className="w-20 text-right">
                 <div className="text-sm font-bold text-brand-900">
-                  {formatCompact(item.median)}
+                  {formatBenchmarkCompact(item.median, item.currency)}
                 </div>
                 <div className={`text-xs ${item.yoyChange >= 0 ? "text-emerald-600" : "text-red-600"}`}>
                   {item.yoyChange >= 0 ? "+" : ""}{item.yoyChange.toFixed(1)}%
                 </div>
               </div>
               {item.isSelected && (
-                <Badge variant="brand" className="text-xs">
+                <span className="text-[10px] font-medium text-brand-600 px-2 py-0.5 rounded-full bg-brand-100">
                   Selected
-                </Badge>
+                </span>
               )}
             </div>
           );
@@ -157,6 +176,6 @@ export function GeoView({ result }: GeoViewProps) {
       <p className="mt-4 text-xs text-brand-500">
         Location premiums reflect cost of living and local talent competition.
       </p>
-    </Card>
+    </div>
   );
 }

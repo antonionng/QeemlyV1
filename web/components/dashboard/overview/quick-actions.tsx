@@ -1,128 +1,128 @@
 "use client";
 
+import { useRef } from "react";
 import { Card } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { 
-  PlayCircle, 
-  Download, 
-  Users, 
-  Calendar, 
+import {
+  Users,
+  AlertTriangle,
+  Flame,
   BarChart3,
-  Settings,
-  ArrowRight
+  ArrowRight,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import Link from "next/link";
 
-interface QuickAction {
+interface ActionCard {
   label: string;
   description: string;
-  icon: typeof PlayCircle;
+  icon: typeof Users;
+  iconBg: string;
+  iconColor: string;
   href: string;
-  variant: "primary" | "secondary";
+  actionText: string;
+  count?: string;
 }
 
+const actions: ActionCard[] = [
+  {
+    label: "56 employees outside compensation band",
+    description: "Review & align compensation levels",
+    icon: Users,
+    iconBg: "bg-orange-100",
+    iconColor: "text-orange-600",
+    href: "/dashboard/salary-review?filter=outside-band",
+    actionText: "Review Employees",
+    count: "56 emp",
+  },
+  {
+    label: "Medium Importance Action",
+    description: "Learn your full/shared and unusual.",
+    icon: AlertTriangle,
+    iconBg: "bg-red-100",
+    iconColor: "text-red-600",
+    href: "/dashboard/salary-review",
+    actionText: "Start Action",
+  },
+  {
+    label: "High Importance Action",
+    description: "Employees require immediate attention",
+    icon: Flame,
+    iconBg: "bg-amber-100",
+    iconColor: "text-amber-600",
+    href: "/dashboard/reports",
+    actionText: "Start Action",
+  },
+  {
+    label: "Regular Action",
+    description: "Learn your full/shared and unusual.",
+    icon: BarChart3,
+    iconBg: "bg-purple-100",
+    iconColor: "text-purple-600",
+    href: "/dashboard/benchmarks",
+    actionText: "Start Action",
+  },
+];
+
 export function QuickActions() {
-  const actions: QuickAction[] = [
-    {
-      label: "Run Salary Review",
-      description: "Start a new compensation review cycle",
-      icon: PlayCircle,
-      href: "/dashboard/salary-review",
-      variant: "primary",
-    },
-    {
-      label: "View Outside Band",
-      description: "Employees requiring attention",
-      icon: Users,
-      href: "/dashboard/salary-review?filter=outside-band",
-      variant: "secondary",
-    },
-    {
-      label: "Export Report",
-      description: "Download compensation summary",
-      icon: Download,
-      href: "/dashboard/reports",
-      variant: "secondary",
-    },
-    {
-      label: "View Benchmarks",
-      description: "Market comparison data",
-      icon: BarChart3,
-      href: "/dashboard/benchmarks",
-      variant: "secondary",
-    },
-  ];
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  const scroll = (dir: "left" | "right") => {
+    if (!scrollRef.current) return;
+    const amount = 280;
+    scrollRef.current.scrollBy({
+      left: dir === "left" ? -amount : amount,
+      behavior: "smooth",
+    });
+  };
 
   return (
-    <Card className="p-5">
-      <h3 className="text-sm font-semibold text-brand-900 mb-4">Quick Actions</h3>
-      
-      <div className="space-y-2">
+    <div>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-sm font-semibold text-accent-800">Quick Actions or Needs Attention</h2>
+        <div className="flex items-center gap-1">
+          <button
+            type="button"
+            onClick={() => scroll("left")}
+            className="h-7 w-7 rounded-lg border border-border bg-white flex items-center justify-center text-accent-500 hover:text-accent-700 hover:bg-accent-50 transition-colors"
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => scroll("right")}
+            className="h-7 w-7 rounded-lg border border-border bg-white flex items-center justify-center text-accent-500 hover:text-accent-700 hover:bg-accent-50 transition-colors"
+          >
+            <ChevronRight className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
+      <div
+        ref={scrollRef}
+        className="flex gap-4 overflow-x-auto pb-1 scrollbar-none"
+        style={{ scrollbarWidth: "none" }}
+      >
         {actions.map((action) => (
-          <Link key={action.label} href={action.href}>
-            <div className={`
-              flex items-center gap-3 p-3 rounded-xl transition-all group cursor-pointer
-              ${action.variant === "primary" 
-                ? "bg-brand-500 text-white hover:bg-brand-600" 
-                : "bg-brand-50 hover:bg-brand-100"
-              }
-            `}>
-              <div className={`
-                rounded-lg p-2 flex-shrink-0
-                ${action.variant === "primary" 
-                  ? "bg-white/20" 
-                  : "bg-white"
-                }
-              `}>
-                <action.icon className={`
-                  h-4 w-4
-                  ${action.variant === "primary" 
-                    ? "text-white" 
-                    : "text-brand-600"
-                  }
-                `} />
+          <Link key={action.label} href={action.href} className="shrink-0 w-[240px]">
+            <Card className="dash-card p-5 h-full flex flex-col hover:shadow-md transition-shadow">
+              <div className={`h-10 w-10 rounded-xl ${action.iconBg} flex items-center justify-center mb-3`}>
+                <action.icon className={`h-5 w-5 ${action.iconColor}`} />
               </div>
-              <div className="flex-1 min-w-0">
-                <p className={`
-                  text-sm font-medium
-                  ${action.variant === "primary" 
-                    ? "text-white" 
-                    : "text-brand-900"
-                  }
-                `}>
-                  {action.label}
-                </p>
-                <p className={`
-                  text-xs
-                  ${action.variant === "primary" 
-                    ? "text-white/70" 
-                    : "text-brand-500"
-                  }
-                `}>
-                  {action.description}
-                </p>
+              <p className="text-sm font-semibold text-accent-900 leading-snug mb-1">
+                {action.label}
+              </p>
+              <p className="text-xs text-accent-500 mb-4 flex-1">
+                {action.description}
+              </p>
+              <div className="flex items-center gap-1 text-xs font-semibold text-accent-700 group">
+                {action.actionText}
+                <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
               </div>
-              <ArrowRight className={`
-                h-4 w-4 transition-transform group-hover:translate-x-1
-                ${action.variant === "primary" 
-                  ? "text-white/70" 
-                  : "text-brand-400"
-                }
-              `} />
-            </div>
+            </Card>
           </Link>
         ))}
       </div>
-
-      {/* Settings link */}
-      <div className="mt-4 pt-4 border-t border-border">
-        <Link href="/dashboard/settings">
-          <Button variant="ghost" className="w-full justify-start text-brand-600 hover:text-brand-800">
-            <Settings className="h-4 w-4 mr-2" />
-            Company Settings
-          </Button>
-        </Link>
-      </div>
-    </Card>
+    </div>
   );
 }

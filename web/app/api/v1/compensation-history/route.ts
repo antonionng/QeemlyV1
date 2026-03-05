@@ -1,12 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateApiKey } from "../middleware";
-import { createClient } from "@supabase/supabase-js";
-
-function getServiceClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  return createClient(url, key);
-}
+import { createServiceClient } from "@/lib/supabase/service";
+import { refreshComplianceSnapshot } from "@/lib/compliance/snapshot-service";
 
 /**
  * POST /api/v1/compensation-history
@@ -29,7 +24,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const supabase = getServiceClient();
+  const supabase = createServiceClient();
   let created = 0;
   const errors: { index: number; error: string }[] = [];
 
@@ -70,6 +65,14 @@ export async function POST(request: NextRequest) {
       errors.push({ index: i, error: error.message });
     } else {
       created++;
+    }
+  }
+
+  if (created > 0) {
+    try {
+      await refreshComplianceSnapshot(auth.workspaceId);
+    } catch {
+      // Do not fail compensation history ingestion for refresh failures.
     }
   }
 

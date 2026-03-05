@@ -3,7 +3,7 @@
 import { BarChart, Card } from "@tremor/react";
 import { Users } from "lucide-react";
 import clsx from "clsx";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   FEATURED_BENCHMARKS,
   formatCurrency,
@@ -15,7 +15,7 @@ import {
   LOCATIONS,
   ROLES,
 } from "@/lib/dashboard/dummy-data";
-import { MOCK_EMPLOYEES } from "@/lib/employees";
+import { getEmployees, type Employee } from "@/lib/employees";
 import { useSalaryView } from "@/lib/salary-view-store";
 
 export function SalaryDistributionWidget() {
@@ -24,13 +24,35 @@ export function SalaryDistributionWidget() {
   const [selectedLevel, setSelectedLevel] = useState("ic3");
   const [showEmployees, setShowEmployees] = useState(false);
   const { salaryView } = useSalaryView();
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const multiplier = salaryView === "annual" ? 12 : 1;
+
+  useEffect(() => {
+    let isMounted = true;
+    void getEmployees().then((rows) => {
+      if (!isMounted) return;
+      setEmployees(rows);
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Find or generate benchmark
   const benchmark =
     FEATURED_BENCHMARKS.find(
       b => b.roleId === selectedRole && b.locationId === selectedLocation && b.levelId === selectedLevel
     ) || FEATURED_BENCHMARKS[0];
+
+  if (!benchmark) {
+    return (
+      <Card className="rounded-2xl border border-dashed border-border bg-surface-1 p-6 text-center">
+        <p className="text-sm text-text-secondary">
+          No benchmark data available yet. Run ingestion to populate salary distribution.
+        </p>
+      </Card>
+    );
+  }
 
   const role = getRole(benchmark.roleId);
   const location = getLocation(benchmark.locationId);
@@ -175,7 +197,7 @@ export function SalaryDistributionWidget() {
 
       {/* Employee overlay */}
       {showEmployees && (() => {
-        const matchingEmployees = MOCK_EMPLOYEES.filter(
+        const matchingEmployees = employees.filter(
           (e) => e.status === "active" && e.role.id === selectedRole
         );
         const p10 = benchmark.percentiles.p10;

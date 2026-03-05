@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useMemo } from "react";
 import { 
   REPORT_TYPES, 
-  ReportTypeId, 
-  formatTimeAgo 
-} from "@/lib/reports/data";
+  type ReportTypeId
+} from "@/lib/reports/constants";
 import { useReportsContext } from "@/lib/reports/context";
 import { 
   ArrowRight, 
@@ -18,8 +17,24 @@ import {
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import clsx from "clsx";
+import type { LucideIcon } from "lucide-react";
 
-const TYPE_ICONS: Record<ReportTypeId, any> = {
+function formatTimeAgo(isoString: string) {
+  const date = new Date(isoString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffMins < 1) return "Just now";
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
+
+const TYPE_ICONS: Record<ReportTypeId, LucideIcon> = {
   overview: LayoutGrid,
   benchmark: BarChart3,
   compliance: ShieldCheck,
@@ -126,7 +141,9 @@ export function ReportTemplatesWidget() {
 
       {filteredTemplates.length === 0 && (
         <div className="flex flex-1 items-center justify-center py-12">
-          <p className="text-sm text-accent-400 font-medium italic">No templates found matching "{searchQuery}"</p>
+          <p className="text-sm text-accent-400 font-medium italic">
+            No templates found matching &quot;{searchQuery}&quot;
+          </p>
         </div>
       )}
     </div>

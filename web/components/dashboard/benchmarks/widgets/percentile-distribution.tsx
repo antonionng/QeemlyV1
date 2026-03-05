@@ -1,17 +1,29 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { BarChart } from "@tremor/react";
 import { Users } from "lucide-react";
 import clsx from "clsx";
 import { useBenchmarksContext } from "@/lib/benchmarks/context";
 import { formatCurrency } from "@/lib/dashboard/dummy-data";
-import { MOCK_EMPLOYEES } from "@/lib/employees";
+import { getEmployees, type Employee } from "@/lib/employees";
 
 export function PercentileDistributionWidget() {
   const { selectedBenchmark, selectedRole, salaryView } = useBenchmarksContext();
   const [showEmployees, setShowEmployees] = useState(false);
+  const [employees, setEmployees] = useState<Employee[]>([]);
   const multiplier = salaryView === "annual" ? 12 : 1;
+
+  useEffect(() => {
+    let isMounted = true;
+    void getEmployees().then((rows) => {
+      if (!isMounted) return;
+      setEmployees(rows);
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   if (!selectedBenchmark || !selectedRole) {
     return (
@@ -116,7 +128,7 @@ export function PercentileDistributionWidget() {
       {/* Employee overlay */}
       {showEmployees && (() => {
         // Find employees with matching role
-        const matchingEmployees = MOCK_EMPLOYEES.filter(
+        const matchingEmployees = employees.filter(
           (e) => e.status === "active" && e.role.title === selectedRole.title
         );
         const p10 = selectedBenchmark.percentiles.p10;

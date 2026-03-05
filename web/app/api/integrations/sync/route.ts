@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { runIntegrationSync } from "@/lib/ingestion/integration-sync";
 
 /**
  * POST /api/integrations/sync
- * 
+ *
  * Triggers a manual sync for a connected integration.
- * Pulls latest data from the provider and updates Qeemly records.
- * 
+ * Uses the same fetch -> normalize -> DQ -> upsert pattern as market ingestion.
+ *
  * Body:
  * {
  *   integration_id: string    // ID of the integration to sync
@@ -29,12 +30,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing integration_id" }, { status: 400 });
     }
 
-    // Verify integration belongs to user's workspace
     const { data: profile } = await supabase
       .from("profiles")
       .select("workspace_id")
       .eq("id", user.id)
       .single();
+
+    if (!profile?.workspace_id) {
+      return NextResponse.json({ error: "No workspace found" }, { status: 404 });
+    }
 
     const { data: integration } = await supabase
       .from("integrations")
@@ -47,58 +51,52 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Integration not found" }, { status: 404 });
     }
 
-    // Update status to syncing
     await supabase
       .from("integrations")
       .update({ status: "syncing", updated_at: new Date().toISOString() })
-      .eq("id", integration_id);
+      .eq("id", integration_id)
+      .eq("workspace_id", profile.workspace_id);
 
-    // Create sync log entry
     const { data: syncLog } = await supabase
       .from("integration_sync_logs")
       .insert({
         integration_id,
         sync_type,
-        status: "success", // Will be updated when sync completes
+        status: "success",
         started_at: new Date().toISOString(),
       })
       .select()
       .single();
 
-    // TODO: Implement actual sync logic per provider:
-    // - Merge.dev: GET /api/hris/v1/employees with account_token
-    // - ZenHR: GET /api/employees with API key
-    // - Bayzat: GET /api/employees with API key
-    // TODO: Map provider data to Qeemly employee schema
-    // TODO: Upsert employees and compensation_history
-    // TODO: Update sync log with results
+    const result = await runIntegrationSync(integration_id);
 
-    // Placeholder: simulate sync completion
     await supabase
       .from("integrations")
       .update({
-        status: "connected",
+        status: result.status === "failed" ? "error" : "connected",
         last_sync_at: new Date().toISOString(),
         updated_at: new Date().toISOString(),
       })
-      .eq("id", integration_id);
+      .eq("id", integration_id)
+      .eq("workspace_id", profile.workspace_id);
 
     if (syncLog) {
       await supabase
         .from("integration_sync_logs")
         .update({
-          status: "success",
-          records_created: 0,
-          records_updated: 0,
-          records_failed: 0,
+          status: result.status,
+          records_created: result.records_created,
+          records_updated: result.records_updated,
+          records_failed: result.records_failed,
           completed_at: new Date().toISOString(),
         })
         .eq("id", syncLog.id);
     }
 
     return NextResponse.json({
-      message: "Sync initiated",
+      message: "Sync completed",
       sync_log_id: syncLog?.id,
+      ...result,
     });
   } catch (err) {
     return NextResponse.json({ error: "Internal server error" }, { status: 500 });

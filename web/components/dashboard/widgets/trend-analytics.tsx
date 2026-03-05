@@ -17,6 +17,15 @@ export function TrendAnalyticsWidget() {
   const [timeRange, setTimeRange] = useState<TimeRange>("12m");
 
   const benchmark = FEATURED_BENCHMARKS.find(b => b.roleId === selectedRole) || FEATURED_BENCHMARKS[0];
+  if (!benchmark) {
+    return (
+      <div className="rounded-2xl border border-dashed border-border bg-surface-1 p-6 text-center">
+        <p className="text-sm text-text-secondary">
+          No trend data available yet. Run ingestion to populate benchmark trends.
+        </p>
+      </div>
+    );
+  }
 
   // Filter trend data based on time range
   const getFilteredTrend = () => {

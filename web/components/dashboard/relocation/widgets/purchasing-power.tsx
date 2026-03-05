@@ -10,6 +10,8 @@ interface PurchasingPowerWidgetProps {
 }
 
 export function PurchasingPowerWidget({ result }: PurchasingPowerWidgetProps) {
+  const { salaryView } = useSalaryView();
+
   if (!result) {
     return (
       <div className="flex h-full items-center justify-center p-8">
@@ -18,38 +20,37 @@ export function PurchasingPowerWidget({ result }: PurchasingPowerWidgetProps) {
     );
   }
 
-  const { salaryView } = useSalaryView();
   const difference = result.purchasingPowerSalary - result.baseSalary;
   const percentChange = ((difference / result.baseSalary) * 100).toFixed(0);
 
   return (
-    <div className="flex flex-col p-2">
-      <p className="text-xs font-bold uppercase tracking-widest text-accent-500">
+    <div className="flex flex-col p-1">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-accent-500">
         Equivalent Salary Needed
       </p>
-      <p className="mt-2 text-4xl font-extrabold text-brand-900">
+      <p className="mt-2 text-3xl font-bold text-brand-900">
         {formatCurrency(applyViewMode(result.purchasingPowerSalary, salaryView))}
       </p>
 
-      <div className="mt-6 flex items-center gap-4 rounded-2xl bg-brand-50/50 p-4 ring-1 ring-brand-100 shadow-sm">
+      <div className="mt-5 flex items-center gap-4 rounded-2xl border border-border bg-accent-50 p-4">
         <div className="text-center">
-          <p className="text-[10px] font-bold uppercase tracking-tighter text-accent-400">{result.homeCity.name}</p>
-          <p className="text-lg font-bold text-brand-900">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-accent-500">{result.homeCity.name}</p>
+          <p className="text-base font-semibold text-brand-900">
             {formatCurrency(applyViewMode(result.baseSalary, salaryView), true)}
           </p>
         </div>
-        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-brand-100">
+        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white ring-1 ring-border">
           <ArrowRight className="h-4 w-4 text-brand-500" />
         </div>
         <div className="text-center">
-          <p className="text-[10px] font-bold uppercase tracking-tighter text-accent-400">{result.targetCity.name}</p>
-          <p className="text-lg font-bold text-brand-900">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-accent-500">{result.targetCity.name}</p>
+          <p className="text-base font-semibold text-brand-900">
             {formatCurrency(applyViewMode(result.purchasingPowerSalary, salaryView), true)}
           </p>
         </div>
         <div
           className={clsx(
-            "ml-auto rounded-full px-3 py-1 text-xs font-bold shadow-sm",
+            "ml-auto rounded-full px-2.5 py-1 text-xs font-semibold",
             difference > 0
               ? "bg-rose-50 text-rose-700"
               : difference < 0
@@ -62,7 +63,7 @@ export function PurchasingPowerWidget({ result }: PurchasingPowerWidgetProps) {
         </div>
       </div>
 
-      <p className="mt-4 text-sm font-medium text-accent-600 italic">
+      <p className="mt-4 text-sm text-accent-600">
         Salary required in {result.targetCity.name} to maintain your current lifestyle.
       </p>
     </div>

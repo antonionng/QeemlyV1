@@ -1,11 +1,8 @@
 "use client";
 
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { type BenchmarkResult } from "@/lib/benchmarks/benchmark-state";
-import { getCompanySizePremium } from "@/lib/dashboard/dummy-data";
 import { useCompanySettings } from "@/lib/company";
-import { useCurrencyFormatter, convertCurrency, monthlyToAnnual, roundToThousand } from "@/lib/utils/currency";
+import { formatBenchmarkCompact, toBenchmarkDisplayValue } from "@/lib/utils/currency";
 import { useSalaryView } from "@/lib/salary-view-store";
 
 interface CompanySizeViewProps {
@@ -13,43 +10,35 @@ interface CompanySizeViewProps {
 }
 
 export function CompanySizeView({ result }: CompanySizeViewProps) {
-  const { role, level, location } = result;
+  const { location, benchmark } = result;
   const companySettings = useCompanySettings();
-  const currency = useCurrencyFormatter();
   const { salaryView } = useSalaryView();
   
   // Company branding - match size category
   const companySize = companySettings.companySize;
   
-  // Convert from monthly AED to company's default currency (respects salary view mode)
-  const convertToDefault = (value: number) => {
-    const converted = salaryView === "annual" ? monthlyToAnnual(value) : value;
-    return roundToThousand(convertCurrency(converted, "AED", currency.defaultCurrency));
-  };
-  
-  const formatCompact = (value: number) => {
-    if (value >= 1000) {
-      return `${currency.symbol}${(value / 1000).toFixed(0)}k`;
-    }
-    return currency.format(value);
-  };
+  const sourceLocationId = location.id === "london" ? "dubai" : location.id;
+  const sourceCurrency = location.id === "london" ? "AED" : location.currency;
+  const targetCurrency = location.currency;
 
-  // Company size premium
-  const companySizeData = getCompanySizePremium(role.id, location.id === "london" ? "dubai" : location.id, level.id)
-    .map(item => ({
-      ...item,
-      median: convertToDefault(item.median),
-      isCompanySize: item.size === companySize,
-    }));
+  const companySizeData = [
+    {
+      size: companySize || "Selected size",
+      median: toBenchmarkDisplayValue(benchmark.percentiles.p50, {
+        salaryView,
+        sourceCurrency,
+        targetCurrency,
+      }),
+      isCompanySize: true,
+    },
+  ];
 
   return (
-    <Card className="p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-brand-900">By Company Size</h3>
+    <div className="bench-section">
+      <div className="flex items-center justify-between pb-4">
+        <h3 className="bench-section-header pb-0">Top Company Sizes</h3>
         {companySettings.isConfigured && (
-          <Badge variant="outline" className="text-xs">
-            Your size: {companySize}
-          </Badge>
+          <span className="text-xs text-brand-500">Your size: {companySize}</span>
         )}
       </div>
       <div className="space-y-3">
@@ -83,15 +72,13 @@ export function CompanySizeView({ result }: CompanySizeViewProps) {
                 />
               </div>
               <div className="w-20 text-right text-sm font-medium text-brand-900">
-                {formatCompact(item.median)}
+                {formatBenchmarkCompact(item.median, targetCurrency)}
               </div>
             </div>
           );
         })}
       </div>
-      <p className="mt-4 text-xs text-brand-500">
-        Larger companies typically offer 15-25% higher compensation due to more complex roles and larger budgets.
-      </p>
-    </Card>
+      <p className="mt-4 text-xs text-brand-500">Company-size segmented premiums are not yet available in this workspace dataset.</p>
+    </div>
   );
 }

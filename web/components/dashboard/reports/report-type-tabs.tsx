@@ -1,5 +1,5 @@
 import clsx from "clsx";
-import type { ReportType } from "@/lib/reports/data";
+import type { ReportType } from "@/lib/reports/constants";
 
 type ReportTypeTabsProps = {
   types: ReportType[];

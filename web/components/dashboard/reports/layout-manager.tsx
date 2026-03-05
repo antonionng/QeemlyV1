@@ -29,7 +29,7 @@ export function ReportsLayoutManager({
   onRemoveWidget,
 }: ReportsLayoutManagerProps) {
   
-  const WIDGET_COMPONENTS: Record<string, React.ComponentType<any>> = {
+  const WIDGET_COMPONENTS: Record<string, React.ComponentType> = {
     "report-stats": ReportStatsWidget,
     "report-templates": ReportTemplatesWidget,
     "recent-reports": RecentReportsWidget,

@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, type RefObject } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   CreditCard,
@@ -10,6 +9,7 @@ import {
   Menu,
   Search,
   Settings,
+  Shield,
   Sparkles,
   User,
   Users,
@@ -24,12 +24,22 @@ import {
 import { SalaryViewToggle } from "@/components/ui/salary-view-toggle";
 import { useSalaryView } from "@/lib/salary-view-store";
 import { createClient } from "@/lib/supabase/client";
+import { isFeatureEnabled } from "@/lib/release/ga-scope";
 
 type DashboardTopBarProps = {
   onMobileOpen: () => void;
   onAIOpen: () => void;
   mobileTriggerRef: RefObject<HTMLButtonElement>;
 };
+
+type DashboardUser = {
+  email?: string | null;
+} | null;
+
+type DashboardProfile = {
+  full_name?: string | null;
+  avatar_url?: string | null;
+} | null;
 
 export function DashboardTopBar({
   onMobileOpen,
@@ -38,8 +48,9 @@ export function DashboardTopBar({
 }: DashboardTopBarProps) {
   const supabase = createClient();
   const router = useRouter();
-  const [user, setUser] = useState<any>(null);
-  const [profile, setProfile] = useState<any>(null);
+  const [user, setUser] = useState<DashboardUser>(null);
+  const [profile, setProfile] = useState<DashboardProfile>(null);
+  const [canAccessAdmin, setCanAccessAdmin] = useState(false);
 
   useEffect(() => {
     async function getUser() {
@@ -53,6 +64,15 @@ export function DashboardTopBar({
           .eq("id", user.id)
           .single();
         setProfile(profile);
+
+        try {
+          const adminAccessResponse = await fetch("/api/admin/workspaces/list");
+          setCanAccessAdmin(adminAccessResponse.ok);
+        } catch {
+          setCanAccessAdmin(false);
+        }
+      } else {
+        setCanAccessAdmin(false);
       }
     }
     getUser();
@@ -70,14 +90,14 @@ export function DashboardTopBar({
     : user?.email?.charAt(0).toUpperCase() || "U";
 
   return (
-    <header className="sticky top-0 z-20 border-b border-border/40 bg-white/80 backdrop-blur-xl">
-      <div className="flex h-14 items-center gap-4 px-6 lg:px-10">
+    <header className="sticky top-0 z-20 border-b border-border/70 bg-surface-1/95 shadow-[var(--dash-card-shadow)] backdrop-blur supports-[backdrop-filter]:bg-surface-1/80">
+      <div className="flex h-16 items-center justify-between gap-3 px-4 sm:px-6 lg:gap-6 lg:px-8">
         {/* Mobile: hamburger + logo */}
-        <div className="flex items-center gap-3 lg:hidden">
+        <div className="flex items-center gap-2 lg:hidden">
           <button
             ref={mobileTriggerRef}
             type="button"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-xl text-brand-800/80 transition-colors hover:bg-brand-100/70 focus-visible:outline-none"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-text-secondary transition-colors hover:bg-surface-3 focus-visible:outline-none"
             aria-label="Open menu"
             onClick={onMobileOpen}
           >
@@ -86,29 +106,29 @@ export function DashboardTopBar({
           <Logo compact href="/dashboard" />
         </div>
 
-        {/* Full-width search bar */}
-        <div className="hidden flex-1 items-center justify-center gap-3 lg:flex">
-          <div className="search-glow flex w-full max-w-2xl items-center gap-2 rounded-xl bg-brand-50/70 px-4 ring-1 ring-border/50 transition-all focus-within:bg-white focus-within:ring-brand-400/60">
-            <Search className="h-4 w-4 shrink-0 text-brand-600" />
+        {/* Desktop: prominent search bar */}
+        <div className="hidden min-w-0 flex-1 items-center lg:flex">
+          <div className="group flex h-11 w-full max-w-3xl items-center gap-3 rounded-xl border border-border/80 bg-white px-4 shadow-sm transition-all duration-200 hover:border-brand-200 focus-within:border-brand-300 focus-within:ring-2 focus-within:ring-brand-100">
+            <Search className="h-4 w-4 shrink-0 text-accent-400 transition-colors group-focus-within:text-brand-500" />
             <Input
               placeholder="Search benchmarks, reports..."
-              className="h-11 w-full border-none bg-transparent px-0 text-sm shadow-none placeholder:text-brand-700/50 focus:border-transparent focus-visible:outline-none"
+              className="h-full w-full border-none bg-transparent px-0 text-sm text-accent-800 shadow-none placeholder:text-accent-400 focus-visible:outline-none"
             />
-            <kbd className="hidden shrink-0 rounded-md bg-brand-100/80 px-2 py-1 text-[11px] font-medium text-brand-700/70 sm:inline-block">
+            <kbd className="hidden shrink-0 rounded-md border border-border bg-accent-50 px-2 py-0.5 text-[10px] font-medium text-accent-500 sm:inline-block">
               ⌘K
             </kbd>
           </div>
         </div>
 
-        {/* Right actions */}
-        <div className="flex items-center gap-2">
+        {/* Right actions (reference: toggle + AI + avatar) */}
+        <div className="flex shrink-0 items-center gap-2.5">
           {/* Mobile search */}
           <button
             type="button"
-            className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-50/70 transition-colors hover:bg-brand-100 lg:hidden"
+            className="flex h-9 w-9 items-center justify-center rounded-lg bg-surface-3 transition-colors hover:bg-accent-200 lg:hidden"
             aria-label="Search"
           >
-            <Search className="h-4 w-4 text-brand-700" />
+            <Search className="h-4 w-4 text-text-secondary" />
           </button>
 
           {/* Salary View Toggle */}
@@ -118,23 +138,20 @@ export function DashboardTopBar({
           <button
             type="button"
             onClick={onAIOpen}
-            className="ai-chat-btn group relative flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-600 text-white shadow-md shadow-brand-500/25 transition-all hover:shadow-lg hover:shadow-brand-500/30 hover:scale-105"
+            className="ai-chat-btn flex h-9 w-9 items-center justify-center rounded-lg bg-brand-500 text-white transition-colors hover:bg-brand-600 focus-visible:outline-none"
             aria-label="Chat with Qeemly AI"
             title="Chat with Qeemly AI"
           >
             <Sparkles className="h-[18px] w-[18px]" />
-            <span className="absolute -bottom-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-lg bg-brand-900 px-2.5 py-1 text-xs font-medium text-white opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
-              Qeemly AI
-            </span>
           </button>
 
           {/* User Profile Dropdown */}
           <DropdownMenu
             align="right"
             trigger={
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-900 text-white font-semibold text-sm transition-all hover:bg-brand-800 hover:scale-105 cursor-pointer overflow-hidden">
+              <div className="flex h-9 w-9 cursor-pointer items-center justify-center overflow-hidden rounded-full bg-brand-800 text-sm font-semibold text-white transition-colors hover:bg-brand-700 shrink-0">
                 {profile?.avatar_url ? (
-                  <img src={profile.avatar_url} alt={profile.full_name} className="h-full w-full object-cover" />
+                  <img src={profile.avatar_url} alt={profile.full_name ?? "User avatar"} className="h-full w-full object-cover" />
                 ) : (
                   <span>{userInitial}</span>
                 )}
@@ -154,15 +171,22 @@ export function DashboardTopBar({
               <DropdownItem icon={<Settings className="h-4 w-4" />} href="/dashboard/settings">
                 Account Settings
               </DropdownItem>
-              <DropdownItem icon={<CreditCard className="h-4 w-4" />} href="/dashboard/billing">
-                Billing
-              </DropdownItem>
+              {isFeatureEnabled("billing") && (
+                <DropdownItem icon={<CreditCard className="h-4 w-4" />} href="/dashboard/billing">
+                  Billing
+                </DropdownItem>
+              )}
               <DropdownItem icon={<Users className="h-4 w-4" />} href="/dashboard/team">
                 Team
               </DropdownItem>
               <DropdownItem icon={<HelpCircle className="h-4 w-4" />} href="/help">
                 Help
               </DropdownItem>
+              {canAccessAdmin && (
+                <DropdownItem icon={<Shield className="h-4 w-4" />} href="/admin">
+                  Super Admin
+                </DropdownItem>
+              )}
             </div>
 
             <DropdownDivider />

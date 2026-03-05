@@ -1,4 +1,5 @@
 export { StatCards } from "./stat-cards";
+export { DataHealthCard } from "./data-health-card";
 export { KeyInsights } from "./key-insights";
 export { DepartmentTabs } from "./department-tabs";
 export { HealthScore } from "./health-score";
@@ -6,4 +7,6 @@ export { PayrollTrend } from "./payroll-trend";
 export { BandDistributionChart } from "./band-distribution-chart";
 export { RiskBreakdown } from "./risk-breakdown";
 export { QuickActions } from "./quick-actions";
+export { ShortcutsRow } from "./shortcuts-row";
 export { OverviewSkeleton, StatCardsSkeleton, ChartSkeleton } from "./skeletons";
+export { AdvisoryPanel } from "./advisory-panel";

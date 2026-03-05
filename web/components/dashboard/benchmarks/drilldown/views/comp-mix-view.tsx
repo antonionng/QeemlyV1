@@ -1,9 +1,6 @@
 "use client";
 
-import { PieChart } from "lucide-react";
-import { Card } from "@/components/ui/card";
 import { type BenchmarkResult } from "@/lib/benchmarks/benchmark-state";
-import { getCompMix, LEVELS } from "@/lib/dashboard/dummy-data";
 import { useSalaryView } from "@/lib/salary-view-store";
 
 interface CompMixViewProps {
@@ -11,7 +8,7 @@ interface CompMixViewProps {
 }
 
 export function CompMixView({ result }: CompMixViewProps) {
-  const { role, level, location, benchmark } = result;
+  const { level, benchmark } = result;
   const { salaryView } = useSalaryView();
   
   // Convert from monthly AED based on salary view mode
@@ -28,20 +25,24 @@ export function CompMixView({ result }: CompMixViewProps) {
     }).format(value);
   };
 
-  // Get compensation mix
-  const compMixData = getCompMix(role.id, location.id === "london" ? "dubai" : location.id, level.id)
-    .map(item => ({
-      ...item,
-      value: convertValue(item.value),
-    }));
+  const hasEmployerCost = Boolean(benchmark.nationalsCostBreakdown);
+  const compMixData = hasEmployerCost
+    ? [
+        { name: "Cash Compensation", value: convertValue(benchmark.percentiles.p50), rawValue: benchmark.percentiles.p50 },
+        {
+          name: "Employer Contributions",
+          value: convertValue((benchmark.nationalsCostBreakdown?.gpssaAmount || 0) + (benchmark.nationalsCostBreakdown?.nafisAmount || 0)),
+          rawValue: (benchmark.nationalsCostBreakdown?.gpssaAmount || 0) + (benchmark.nationalsCostBreakdown?.nafisAmount || 0),
+        },
+      ]
+    : [{ name: "Cash Compensation", value: convertValue(benchmark.percentiles.p50), rawValue: benchmark.percentiles.p50 }];
 
   const totalComp = compMixData.reduce((sum, item) => sum + item.value, 0);
 
   const getColor = (name: string) => {
     switch (name) {
       case "Base": return "bg-brand-500";
-      case "Bonus": return "bg-emerald-500";
-      case "Equity": return "bg-purple-500";
+      case "Employer Contributions": return "bg-emerald-500";
       default: return "bg-gray-500";
     }
   };
@@ -49,22 +50,14 @@ export function CompMixView({ result }: CompMixViewProps) {
   const getColorLight = (name: string) => {
     switch (name) {
       case "Base": return "bg-brand-100 text-brand-700";
-      case "Bonus": return "bg-emerald-100 text-emerald-700";
-      case "Equity": return "bg-purple-100 text-purple-700";
+      case "Employer Contributions": return "bg-emerald-100 text-emerald-700";
       default: return "bg-gray-100 text-gray-700";
     }
   };
 
-  // Calculate level index for context
-  const levelIndex = LEVELS.findIndex(l => l.id === level.id);
-  const isEquityEligible = levelIndex >= 3; // IC4+
-
   return (
-    <Card className="p-6">
-      <div className="flex items-center gap-2 mb-4">
-        <PieChart className="h-4 w-4 text-brand-600" />
-        <h3 className="text-sm font-semibold text-brand-900">Compensation Mix</h3>
-      </div>
+    <div className="bench-section">
+      <h3 className="bench-section-header">Compensation Mix</h3>
       
       <p className="text-xs text-brand-500 mb-4">
         Typical breakdown for {level.name} at P50
@@ -115,17 +108,17 @@ export function CompMixView({ result }: CompMixViewProps) {
       </div>
 
       {/* Equity note */}
-      {!isEquityEligible && (
+      {!hasEmployerCost && (
         <div className="mt-4 p-3 rounded-xl bg-amber-50 text-xs text-amber-700">
-          Equity is typically offered at IC4+ levels. Junior roles focus on base salary and bonus.
+          Detailed compensation component splits are not yet available for this workspace.
         </div>
       )}
 
-      {isEquityEligible && (
+      {hasEmployerCost && (
         <div className="mt-4 p-3 rounded-xl bg-purple-50 text-xs text-purple-700">
-          At {level.name} level, equity becomes a significant part of total compensation. Consider 4-year vesting schedules.
+          Employer contribution components are included where available for this benchmark row.
         </div>
       )}
-    </Card>
+    </div>
   );
 }

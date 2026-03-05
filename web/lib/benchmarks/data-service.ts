@@ -1,9 +1,8 @@
-// Data service layer for benchmarks
-// Provides database-backed data with fallback to localStorage/generated data
+// Data service layer for benchmarks (database only)
 
 import { createClient } from "@/lib/supabase/client";
 import type { SalaryBenchmark, Currency } from "@/lib/dashboard/dummy-data";
-import { generateBenchmark, LOCATIONS, LEVELS, ROLES } from "@/lib/dashboard/dummy-data";
+import { LOCATIONS } from "@/lib/dashboard/dummy-data";
 
 // Cache for database benchmark count check
 let hasDbBenchmarksCache: boolean | null = null;
@@ -115,30 +114,22 @@ export async function fetchDbBenchmarks(): Promise<DbBenchmark[]> {
 
 /**
  * Get benchmark for a specific role/location/level combination
- * Checks database first, then falls back to generated data
  */
 export async function getBenchmark(
   roleId: string,
   locationId: string,
   levelId: string
-): Promise<SalaryBenchmark> {
-  const hasDb = await hasDbBenchmarks();
-  
-  if (hasDb) {
-    const dbBenchmarks = await fetchDbBenchmarks();
-    const match = dbBenchmarks.find(
-      b => b.role_id === roleId && 
-           b.location_id === locationId && 
-           b.level_id === levelId
-    );
-    
-    if (match) {
-      return transformDbBenchmark(match);
-    }
+): Promise<SalaryBenchmark | null> {
+  const dbBenchmarks = await fetchDbBenchmarks();
+  const match = dbBenchmarks.find(
+    (b) => b.role_id === roleId && b.location_id === locationId && b.level_id === levelId
+  );
+
+  if (!match) {
+    return null;
   }
-  
-  // Fall back to generated benchmark
-  return generateBenchmark(roleId, locationId, levelId);
+
+  return transformDbBenchmark(match);
 }
 
 /**

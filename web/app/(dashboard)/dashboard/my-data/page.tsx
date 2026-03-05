@@ -1,4 +1,5 @@
 "use client";
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
@@ -144,8 +145,8 @@ export default function MyDataPage() {
     <div className="max-w-5xl space-y-8">
       <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-2xl font-bold text-brand-900">My Data</h1>
-          <p className="text-brand-600">Manage and upload your organization's compensation datasets.</p>
+          <h1 className="text-2xl font-bold tracking-tight text-accent-800 sm:text-3xl">My Data</h1>
+          <p className="text-brand-600">Manage and upload your organization&apos;s compensation datasets.</p>
         </div>
         <label className="cursor-pointer">
           <Button isLoading={uploading} className="pointer-events-none">

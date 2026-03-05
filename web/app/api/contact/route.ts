@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
-import { promises as fs } from "fs";
-import path from "path";
+import { createServiceClient } from "@/lib/supabase/service";
 
 type ContactPayload = {
   name: string;
@@ -36,23 +35,24 @@ function validate(payload: Partial<ContactPayload>) {
   return errors;
 }
 
-async function appendLead(lead: Record<string, unknown>) {
-  // Best-effort persistence for dev/self-hosted. Serverless platforms may not persist filesystem.
-  const dataDir = path.join(process.cwd(), "data");
-  const filePath = path.join(dataDir, "leads.json");
-  await fs.mkdir(dataDir, { recursive: true });
+async function persistLead(lead: Record<string, unknown>) {
+  const supabase = createServiceClient();
+  const { error } = await supabase.from("contact_leads").insert({
+    name: lead.name,
+    email: lead.email,
+    company: lead.company,
+    role: lead.role,
+    team_size: lead.teamSize,
+    interests: lead.interests,
+    message: lead.message,
+    preferred_contact: lead.preferredContact,
+    user_agent: lead.userAgent,
+    metadata: lead,
+  });
 
-  let existing: unknown[] = [];
-  try {
-    const raw = await fs.readFile(filePath, "utf8");
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) existing = parsed;
-  } catch {
-    // ignore
+  if (error) {
+    throw new Error(error.message);
   }
-
-  existing.unshift(lead);
-  await fs.writeFile(filePath, JSON.stringify(existing, null, 2), "utf8");
 }
 
 export async function POST(req: Request) {
@@ -86,9 +86,16 @@ export async function POST(req: Request) {
   console.log("[contact] lead submitted:", lead);
 
   try {
-    await appendLead(lead);
+    await persistLead(lead);
   } catch (e) {
-    console.warn("[contact] failed to persist lead:", e);
+    console.error("[contact] failed to persist lead:", e);
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "We couldn't save your message. Please try again in a minute.",
+      },
+      { status: 503 }
+    );
   }
 
   return NextResponse.json({ ok: true });

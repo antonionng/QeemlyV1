@@ -18,10 +18,10 @@ export function Card({
   return (
     <div
       className={clsx(
-        "rounded-2xl border border-border bg-white transition-all duration-200",
-        muted && "bg-muted border-muted",
+        "rounded-[var(--dash-card-radius,1rem)] border border-border bg-surface-1 text-text-primary shadow-[var(--dash-card-shadow)] transition-all duration-200",
+        muted && "bg-surface-3",
         clickable && "hover:-translate-y-1 hover:shadow-md cursor-pointer",
-        glow && "hover:shadow-[0_8px_20px_rgba(15,15,26,0.06)] hover:-translate-y-0.5",
+        glow && "hover:-translate-y-0.5 hover:shadow-[var(--overlay-shadow)]",
         className,
       )}
       {...rest}

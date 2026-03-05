@@ -38,7 +38,7 @@ export default function LoginPage() {
       heroPrompt={AUTH_IMAGE_PROMPTS.loginHero}
       footer={
         <p>
-          Don't have an account?{" "}
+          Don&apos;t have an account?{" "}
           <Link href="/register" className="font-semibold text-brand-800 underline underline-offset-4">
             Request access
           </Link>

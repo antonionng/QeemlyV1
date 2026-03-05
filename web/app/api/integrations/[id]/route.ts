@@ -1,6 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
+async function getWorkspaceContext(supabase: Awaited<ReturnType<typeof createClient>>, userId: string) {
+  const { data: profile, error } = await supabase
+    .from("profiles")
+    .select("workspace_id")
+    .eq("id", userId)
+    .single();
+
+  if (error || !profile?.workspace_id) {
+    return null;
+  }
+
+  return profile.workspace_id as string;
+}
+
 /**
  * GET /api/integrations/:id
  * Returns details for a specific integration including recent sync logs.
@@ -18,17 +32,16 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("workspace_id")
-      .eq("id", user.id)
-      .single();
+    const workspaceId = await getWorkspaceContext(supabase, user.id);
+    if (!workspaceId) {
+      return NextResponse.json({ error: "No workspace found" }, { status: 404 });
+    }
 
     const { data: integration } = await supabase
       .from("integrations")
       .select("*")
       .eq("id", id)
-      .eq("workspace_id", profile?.workspace_id)
+      .eq("workspace_id", workspaceId)
       .single();
 
     if (!integration) {
@@ -76,6 +89,11 @@ export async function PATCH(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const workspaceId = await getWorkspaceContext(supabase, user.id);
+    if (!workspaceId) {
+      return NextResponse.json({ error: "No workspace found" }, { status: 404 });
+    }
+
     const body = await request.json();
     const { config, sync_frequency, status } = body;
 
@@ -88,6 +106,7 @@ export async function PATCH(
       .from("integrations")
       .update(updates)
       .eq("id", id)
+      .eq("workspace_id", workspaceId)
       .select()
       .single();
 
@@ -118,18 +137,17 @@ export async function DELETE(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("workspace_id")
-      .eq("id", user.id)
-      .single();
+    const workspaceId = await getWorkspaceContext(supabase, user.id);
+    if (!workspaceId) {
+      return NextResponse.json({ error: "No workspace found" }, { status: 404 });
+    }
 
     // Verify ownership before deletion
     const { data: integration } = await supabase
       .from("integrations")
       .select("provider")
       .eq("id", id)
-      .eq("workspace_id", profile?.workspace_id)
+      .eq("workspace_id", workspaceId)
       .single();
 
     if (!integration) {
@@ -143,7 +161,8 @@ export async function DELETE(
     const { error } = await supabase
       .from("integrations")
       .delete()
-      .eq("id", id);
+      .eq("id", id)
+      .eq("workspace_id", workspaceId);
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });

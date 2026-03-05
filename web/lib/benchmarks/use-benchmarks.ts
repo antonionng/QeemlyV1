@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { getDefaultBenchmarkLayout, getBenchmarkPreset, BENCHMARK_PRESET_LAYOUTS, type GridLayoutItem } from "./preset-layouts";
 import { ALL_BENCHMARK_WIDGET_IDS } from "./widget-registry";
-import { generateBenchmark, LOCATIONS, LEVELS, ROLES } from "@/lib/dashboard/dummy-data";
+import { LOCATIONS, LEVELS, ROLES, type SalaryBenchmark } from "@/lib/dashboard/dummy-data";
 import { useSalaryView } from "@/lib/salary-view-store";
+import { getBenchmark } from "./data-service";
 
 // Version the storage keys to invalidate cache when layout structure changes
 const STORAGE_VERSION = "v2";
@@ -67,10 +68,23 @@ export function useBenchmarks() {
   const [offerTarget, setOfferTarget] = useState(75);
   const { salaryView, setSalaryView } = useSalaryView();
 
-  // Computed benchmark data
-  const selectedBenchmark = useMemo(() => {
-    if (!selectedRoleId) return null;
-    return generateBenchmark(selectedRoleId, selectedLocationId, selectedLevelId);
+  const [selectedBenchmark, setSelectedBenchmark] = useState<SalaryBenchmark | null>(null);
+
+  useEffect(() => {
+    if (!selectedRoleId) {
+      const timer = setTimeout(() => {
+        setSelectedBenchmark(null);
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+    let mounted = true;
+    void getBenchmark(selectedRoleId, selectedLocationId, selectedLevelId).then((bm) => {
+      if (!mounted) return;
+      setSelectedBenchmark(bm);
+    });
+    return () => {
+      mounted = false;
+    };
   }, [selectedRoleId, selectedLocationId, selectedLevelId]);
 
   const selectedRole = useMemo(() => {

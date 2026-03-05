@@ -11,6 +11,10 @@ import { useSalaryView, applyViewMode } from "@/lib/salary-view-store";
 interface KeyInsightsProps {
   metrics: CompanyMetrics;
   departmentSummaries: DepartmentSummary[];
+  benchmarkCoverage?: {
+    activeEmployees: number;
+    benchmarkedEmployees: number;
+  };
 }
 
 interface Insight {
@@ -23,9 +27,21 @@ interface Insight {
   priority: number; // 1 = highest priority
 }
 
-export function KeyInsights({ metrics, departmentSummaries }: KeyInsightsProps) {
+export function KeyInsights({ metrics, departmentSummaries, benchmarkCoverage }: KeyInsightsProps) {
   const { salaryView } = useSalaryView();
   const fmt = (v: number) => formatAEDCompact(applyViewMode(v, salaryView));
+  const coveragePct =
+    benchmarkCoverage && benchmarkCoverage.activeEmployees > 0
+      ? Math.round((benchmarkCoverage.benchmarkedEmployees / benchmarkCoverage.activeEmployees) * 100)
+      : null;
+  const coverageBadgeClass =
+    typeof coveragePct !== "number"
+      ? ""
+      : coveragePct >= 90
+        ? "bg-emerald-100 text-emerald-700"
+        : coveragePct >= 60
+          ? "bg-amber-100 text-amber-700"
+          : "bg-rose-100 text-rose-700";
 
   // Generate insights based on metrics
   const insights: Insight[] = [];
@@ -130,13 +146,13 @@ export function KeyInsights({ metrics, departmentSummaries }: KeyInsightsProps) 
   const getTypeStyles = (type: Insight["type"]) => {
     switch (type) {
       case "danger":
-        return "bg-red-50 border-red-200";
+        return "bg-rose-50/70 border-rose-200";
       case "warning":
-        return "bg-amber-50 border-amber-200";
+        return "bg-amber-50/70 border-amber-200";
       case "info":
-        return "bg-blue-50 border-blue-200";
+        return "bg-brand-50 border-brand-100";
       case "success":
-        return "bg-emerald-50 border-emerald-200";
+        return "bg-emerald-50/70 border-emerald-200";
     }
   };
 
@@ -180,17 +196,26 @@ export function KeyInsights({ metrics, departmentSummaries }: KeyInsightsProps) 
   };
 
   return (
-    <Card className="p-5">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-brand-900">Key Insights</h3>
-        <span className="text-xs text-brand-500">{insights.length} items</span>
+    <Card className="dash-card p-5">
+      <div className="mb-4 flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-accent-900">Key Insights</h3>
+        <div className="flex items-center gap-2">
+          {typeof coveragePct === "number" && (
+            <span
+              className={clsx("rounded-full px-2 py-0.5 text-[10px] font-semibold", coverageBadgeClass)}
+            >
+              Coverage {coveragePct}%
+            </span>
+          )}
+          <span className="text-xs text-accent-500">{insights.length} items</span>
+        </div>
       </div>
       <div className="space-y-3">
         {insights.slice(0, 5).map((insight, index) => (
           <div
             key={index}
             className={clsx(
-              "rounded-xl border p-4 transition-all",
+              "rounded-xl border p-4 transition-all hover:shadow-sm",
               getTypeStyles(insight.type)
             )}
           >
@@ -213,9 +238,9 @@ export function KeyInsights({ metrics, departmentSummaries }: KeyInsightsProps) 
                       variant="ghost" 
                       size="sm" 
                       className={clsx(
-                        "mt-2 h-7 px-2 text-xs gap-1",
+                        "mt-2 h-8 gap-1 rounded-full bg-white px-3 text-xs shadow-sm",
                         getTextStyles(insight.type),
-                        "hover:bg-white/50"
+                        "hover:bg-white"
                       )}
                     >
                       {insight.actionLabel}

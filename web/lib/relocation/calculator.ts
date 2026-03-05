@@ -87,7 +87,7 @@ export function calculateRelocation(inputs: RelocationInputs): RelocationResult 
   };
 
   // Calculate cost breakdowns
-  let targetBreakdown = { ...targetCity.breakdown };
+  const targetBreakdown = { ...targetCity.breakdown };
   let targetWithOverride: CostBreakdown | undefined;
 
   if (inputs.rentOverride !== undefined && inputs.rentOverride > 0) {

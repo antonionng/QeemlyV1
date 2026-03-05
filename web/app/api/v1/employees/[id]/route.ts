@@ -1,12 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateApiKey } from "../../middleware";
-import { createClient } from "@supabase/supabase-js";
-
-function getServiceClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  return createClient(url, key);
-}
+import { createServiceClient } from "@/lib/supabase/service";
+import { refreshComplianceSnapshot } from "@/lib/compliance/snapshot-service";
 
 /**
  * PATCH /api/v1/employees/:id
@@ -23,7 +18,7 @@ export async function PATCH(
 
   const { id } = await params;
   const body = await request.json();
-  const supabase = getServiceClient();
+  const supabase = createServiceClient();
 
   // Verify employee belongs to workspace
   const { data: existing } = await supabase
@@ -52,6 +47,12 @@ export async function PATCH(
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  try {
+    await refreshComplianceSnapshot(auth.workspaceId);
+  } catch {
+    // Keep employee patch success even if snapshot refresh fails.
   }
 
   return NextResponse.json(data);

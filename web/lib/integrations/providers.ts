@@ -301,8 +301,12 @@ export const CATEGORY_LABELS: Record<string, { label: string; description: strin
     description: "Send alerts and reminders to your team's communication tools.",
   },
   hris: {
-    label: "HRIS (Employee Data Sync)",
-    description: "Automatically sync employee records, compensation, and org structure from your HR system.",
+    label: "Employee Data",
+    description: "Sync employee records, compensation, and org structure from your HR system. This is your people data — headcount, roles, salaries, and departments.",
+  },
+  benchmarks: {
+    label: "Salary Benchmarks",
+    description: "Import market benchmark data to compare your compensation against external survey sources and salary datasets.",
   },
   ats: {
     label: "ATS (Recruiting)",

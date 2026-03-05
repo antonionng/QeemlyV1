@@ -54,47 +54,47 @@ export function SummaryExportWidget({
   }
 
   return (
-    <div className="flex flex-col p-2">
+    <div className="flex flex-col p-1">
       {/* Summary card */}
-      <div className="rounded-2xl bg-gradient-to-br from-brand-600 to-brand-700 p-5 shadow-lg ring-1 ring-brand-500 text-white">
+      <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-2">
-            <span className="text-2xl">{result.homeCity.flag}</span>
-            <span className="text-sm font-bold uppercase tracking-widest">
+            <span className="text-xl">{result.homeCity.flag}</span>
+            <span className="text-xs font-semibold uppercase tracking-wider text-accent-600">
               {result.homeCity.name}
             </span>
           </div>
-          <div className="h-px flex-1 bg-white/20" />
+          <div className="h-px flex-1 bg-border" />
           <div className="flex items-center gap-2">
-            <span className="text-2xl">{result.targetCity.flag}</span>
-            <span className="text-sm font-bold uppercase tracking-widest">
+            <span className="text-xl">{result.targetCity.flag}</span>
+            <span className="text-xs font-semibold uppercase tracking-wider text-accent-600">
               {result.targetCity.name}
             </span>
           </div>
         </div>
 
         <div className="mt-6 grid grid-cols-2 gap-4">
-          <div className="rounded-xl bg-white/10 p-3 backdrop-blur-sm">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-white/60">Base Salary</p>
-            <p className="text-lg font-bold">
+          <div className="rounded-xl border border-border bg-accent-50 p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-accent-500">Base Salary</p>
+            <p className="text-base font-semibold text-brand-900">
               {formatCurrency(applyViewMode(result.baseSalary, salaryView))}
             </p>
           </div>
-          <div className="rounded-xl bg-white/10 p-3 backdrop-blur-sm">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-white/60">Recommended</p>
-            <p className="text-lg font-bold leading-tight">
+          <div className="rounded-xl border border-border bg-brand-50 p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-accent-500">Recommended</p>
+            <p className="text-base font-semibold leading-tight text-brand-900">
               {formatCurrency(applyViewMode(result.recommendedRange.min, salaryView))}
             </p>
           </div>
-          <div className="rounded-xl bg-white/10 p-3 backdrop-blur-sm">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-white/60">Approach</p>
-            <p className="text-xs font-bold truncate">
+          <div className="rounded-xl border border-border bg-accent-50 p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-accent-500">Approach</p>
+            <p className="truncate text-xs font-semibold text-brand-900">
               {APPROACH_LABELS[compApproach]}
             </p>
           </div>
-          <div className="rounded-xl bg-white/10 p-3 backdrop-blur-sm">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-white/60">CoL Ratio</p>
-            <p className="text-lg font-bold">
+          <div className="rounded-xl border border-border bg-accent-50 p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-accent-500">CoL Ratio</p>
+            <p className="text-base font-semibold text-brand-900">
               {result.colRatio.toFixed(2)}x
             </p>
           </div>
@@ -107,7 +107,7 @@ export function SummaryExportWidget({
           variant="outline"
           fullWidth
           onClick={handleCopyLink}
-          className="h-11 justify-center gap-2 text-xs font-bold uppercase tracking-widest bg-white"
+          className="h-10 justify-center gap-2 text-xs font-semibold uppercase tracking-wider bg-white"
         >
           {copied ? (
             <>
@@ -125,7 +125,7 @@ export function SummaryExportWidget({
         <Button
           variant="outline"
           fullWidth
-          className="h-11 justify-center gap-2 text-xs font-bold uppercase tracking-widest bg-white"
+          className="h-10 justify-center gap-2 text-xs font-semibold uppercase tracking-wider bg-white"
         >
           <Download className="h-4 w-4 text-brand-500" />
           Export as PDF

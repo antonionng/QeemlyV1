@@ -24,7 +24,21 @@ export type ReportKpi = {
   label: string;
   value: string;
   delta: string;
-  trend: "up" | "down";
+  deltaLabel: string;
+  trend: "up" | "down" | "stable";
+  valueColor?: string;
+};
+
+export type ReportStatus = "Scheduled" | "Ready" | "In Review" | "Building";
+
+export type ReportGridItem = {
+  id: string;
+  title: string;
+  owner: string;
+  date: string;
+  status: ReportStatus;
+  typeId: ReportTypeId;
+  tags: string[];
 };
 
 export type RecentReport = {
@@ -64,31 +78,35 @@ export const REPORT_TYPES: ReportType[] = [
 export const REPORT_KPIS: ReportKpi[] = [
   {
     id: "generated",
-    label: "Reports generated",
-    value: "128",
-    delta: "+12% vs last month",
-    trend: "up",
+    label: "Reports Generated",
+    value: "0",
+    delta: "0",
+    deltaLabel: "until reports are created",
+    trend: "stable",
   },
   {
     id: "ready",
-    label: "Ready to share",
-    value: "18",
-    delta: "4 scheduled today",
-    trend: "up",
+    label: "Ready to Share",
+    value: "0",
+    delta: "0",
+    deltaLabel: "until reports are created",
+    trend: "stable",
   },
   {
     id: "coverage",
     label: "Coverage",
-    value: "100% data history",
-    delta: "All modules included",
-    trend: "up",
+    value: "0%",
+    delta: "0",
+    deltaLabel: "until reports are created",
+    trend: "stable",
   },
   {
     id: "confidence",
-    label: "Avg. confidence",
-    value: "High",
-    delta: "Stable for 90 days",
-    trend: "up",
+    label: "Average Confidence",
+    value: "N/A",
+    delta: "Stable",
+    deltaLabel: "until reports are created",
+    trend: "stable",
   },
 ];
 
@@ -103,36 +121,36 @@ export const REPORT_TEMPLATES: ReportTemplate[] = [
     confidence: "High",
     lastUpdated: "2026-01-12T10:00:00Z",
     owner: "People Analytics",
-    tags: ["Board deck", "Trends", "Budget"],
+    tags: ["Board Check", "Trends", "Budget"],
   },
   {
     id: "temp-overview-ops",
     typeId: "overview",
-    title: "Ops Scorecard",
+    title: "Ops Scoreboard",
     description: "Operational KPIs for compensation cycles and approvals.",
     cadence: "Weekly",
     coverage: "All regions · 18 markets",
     confidence: "High",
     lastUpdated: "2026-01-10T08:30:00Z",
     owner: "Comp Ops",
-    tags: ["Cycle readiness", "Approvals"],
+    tags: ["Board Check", "Trends", "Budget"],
   },
   {
     id: "temp-benchmark-role",
     typeId: "benchmark",
     title: "Role Benchmark Pack",
     description: "Role family benchmarks with percentile movement.",
-    cadence: "On demand",
+    cadence: "On Demand",
     coverage: "Engineering · GCC",
     confidence: "High",
     lastUpdated: "2026-01-11T14:15:00Z",
     owner: "Total Rewards",
-    tags: ["Percentiles", "YoY deltas"],
+    tags: ["Board Check", "Trends", "Budget"],
   },
   {
     id: "temp-benchmark-geo",
     typeId: "benchmark",
-    title: "Geo Comparison",
+    title: "Geo Compensation",
     description: "Location-based benchmarking for hiring hubs.",
     cadence: "Quarterly",
     coverage: "UAE · KSA · Qatar",
@@ -146,7 +164,7 @@ export const REPORT_TEMPLATES: ReportTemplate[] = [
     typeId: "compliance",
     title: "Pay Equity Review",
     description: "Identify pay equity gaps and remediation actions.",
-    cadence: "Quarterly",
+    cadence: "Monthly",
     coverage: "All business units",
     confidence: "High",
     lastUpdated: "2026-01-09T12:45:00Z",
@@ -158,7 +176,7 @@ export const REPORT_TEMPLATES: ReportTemplate[] = [
     typeId: "compliance",
     title: "Policy Adherence",
     description: "Tracks out-of-band offers and approval exceptions.",
-    cadence: "Monthly",
+    cadence: "On demand",
     coverage: "All offers",
     confidence: "Medium",
     lastUpdated: "2026-01-08T15:20:00Z",
@@ -191,58 +209,9 @@ export const REPORT_TEMPLATES: ReportTemplate[] = [
   },
 ];
 
-export const RECENT_REPORTS: RecentReport[] = [
-  {
-    id: "recent-1",
-    title: "January Executive Summary",
-    typeId: "overview",
-    owner: "John Doe",
-    lastRun: "2026-01-12T13:10:00Z",
-    status: "Ready",
-    format: "Slides",
-    recipients: 14,
-  },
-  {
-    id: "recent-2",
-    title: "KSA Market Benchmarks",
-    typeId: "benchmark",
-    owner: "Fatima Khan",
-    lastRun: "2026-01-12T09:40:00Z",
-    status: "Ready",
-    format: "PDF",
-    recipients: 6,
-  },
-  {
-    id: "recent-3",
-    title: "Q4 Pay Equity Review",
-    typeId: "compliance",
-    owner: "Ahmed Al-Hassan",
-    lastRun: "2026-01-11T17:25:00Z",
-    status: "Building",
-    format: "XLSX",
-    recipients: 4,
-  },
-  {
-    id: "recent-4",
-    title: "Offer Audit Pack",
-    typeId: "custom",
-    owner: "Maria Santos",
-    lastRun: "2026-01-11T08:10:00Z",
-    status: "Scheduled",
-    format: "Slides",
-    recipients: 9,
-  },
-  {
-    id: "recent-5",
-    title: "Engineering Role Benchmarks",
-    typeId: "benchmark",
-    owner: "Sarah Chen",
-    lastRun: "2026-01-10T15:45:00Z",
-    status: "Ready",
-    format: "PDF",
-    recipients: 11,
-  },
-];
+export const REPORT_GRID_ITEMS: ReportGridItem[] = [];
+
+export const RECENT_REPORTS: RecentReport[] = [];
 
 export function formatTimeAgo(isoString: string): string {
   const date = new Date(isoString);

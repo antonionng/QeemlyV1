@@ -23,15 +23,15 @@ export function ColIndexWidget({ result }: ColIndexWidgetProps) {
   const isSimilar = Math.abs(percentDiff) < 5;
 
   return (
-    <div className="flex flex-col p-2">
+    <div className="flex flex-col p-1">
       <div className="flex items-baseline gap-2">
-        <span className="text-5xl font-extrabold text-brand-900">
+        <span className="text-4xl font-bold text-brand-900">
           {colRatio.toFixed(2)}x
         </span>
         {!isSimilar && (
           <span
             className={clsx(
-              "flex items-center gap-1 text-base font-bold",
+              "flex items-center gap-1 text-sm font-semibold",
               isMoreExpensive ? "text-rose-600" : "text-emerald-600"
             )}
           >
@@ -45,21 +45,21 @@ export function ColIndexWidget({ result }: ColIndexWidgetProps) {
         )}
       </div>
 
-      <p className="mt-3 text-base text-accent-600">
+      <p className="mt-3 text-sm text-accent-600">
         {result.targetCity.name} is <strong>{getComparisonText(colRatio)}</strong> than{" "}
         {result.homeCity.name}
       </p>
       
-      <div className="mt-6 flex items-center gap-3">
-        <div className="flex items-center gap-2 rounded-full bg-brand-50 px-4 py-2 ring-1 ring-brand-100">
-          <span className="text-2xl">{result.homeCity.flag}</span>
-          <span className="text-xs font-bold text-brand-700">
+      <div className="mt-5 flex items-center gap-2.5">
+        <div className="flex items-center gap-2 rounded-full bg-accent-50 px-3 py-1.5 ring-1 ring-border">
+          <span className="text-lg">{result.homeCity.flag}</span>
+          <span className="text-xs font-semibold text-accent-700">
             {result.homeCity.name}: {result.homeCity.colIndex}
           </span>
         </div>
-        <div className="flex items-center gap-2 rounded-full bg-brand-50 px-4 py-2 ring-1 ring-brand-100">
-          <span className="text-2xl">{result.targetCity.flag}</span>
-          <span className="text-xs font-bold text-brand-700">
+        <div className="flex items-center gap-2 rounded-full bg-brand-50 px-3 py-1.5 ring-1 ring-brand-100">
+          <span className="text-lg">{result.targetCity.flag}</span>
+          <span className="text-xs font-semibold text-brand-700">
             {result.targetCity.name}: {result.targetCity.colIndex}
           </span>
         </div>

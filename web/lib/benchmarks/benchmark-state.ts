@@ -10,9 +10,9 @@ import {
   ROLES,
   LEVELS,
   LOCATIONS,
-  generateBenchmark,
 } from "../dashboard/dummy-data";
 import { useCompanySettings, type TargetPercentile } from "../company/settings";
+import { getBenchmark } from "./data-service";
 
 // Types
 export type BenchmarkContext = "existing" | "new-hire" | "relocating";
@@ -95,7 +95,7 @@ export interface BenchmarkState {
   // Form actions
   updateFormField: <K extends keyof BenchmarkFormData>(field: K, value: BenchmarkFormData[K]) => void;
   resetForm: () => void;
-  runBenchmark: () => void;
+  runBenchmark: () => Promise<void>;
   goToStep: (step: "form" | "results" | "detail") => void;
   clearResult: () => void;
   
@@ -161,7 +161,7 @@ export const useBenchmarkState = create<BenchmarkState>()(
         });
       },
       
-      runBenchmark: () => {
+      runBenchmark: async () => {
         const { formData } = get();
         
         if (!formData.roleId || !formData.levelId || !formData.locationId) {
@@ -175,17 +175,20 @@ export const useBenchmarkState = create<BenchmarkState>()(
           city: "London",
           country: "United Kingdom",
           countryCode: "GB",
-          currency: "AED" as const,
+          currency: "GBP" as const,
           flag: "GB",
         };
         
-        // Generate benchmark (use dubai as proxy for non-GCC locations)
+        // Fetch benchmark from workspace dataset (use dubai as proxy for non-GCC locations)
         const isGccLocation = LOCATIONS.some(l => l.id === formData.locationId);
-        const benchmark = generateBenchmark(
+        const benchmark = await getBenchmark(
           formData.roleId,
           isGccLocation ? formData.locationId : "dubai",
           formData.levelId
         );
+        if (!benchmark) {
+          return;
+        }
         
         // Check if any settings were overridden
         const isOverridden = !!(
@@ -281,7 +284,9 @@ export const useBenchmarkState = create<BenchmarkState>()(
         
         // Run benchmark with updated form data
         // Need to call runBenchmark after state is updated
-        setTimeout(() => get().runBenchmark(), 0);
+        setTimeout(() => {
+          void runBenchmark();
+        }, 0);
       },
     }),
     {
@@ -301,11 +306,11 @@ export const useBenchmarkState = create<BenchmarkState>()(
 
 // Extended locations for UK focus
 export const EXTENDED_LOCATIONS: Location[] = [
-  { id: "london", city: "London", country: "United Kingdom", countryCode: "GB", currency: "AED", flag: "GB" },
-  { id: "manchester", city: "Manchester", country: "United Kingdom", countryCode: "GB", currency: "AED", flag: "GB" },
-  { id: "birmingham", city: "Birmingham", country: "United Kingdom", countryCode: "GB", currency: "AED", flag: "GB" },
-  { id: "edinburgh", city: "Edinburgh", country: "United Kingdom", countryCode: "GB", currency: "AED", flag: "GB" },
-  { id: "bristol", city: "Bristol", country: "United Kingdom", countryCode: "GB", currency: "AED", flag: "GB" },
+  { id: "london", city: "London", country: "United Kingdom", countryCode: "GB", currency: "GBP", flag: "GB" },
+  { id: "manchester", city: "Manchester", country: "United Kingdom", countryCode: "GB", currency: "GBP", flag: "GB" },
+  { id: "birmingham", city: "Birmingham", country: "United Kingdom", countryCode: "GB", currency: "GBP", flag: "GB" },
+  { id: "edinburgh", city: "Edinburgh", country: "United Kingdom", countryCode: "GB", currency: "GBP", flag: "GB" },
+  { id: "bristol", city: "Bristol", country: "United Kingdom", countryCode: "GB", currency: "GBP", flag: "GB" },
   ...LOCATIONS,
 ];
 

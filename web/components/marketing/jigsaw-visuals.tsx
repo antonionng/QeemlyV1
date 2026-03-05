@@ -1,6 +1,15 @@
 import clsx from "clsx";
 import { AlertTriangle, CheckCircle2, Dot } from "lucide-react";
-import { SAMPLE_BENCHMARK, formatMoneyK } from "@/lib/sample-benchmark";
+
+const LIVE_MARKET = {
+  city: "Live market",
+  level: "Current level",
+  currency: "AED",
+  p25: "Live P25",
+  p50: "Live P50",
+  p75: "Live P75",
+  trend: "Live trend",
+};
 
 type VisualProps = { className?: string };
 
@@ -64,9 +73,9 @@ export function HireSmarterVisual({ className }: VisualProps) {
         <div className="mt-3 grid grid-cols-2 gap-2">
           <div className="rounded-xl bg-muted p-3 ring-1 ring-border/60">
             <div className="text-[11px] font-semibold uppercase tracking-wide text-accent-600/90">P50</div>
-            <div className="mt-1 text-lg font-semibold text-brand-900">{formatMoneyK(SAMPLE_BENCHMARK.currency, SAMPLE_BENCHMARK.p50)}</div>
+            <div className="mt-1 text-lg font-semibold text-brand-900">{LIVE_MARKET.p50}</div>
             <div className="mt-1 text-xs text-accent-600">
-              {SAMPLE_BENCHMARK.location.split(",")[0]} • {SAMPLE_BENCHMARK.level}
+              {LIVE_MARKET.city} • {LIVE_MARKET.level}
             </div>
           </div>
           <div className="rounded-xl bg-muted p-3 ring-1 ring-border/60">
@@ -118,9 +127,9 @@ export function KnowMarketVisual({ className }: VisualProps) {
       <Panel className="bg-muted/40">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
-            <MiniBadge label={SAMPLE_BENCHMARK.location.split(",")[0]} tone="ghost" />
-            <MiniBadge label={SAMPLE_BENCHMARK.level} tone="ghost" />
-            <MiniBadge label={SAMPLE_BENCHMARK.currency} tone="ghost" />
+            <MiniBadge label={LIVE_MARKET.city} tone="ghost" />
+            <MiniBadge label={LIVE_MARKET.level} tone="ghost" />
+            <MiniBadge label={LIVE_MARKET.currency} tone="ghost" />
           </div>
           <MiniBadge label="Live" tone="brand" />
         </div>
@@ -129,9 +138,9 @@ export function KnowMarketVisual({ className }: VisualProps) {
           {/* Percentiles */}
           <div className="space-y-2">
             {[
-              { k: "P25", v: SAMPLE_BENCHMARK.p25, w: "48%" },
-              { k: "P50", v: SAMPLE_BENCHMARK.p50, w: "63%" },
-              { k: "P75", v: SAMPLE_BENCHMARK.p75, w: "80%" },
+              { k: "P25", v: LIVE_MARKET.p25, w: "48%" },
+              { k: "P50", v: LIVE_MARKET.p50, w: "63%" },
+              { k: "P75", v: LIVE_MARKET.p75, w: "80%" },
             ].map((p) => (
               <div key={p.k} className="flex items-center gap-3">
                 <div className="w-9 text-xs font-bold text-accent-700">{p.k}</div>
@@ -141,7 +150,7 @@ export function KnowMarketVisual({ className }: VisualProps) {
                     style={{ width: p.w }}
                   />
                 </div>
-                <div className="w-20 text-right text-xs font-semibold text-brand-900">{formatMoneyK(SAMPLE_BENCHMARK.currency, p.v)}</div>
+                <div className="w-20 text-right text-xs font-semibold text-brand-900">{p.v}</div>
               </div>
             ))}
             <div className="text-[11px] text-accent-600">Percentiles by city, level, and profile</div>
@@ -168,7 +177,7 @@ export function KnowMarketVisual({ className }: VisualProps) {
             </svg>
             <div className="mt-1 flex items-center justify-between text-[11px] text-accent-600">
               <span>Stable</span>
-              <span className="font-semibold text-accent-800">{SAMPLE_BENCHMARK.trendDelta}</span>
+              <span className="font-semibold text-accent-800">{LIVE_MARKET.trend}</span>
             </div>
           </div>
         </div>

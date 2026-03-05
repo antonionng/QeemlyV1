@@ -1,6 +1,15 @@
 import clsx from "clsx";
 import { BarChart3, Compass, Filter, Globe, Layers, LineChart, SlidersHorizontal, Users } from "lucide-react";
-import { SAMPLE_BENCHMARK, formatMoneyK } from "@/lib/sample-benchmark";
+
+const LIVE_MARKET = {
+  city: "Live market",
+  level: "Current level",
+  currency: "AED",
+  p25: "Live P25",
+  p50: "Live P50",
+  p75: "Live P75",
+  trend: "Live trend",
+};
 
 type VisualProps = { className?: string };
 
@@ -97,9 +106,9 @@ export function TourBenchmarkVisual({ className }: VisualProps) {
               Filters
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Chip label={SAMPLE_BENCHMARK.location.split(",")[0]} active />
-              <Chip label={SAMPLE_BENCHMARK.level} />
-              <Chip label={SAMPLE_BENCHMARK.currency} />
+              <Chip label={LIVE_MARKET.city} active />
+              <Chip label={LIVE_MARKET.level} />
+              <Chip label={LIVE_MARKET.currency} />
               <Chip label="Monthly" />
             </div>
           </Shell>
@@ -115,9 +124,9 @@ export function TourBenchmarkVisual({ className }: VisualProps) {
               </div>
               <div className="mt-4 space-y-2">
                 {[
-                  { k: "P25", v: SAMPLE_BENCHMARK.p25, w: "48%", hi: false },
-                  { k: "P50", v: SAMPLE_BENCHMARK.p50, w: "63%", hi: true },
-                  { k: "P75", v: SAMPLE_BENCHMARK.p75, w: "80%", hi: false },
+                  { k: "P25", v: LIVE_MARKET.p25, w: "48%", hi: false },
+                  { k: "P50", v: LIVE_MARKET.p50, w: "63%", hi: true },
+                  { k: "P75", v: LIVE_MARKET.p75, w: "80%", hi: false },
                 ].map((r) => (
                   <div key={r.k} className="flex items-center gap-3">
                     <div className="w-9 text-xs font-bold text-accent-700">{r.k}</div>
@@ -128,7 +137,7 @@ export function TourBenchmarkVisual({ className }: VisualProps) {
                       />
                     </div>
                     <div className="w-24 text-right text-xs font-semibold text-brand-900">
-                      {formatMoneyK(SAMPLE_BENCHMARK.currency, r.v)}
+                      {r.v}
                     </div>
                   </div>
                 ))}
@@ -150,7 +159,7 @@ export function TourBenchmarkVisual({ className }: VisualProps) {
                   <div className="text-[11px] font-semibold uppercase tracking-wide text-accent-600">Movement</div>
                   <div className="mt-1 text-sm font-semibold text-brand-900">Trendline (90d)</div>
                 </div>
-                <div className="text-xs font-semibold text-accent-800">{SAMPLE_BENCHMARK.trendDelta}</div>
+                <div className="text-xs font-semibold text-accent-800">{LIVE_MARKET.trend}</div>
               </div>
               <svg viewBox="0 0 260 90" className="mt-4 h-24 w-full">
                 <path
@@ -198,8 +207,8 @@ export function TourDeltasVisual({ className }: VisualProps) {
               Profiles
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <Chip label={SAMPLE_BENCHMARK.location.split(",")[0]} active />
-              <Chip label={SAMPLE_BENCHMARK.currency} />
+              <Chip label={LIVE_MARKET.city} active />
+              <Chip label={LIVE_MARKET.currency} />
               <Chip label="Tech roles" />
             </div>
           </Shell>
@@ -266,7 +275,7 @@ export function TourPlanningVisual({ className }: VisualProps) {
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Chip label="Scenario A" active />
-              <Chip label={SAMPLE_BENCHMARK.currency} />
+              <Chip label={LIVE_MARKET.currency} />
               <Chip label="Quarterly" />
             </div>
           </Shell>
@@ -278,9 +287,7 @@ export function TourPlanningVisual({ className }: VisualProps) {
                   <div className="text-[11px] font-semibold uppercase tracking-wide text-accent-600">Forecast</div>
                   <div className="mt-1 text-sm font-semibold text-brand-900">Headcount budget</div>
                 </div>
-                <span className="rounded-full bg-brand-500 px-2.5 py-1 text-[11px] font-bold text-white">
-                  {formatMoneyK(SAMPLE_BENCHMARK.currency, 3100)}
-                </span>
+                <span className="rounded-full bg-brand-500 px-2.5 py-1 text-[11px] font-bold text-white">Live budget</span>
               </div>
               <div className="mt-4 grid grid-cols-12 items-end gap-1.5">
                 {[6, 9, 7, 11, 10, 13, 12, 14, 15, 16, 14, 18].map((h, i) => (

@@ -1,12 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateApiKey } from "../middleware";
-import { createClient } from "@supabase/supabase-js";
-
-function getServiceClient() {
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-  return createClient(url, key);
-}
+import { createServiceClient } from "@/lib/supabase/service";
 
 /**
  * GET /api/v1/sync-status
@@ -18,7 +12,7 @@ export async function GET(request: NextRequest) {
   const auth = await authenticateApiKey(request, "integrations:read");
   if (auth.error) return auth.error;
 
-  const supabase = getServiceClient();
+  const supabase = createServiceClient();
 
   // Fetch all integrations for the workspace
   const { data: integrations, error } = await supabase

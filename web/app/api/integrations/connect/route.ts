@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createOAuthState } from "@/lib/security/oauth-state";
 
 /**
  * POST /api/integrations/connect
@@ -38,7 +39,7 @@ export async function POST(request: NextRequest) {
     // Get user's workspace
     const { data: profile } = await supabase
       .from("profiles")
-      .select("workspace_id")
+      .select("workspace_id, role")
       .eq("id", user.id)
       .single();
 
@@ -46,15 +47,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No workspace found" }, { status: 404 });
     }
 
-    // TODO: Implement actual OAuth / Merge Link / API key flows
-    // For now, create the integration record directly
+    if (profile.role !== "admin") {
+      return NextResponse.json({ error: "Only admins can connect integrations" }, { status: 403 });
+    }
+
     const { data: integration, error } = await supabase
       .from("integrations")
       .upsert({
         workspace_id: profile.workspace_id,
         provider,
         category,
-        status: "connected",
+        status: "connecting",
         config: config || {},
         access_token: api_key || null,
         updated_at: new Date().toISOString(),
@@ -64,6 +67,48 @@ export async function POST(request: NextRequest) {
 
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    if (provider === "slack" || provider === "teams") {
+      const state = createOAuthState({
+        provider,
+        workspace_id: profile.workspace_id,
+        integration_id: integration.id,
+      });
+      const callbackUrl = new URL("/api/integrations/callback", request.url).toString();
+      const oauthBase =
+        provider === "slack"
+          ? process.env.SLACK_OAUTH_AUTHORIZE_URL
+          : process.env.TEAMS_OAUTH_AUTHORIZE_URL;
+
+      if (!oauthBase) {
+        return NextResponse.json(
+          { error: `Missing OAuth authorize URL for ${provider}` },
+          { status: 500 }
+        );
+      }
+
+      const oauthUrl = new URL(oauthBase);
+      oauthUrl.searchParams.set("state", state);
+      oauthUrl.searchParams.set("redirect_uri", callbackUrl);
+
+      return NextResponse.json({ integration, oauth_url: oauthUrl.toString(), state_required: true });
+    }
+
+    if (integration.status !== "connected") {
+      const { data: connectedIntegration, error: updateError } = await supabase
+        .from("integrations")
+        .update({ status: "connected", updated_at: new Date().toISOString() })
+        .eq("id", integration.id)
+        .eq("workspace_id", profile.workspace_id)
+        .select()
+        .single();
+
+      if (updateError) {
+        return NextResponse.json({ error: updateError.message }, { status: 500 });
+      }
+
+      return NextResponse.json({ integration: connectedIntegration });
     }
 
     return NextResponse.json({ integration });

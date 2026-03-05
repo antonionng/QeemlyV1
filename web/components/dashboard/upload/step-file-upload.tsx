@@ -88,7 +88,7 @@ export function StepFileUpload() {
   );
 
   const handleClearFile = () => {
-    setFile(null as any);
+    setFile(null);
     setMappings([]);
     setError(null);
   };

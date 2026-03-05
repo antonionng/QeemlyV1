@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import { Upload, X, Image as ImageIcon } from "lucide-react";
+import { Upload, X, Loader2 } from "lucide-react";
 import clsx from "clsx";
 
 interface LogoUploaderProps {
@@ -12,6 +12,7 @@ interface LogoUploaderProps {
 
 export function LogoUploader({ value, onChange, companyName = "Company" }: LogoUploaderProps) {
   const [isDragging, setIsDragging] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -24,7 +25,7 @@ export function LogoUploader({ value, onChange, companyName = "Company" }: LogoU
       .slice(0, 2);
   };
 
-  const handleFile = useCallback((file: File) => {
+  const handleFile = useCallback(async (file: File) => {
     setError(null);
 
     // Validate file type
@@ -40,16 +41,29 @@ export function LogoUploader({ value, onChange, companyName = "Company" }: LogoU
       return;
     }
 
-    // Convert to base64
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const result = e.target?.result as string;
-      onChange(result);
-    };
-    reader.onerror = () => {
-      setError("Failed to read file");
-    };
-    reader.readAsDataURL(file);
+    // Upload to API
+    try {
+      setUploading(true);
+      const formData = new FormData();
+      formData.append("file", file);
+      
+      const res = await fetch("/api/settings/logo", {
+        method: "POST",
+        body: formData,
+      });
+      
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Upload failed");
+      }
+      
+      const data = await res.json();
+      onChange(data.logo_url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+    }
   }, [onChange]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -83,12 +97,25 @@ export function LogoUploader({ value, onChange, companyName = "Company" }: LogoU
     }
   };
 
-  const handleRemove = (e: React.MouseEvent) => {
+  const handleRemove = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    onChange(null);
     setError(null);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
+    
+    try {
+      setUploading(true);
+      const res = await fetch("/api/settings/logo", { method: "DELETE" });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to remove logo");
+      }
+      onChange(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to remove logo");
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -151,10 +178,14 @@ export function LogoUploader({ value, onChange, companyName = "Company" }: LogoU
               className="hidden"
             />
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-100 text-brand-600 mb-3">
-              <Upload className="h-5 w-5" />
+              {uploading ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : (
+                <Upload className="h-5 w-5" />
+              )}
             </div>
             <p className="text-sm font-medium text-brand-900">
-              {isDragging ? "Drop your logo here" : "Upload company logo"}
+              {uploading ? "Uploading..." : isDragging ? "Drop your logo here" : "Upload company logo"}
             </p>
             <p className="text-xs text-brand-500 mt-1">
               PNG, JPG, SVG or WebP (max 2MB)

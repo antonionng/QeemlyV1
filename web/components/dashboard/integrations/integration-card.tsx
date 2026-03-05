@@ -66,8 +66,8 @@ export function IntegrationCard({
         "group relative flex flex-col rounded-2xl border bg-white p-5 transition-all duration-200",
         provider.comingSoon
           ? "border-border/50 opacity-70"
-          : "border-border hover:shadow-[0_4px_12px_rgba(0,0,0,0.04)] hover:-translate-y-0.5",
-        isConnected && "border-emerald-200/60 bg-emerald-50/20"
+          : "border-border hover:shadow-[0_6px_18px_rgba(15,23,42,0.08)]",
+        isConnected && "border-brand-200 bg-brand-50/20"
       )}
     >
       {/* Header: Logo + Status */}
@@ -82,7 +82,7 @@ export function IntegrationCard({
             </h3>
             {provider.mergeIntegration && (
               <span className="text-[10px] font-medium text-brand-500 uppercase tracking-wider">
-                via Merge
+                via Merge.dev
               </span>
             )}
           </div>
@@ -118,7 +118,7 @@ export function IntegrationCard({
         {provider.features.slice(0, 3).map((feature) => (
           <span
             key={feature}
-            className="inline-block rounded-md bg-brand-50 px-1.5 py-0.5 text-[10px] font-medium text-brand-600"
+            className="inline-block rounded-md bg-surface-2 px-1.5 py-0.5 text-[10px] font-medium text-text-secondary"
           >
             {feature.replace(/_/g, " ")}
           </span>
@@ -147,7 +147,7 @@ export function IntegrationCard({
         ) : isConnected ? (
           <>
             <Button
-              variant="ghost"
+              variant="secondary"
               size="sm"
               className="flex-1 text-xs"
               onClick={onManage}
