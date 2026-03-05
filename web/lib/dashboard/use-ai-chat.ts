@@ -173,32 +173,6 @@ export function useAIChat() {
       return;
     }
 
-    const desiredMode = options?.mode ?? activeThread?.mode ?? "general";
-    const desiredEmployeeId =
-      desiredMode === "employee" ? options?.employeeId ?? activeThread?.employee_id ?? undefined : undefined;
-
-    let targetThread = activeThread;
-    const modeMismatch = targetThread && targetThread.mode !== desiredMode;
-    const employeeMismatch =
-      desiredMode === "employee" &&
-      targetThread?.mode === "employee" &&
-      targetThread.employee_id &&
-      desiredEmployeeId &&
-      targetThread.employee_id !== desiredEmployeeId;
-
-    if (!targetThread || options?.newThread || modeMismatch || employeeMismatch) {
-      targetThread = await startNewChat({
-        mode: desiredMode,
-        employeeId: desiredEmployeeId,
-        employee: options?.employee,
-      });
-    }
-
-    if (!targetThread) {
-      throw new Error("No active chat thread available.");
-    }
-
-    // Add user message
     const userMessage: Message = {
       id: Date.now().toString(),
       role: "user",
@@ -219,7 +193,32 @@ export function useAIChat() {
       },
     ]);
 
+    const desiredMode = options?.mode ?? activeThread?.mode ?? "general";
+    const desiredEmployeeId =
+      desiredMode === "employee" ? options?.employeeId ?? activeThread?.employee_id ?? undefined : undefined;
+
+    let targetThread = activeThread;
+    const modeMismatch = targetThread && targetThread.mode !== desiredMode;
+    const employeeMismatch =
+      desiredMode === "employee" &&
+      targetThread?.mode === "employee" &&
+      targetThread.employee_id &&
+      desiredEmployeeId &&
+      targetThread.employee_id !== desiredEmployeeId;
+
     try {
+      if (!targetThread || options?.newThread || modeMismatch || employeeMismatch) {
+        targetThread = await startNewChat({
+          mode: desiredMode,
+          employeeId: desiredEmployeeId,
+          employee: options?.employee,
+        });
+      }
+
+      if (!targetThread) {
+        throw new Error("No active chat thread available.");
+      }
+
       const requestedMode = targetThread.mode;
       const payload: ChatRequest =
         requestedMode === "employee" && targetThread.employee_id
@@ -291,9 +290,17 @@ export function useAIChat() {
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown chat error";
+      const friendlyMessage =
+        /relation .*ai_chat_threads.* does not exist|relation .*ai_chat_messages.* does not exist/i.test(
+          message
+        )
+          ? "Chat storage is not initialized in this environment yet. Please run the latest Supabase migrations."
+          : message;
       setMessages((prev) =>
         prev.map((msg) =>
-          msg.id === assistantMessageId ? { ...msg, content: `AI chat request failed: ${message}` } : msg
+          msg.id === assistantMessageId
+            ? { ...msg, content: `AI chat request failed: ${friendlyMessage}` }
+            : msg
         )
       );
     } finally {
