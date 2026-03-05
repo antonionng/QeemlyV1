@@ -102,9 +102,11 @@ export default function SalaryReviewPage() {
   const currentBudgetSuggestions = settings.budgetType === "percentage"
     ? PERCENTAGE_BUDGET_SUGGESTIONS
     : ABSOLUTE_BUDGET_SUGGESTIONS;
+  const aiPlanCycle: SalaryReviewAiPlanRequest["cycle"] =
+    settings.cycle === "monthly" ? "monthly" : "annual";
   const aiPlanRequest: SalaryReviewAiPlanRequest = {
     mode: "assistive",
-    cycle: settings.cycle,
+    cycle: aiPlanCycle,
     budgetType: settings.budgetType,
     budgetPercentage: settings.budgetPercentage,
     budgetAbsolute: settings.budgetAbsolute,
