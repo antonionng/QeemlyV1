@@ -34,7 +34,17 @@ export async function runIngestionForJob(
     .eq("id", sourceId)
     .single();
 
-  const ingestor = source ? getIngestorForSource(source.slug) : null;
+  if (!source) {
+    return {
+      status: "failed",
+      records_created: 0,
+      records_updated: 0,
+      records_failed: 0,
+      error_message: `No ingestion source found for ${sourceId}`,
+    };
+  }
+
+  const ingestor = getIngestorForSource(source.slug);
 
   if (!ingestor) {
     return {

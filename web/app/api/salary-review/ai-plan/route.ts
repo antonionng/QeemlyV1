@@ -37,13 +37,22 @@ type FreshnessRow = {
   source_id: string | null;
   last_updated_at: string | null;
   confidence: "high" | "medium" | "low" | null;
-  ingestion_sources: {
+  ingestion_sources:
+    | {
     slug: string;
     name: string;
     approved_for_commercial: boolean;
     needs_review: boolean;
     enabled: boolean;
-  } | null;
+  }
+    | {
+        slug: string;
+        name: string;
+        approved_for_commercial: boolean;
+        needs_review: boolean;
+        enabled: boolean;
+      }[]
+    | null;
 };
 
 function toEmployeeInput(row: EmployeeRow): SalaryReviewAiEmployeeInput {
@@ -170,7 +179,9 @@ export async function POST(request: Request) {
 
   const typedFreshnessRows = (freshnessRows ?? []) as FreshnessRow[];
   const allowedIngestionFreshness = typedFreshnessRows.find((row) => {
-    const source = row.ingestion_sources;
+    const source = Array.isArray(row.ingestion_sources)
+      ? row.ingestion_sources[0]
+      : row.ingestion_sources;
     if (!source) return false;
     return source.enabled && source.approved_for_commercial && !source.needs_review;
   });
@@ -199,8 +210,12 @@ export async function POST(request: Request) {
   const ingestionBenchmarks = dedupeBenchmarks(
     (ingestionBenchmarkRows ?? []) as BenchmarkRow[],
     "ingestion",
-    allowedIngestionFreshness?.ingestion_sources?.slug ?? "qeemly_ingestion",
-    allowedIngestionFreshness?.ingestion_sources?.name ?? "Qeemly Ingestion"
+    (Array.isArray(allowedIngestionFreshness?.ingestion_sources)
+      ? allowedIngestionFreshness?.ingestion_sources[0]?.slug
+      : allowedIngestionFreshness?.ingestion_sources?.slug) ?? "qeemly_ingestion",
+    (Array.isArray(allowedIngestionFreshness?.ingestion_sources)
+      ? allowedIngestionFreshness?.ingestion_sources[0]?.name
+      : allowedIngestionFreshness?.ingestion_sources?.name) ?? "Qeemly Ingestion"
   );
 
   const plan = buildSalaryReviewAiPlan({
