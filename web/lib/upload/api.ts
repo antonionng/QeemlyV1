@@ -109,7 +109,7 @@ export async function uploadEmployees(
             updated_at: new Date().toISOString(),
           };
         })
-        .filter((entry): entry is Record<string, unknown> => Boolean(entry));
+        .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
 
       if (enrichmentPayload.length > 0) {
         await supabase
@@ -137,7 +137,7 @@ export async function uploadEmployees(
             updated_at: new Date().toISOString(),
           };
         })
-        .filter((entry): entry is Record<string, unknown> => Boolean(entry));
+        .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
 
       if (visaPayload.length > 0) {
         await supabase.from("employee_visa_records").insert(visaPayload);
