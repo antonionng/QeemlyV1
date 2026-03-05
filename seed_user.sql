@@ -1,130 +1,217 @@
 /*
   SEED USER FOR DEMO
-  
-  To create the demo user, go to your Supabase Dashboard:
-  1. Navigate to Authentication > Users
-  2. Click "Add user" button
-  3. Enter:
-     - Email: ag@experrt.com
-     - Password: Generate a one-time strong password in your password manager
-  4. Click "Create user"
-  
-  Then run the SQL below to create their workspace and profile:
+  Resets and reseeds Experrt with realistic active data.
 */
 
--- Create workspace for the demo user
+-- 0) Workspace bootstrap (idempotent)
 INSERT INTO workspaces (id, name, slug)
 VALUES (
   'a0000000-0000-0000-0000-000000000001',
   'Experrt',
   'experrt-demo'
 )
-ON CONFLICT (slug) DO NOTHING;
+ON CONFLICT (slug) DO UPDATE SET
+  name = EXCLUDED.name;
 
--- Get the user ID from auth.users and create their profile
--- Note: Replace 'USER_ID_HERE' with the actual UUID from the Authentication tab
--- after creating the user manually
+-- 1) Clear tenant runtime data for a fresh reseed
+WITH ws AS (
+  SELECT id FROM workspaces WHERE slug = 'experrt-demo' LIMIT 1
+), tenant_employees AS (
+  SELECT id FROM employees WHERE workspace_id = (SELECT id FROM ws)
+)
+DELETE FROM compensation_history
+WHERE employee_id IN (SELECT id FROM tenant_employees);
 
--- Example (you'll need to update the UUID after creating the user):
-/*
-INSERT INTO profiles (id, workspace_id, full_name, role)
-VALUES (
-  'USER_ID_HERE',  -- Copy from Authentication > Users after creating the user
-  'a0000000-0000-0000-0000-000000000001',
-  'Demo User',
-  'admin'
+WITH ws AS (
+  SELECT id FROM workspaces WHERE slug = 'experrt-demo' LIMIT 1
+)
+DELETE FROM compliance_visa_cases WHERE workspace_id = (SELECT id FROM ws);
+
+WITH ws AS (
+  SELECT id FROM workspaces WHERE slug = 'experrt-demo' LIMIT 1
+)
+DELETE FROM compliance_audit_events WHERE workspace_id = (SELECT id FROM ws);
+
+WITH ws AS (
+  SELECT id FROM workspaces WHERE slug = 'experrt-demo' LIMIT 1
+)
+DELETE FROM compliance_documents WHERE workspace_id = (SELECT id FROM ws);
+
+WITH ws AS (
+  SELECT id FROM workspaces WHERE slug = 'experrt-demo' LIMIT 1
+)
+DELETE FROM compliance_deadlines WHERE workspace_id = (SELECT id FROM ws);
+
+WITH ws AS (
+  SELECT id FROM workspaces WHERE slug = 'experrt-demo' LIMIT 1
+)
+DELETE FROM compliance_regulatory_updates WHERE workspace_id = (SELECT id FROM ws);
+
+WITH ws AS (
+  SELECT id FROM workspaces WHERE slug = 'experrt-demo' LIMIT 1
+)
+DELETE FROM compliance_policies WHERE workspace_id = (SELECT id FROM ws);
+
+WITH ws AS (
+  SELECT id FROM workspaces WHERE slug = 'experrt-demo' LIMIT 1
+)
+DELETE FROM compliance_snapshots WHERE workspace_id = (SELECT id FROM ws);
+
+WITH ws AS (
+  SELECT id FROM workspaces WHERE slug = 'experrt-demo' LIMIT 1
+)
+DELETE FROM salary_benchmarks WHERE workspace_id = (SELECT id FROM ws);
+
+WITH ws AS (
+  SELECT id FROM workspaces WHERE slug = 'experrt-demo' LIMIT 1
+)
+DELETE FROM ai_chat_messages
+WHERE thread_id IN (
+  SELECT id FROM ai_chat_threads WHERE workspace_id = (SELECT id FROM ws)
 );
-*/
 
--- Seed baseline employees + compensation history for experrt-demo tenant.
--- Idempotent: fixed UUIDs + ON CONFLICT updates.
-WITH experrt_workspace AS (
-  SELECT id
-  FROM workspaces
-  WHERE slug = 'experrt-demo'
-  LIMIT 1
+WITH ws AS (
+  SELECT id FROM workspaces WHERE slug = 'experrt-demo' LIMIT 1
+)
+DELETE FROM ai_chat_threads WHERE workspace_id = (SELECT id FROM ws);
+
+WITH ws AS (
+  SELECT id FROM workspaces WHERE slug = 'experrt-demo' LIMIT 1
+)
+DELETE FROM employees WHERE workspace_id = (SELECT id FROM ws);
+
+-- 2) Seed 85 realistic employees
+WITH ws AS (
+  SELECT id AS workspace_id FROM workspaces WHERE slug = 'experrt-demo' LIMIT 1
+), first_names AS (
+  SELECT ARRAY[
+    'Ahmed','Aisha','Omar','Fatima','Hassan','Noor','Khalid','Layla','Yousef','Mariam',
+    'Salman','Huda','Rami','Dalia','Nasser','Sara','Tariq','Amal','Zayd','Reem'
+  ] AS arr
+), last_names AS (
+  SELECT ARRAY[
+    'Al-Mansoori','Al-Harbi','Al-Qahtani','Al-Khalifa','Al-Hashemi','Al-Suwaidi','Al-Nuaimi','Al-Sabah',
+    'Khan','Rahman','Siddiqui','Patel','Sharma','Fernandes','Dsouza','Haddad','Nasser','Maktoum','Faris','Yazid'
+  ] AS arr
+), role_base AS (
+  SELECT * FROM (VALUES
+    ('swe',32000),('swe-fe',30000),('swe-be',33000),('swe-mobile',31000),('swe-devops',34000),
+    ('swe-data',35000),('swe-ml',42000),('pm',38000),('tpm',40000),('designer',28000),
+    ('ux-researcher',26000),('data-scientist',40000),('data-analyst',25000),('security',36000),('qa',22000)
+  ) AS t(role_id, monthly_aed)
+), level_mult AS (
+  SELECT * FROM (VALUES
+    ('ic1',0.55),('ic2',0.75),('ic3',1.0),('ic4',1.35),('ic5',1.70),
+    ('m1',1.40),('m2',1.70),('d1',2.0),('d2',2.40),('vp',3.0)
+  ) AS t(level_id, multiplier)
+), location_info AS (
+  SELECT * FROM (VALUES
+    ('dubai','AED',1.00,1.00),('abu-dhabi','AED',0.95,1.00),('riyadh','SAR',1.15,1.02),('jeddah','SAR',1.05,1.02),
+    ('doha','QAR',1.20,0.99),('manama','BHD',0.85,0.103),('kuwait-city','KWD',1.10,0.084),('muscat','OMR',0.80,0.105)
+  ) AS t(location_id, currency, location_mult, fx_from_aed)
+), generated AS (
+  SELECT
+    g.i,
+    (SELECT workspace_id FROM ws) AS workspace_id,
+    (SELECT arr[((g.i - 1) % 20) + 1] FROM first_names) AS first_name,
+    (SELECT arr[((g.i * 7 - 1) % 20) + 1] FROM last_names) AS last_name,
+    CASE
+      WHEN (g.i % 100) < 35 THEN 'Engineering'
+      WHEN (g.i % 100) < 47 THEN 'Product'
+      WHEN (g.i % 100) < 56 THEN 'Design'
+      WHEN (g.i % 100) < 66 THEN 'Data'
+      WHEN (g.i % 100) < 75 THEN 'Sales'
+      WHEN (g.i % 100) < 82 THEN 'Marketing'
+      WHEN (g.i % 100) < 89 THEN 'Operations'
+      WHEN (g.i % 100) < 95 THEN 'Finance'
+      ELSE 'HR'
+    END AS department
+  FROM generate_series(1, 85) AS g(i)
+), with_role_level_location AS (
+  SELECT
+    g.*,
+    CASE g.department
+      WHEN 'Engineering' THEN (ARRAY['swe','swe-fe','swe-be','swe-mobile','swe-devops','swe-data','swe-ml','security','qa'])[((g.i * 3) % 9) + 1]
+      WHEN 'Product' THEN (ARRAY['pm','tpm'])[((g.i * 5) % 2) + 1]
+      WHEN 'Design' THEN (ARRAY['designer','ux-researcher'])[((g.i * 7) % 2) + 1]
+      WHEN 'Data' THEN (ARRAY['data-scientist','data-analyst','swe-data'])[((g.i * 11) % 3) + 1]
+      WHEN 'Sales' THEN 'pm'
+      WHEN 'Marketing' THEN 'pm'
+      WHEN 'Operations' THEN 'tpm'
+      WHEN 'Finance' THEN 'data-analyst'
+      ELSE 'pm'
+    END AS role_id,
+    CASE
+      WHEN (g.i % 100) < 12 THEN 'ic1'
+      WHEN (g.i % 100) < 30 THEN 'ic2'
+      WHEN (g.i % 100) < 55 THEN 'ic3'
+      WHEN (g.i % 100) < 70 THEN 'ic4'
+      WHEN (g.i % 100) < 78 THEN 'ic5'
+      WHEN (g.i % 100) < 88 THEN 'm1'
+      WHEN (g.i % 100) < 94 THEN 'm2'
+      WHEN (g.i % 100) < 97 THEN 'd1'
+      WHEN (g.i % 100) < 99 THEN 'd2'
+      ELSE 'vp'
+    END AS level_id,
+    CASE
+      WHEN (g.i % 100) < 28 THEN 'dubai'
+      WHEN (g.i % 100) < 42 THEN 'abu-dhabi'
+      WHEN (g.i % 100) < 56 THEN 'riyadh'
+      WHEN (g.i % 100) < 64 THEN 'jeddah'
+      WHEN (g.i % 100) < 74 THEN 'doha'
+      WHEN (g.i % 100) < 83 THEN 'manama'
+      WHEN (g.i % 100) < 92 THEN 'kuwait-city'
+      ELSE 'muscat'
+    END AS location_id
+  FROM generated g
+), prepared AS (
+  SELECT
+    (
+      substr(md5('experrt-employee-' || w.i),1,8) || '-' ||
+      substr(md5('experrt-employee-' || w.i),9,4) || '-4' ||
+      substr(md5('experrt-employee-' || w.i),14,3) || '-a' ||
+      substr(md5('experrt-employee-' || w.i),18,3) || '-' ||
+      substr(md5('experrt-employee-' || w.i),21,12)
+    )::uuid AS id,
+    w.workspace_id,
+    w.first_name,
+    w.last_name,
+    lower(replace(w.first_name,'''','')) || '.' || lower(replace(w.last_name,'''','')) || '.' || lpad(w.i::text,3,'0') || '@experrt.com' AS email,
+    w.department,
+    w.role_id,
+    w.level_id,
+    w.location_id,
+    li.currency,
+    round((rb.monthly_aed * 12 * lm.multiplier * li.location_mult * li.fx_from_aed) * (0.92 + ((w.i % 9) * 0.02)))::numeric AS base_salary,
+    round((rb.monthly_aed * 12 * lm.multiplier * li.location_mult * li.fx_from_aed) * (0.04 + ((w.i % 7) * 0.01)))::numeric AS bonus,
+    CASE
+      WHEN w.level_id IN ('ic4','ic5','m1','m2','d1','d2','vp')
+      THEN round((rb.monthly_aed * 12 * lm.multiplier * li.location_mult * li.fx_from_aed) * (0.06 + ((w.i % 6) * 0.03)))::numeric
+      ELSE 0
+    END AS equity,
+    'active'::text AS status,
+    CASE WHEN (w.i % 10) < 6 THEN 'national' ELSE 'expat' END AS employment_type,
+    (CURRENT_DATE - ((w.i * 37) % 2550))::date AS hire_date,
+    (CURRENT_DATE - ((w.i * 13) % 320))::date AS last_review_date,
+    CASE
+      WHEN (w.i % 20) < 2 THEN 'low'
+      WHEN (w.i % 20) < 9 THEN 'meets'
+      WHEN (w.i % 20) < 17 THEN 'exceeds'
+      ELSE 'exceptional'
+    END AS performance_rating
+  FROM with_role_level_location w
+  JOIN role_base rb ON rb.role_id = w.role_id
+  JOIN level_mult lm ON lm.level_id = w.level_id
+  JOIN location_info li ON li.location_id = w.location_id
 )
 INSERT INTO employees (
-  id,
-  workspace_id,
-  first_name,
-  last_name,
-  email,
-  department,
-  role_id,
-  level_id,
-  location_id,
-  base_salary,
-  bonus,
-  equity,
-  currency,
-  status,
-  employment_type,
-  hire_date,
-  last_review_date,
-  performance_rating
+  id, workspace_id, first_name, last_name, email, department, role_id, level_id, location_id,
+  base_salary, bonus, equity, currency, status, employment_type, hire_date, last_review_date, performance_rating
 )
-SELECT * FROM (
-  SELECT
-    'a1000000-0000-0000-0000-000000000001'::uuid AS id,
-    (SELECT id FROM experrt_workspace) AS workspace_id,
-    'Ahmed' AS first_name,
-    'Al-Dosari' AS last_name,
-    'ahmed.al-dosari@experrt.com' AS email,
-    'Product' AS department,
-    'pm' AS role_id,
-    'ic4' AS level_id,
-    'manama' AS location_id,
-    229700 AS base_salary,
-    22000 AS bonus,
-    18000 AS equity,
-    'AED' AS currency,
-    'active' AS status,
-    'national' AS employment_type,
-    DATE '2020-11-01' AS hire_date,
-    DATE '2025-11-01' AS last_review_date,
-    'exceeds' AS performance_rating
-  UNION ALL
-  SELECT
-    'a1000000-0000-0000-0000-000000000002'::uuid,
-    (SELECT id FROM experrt_workspace),
-    'Sabah',
-    'Khan',
-    'sabah.khan@experrt.com',
-    'Engineering',
-    'swe-be',
-    'ic5',
-    'dubai',
-    191100,
-    20000,
-    12000,
-    'AED',
-    'active',
-    'expat',
-    DATE '2021-10-01',
-    DATE '2025-10-01',
-    'exceptional'
-  UNION ALL
-  SELECT
-    'a1000000-0000-0000-0000-000000000003'::uuid,
-    (SELECT id FROM experrt_workspace),
-    'Rashid',
-    'Hassan',
-    'rashid.hassan@experrt.com',
-    'Design',
-    'designer',
-    'ic3',
-    'abu-dhabi',
-    183300,
-    16000,
-    8000,
-    'AED',
-    'active',
-    'national',
-    DATE '2022-10-01',
-    DATE '2025-10-01',
-    'meets'
-) seeded_employees
+SELECT
+  id, workspace_id, first_name, last_name, email, department, role_id, level_id, location_id,
+  base_salary, bonus, equity, currency, status, employment_type, hire_date, last_review_date, performance_rating
+FROM prepared
 WHERE workspace_id IS NOT NULL
 ON CONFLICT (id) DO UPDATE SET
   workspace_id = EXCLUDED.workspace_id,
@@ -146,33 +233,97 @@ ON CONFLICT (id) DO UPDATE SET
   performance_rating = EXCLUDED.performance_rating,
   updated_at = now();
 
-INSERT INTO compensation_history (
-  id,
-  employee_id,
-  effective_date,
-  base_salary,
-  bonus,
-  equity,
-  currency,
-  change_reason,
-  change_percentage
+-- 3) Salary benchmarks for every role/level/location tuple present
+WITH ws AS (
+  SELECT id AS workspace_id FROM workspaces WHERE slug = 'experrt-demo' LIMIT 1
+), tuples AS (
+  SELECT
+    e.workspace_id,
+    e.role_id,
+    e.level_id,
+    e.location_id,
+    e.currency,
+    avg((coalesce(e.base_salary,0) + coalesce(e.bonus,0) + coalesce(e.equity,0)) / 12.0)::numeric AS avg_monthly_total,
+    count(*)::int AS sample_size
+  FROM employees e
+  WHERE e.workspace_id = (SELECT workspace_id FROM ws)
+  GROUP BY e.workspace_id, e.role_id, e.level_id, e.location_id, e.currency
 )
-VALUES
-  -- Ahmed
-  ('a2000000-0000-0000-0000-000000000001', 'a1000000-0000-0000-0000-000000000001', DATE '2020-11-01', 158300, 10000, 5000, 'AED', 'hire', 0),
-  ('a2000000-0000-0000-0000-000000000002', 'a1000000-0000-0000-0000-000000000001', DATE '2022-11-01', 175000, 13000, 8000, 'AED', 'annual-review', 10.5),
-  ('a2000000-0000-0000-0000-000000000003', 'a1000000-0000-0000-0000-000000000001', DATE '2024-11-01', 225000, 20000, 15000, 'AED', 'promotion', 28.6),
-  ('a2000000-0000-0000-0000-000000000004', 'a1000000-0000-0000-0000-000000000001', DATE '2025-11-01', 229700, 22000, 18000, 'AED', 'market-adjustment', 2.1),
+INSERT INTO salary_benchmarks (
+  workspace_id, role_id, level_id, location_id, currency,
+  p10, p25, p50, p75, p90, sample_size, source, confidence, valid_from
+)
+SELECT
+  t.workspace_id,
+  t.role_id,
+  t.level_id,
+  t.location_id,
+  t.currency,
+  round(t.avg_monthly_total * 0.70)::numeric AS p10,
+  round(t.avg_monthly_total * 0.83)::numeric AS p25,
+  round(t.avg_monthly_total * 1.00)::numeric AS p50,
+  round(t.avg_monthly_total * 1.18)::numeric AS p75,
+  round(t.avg_monthly_total * 1.35)::numeric AS p90,
+  greatest(t.sample_size, 20) AS sample_size,
+  'market'::text AS source,
+  CASE WHEN t.sample_size >= 8 THEN 'high' ELSE 'medium' END::text AS confidence,
+  CURRENT_DATE AS valid_from
+FROM tuples t
+ON CONFLICT (workspace_id, role_id, location_id, level_id, valid_from) DO UPDATE SET
+  currency = EXCLUDED.currency,
+  p10 = EXCLUDED.p10,
+  p25 = EXCLUDED.p25,
+  p50 = EXCLUDED.p50,
+  p75 = EXCLUDED.p75,
+  p90 = EXCLUDED.p90,
+  sample_size = EXCLUDED.sample_size,
+  source = EXCLUDED.source,
+  confidence = EXCLUDED.confidence;
 
-  -- Sabah
-  ('a2000000-0000-0000-0000-000000000005', 'a1000000-0000-0000-0000-000000000002', DATE '2021-10-01', 146000, 10000, 3000, 'AED', 'hire', 0),
-  ('a2000000-0000-0000-0000-000000000006', 'a1000000-0000-0000-0000-000000000002', DATE '2023-10-01', 165500, 13000, 7000, 'AED', 'annual-review', 13.4),
-  ('a2000000-0000-0000-0000-000000000007', 'a1000000-0000-0000-0000-000000000002', DATE '2025-10-01', 191100, 20000, 12000, 'AED', 'promotion', 15.5),
-
-  -- Rashid
-  ('a2000000-0000-0000-0000-000000000008', 'a1000000-0000-0000-0000-000000000003', DATE '2022-10-01', 150000, 10000, 3000, 'AED', 'hire', 0),
-  ('a2000000-0000-0000-0000-000000000009', 'a1000000-0000-0000-0000-000000000003', DATE '2024-10-01', 172000, 13000, 6000, 'AED', 'annual-review', 14.7),
-  ('a2000000-0000-0000-0000-000000000010', 'a1000000-0000-0000-0000-000000000003', DATE '2025-10-01', 183300, 16000, 8000, 'AED', 'market-adjustment', 6.6)
+-- 4) Compensation history (3 snapshots per employee)
+WITH ws AS (
+  SELECT id AS workspace_id FROM workspaces WHERE slug = 'experrt-demo' LIMIT 1
+), emps AS (
+  SELECT
+    e.id,
+    e.currency,
+    e.hire_date,
+    coalesce(e.base_salary,0)::numeric AS base_salary,
+    coalesce(e.bonus,0)::numeric AS bonus,
+    coalesce(e.equity,0)::numeric AS equity
+  FROM employees e
+  WHERE e.workspace_id = (SELECT workspace_id FROM ws)
+)
+INSERT INTO compensation_history (
+  id, employee_id, effective_date, base_salary, bonus, equity, currency, change_reason, change_percentage
+)
+SELECT
+  (
+    substr(md5(emps.id::text || '-hist-' || step.step_no),1,8) || '-' ||
+    substr(md5(emps.id::text || '-hist-' || step.step_no),9,4) || '-4' ||
+    substr(md5(emps.id::text || '-hist-' || step.step_no),14,3) || '-a' ||
+    substr(md5(emps.id::text || '-hist-' || step.step_no),18,3) || '-' ||
+    substr(md5(emps.id::text || '-hist-' || step.step_no),21,12)
+  )::uuid AS id,
+  emps.id AS employee_id,
+  CASE
+    WHEN step.step_no = 1 THEN greatest(emps.hire_date, CURRENT_DATE - interval '6 years')::date
+    WHEN step.step_no = 2 THEN greatest(emps.hire_date + interval '18 months', CURRENT_DATE - interval '2 years')::date
+    ELSE greatest(emps.hire_date + interval '42 months', CURRENT_DATE - interval '90 days')::date
+  END AS effective_date,
+  round(emps.base_salary * step.base_factor)::numeric AS base_salary,
+  round(emps.bonus * step.bonus_factor)::numeric AS bonus,
+  round(emps.equity * step.equity_factor)::numeric AS equity,
+  emps.currency,
+  step.reason AS change_reason,
+  step.change_pct AS change_percentage
+FROM emps
+CROSS JOIN (
+  VALUES
+    (1, 'hire'::text, 0.74::numeric, 0.50::numeric, 0.35::numeric, 0::numeric),
+    (2, 'annual-review'::text, 0.88::numeric, 0.78::numeric, 0.70::numeric, 12::numeric),
+    (3, 'market-adjustment'::text, 1.00::numeric, 1.00::numeric, 1.00::numeric, 6::numeric)
+) AS step(step_no, reason, base_factor, bonus_factor, equity_factor, change_pct)
 ON CONFLICT (id) DO UPDATE SET
   employee_id = EXCLUDED.employee_id,
   effective_date = EXCLUDED.effective_date,
@@ -183,293 +334,293 @@ ON CONFLICT (id) DO UPDATE SET
   change_reason = EXCLUDED.change_reason,
   change_percentage = EXCLUDED.change_percentage;
 
--- Seed salary benchmarks for experrt workspace (role/location/level tuples used across dashboards).
-WITH experrt_workspace AS (
-  SELECT id
-  FROM workspaces
-  WHERE slug = 'experrt-demo'
-  LIMIT 1
+-- 5) Compliance domain tables
+-- Bootstrap-only demo seed for local testing. In production, tenant imports and integrations
+-- should remain the system-of-record that populates these compliance tables.
+WITH ws AS (
+  SELECT id AS workspace_id FROM workspaces WHERE slug = 'experrt-demo' LIMIT 1
+), dept_stats AS (
+  SELECT
+    e.department,
+    count(*)::int AS headcount,
+    avg(
+      CASE e.performance_rating
+        WHEN 'low' THEN 62
+        WHEN 'meets' THEN 82
+        WHEN 'exceeds' THEN 91
+        ELSE 97
+      END
+    )::numeric AS perf_score
+  FROM employees e
+  WHERE e.workspace_id = (SELECT workspace_id FROM ws)
+  GROUP BY e.department
+), ranked AS (
+  SELECT
+    department,
+    headcount,
+    perf_score,
+    row_number() OVER (ORDER BY headcount DESC, department) AS rn
+  FROM dept_stats
 )
-INSERT INTO salary_benchmarks (
-  workspace_id,
-  role_id,
-  level_id,
-  location_id,
-  currency,
-  p10,
-  p25,
-  p50,
-  p75,
-  p90,
-  sample_size,
-  source,
-  confidence,
-  valid_from
-)
-SELECT * FROM (
-  SELECT
-    (SELECT id FROM experrt_workspace) AS workspace_id,
-    'swe-be'::text AS role_id,
-    'ic5'::text AS level_id,
-    'dubai'::text AS location_id,
-    'AED'::text AS currency,
-    21500::numeric AS p10,
-    25500::numeric AS p25,
-    30200::numeric AS p50,
-    36800::numeric AS p75,
-    42500::numeric AS p90,
-    87::int AS sample_size,
-    'market-ingestion'::text AS source,
-    'High'::text AS confidence,
-    CURRENT_DATE - 7 AS valid_from
-  UNION ALL
-  SELECT
-    (SELECT id FROM experrt_workspace), 'pm', 'ic4', 'dubai', 'AED',
-    20500, 24500, 29600, 35100, 40900, 76, 'market-ingestion', 'High', CURRENT_DATE - 7
-  UNION ALL
-  SELECT
-    (SELECT id FROM experrt_workspace), 'designer', 'ic3', 'abu-dhabi', 'AED',
-    16500, 19800, 23800, 28400, 32700, 64, 'market-ingestion', 'Medium', CURRENT_DATE - 7
-  UNION ALL
-  SELECT
-    (SELECT id FROM experrt_workspace), 'data-scientist', 'ic4', 'riyadh', 'SAR',
-    19000, 23000, 28100, 33600, 40200, 58, 'market-ingestion', 'Medium', CURRENT_DATE - 7
-) seeded_benchmarks
-WHERE workspace_id IS NOT NULL
-ON CONFLICT (workspace_id, role_id, location_id, level_id, valid_from) DO UPDATE SET
-  currency = EXCLUDED.currency,
-  p10 = EXCLUDED.p10,
-  p25 = EXCLUDED.p25,
-  p50 = EXCLUDED.p50,
-  p75 = EXCLUDED.p75,
-  p90 = EXCLUDED.p90,
-  sample_size = EXCLUDED.sample_size,
-  source = EXCLUDED.source,
-  confidence = EXCLUDED.confidence,
-  updated_at = now();
+INSERT INTO compliance_policies (workspace_id, name, completion_rate, status, due_date, data_source)
+SELECT
+  (SELECT workspace_id FROM ws) AS workspace_id,
+  CASE (r.rn - 1) % 4
+    WHEN 0 THEN initcap(r.department) || ' Sign-off Controls'
+    WHEN 1 THEN initcap(r.department) || ' Documentation Standard'
+    WHEN 2 THEN initcap(r.department) || ' Escalation Workflow'
+    ELSE initcap(r.department) || ' Risk Monitoring SOP'
+  END AS name,
+  least(99, greatest(68, round(r.perf_score - (r.rn * 1.7), 1)))::numeric(5,2) AS completion_rate,
+  CASE
+    WHEN least(99, greatest(68, round(r.perf_score - (r.rn * 1.7), 1))) >= 93 THEN 'Success'
+    WHEN least(99, greatest(68, round(r.perf_score - (r.rn * 1.7), 1))) >= 84 THEN 'Pending'
+    ELSE 'Critical'
+  END AS status,
+  (CURRENT_DATE + (6 + (r.rn * 5)))::date AS due_date,
+  'seed'::text AS data_source
+FROM ranked r
+WHERE (SELECT workspace_id FROM ws) IS NOT NULL
+LIMIT 8;
 
--- Seed compliance snapshot consumed by compliance page.
-WITH experrt_workspace AS (
-  SELECT id
-  FROM workspaces
-  WHERE slug = 'experrt-demo'
-  LIMIT 1
+WITH ws AS (
+  SELECT id AS workspace_id FROM workspaces WHERE slug = 'experrt-demo' LIMIT 1
+), location_stats AS (
+  SELECT
+    e.location_id,
+    count(*)::int AS headcount,
+    row_number() OVER (ORDER BY count(*) DESC, e.location_id) AS rn
+  FROM employees e
+  WHERE e.workspace_id = (SELECT workspace_id FROM ws)
+  GROUP BY e.location_id
 )
-INSERT INTO compliance_snapshots (
-  workspace_id,
-  compliance_score,
-  risk_items,
-  pay_equity_kpis,
-  equity_levels,
-  policy_items,
-  regulatory_updates,
-  deadline_items,
-  visa_stats,
-  visa_timeline,
-  document_items,
-  audit_log_items
+INSERT INTO compliance_regulatory_updates (
+  workspace_id, title, description, published_date, status, impact, jurisdiction, data_source
 )
 SELECT
-  (SELECT id FROM experrt_workspace),
-  94.6,
-  '[
-    {"id":"risk-1","area":"Labour Contract Registry","level":68,"status":"High","description":"A subset of records need refreshed contract addenda."},
-    {"id":"risk-2","area":"WPS Transfer Timeliness","level":34,"status":"Moderate","description":"Payroll transfer SLA is stable but should remain monitored."},
-    {"id":"risk-3","area":"Work Permit Renewals","level":23,"status":"Low","description":"Permit renewals are on track across active entities."}
-  ]'::jsonb,
-  '[
-    {"id":"pek1","label":"Gender Pay Gap","value":"2.4%","subtitle":"within target","delta":"-0.8","deltaDirection":"down"},
-    {"id":"pek2","label":"Equity Score","value":"91.2","subtitle":"target >= 90"},
-    {"id":"pek3","label":"Audited Roles","value":"24","subtitle":"quarter to date"}
-  ]'::jsonb,
-  '[
-    {"level":"IC3","gap":"2.1%","barPercent":58,"direction":"down"},
-    {"level":"IC4","gap":"2.8%","barPercent":62,"direction":"down"},
-    {"level":"M1","gap":"3.4%","barPercent":66,"direction":"neutral"}
-  ]'::jsonb,
-  '[
-    {"id":"pol-1","name":"Offer Approval Policy","rate":96,"status":"Success"},
-    {"id":"pol-2","name":"Compensation Change SOP","rate":91,"status":"Pending"},
-    {"id":"pol-3","name":"Visa Sponsorship Policy","rate":88,"status":"Pending"}
-  ]'::jsonb,
-  '[
-    {"id":"reg-1","title":"UAE End-of-Service Clarification","description":"Updated interpretation published for fixed-term contracts.","date":"2026-02-18","status":"Active","impact":"Medium","jurisdiction":"UAE"},
-    {"id":"reg-2","title":"KSA Employment Contract Update","description":"Template clauses updated for probation wording.","date":"2026-02-11","status":"Review","impact":"Low","jurisdiction":"KSA"}
-  ]'::jsonb,
-  '[
-    {"id":"ddl-1","date":"Mar 12","title":"Quarterly wage compliance filing","type":"Mandatory"},
-    {"id":"ddl-2","date":"Mar 20","title":"Permit renewal cohort B","type":"Urgent"}
-  ]'::jsonb,
-  '[
-    {"label":"Active Permits","value":"41","color":"brand"},
-    {"label":"Expiring <30d","value":"3","color":"amber"},
-    {"label":"Overdue","value":"0","color":"emerald"},
-    {"label":"Open Cases","value":"2","color":"red"}
-  ]'::jsonb,
-  '[
-    {"id":"visa-1","title":"Renewal batch A submitted","description":"Submitted to PRO queue for review.","type":"Success"},
-    {"id":"visa-2","title":"Medical test scheduling","description":"3 employees pending booking confirmation.","type":"Update"}
-  ]'::jsonb,
-  '[
-    {"id":"doc-1","name":"Mainland Trade License","docType":"License","expiry":"2026-06-30","status":"Active","size":"2.1 MB"},
-    {"id":"doc-2","name":"Labour Establishment Card","docType":"Permit","expiry":"2026-04-14","status":"Expiring","size":"1.4 MB"}
-  ]'::jsonb,
-  '[
-    {"id":"audit-1","action":"Updated","target":"Offer Approval Policy","user":"People Ops","time":"2h ago","iconType":"policy"},
-    {"id":"audit-2","action":"Uploaded","target":"Labour Establishment Card","user":"Compliance Lead","time":"1d ago","iconType":"document"}
-  ]'::jsonb
-WHERE (SELECT id FROM experrt_workspace) IS NOT NULL
-ON CONFLICT (workspace_id) DO UPDATE SET
-  compliance_score = EXCLUDED.compliance_score,
-  risk_items = EXCLUDED.risk_items,
-  pay_equity_kpis = EXCLUDED.pay_equity_kpis,
-  equity_levels = EXCLUDED.equity_levels,
-  policy_items = EXCLUDED.policy_items,
-  regulatory_updates = EXCLUDED.regulatory_updates,
-  deadline_items = EXCLUDED.deadline_items,
-  visa_stats = EXCLUDED.visa_stats,
-  visa_timeline = EXCLUDED.visa_timeline,
-  document_items = EXCLUDED.document_items,
-  audit_log_items = EXCLUDED.audit_log_items,
-  updated_at = now();
-
--- Seed relocation city cost records used by relocation calculator.
-INSERT INTO relocation_city_costs (
-  city_id, name, country, region, flag, col_index, rent, transport, food, utilities, other, currency, currency_symbol, source
-)
-VALUES
-  ('dubai','Dubai','UAE','gcc','🇦🇪',100,9000,1100,2200,750,1500,'AED','د.إ','experrt-seed'),
-  ('abu-dhabi','Abu Dhabi','UAE','gcc','🇦🇪',95,8200,1000,2100,700,1400,'AED','د.إ','experrt-seed'),
-  ('riyadh','Riyadh','Saudi Arabia','gcc','🇸🇦',85,6500,900,1800,550,1300,'SAR','﷼','experrt-seed'),
-  ('doha','Doha','Qatar','gcc','🇶🇦',105,9800,1200,2300,650,1600,'QAR','ر.ق','experrt-seed'),
-  ('london','London','United Kingdom','europe','🇬🇧',145,12800,1650,2900,900,2200,'GBP','£','experrt-seed')
-ON CONFLICT (city_id) DO UPDATE SET
-  name = EXCLUDED.name,
-  country = EXCLUDED.country,
-  region = EXCLUDED.region,
-  flag = EXCLUDED.flag,
-  col_index = EXCLUDED.col_index,
-  rent = EXCLUDED.rent,
-  transport = EXCLUDED.transport,
-  food = EXCLUDED.food,
-  utilities = EXCLUDED.utilities,
-  other = EXCLUDED.other,
-  currency = EXCLUDED.currency,
-  currency_symbol = EXCLUDED.currency_symbol,
-  source = EXCLUDED.source,
-  updated_at = now();
-
--- Seed workspace billing subscription + invoices.
-WITH experrt_workspace AS (
-  SELECT id FROM workspaces WHERE slug = 'experrt-demo' LIMIT 1
-),
-starter_plan AS (
-  SELECT id FROM billing_plans WHERE code = 'starter' LIMIT 1
-)
-INSERT INTO workspace_billing_subscriptions (
-  workspace_id,
-  plan_id,
-  status,
-  billing_cycle,
-  next_billing_at,
-  payment_method_last4
-)
-SELECT
-  (SELECT id FROM experrt_workspace),
-  (SELECT id FROM starter_plan),
-  'active',
-  'monthly',
-  now() + interval '14 days',
-  '4242'
-WHERE (SELECT id FROM experrt_workspace) IS NOT NULL
-  AND (SELECT id FROM starter_plan) IS NOT NULL
-ON CONFLICT (workspace_id) DO UPDATE SET
-  plan_id = EXCLUDED.plan_id,
-  status = EXCLUDED.status,
-  billing_cycle = EXCLUDED.billing_cycle,
-  next_billing_at = EXCLUDED.next_billing_at,
-  payment_method_last4 = EXCLUDED.payment_method_last4,
-  updated_at = now();
-
-WITH experrt_workspace AS (
-  SELECT id FROM workspaces WHERE slug = 'experrt-demo' LIMIT 1
-),
-sub AS (
-  SELECT id FROM workspace_billing_subscriptions WHERE workspace_id = (SELECT id FROM experrt_workspace) LIMIT 1
-)
-INSERT INTO billing_invoices (
-  workspace_id,
-  subscription_id,
-  invoice_number,
-  amount,
-  currency,
-  status,
-  issued_at,
-  paid_at
-)
-SELECT
-  (SELECT id FROM experrt_workspace),
-  (SELECT id FROM sub),
-  invoice_number,
-  amount,
-  'AED',
-  'paid',
-  issued_at,
-  issued_at + interval '2 days'
+  (SELECT workspace_id FROM ws) AS workspace_id,
+  CASE (ls.rn - 1) % 4
+    WHEN 0 THEN jurisdiction || ' Labor Circular Update'
+    WHEN 1 THEN jurisdiction || ' Permit Compliance Clarification'
+    WHEN 2 THEN jurisdiction || ' Payroll Reporting Amendment'
+    ELSE jurisdiction || ' Employment Contract Guidance'
+  END AS title,
+  'Review for ' || ls.headcount || ' active employees in ' || jurisdiction || ' location groups.' AS description,
+  (CURRENT_DATE - ((ls.rn * 3) + 2))::date AS published_date,
+  CASE ls.rn % 3
+    WHEN 1 THEN 'Active'
+    WHEN 2 THEN 'Pending'
+    ELSE 'Review'
+  END AS status,
+  CASE
+    WHEN ls.headcount >= 14 THEN 'High'
+    WHEN ls.headcount >= 9 THEN 'Medium'
+    ELSE 'Low'
+  END AS impact,
+  jurisdiction,
+  'seed'::text AS data_source
 FROM (
-  VALUES
-    ('INV-EXP-2026-01', 179::numeric, TIMESTAMPTZ '2026-01-01 00:00:00+00'),
-    ('INV-EXP-2026-02', 179::numeric, TIMESTAMPTZ '2026-02-01 00:00:00+00'),
-    ('INV-EXP-2026-03', 179::numeric, TIMESTAMPTZ '2026-03-01 00:00:00+00')
-) seeded(invoice_number, amount, issued_at)
-WHERE (SELECT id FROM experrt_workspace) IS NOT NULL
-ON CONFLICT (workspace_id, invoice_number) DO UPDATE SET
-  amount = EXCLUDED.amount,
-  status = EXCLUDED.status,
-  issued_at = EXCLUDED.issued_at,
-  paid_at = EXCLUDED.paid_at,
-  updated_at = now();
+  SELECT
+    ls.*,
+    CASE ls.location_id
+      WHEN 'dubai' THEN 'UAE'
+      WHEN 'abu-dhabi' THEN 'UAE'
+      WHEN 'riyadh' THEN 'KSA'
+      WHEN 'jeddah' THEN 'KSA'
+      WHEN 'doha' THEN 'Qatar'
+      WHEN 'manama' THEN 'Bahrain'
+      WHEN 'kuwait-city' THEN 'Kuwait'
+      WHEN 'muscat' THEN 'Oman'
+      ELSE 'UAE'
+    END AS jurisdiction
+  FROM location_stats ls
+) ls
+WHERE (SELECT workspace_id FROM ws) IS NOT NULL
+LIMIT 8;
 
--- Seed public benchmark snapshot for marketing/search/preview pages.
-WITH experrt_workspace AS (
-  SELECT id FROM workspaces WHERE slug = 'experrt-demo' LIMIT 1
+WITH ws AS (
+  SELECT id AS workspace_id FROM workspaces WHERE slug = 'experrt-demo' LIMIT 1
+), dept_pool AS (
+  SELECT
+    array_agg(department ORDER BY headcount DESC, department) AS departments
+  FROM (
+    SELECT e.department, count(*)::int AS headcount
+    FROM employees e
+    WHERE e.workspace_id = (SELECT workspace_id FROM ws)
+    GROUP BY e.department
+  ) d
 )
-INSERT INTO public_benchmark_snapshots (
-  workspace_id,
-  role_id,
-  role_label,
-  location_id,
-  location_label,
-  level_id,
-  level_label,
-  currency,
-  p25,
-  p50,
-  p75,
-  submissions_this_week,
-  mom_delta_p25,
-  mom_delta_p50,
-  mom_delta_p75,
-  trend_delta,
-  is_public
-)
+INSERT INTO compliance_deadlines (workspace_id, due_at, title, type, status, data_source)
 SELECT
-  (SELECT id FROM experrt_workspace),
-  'swe-be',
-  'Backend Engineer',
-  'dubai',
-  'Dubai, UAE',
-  'ic3',
-  'IC3',
-  'AED',
-  24500,
-  30200,
-  38700,
-  42,
-  '+1.2%',
-  '+1.9%',
-  '+2.4%',
-  '+1.8%',
-  true
-WHERE (SELECT id FROM experrt_workspace) IS NOT NULL
-ON CONFLICT DO NOTHING;
+  (SELECT workspace_id FROM ws) AS workspace_id,
+  (CURRENT_DATE + ((g.i * 5) - 8))::date AS due_at,
+  initcap(
+    (SELECT departments[((g.i - 1) % array_length(departments, 1)) + 1] FROM dept_pool)
+  ) || ' compliance checkpoint #' || lpad(g.i::text, 2, '0') AS title,
+  CASE g.i % 3
+    WHEN 1 THEN 'Urgent'
+    WHEN 2 THEN 'Regular'
+    ELSE 'Mandatory'
+  END AS type,
+  CASE
+    WHEN (CURRENT_DATE + ((g.i * 5) - 8))::date < CURRENT_DATE THEN 'overdue'
+    WHEN g.i % 5 = 0 THEN 'done'
+    ELSE 'open'
+  END AS status,
+  'seed'::text AS data_source
+FROM generate_series(1, 10) AS g(i)
+WHERE (SELECT workspace_id FROM ws) IS NOT NULL
+  AND coalesce((SELECT array_length(departments, 1) FROM dept_pool), 0) > 0;
+
+WITH ws AS (
+  SELECT id AS workspace_id FROM workspaces WHERE slug = 'experrt-demo' LIMIT 1
+), expats AS (
+  SELECT
+    e.id,
+    e.first_name,
+    e.last_name,
+    e.department,
+    e.role_id,
+    row_number() OVER (ORDER BY e.hire_date, e.id) AS rn
+  FROM employees e
+  WHERE e.workspace_id = (SELECT workspace_id FROM ws)
+    AND e.employment_type = 'expat'
+)
+INSERT INTO compliance_visa_cases (workspace_id, employee_id, title, description, status, expires_on, data_source)
+SELECT
+  (SELECT workspace_id FROM ws),
+  e.id,
+  'Permit review - ' || e.first_name || ' ' || e.last_name,
+  initcap(e.department) || ' / ' || upper(e.role_id) || ' sponsorship workflow tracking.',
+  CASE
+    WHEN e.rn % 11 IN (0, 4) THEN 'overdue'
+    WHEN e.rn % 11 IN (2, 5, 8) THEN 'expiring'
+    WHEN e.rn % 11 IN (3, 7) THEN 'open_case'
+    ELSE 'active'
+  END AS status,
+  CASE
+    WHEN e.rn % 11 IN (0, 4) THEN (CURRENT_DATE - (2 + (e.rn % 14)))::date
+    WHEN e.rn % 11 IN (2, 5, 8) THEN (CURRENT_DATE + (4 + (e.rn % 22)))::date
+    WHEN e.rn % 11 IN (3, 7) THEN (CURRENT_DATE + (18 + (e.rn % 36)))::date
+    ELSE (CURRENT_DATE + (45 + (e.rn % 160)))::date
+  END AS expires_on,
+  'seed'::text AS data_source
+FROM expats e
+WHERE (SELECT workspace_id FROM ws) IS NOT NULL
+LIMIT 20;
+
+WITH ws AS (
+  SELECT id AS workspace_id FROM workspaces WHERE slug = 'experrt-demo' LIMIT 1
+), dept_stats AS (
+  SELECT
+    e.department,
+    count(*)::int AS headcount,
+    row_number() OVER (ORDER BY count(*) DESC, e.department) AS rn
+  FROM employees e
+  WHERE e.workspace_id = (SELECT workspace_id FROM ws)
+  GROUP BY e.department
+)
+INSERT INTO compliance_documents (workspace_id, name, doc_type, expiry_date, status, size_bytes, data_source)
+SELECT
+  (SELECT workspace_id FROM ws) AS workspace_id,
+  initcap(ds.department) || ' ' ||
+    CASE ds.rn % 5
+      WHEN 1 THEN 'License Pack'
+      WHEN 2 THEN 'Permit Register'
+      WHEN 3 THEN 'Policy Binder'
+      WHEN 4 THEN 'Contract Archive'
+      ELSE 'Certificate Bundle'
+    END AS name,
+  CASE ds.rn % 6
+    WHEN 1 THEN 'License'
+    WHEN 2 THEN 'Permit'
+    WHEN 3 THEN 'Policy'
+    WHEN 4 THEN 'Contract'
+    WHEN 5 THEN 'Registration'
+    ELSE 'Certificate'
+  END AS doc_type,
+  (CURRENT_DATE + (12 + (ds.rn * 17)))::date AS expiry_date,
+  CASE
+    WHEN (CURRENT_DATE + (12 + (ds.rn * 17)))::date <= CURRENT_DATE + 45 THEN 'Expiring'
+    WHEN (CURRENT_DATE + (12 + (ds.rn * 17)))::date >= CURRENT_DATE + 120 THEN 'Active'
+    ELSE 'Review'
+  END AS status,
+  (550000 + (ds.rn * 175000) + (ds.headcount * 22000))::bigint AS size_bytes,
+  'seed'::text AS data_source
+FROM dept_stats ds
+WHERE (SELECT workspace_id FROM ws) IS NOT NULL
+LIMIT 10;
+
+WITH ws AS (
+  SELECT id AS workspace_id FROM workspaces WHERE slug = 'experrt-demo' LIMIT 1
+), policy_events AS (
+  SELECT
+    'policy'::text AS icon_type,
+    name::text AS target,
+    row_number() OVER (ORDER BY due_date, name) AS rn
+  FROM compliance_policies
+  WHERE workspace_id = (SELECT workspace_id FROM ws)
+), document_events AS (
+  SELECT
+    'document'::text AS icon_type,
+    name::text AS target,
+    100 + row_number() OVER (ORDER BY expiry_date, name) AS rn
+  FROM compliance_documents
+  WHERE workspace_id = (SELECT workspace_id FROM ws)
+), deadline_events AS (
+  SELECT
+    'risk'::text AS icon_type,
+    title::text AS target,
+    200 + row_number() OVER (ORDER BY due_at, title) AS rn
+  FROM compliance_deadlines
+  WHERE workspace_id = (SELECT workspace_id FROM ws)
+), visa_events AS (
+  SELECT
+    'user'::text AS icon_type,
+    title::text AS target,
+    300 + row_number() OVER (ORDER BY expires_on, title) AS rn
+  FROM compliance_visa_cases
+  WHERE workspace_id = (SELECT workspace_id FROM ws)
+), event_sources AS (
+  SELECT * FROM policy_events WHERE rn <= 4
+  UNION ALL
+  SELECT * FROM document_events WHERE rn <= 4
+  UNION ALL
+  SELECT * FROM deadline_events WHERE rn <= 4
+  UNION ALL
+  SELECT * FROM visa_events WHERE rn <= 4
+), ordered AS (
+  SELECT
+    icon_type,
+    target,
+    row_number() OVER (ORDER BY rn, target) AS seq
+  FROM event_sources
+)
+INSERT INTO compliance_audit_events (workspace_id, action, target, actor, icon_type, metadata, event_time, data_source)
+SELECT
+  (SELECT workspace_id FROM ws) AS workspace_id,
+  CASE o.seq % 6
+    WHEN 1 THEN 'Updated'
+    WHEN 2 THEN 'Reviewed'
+    WHEN 3 THEN 'Assigned'
+    WHEN 4 THEN 'Generated'
+    WHEN 5 THEN 'Escalated'
+    ELSE 'Approved'
+  END AS action,
+  o.target,
+  CASE o.icon_type
+    WHEN 'policy' THEN 'People Ops'
+    WHEN 'document' THEN 'Compliance Lead'
+    WHEN 'risk' THEN 'Risk Manager'
+    ELSE 'Mobility Specialist'
+  END AS actor,
+  o.icon_type,
+  jsonb_build_object(
+    'seed_origin', 'bootstrap_demo',
+    'entity_type', o.icon_type
+  ) AS metadata,
+  (now() - ((o.seq * 4 + 1) || ' hours')::interval) AS event_time,
+  'seed'::text AS data_source
+FROM ordered o
+WHERE (SELECT workspace_id FROM ws) IS NOT NULL
+LIMIT 16;

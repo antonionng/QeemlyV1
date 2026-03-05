@@ -26,6 +26,7 @@ type ComplianceContextState = {
   loading: boolean;
   refreshing: boolean;
   complianceScore: number;
+  activeEmployees: number;
   riskItems: RiskItem[];
   payEquityKpis: PayEquityKpi[];
   equityLevels: EquityLevel[];
@@ -45,6 +46,7 @@ const DEFAULT_STATE: ComplianceContextState = {
   loading: true,
   refreshing: false,
   complianceScore: 0,
+  activeEmployees: 0,
   riskItems: [],
   payEquityKpis: [],
   equityLevels: [],
@@ -74,6 +76,11 @@ export function ComplianceProvider({ children }: { children: ReactNode }) {
         loading: false,
         refreshing: false,
         complianceScore: Number(data.compliance_score || 0),
+        activeEmployees: Number(
+          data.ai_scoring_metadata?.active_employees ??
+            data.ai_scoring_metadata?.activeEmployees ??
+            0
+        ),
         riskItems: data.risk_items || [],
         payEquityKpis: data.pay_equity_kpis || [],
         equityLevels: data.equity_levels || [],
@@ -91,13 +98,7 @@ export function ComplianceProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    let isMounted = true;
-    void loadCompliance(false).then(() => {
-      if (!isMounted) return;
-    });
-    return () => {
-      isMounted = false;
-    };
+    void loadCompliance(true);
   }, []);
 
   const refresh = async () => {

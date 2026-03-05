@@ -36,6 +36,13 @@ export const EMPLOYEE_TEMPLATE: Template = {
     { header: "employment_type", description: "Type (national/expat)", required: false, example: "national" },
     { header: "hire_date", description: "Date of hire (YYYY-MM-DD)", required: false, example: "2023-01-15" },
     { header: "performance_rating", description: "Rating (low/meets/exceeds/exceptional)", required: false, example: "exceeds" },
+    { header: "avatar_url", description: "Profile photo URL from ATS/HRIS", required: false, example: "https://cdn.company.com/avatars/john-smith.jpg" },
+    { header: "visa_type", description: "Visa type (e.g., work_permit)", required: false, example: "work_permit" },
+    { header: "visa_status", description: "active/expiring/expired/pending/cancelled", required: false, example: "active" },
+    { header: "visa_issue_date", description: "Visa issue date", required: false, example: "2024-01-15" },
+    { header: "visa_expiry_date", description: "Visa expiry date", required: false, example: "2026-01-14" },
+    { header: "visa_sponsor", description: "Sponsor name", required: false, example: "Qeemly Technologies LLC" },
+    { header: "visa_permit_id", description: "Permit/work authorization ID", required: false, example: "AE-WP-123456" },
   ],
 };
 

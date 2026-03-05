@@ -29,7 +29,7 @@ export async function GET(
 
   const { data: historyRows, error } = await client
     .from("compensation_history")
-    .select("id, effective_date, base_salary, change_reason, change_percentage")
+    .select("id, effective_date, base_salary, bonus, equity, currency, change_reason, change_percentage")
     .eq("employee_id", employeeId)
     .order("effective_date", { ascending: false });
 
@@ -43,6 +43,13 @@ export async function GET(
       id: row.id,
       effectiveDate: row.effective_date,
       baseSalary: Number(row.base_salary) || 0,
+      bonus: row.bonus != null ? Number(row.bonus) : 0,
+      equity: row.equity != null ? Number(row.equity) : 0,
+      totalComp:
+        (Number(row.base_salary) || 0) +
+        (row.bonus != null ? Number(row.bonus) : 0) +
+        (row.equity != null ? Number(row.equity) : 0),
+      currency: row.currency || "AED",
       changeReason: row.change_reason,
       changePercentage: row.change_percentage != null ? Number(row.change_percentage) : null,
     })),

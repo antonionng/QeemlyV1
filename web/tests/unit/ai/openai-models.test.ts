@@ -23,17 +23,17 @@ describe("AI model selectors", () => {
     delete process.env.OPENAI_ADVISORY_MODEL;
     delete process.env.OPENAI_COMPLIANCE_SCORING_MODEL;
 
-    expect(getChatModel()).toBe("gpt-5.2-mini");
+    expect(getChatModel()).toBe("gpt-5-mini");
     expect(getAdvisoryModel()).toBe("gpt-5.2");
     expect(getComplianceScoringModel()).toBe("gpt-5.2");
   });
 
   it("respects explicit model overrides", () => {
-    process.env.OPENAI_CHAT_MODEL = "gpt-5.2-mini-custom";
+    process.env.OPENAI_CHAT_MODEL = "gpt-5-mini-custom";
     process.env.OPENAI_ADVISORY_MODEL = "gpt-5.2-custom";
     process.env.OPENAI_COMPLIANCE_SCORING_MODEL = "gpt-5.2-compliance";
 
-    expect(getChatModel()).toBe("gpt-5.2-mini-custom");
+    expect(getChatModel()).toBe("gpt-5-mini-custom");
     expect(getAdvisoryModel()).toBe("gpt-5.2-custom");
     expect(getComplianceScoringModel()).toBe("gpt-5.2-compliance");
   });

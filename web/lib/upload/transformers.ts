@@ -408,6 +408,13 @@ export type TransformedEmployee = {
   employmentType: "national" | "expat";
   hireDate: string | null;
   performanceRating: "low" | "meets" | "exceeds" | "exceptional" | null;
+  avatarUrl: string | null;
+  visaType: string | null;
+  visaStatus: "active" | "expiring" | "expired" | "pending" | "cancelled" | null;
+  visaIssueDate: string | null;
+  visaExpiryDate: string | null;
+  visaSponsor: string | null;
+  visaPermitId: string | null;
 };
 
 /**
@@ -448,6 +455,14 @@ export function transformEmployee(data: Record<string, unknown>): TransformedEmp
     employmentType: normalizeEmploymentType(data.employmentType as string || "national"),
     hireDate: parseDate(data.hireDate as string || ""),
     performanceRating: normalizePerformanceRating(data.performanceRating as string || ""),
+    avatarUrl: (data.avatarUrl as string)?.trim() || null,
+    visaType: (data.visaType as string)?.trim() || null,
+    visaStatus:
+      (data.visaStatus as "active" | "expiring" | "expired" | "pending" | "cancelled" | undefined) || null,
+    visaIssueDate: parseDate(data.visaIssueDate as string || ""),
+    visaExpiryDate: parseDate(data.visaExpiryDate as string || ""),
+    visaSponsor: (data.visaSponsor as string)?.trim() || null,
+    visaPermitId: (data.visaPermitId as string)?.trim() || null,
   };
 }
 

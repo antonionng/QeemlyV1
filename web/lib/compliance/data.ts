@@ -1,4 +1,4 @@
-/* ── Compliance fixture data & types ── */
+/* Compliance shared types */
 
 export type RiskItem = {
   id: string;
@@ -83,29 +83,3 @@ export type DrawerContent =
   | { type: "documents-all" }
   | { type: "audit-all" }
   | null;
-
-/* ── Fixture arrays ── */
-
-export const RISK_ITEMS: RiskItem[] = [];
-
-export const PAY_EQUITY_KPIS = [
-  { id: "pek1", label: "Gender Pay Gap", value: "N/A", subtitle: "No data", delta: "0", deltaDirection: "down" as const },
-  { id: "pek2", label: "Equity Score", value: "N/A", subtitle: "No data" },
-  { id: "pek3", label: "Audited Roles", value: "0", subtitle: "No data" },
-];
-
-export const EQUITY_LEVELS: EquityLevel[] = [];
-
-export const POLICY_ITEMS: PolicyItem[] = [];
-
-export const REGULATORY_UPDATES: RegulatoryUpdate[] = [];
-
-export const DEADLINE_ITEMS: DeadlineItem[] = [];
-
-export const VISA_STATS: VisaStat[] = [];
-
-export const VISA_TIMELINE: VisaTimelineItem[] = [];
-
-export const DOCUMENT_ITEMS: DocumentItem[] = [];
-
-export const AUDIT_LOG_ITEMS: AuditLogItem[] = [];

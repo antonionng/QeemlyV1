@@ -80,12 +80,68 @@ export async function uploadEmployees(
     const { data, error } = await supabase
       .from("employees")
       .insert(records)
-      .select("id");
+      .select("id,email");
     
     if (error) {
       errors.push(`Batch ${Math.floor(i / batchSize) + 1}: ${error.message}`);
     } else {
       insertedCount += data?.length || 0;
+
+      const employeeByEmail = new Map<string, string>();
+      for (const row of data || []) {
+        if (row.email) {
+          employeeByEmail.set(String(row.email).toLowerCase(), String(row.id));
+        }
+      }
+
+      const enrichmentPayload = batch
+        .filter((emp) => emp.avatarUrl && emp.email)
+        .map((emp) => {
+          const employeeId = employeeByEmail.get(String(emp.email).toLowerCase());
+          if (!employeeId) return null;
+          return {
+            workspace_id: workspaceId,
+            employee_id: employeeId,
+            avatar_url: emp.avatarUrl,
+            avatar_source: "upload",
+            source_system: "csv_upload",
+            source_updated_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          };
+        })
+        .filter((entry): entry is Record<string, unknown> => Boolean(entry));
+
+      if (enrichmentPayload.length > 0) {
+        await supabase
+          .from("employee_profile_enrichment")
+          .upsert(enrichmentPayload, { onConflict: "employee_id" });
+      }
+
+      const visaPayload = batch
+        .filter((emp) => (emp.visaType || emp.visaStatus || emp.visaExpiryDate) && emp.email)
+        .map((emp) => {
+          const employeeId = employeeByEmail.get(String(emp.email).toLowerCase());
+          if (!employeeId) return null;
+          return {
+            workspace_id: workspaceId,
+            employee_id: employeeId,
+            visa_type: emp.visaType || "work_permit",
+            visa_status: emp.visaStatus || "active",
+            sponsor_name: emp.visaSponsor || null,
+            permit_id: emp.visaPermitId || null,
+            issue_date: emp.visaIssueDate || null,
+            expiry_date: emp.visaExpiryDate || null,
+            source_system: "upload",
+            source_reference: "employee_csv",
+            source_updated_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          };
+        })
+        .filter((entry): entry is Record<string, unknown> => Boolean(entry));
+
+      if (visaPayload.length > 0) {
+        await supabase.from("employee_visa_records").insert(visaPayload);
+      }
     }
     
     // Report progress

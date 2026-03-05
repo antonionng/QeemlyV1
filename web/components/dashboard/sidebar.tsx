@@ -20,6 +20,7 @@ import {
   ShieldCheck,
   Upload,
   User,
+  Users,
   Wallet,
 } from "lucide-react";
 import { Logo } from "@/components/logo";
@@ -45,6 +46,7 @@ const adminNavSections: NavSection[] = [
     label: null,
     items: [
       { href: "/dashboard/overview", label: "Company Overview", icon: LayoutDashboard },
+      { href: "/dashboard/people", label: "People", icon: Users },
       { href: "/dashboard/benchmarks", label: "Benchmarking", icon: ChartLine },
       { href: "/dashboard/salary-review", label: "Salary Review", icon: DollarSign },
     ],

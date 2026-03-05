@@ -1,6 +1,5 @@
 // Data service layer for employees (database only)
 
-import { createClient } from "@/lib/supabase/client";
 import type { Employee, CompanyMetrics, DepartmentSummary, Department, PerformanceRating } from "./mock-data";
 import { LOCATIONS, LEVELS, ROLES } from "@/lib/dashboard/dummy-data";
 
@@ -19,33 +18,14 @@ export async function hasDbEmployees(): Promise<boolean> {
   }
 
   try {
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (!user) {
+    const response = await fetch("/api/people", { method: "GET", cache: "no-store" });
+    if (!response.ok) {
       hasDbEmployeesCache = false;
       cacheTimestamp = Date.now();
       return false;
     }
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("workspace_id")
-      .eq("id", user.id)
-      .single();
-
-    if (!profile?.workspace_id) {
-      hasDbEmployeesCache = false;
-      cacheTimestamp = Date.now();
-      return false;
-    }
-
-    const { count } = await supabase
-      .from("employees")
-      .select("*", { count: "exact", head: true })
-      .eq("workspace_id", profile.workspace_id);
-
-    hasDbEmployeesCache = (count || 0) > 0;
+    const payload = (await response.json()) as { employees?: unknown[] };
+    hasDbEmployeesCache = (payload.employees || []).length > 0;
     cacheTimestamp = Date.now();
     return hasDbEmployeesCache;
   } catch {
@@ -68,140 +48,116 @@ export function invalidateEmployeeCache() {
  */
 export async function fetchDbEmployees(): Promise<Employee[]> {
   try {
-    const supabase = createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (!user) return [];
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("workspace_id")
-      .eq("id", user.id)
-      .single();
-
-    if (!profile?.workspace_id) return [];
-
-    const [employeesResult, benchmarksResult] = await Promise.all([
-      supabase
-        .from("employees")
-        .select("*")
-        .eq("workspace_id", profile.workspace_id),
-      supabase
-        .from("salary_benchmarks")
-        .select("role_id, location_id, level_id, p10, p25, p50, p75, p90, valid_from, created_at")
-        .eq("workspace_id", profile.workspace_id)
-        .order("valid_from", { ascending: false })
-        .order("created_at", { ascending: false }),
-    ]);
-
-    const dbEmployees = employeesResult.data;
-    const dbBenchmarks = benchmarksResult.data ?? [];
-
-    if (!dbEmployees || dbEmployees.length === 0) return [];
-
-    type BenchmarkRow = {
-      role_id: string;
-      location_id: string;
-      level_id: string;
-      p10: number;
-      p25: number;
-      p50: number;
-      p75: number;
-      p90: number;
-    };
-
-    const exactBenchmarkMap = new Map<string, BenchmarkRow>();
-    const roleLevelFallbackMap = new Map<string, BenchmarkRow>();
-    for (const row of dbBenchmarks) {
-      const exactKey = `${row.role_id}::${row.location_id}::${row.level_id}`;
-      if (!exactBenchmarkMap.has(exactKey)) {
-        exactBenchmarkMap.set(exactKey, row as BenchmarkRow);
-      }
-      const roleLevelKey = `${row.role_id}::${row.level_id}`;
-      if (!roleLevelFallbackMap.has(roleLevelKey)) {
-        roleLevelFallbackMap.set(roleLevelKey, row as BenchmarkRow);
-      }
-    }
-
-    const toAnnual = (value: number): number => {
-      // Benchmarks are typically monthly in this product, while employee compensation is annual.
-      return value < 100_000 ? value * 12 : value;
-    };
-
-    const percentileFromComp = (comp: number, b: BenchmarkRow): number => {
-      const p10 = toAnnual(Number(b.p10) || 0);
-      const p25 = toAnnual(Number(b.p25) || 0);
-      const p50 = toAnnual(Number(b.p50) || 0);
-      const p75 = toAnnual(Number(b.p75) || 0);
-      const p90 = toAnnual(Number(b.p90) || 0);
-      if (comp <= p10) return 10;
-      if (comp >= p90) return 90;
-      if (comp <= p25) return 10 + ((comp - p10) / Math.max(1, p25 - p10)) * 15;
-      if (comp <= p50) return 25 + ((comp - p25) / Math.max(1, p50 - p25)) * 25;
-      if (comp <= p75) return 50 + ((comp - p50) / Math.max(1, p75 - p50)) * 25;
-      return 75 + ((comp - p75) / Math.max(1, p90 - p75)) * 15;
-    };
-
-    // Transform database records to Employee type
-    return dbEmployees.map((emp) => {
-      const location = LOCATIONS.find(l => l.id === emp.location_id) || LOCATIONS[0];
-      const level = LEVELS.find(l => l.id === emp.level_id) || LEVELS[2];
-      const role = ROLES.find(r => r.id === emp.role_id) || ROLES[0];
-
-      const baseSalary = Number(emp.base_salary) || 0;
-      const bonus = Number(emp.bonus) || 0;
-      const equity = Number(emp.equity) || 0;
-      const totalComp = baseSalary + bonus + equity;
-
-      const exactKey = `${emp.role_id}::${emp.location_id}::${emp.level_id}`;
-      const fallbackKey = `${emp.role_id}::${emp.level_id}`;
-      const benchmark = exactBenchmarkMap.get(exactKey) ?? roleLevelFallbackMap.get(fallbackKey);
-
-      let bandPosition: "below" | "in-band" | "above" = "in-band";
-      let bandPercentile = 50;
-      let marketComparison = 0;
-      let hasBenchmark = false;
-      if (benchmark) {
-        const p25Annual = toAnnual(Number(benchmark.p25) || 0);
-        const p50Annual = toAnnual(Number(benchmark.p50) || 0);
-        const p75Annual = toAnnual(Number(benchmark.p75) || 0);
-        if (p50Annual > 0) {
-          hasBenchmark = true;
-          marketComparison = Math.round(((totalComp - p50Annual) / p50Annual) * 100);
-          if (totalComp < p25Annual) bandPosition = "below";
-          else if (totalComp > p75Annual) bandPosition = "above";
-          else bandPosition = "in-band";
-          bandPercentile = Math.round(percentileFromComp(totalComp, benchmark));
-        }
-      }
-
-      return {
-        id: emp.id,
-        firstName: emp.first_name,
-        lastName: emp.last_name,
-        email: emp.email || "",
-        department: (emp.department || "Engineering") as Department,
-        role,
-        level,
-        location,
-        status: emp.status as "active" | "inactive",
-        employmentType: emp.employment_type as "national" | "expat",
-        baseSalary,
-        bonus: bonus > 0 ? bonus : undefined,
-        equity: equity > 0 ? equity : undefined,
-        totalComp,
-        bandPosition,
-        bandPercentile,
-        marketComparison,
-        hasBenchmark,
-        hireDate: emp.hire_date ? new Date(emp.hire_date) : new Date(),
-        lastReviewDate: emp.last_review_date ? new Date(emp.last_review_date) : undefined,
-        performanceRating: (emp.performance_rating as PerformanceRating | null) ?? undefined,
-      };
-    });
+    const response = await fetch("/api/people", { method: "GET", cache: "no-store" });
+    if (!response.ok) return [];
+    const payload = (await response.json()) as { employees?: Record<string, unknown>[]; benchmarks?: Record<string, unknown>[] };
+    return mapRowsToEmployees(payload.employees || [], payload.benchmarks || []);
   } catch {
     return [];
   }
+}
+
+type BenchmarkRow = {
+  role_id: string;
+  location_id: string;
+  level_id: string;
+  p10: number;
+  p25: number;
+  p50: number;
+  p75: number;
+  p90: number;
+};
+
+function mapRowsToEmployees(dbEmployees: Record<string, unknown>[], dbBenchmarks: Record<string, unknown>[]): Employee[] {
+  if (!dbEmployees.length) return [];
+
+  const exactBenchmarkMap = new Map<string, BenchmarkRow>();
+  const roleLevelFallbackMap = new Map<string, BenchmarkRow>();
+  for (const row of dbBenchmarks) {
+    const exactKey = `${row.role_id as string}::${row.location_id as string}::${row.level_id as string}`;
+    if (!exactBenchmarkMap.has(exactKey)) {
+      exactBenchmarkMap.set(exactKey, row as unknown as BenchmarkRow);
+    }
+    const roleLevelKey = `${row.role_id as string}::${row.level_id as string}`;
+    if (!roleLevelFallbackMap.has(roleLevelKey)) {
+      roleLevelFallbackMap.set(roleLevelKey, row as unknown as BenchmarkRow);
+    }
+  }
+
+  const toAnnual = (value: number): number => (value < 100_000 ? value * 12 : value);
+  const percentileFromComp = (comp: number, b: BenchmarkRow): number => {
+    const p10 = toAnnual(Number(b.p10) || 0);
+    const p25 = toAnnual(Number(b.p25) || 0);
+    const p50 = toAnnual(Number(b.p50) || 0);
+    const p75 = toAnnual(Number(b.p75) || 0);
+    const p90 = toAnnual(Number(b.p90) || 0);
+    if (comp <= p10) return 10;
+    if (comp >= p90) return 90;
+    if (comp <= p25) return 10 + ((comp - p10) / Math.max(1, p25 - p10)) * 15;
+    if (comp <= p50) return 25 + ((comp - p25) / Math.max(1, p50 - p25)) * 25;
+    if (comp <= p75) return 50 + ((comp - p50) / Math.max(1, p75 - p50)) * 25;
+    return 75 + ((comp - p75) / Math.max(1, p90 - p75)) * 15;
+  };
+
+  return dbEmployees.map((emp) => {
+    const location = LOCATIONS.find((l) => l.id === emp.location_id) || LOCATIONS[0];
+    const level = LEVELS.find((l) => l.id === emp.level_id) || LEVELS[2];
+    const role = ROLES.find((r) => r.id === emp.role_id) || ROLES[0];
+
+    const baseSalary = Number(emp.base_salary) || 0;
+    const bonus = Number(emp.bonus) || 0;
+    const equity = Number(emp.equity) || 0;
+    const totalComp = baseSalary + bonus + equity;
+
+    const exactKey = `${emp.role_id as string}::${emp.location_id as string}::${emp.level_id as string}`;
+    const fallbackKey = `${emp.role_id as string}::${emp.level_id as string}`;
+    const benchmark = exactBenchmarkMap.get(exactKey) ?? roleLevelFallbackMap.get(fallbackKey);
+
+    let bandPosition: "below" | "in-band" | "above" = "in-band";
+    let bandPercentile = 50;
+    let marketComparison = 0;
+    let hasBenchmark = false;
+    if (benchmark) {
+      const p25Annual = toAnnual(Number(benchmark.p25) || 0);
+      const p50Annual = toAnnual(Number(benchmark.p50) || 0);
+      const p75Annual = toAnnual(Number(benchmark.p75) || 0);
+      if (p50Annual > 0) {
+        hasBenchmark = true;
+        marketComparison = Math.round(((totalComp - p50Annual) / p50Annual) * 100);
+        if (totalComp < p25Annual) bandPosition = "below";
+        else if (totalComp > p75Annual) bandPosition = "above";
+        else bandPosition = "in-band";
+        bandPercentile = Math.round(percentileFromComp(totalComp, benchmark));
+      }
+    }
+
+    return {
+      id: String(emp.id || ""),
+      firstName: String(emp.first_name || ""),
+      lastName: String(emp.last_name || ""),
+      email: String(emp.email || ""),
+      avatar: emp.avatar_url ? String(emp.avatar_url) : undefined,
+      visaExpiryDate: emp.visa_expiry_date ? new Date(String(emp.visa_expiry_date)) : undefined,
+      visaStatus: emp.visa_status ? String(emp.visa_status) : undefined,
+      department: (emp.department || "Engineering") as Department,
+      role,
+      level,
+      location,
+      status: (emp.status || "active") as "active" | "inactive",
+      employmentType: (emp.employment_type || "national") as "national" | "expat",
+      baseSalary,
+      bonus: bonus > 0 ? bonus : undefined,
+      equity: equity > 0 ? equity : undefined,
+      totalComp,
+      bandPosition,
+      bandPercentile,
+      marketComparison,
+      hasBenchmark,
+      hireDate: emp.hire_date ? new Date(String(emp.hire_date)) : new Date(),
+      lastReviewDate: emp.last_review_date ? new Date(String(emp.last_review_date)) : undefined,
+      performanceRating: (emp.performance_rating as PerformanceRating | null) ?? undefined,
+    };
+  });
 }
 
 /**

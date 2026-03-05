@@ -64,6 +64,21 @@ export async function POST(request: NextRequest) {
     if (error) {
       errors.push({ index: i, error: error.message });
     } else {
+      await supabase.from("employee_timeline_events").insert({
+        workspace_id: auth.workspaceId,
+        employee_id: employee.id,
+        event_type: "compensation_updated",
+        actor_type: "api",
+        actor_name: "public_api",
+        source_system: "api_v1",
+        payload: {
+          effective_date: entry.effective_date,
+          base_salary: entry.base_salary,
+          bonus: entry.bonus || null,
+          equity: entry.equity || null,
+          change_reason: entry.change_reason || null,
+        },
+      });
       created++;
     }
   }

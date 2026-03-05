@@ -10,6 +10,8 @@ type ComplianceAiScoringInput = {
     expiringDocuments: number;
     overduePermits: number;
     overdueDeadlines: number;
+    upcomingDeadlines?: number;
+    expiringPermits?: number;
   };
   riskItems: Array<{
     area: string;

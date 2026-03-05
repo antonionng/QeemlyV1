@@ -139,6 +139,56 @@ export const EMPLOYEE_FIELDS: FieldDefinition[] = [
     type: "enum",
     enumValues: ["low", "meets", "exceeds", "exceptional"],
   },
+  {
+    key: "avatarUrl",
+    label: "Avatar URL",
+    required: false,
+    aliases: ["avatar", "avatar url", "photo", "profile image", "image url"],
+    type: "string",
+  },
+  {
+    key: "visaType",
+    label: "Visa Type",
+    required: false,
+    aliases: ["visa type", "work visa", "permit type"],
+    type: "string",
+  },
+  {
+    key: "visaStatus",
+    label: "Visa Status",
+    required: false,
+    aliases: ["visa status", "immigration status", "work authorization status"],
+    type: "enum",
+    enumValues: ["active", "expiring", "expired", "pending", "cancelled"],
+  },
+  {
+    key: "visaIssueDate",
+    label: "Visa Issue Date",
+    required: false,
+    aliases: ["visa issue date", "permit issue date", "work permit issue date"],
+    type: "date",
+  },
+  {
+    key: "visaExpiryDate",
+    label: "Visa Expiry Date",
+    required: false,
+    aliases: ["visa expiry date", "visa expiration", "permit expiry", "work permit expiry"],
+    type: "date",
+  },
+  {
+    key: "visaSponsor",
+    label: "Visa Sponsor",
+    required: false,
+    aliases: ["visa sponsor", "sponsor", "sponsor name"],
+    type: "string",
+  },
+  {
+    key: "visaPermitId",
+    label: "Visa Permit ID",
+    required: false,
+    aliases: ["permit id", "visa permit id", "work permit id"],
+    type: "string",
+  },
 ];
 
 export const BENCHMARK_FIELDS: FieldDefinition[] = [

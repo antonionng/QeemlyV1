@@ -1,7 +1,7 @@
 import OpenAI from "openai";
 
 let openaiClient: OpenAI | null = null;
-const DEFAULT_CHAT_MODEL = "gpt-5.2-mini";
+const DEFAULT_CHAT_MODEL = "gpt-5-mini";
 const DEFAULT_ADVISORY_MODEL = "gpt-5.2";
 
 export function getOpenAIClient(): OpenAI {

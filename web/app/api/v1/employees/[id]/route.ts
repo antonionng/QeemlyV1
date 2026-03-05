@@ -57,3 +57,51 @@ export async function PATCH(
 
   return NextResponse.json(data);
 }
+
+/**
+ * DELETE /api/v1/employees/:id
+ *
+ * Soft-deletes an employee by marking status as inactive.
+ * Requires scope: employees:write
+ */
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const auth = await authenticateApiKey(request, "employees:write");
+  if (auth.error) return auth.error;
+
+  const { id } = await params;
+  const supabase = createServiceClient();
+
+  const { data: existing } = await supabase
+    .from("employees")
+    .select("id")
+    .eq("id", id)
+    .eq("workspace_id", auth.workspaceId)
+    .single();
+
+  if (!existing) {
+    return NextResponse.json({ error: "Employee not found" }, { status: 404 });
+  }
+
+  const { error } = await supabase
+    .from("employees")
+    .update({
+      status: "inactive",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  try {
+    await refreshComplianceSnapshot(auth.workspaceId);
+  } catch {
+    // Keep delete success even if snapshot refresh fails.
+  }
+
+  return NextResponse.json({ ok: true, id });
+}

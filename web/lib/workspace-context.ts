@@ -11,6 +11,8 @@ const WORKSPACE_OVERRIDE_COOKIE = "qeemly_workspace_override";
 export type WorkspaceContext = {
   workspace_id: string;
   is_override: boolean;
+  override_workspace_id: string | null;
+  profile_workspace_id: string | null;
   is_super_admin: boolean;
   user_id: string;
   user_email: string;
@@ -52,13 +54,13 @@ export async function getWorkspaceContext(): Promise<
 
     // Validate override workspace exists
     if (overrideWorkspaceId && serviceClient) {
-      const { data: workspace } = await serviceClient
+      const { data: workspace, error: wsError } = await serviceClient
         .from("workspaces")
         .select("id")
         .eq("id", overrideWorkspaceId)
         .single();
 
-      if (!workspace) {
+      if (!wsError && !workspace) {
         overrideWorkspaceId = null;
       }
     }
@@ -73,13 +75,15 @@ export async function getWorkspaceContext(): Promise<
 
   let profileWorkspaceId = profile?.workspace_id || null;
   if (profileWorkspaceId && serviceClient) {
-    const { data: workspace } = await serviceClient
+    const { data: workspace, error: wsError } = await serviceClient
       .from("workspaces")
       .select("id")
       .eq("id", profileWorkspaceId)
       .single();
 
-    if (!workspace) {
+    // Only invalidate the workspace ID if the query succeeded but found no row.
+    // If the query errored (bad key, network, etc.) keep the profile workspace ID.
+    if (!wsError && !workspace) {
       profileWorkspaceId = null;
     }
   }
@@ -94,6 +98,8 @@ export async function getWorkspaceContext(): Promise<
     context: {
       workspace_id: effectiveWorkspaceId,
       is_override: !!overrideWorkspaceId,
+      override_workspace_id: overrideWorkspaceId,
+      profile_workspace_id: profileWorkspaceId,
       is_super_admin: isSuperAdmin,
       user_id: user.id,
       user_email: email,

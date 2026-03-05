@@ -35,3 +35,33 @@ Primary purple palette with teal accent:
 - `npm run build` - production build
 - `npm run start` - run production build
 - `npm run lint` - lint with Next config
+
+## Tenant verification runbook
+
+Use this after reseeding and when validating superadmin tenant override behavior.
+
+1. Sign in as a superadmin and select tenant A in workspace switcher.
+2. Call `GET /api/compliance` and verify `diagnostics.workspace_id` matches selected tenant (in dev mode).
+3. Call `POST /api/compliance/refresh` and verify the same `workspace_id` is returned.
+4. Go to `/dashboard/people` and confirm headcount differs when switching to tenant B.
+5. Run these SQL checks in Supabase SQL editor for the selected tenant id:
+
+```sql
+select count(*) as active_employees
+from employees
+where workspace_id = '<workspace_id>' and status is distinct from 'inactive';
+
+select count(*) as benchmark_rows
+from salary_benchmarks
+where workspace_id = '<workspace_id>';
+
+select
+  (select count(*) from compliance_policies where workspace_id = '<workspace_id>') as policies,
+  (select count(*) from compliance_regulatory_updates where workspace_id = '<workspace_id>') as regulatory_updates,
+  (select count(*) from compliance_deadlines where workspace_id = '<workspace_id>') as deadlines,
+  (select count(*) from compliance_visa_cases where workspace_id = '<workspace_id>') as visa_cases,
+  (select count(*) from compliance_documents where workspace_id = '<workspace_id>') as documents,
+  (select count(*) from compliance_audit_events where workspace_id = '<workspace_id>') as audit_events;
+```
+
+If any count is zero unexpectedly, reseed and refresh compliance again for that tenant.

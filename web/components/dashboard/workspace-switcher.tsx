@@ -29,14 +29,16 @@ export function WorkspaceSwitcher({ collapsed = false }: Props) {
   const [open, setOpen] = useState(false);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [currentWorkspaceId, setCurrentWorkspaceId] = useState<string | null>(null);
+  const [currentWorkspace, setCurrentWorkspace] = useState<Workspace | null>(null);
   const [overrideWorkspace, setOverrideWorkspace] = useState<Workspace | null>(null);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
 
   const loadWorkspaces = useCallback(async () => {
     try {
-      const [listRes, overrideRes] = await Promise.all([
+      const [listRes, overrideRes, settingsRes] = await Promise.all([
         fetch("/api/admin/workspaces/list"),
         fetch("/api/admin/workspace-override"),
+        fetch("/api/settings"),
       ]);
 
       if (listRes.ok) {
@@ -50,6 +52,25 @@ export function WorkspaceSwitcher({ collapsed = false }: Props) {
         const overrideData = await overrideRes.json();
         if (overrideData.is_overriding && overrideData.workspace) {
           setOverrideWorkspace(overrideData.workspace);
+        }
+      }
+
+      if (settingsRes.ok) {
+        const settingsData = await settingsRes.json();
+        const workspaceId = settingsData.workspace_id || null;
+        const workspaceName = settingsData.workspace_name || null;
+        const workspaceSlug = settingsData.workspace_slug || "";
+
+        if (workspaceId) {
+          setCurrentWorkspaceId((prev) => prev || workspaceId);
+        }
+
+        if (workspaceId && workspaceName) {
+          setCurrentWorkspace({
+            id: workspaceId,
+            name: workspaceName,
+            slug: workspaceSlug,
+          });
         }
       }
     } catch {
@@ -105,7 +126,10 @@ export function WorkspaceSwitcher({ collapsed = false }: Props) {
     return null;
   }
 
-  const activeWorkspace = overrideWorkspace || workspaces.find((w) => w.id === currentWorkspaceId);
+  const activeWorkspace =
+    overrideWorkspace ||
+    workspaces.find((w) => w.id === currentWorkspaceId) ||
+    currentWorkspace;
   const isOverriding = !!overrideWorkspace;
 
   if (collapsed) {

@@ -13,6 +13,7 @@ import {
   Gift,
   TrendingUp,
   BarChart3,
+  ShieldCheck,
   Info,
   Users,
   Loader2,
@@ -24,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { LogoUploader } from "@/components/dashboard/settings/logo-uploader";
+import { ComplianceSettingsPanel } from "@/components/dashboard/settings/compliance-settings-panel";
 import { 
   useCompanySettings, 
   FUNDING_STAGES, 
@@ -45,7 +47,7 @@ import { getEmployees, type Employee } from "@/lib/employees";
 import { getBenchmark } from "@/lib/benchmarks/data-service";
 import clsx from "clsx";
 
-type SettingsTab = "profile" | "compensation" | "indices";
+type SettingsTab = "profile" | "compensation" | "indices" | "compliance";
 type IndexView = "family" | "family-level";
 
 export default function SettingsPage() {
@@ -233,6 +235,7 @@ export default function SettingsPage() {
     { id: "profile" as const, label: "Company Profile", icon: Building2 },
     { id: "compensation" as const, label: "Compensation Defaults", icon: Target },
     { id: "indices" as const, label: "Compensation Index", icon: BarChart3 },
+    { id: "compliance" as const, label: "Compliance Setup", icon: ShieldCheck },
   ];
 
   if (loading) {
@@ -856,8 +859,10 @@ export default function SettingsPage() {
 
       {/* Compensation Index Tab */}
       {activeTab === "indices" && <CompensationIndexPanel targetPercentile={targetPercentile} />}
+      {activeTab === "compliance" && <ComplianceSettingsPanel />}
 
       {/* Save Button */}
+      {activeTab !== "compliance" && (
       <div className="flex items-center justify-between pt-4 border-t border-border sticky bottom-0 bg-white py-4 -mx-6 px-6">
         <div>
           {saved && (
@@ -881,6 +886,7 @@ export default function SettingsPage() {
           {saving ? "Saving..." : "Save Settings"}
         </Button>
       </div>
+      )}
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { CheckCircle2, RefreshCw } from "lucide-react";
 import { useComplianceContext } from "@/lib/compliance/context";
 
 export function ComplianceTopStrip() {
-  const { complianceScore, refresh, refreshing } = useComplianceContext();
+  const { complianceScore, activeEmployees, refresh, refreshing } = useComplianceContext();
   return (
     <div className="flex items-center justify-between rounded-2xl border border-border bg-white px-6 py-4 shadow-sm">
       <div className="flex items-center gap-6">
@@ -16,6 +16,7 @@ export function ComplianceTopStrip() {
         </div>
         <div className="hidden items-center gap-2 text-sm text-accent-500 sm:flex">
           <span className="text-accent-400">Active Employees</span>
+          <span className="font-semibold text-brand-700">{activeEmployees}</span>
         </div>
       </div>
       <button

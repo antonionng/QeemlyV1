@@ -24,8 +24,16 @@ export function CompliancePayEquityCard() {
                 {kpi.value}
               </span>
               {kpi.delta && (
-                <span className="flex items-center gap-0.5 text-[11px] font-bold text-emerald-600">
-                  <TrendingDown className="h-3 w-3" />
+                <span
+                  className={`flex items-center gap-0.5 text-[11px] font-bold ${
+                    kpi.deltaDirection === "up" ? "text-red-600" : "text-emerald-600"
+                  }`}
+                >
+                  {kpi.deltaDirection === "up" ? (
+                    <TrendingUp className="h-3 w-3" />
+                  ) : (
+                    <TrendingDown className="h-3 w-3" />
+                  )}
                   {kpi.delta}
                 </span>
               )}

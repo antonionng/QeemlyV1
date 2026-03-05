@@ -1,5 +1,13 @@
 import { createServiceClient } from "@/lib/supabase/service";
+import { createClient as createUserClient } from "@/lib/supabase/server";
 import { runComplianceAiScoring } from "@/lib/compliance/ai-scoring";
+import {
+  DEFAULT_COMPLIANCE_SETTINGS,
+  DEFAULT_RISK_WEIGHTS,
+  RISK_WEIGHT_KEYS,
+  type ComplianceSettingsPayload,
+  type RiskWeightKey,
+} from "@/lib/compliance/settings-schema";
 
 type EmployeeRow = {
   id: string;
@@ -27,6 +35,7 @@ type PolicyRow = {
   name: string;
   completion_rate: number | null;
   status: "Success" | "Pending" | "Critical" | null;
+  data_source: "integration" | "import" | "manual" | "seed" | null;
 };
 
 type RegulatoryRow = {
@@ -37,6 +46,7 @@ type RegulatoryRow = {
   status: "Active" | "Pending" | "Review" | null;
   impact: "High" | "Medium" | "Low" | null;
   jurisdiction: string | null;
+  data_source: "integration" | "import" | "manual" | "seed" | null;
 };
 
 type DeadlineRow = {
@@ -45,6 +55,7 @@ type DeadlineRow = {
   title: string;
   type: "Urgent" | "Regular" | "Mandatory" | null;
   status: "open" | "done" | "overdue" | null;
+  data_source: "integration" | "import" | "manual" | "seed" | null;
 };
 
 type VisaCaseRow = {
@@ -53,6 +64,7 @@ type VisaCaseRow = {
   description: string | null;
   status: "active" | "expiring" | "overdue" | "open_case" | null;
   expires_on: string | null;
+  data_source: "integration" | "import" | "manual" | "seed" | null;
 };
 
 type DocumentRow = {
@@ -62,6 +74,7 @@ type DocumentRow = {
   expiry_date: string | null;
   status: "Active" | "Review" | "Expiring" | null;
   size_bytes: number | null;
+  data_source: "integration" | "import" | "manual" | "seed" | null;
 };
 
 type AuditEventRow = {
@@ -71,6 +84,22 @@ type AuditEventRow = {
   actor: string;
   event_time: string | null;
   icon_type: "document" | "policy" | "risk" | "user" | null;
+  data_source: "integration" | "import" | "manual" | "seed" | null;
+};
+
+type ComplianceSourceSettings = {
+  prefer_integration_data: boolean;
+  prefer_import_data: boolean;
+  allow_manual_overrides: boolean;
+};
+
+type SnapshotComplianceSettings = ComplianceSourceSettings & {
+  default_jurisdictions: string[];
+  visa_lead_time_days: number;
+  deadline_sla_days: number;
+  document_renewal_threshold_days: number;
+  risk_weights: Record<RiskWeightKey, number>;
+  is_compliance_configured: boolean;
 };
 
 const clamp = (value: number, min: number, max: number): number =>
@@ -78,15 +107,93 @@ const clamp = (value: number, min: number, max: number): number =>
 
 const nowIso = () => new Date().toISOString();
 
+function normalizeNonNegativeInt(value: unknown, fallback: number): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(0, Math.round(parsed));
+}
+
+function normalizeRiskWeights(value: unknown): Record<RiskWeightKey, number> {
+  const candidate = (value || {}) as Record<string, unknown>;
+  const merged: Record<RiskWeightKey, number> = { ...DEFAULT_RISK_WEIGHTS };
+  for (const key of RISK_WEIGHT_KEYS) {
+    const next = Number(candidate[key]);
+    if (Number.isFinite(next) && next >= 0) merged[key] = next;
+  }
+  const total = Object.values(merged).reduce((sum, weight) => sum + weight, 0);
+  if (total <= 0) return { ...DEFAULT_RISK_WEIGHTS };
+  for (const key of RISK_WEIGHT_KEYS) {
+    merged[key] = merged[key] / total;
+  }
+  return merged;
+}
+
+function normalizeComplianceSettings(value: Record<string, unknown> | null): SnapshotComplianceSettings {
+  const settings = value || {};
+  const fallback = DEFAULT_COMPLIANCE_SETTINGS;
+  const jurisdictions = Array.isArray(settings.default_jurisdictions)
+    ? settings.default_jurisdictions
+        .map((entry) => String(entry || "").trim())
+        .filter(Boolean)
+    : fallback.default_jurisdictions;
+  return {
+    prefer_integration_data: Boolean(
+      settings.prefer_integration_data ?? fallback.prefer_integration_data
+    ),
+    prefer_import_data: Boolean(settings.prefer_import_data ?? fallback.prefer_import_data),
+    allow_manual_overrides: Boolean(
+      settings.allow_manual_overrides ?? fallback.allow_manual_overrides
+    ),
+    default_jurisdictions: jurisdictions.length > 0 ? jurisdictions : fallback.default_jurisdictions,
+    visa_lead_time_days: normalizeNonNegativeInt(
+      settings.visa_lead_time_days,
+      fallback.visa_lead_time_days
+    ),
+    deadline_sla_days: normalizeNonNegativeInt(settings.deadline_sla_days, fallback.deadline_sla_days),
+    document_renewal_threshold_days: normalizeNonNegativeInt(
+      settings.document_renewal_threshold_days,
+      fallback.document_renewal_threshold_days
+    ),
+    risk_weights: normalizeRiskWeights(settings.risk_weights),
+    is_compliance_configured: Boolean(
+      settings.is_compliance_configured ?? fallback.is_compliance_configured
+    ),
+  };
+}
+
+function daysUntil(dateLike: string | null): number | null {
+  if (!dateLike) return null;
+  const target = new Date(dateLike);
+  if (!Number.isFinite(target.getTime())) return null;
+  const now = new Date();
+  const msPerDay = 1000 * 60 * 60 * 24;
+  return Math.ceil((target.getTime() - now.getTime()) / msPerDay);
+}
+
 type DbErrorLike = {
   code?: string;
   message?: string;
 } | null;
+type SupabaseClientLike = Awaited<ReturnType<typeof createUserClient>> | ReturnType<typeof createServiceClient>;
 
 function isMissingRelationError(error: DbErrorLike): boolean {
   if (!error) return false;
   if (error.code === "42P01") return true;
   return (error.message || "").toLowerCase().includes("does not exist");
+}
+
+function isAccessDeniedError(error: DbErrorLike): boolean {
+  if (!error) return false;
+  if (error.code === "42501") return true;
+  const message = (error.message || "").toLowerCase();
+  return message.includes("permission denied") || message.includes("row-level security");
+}
+
+function isMissingColumnError(error: DbErrorLike): boolean {
+  if (!error) return false;
+  if (error.code === "42703") return true;
+  const message = (error.message || "").toLowerCase();
+  return message.includes("column") && message.includes("does not exist");
 }
 
 function toAnnual(value: number): number {
@@ -126,97 +233,240 @@ function formatFileSize(sizeBytes: number | null): string {
   return `${Math.max(1, Math.round(kb))} KB`;
 }
 
-export async function refreshComplianceSnapshot(workspaceId: string) {
-  const supabase = createServiceClient();
+function applySourcePrecedence<T extends { data_source?: string | null }>(
+  rows: T[],
+  settings: ComplianceSourceSettings
+): T[] {
+  if (rows.length === 0) return rows;
+  const hasIntegration = rows.some((row) => row.data_source === "integration");
+  const hasImport = rows.some((row) => row.data_source === "import");
+  const hasManual = rows.some((row) => row.data_source === "manual");
+  let selected: "integration" | "import" | "manual" | null = null;
+  if (settings.prefer_integration_data && hasIntegration) {
+    selected = "integration";
+  } else if (settings.prefer_import_data && hasImport) {
+    selected = "import";
+  } else if (hasManual) {
+    selected = "manual";
+  }
+  if (!selected) return rows;
+  if (settings.allow_manual_overrides && selected !== "manual") {
+    return rows.filter((row) => row.data_source === selected || row.data_source === "manual");
+  }
+  return rows.filter((row) => row.data_source === selected);
+}
 
-  const [
-    employeesResult,
-    benchmarksResult,
-    policyResult,
-    regulatoryResult,
-    deadlineResult,
-    visaResult,
-    docsResult,
-    auditResult,
-  ] = await Promise.all([
-    supabase
-      .from("employees")
-      .select("id,level_id,role_id,location_id,base_salary,bonus,equity,status,employment_type")
-      .eq("workspace_id", workspaceId)
-      .eq("status", "active"),
-    supabase
-      .from("salary_benchmarks")
-      .select("role_id,level_id,location_id,p25,p50,p75,valid_from,created_at")
-      .eq("workspace_id", workspaceId)
-      .order("valid_from", { ascending: false })
-      .order("created_at", { ascending: false }),
-    supabase
+async function queryEmployeesStrict(client: SupabaseClientLike, workspaceId: string) {
+  return client
+    .from("employees")
+    .select("id,level_id,role_id,location_id,base_salary,bonus,equity,status,employment_type")
+    .eq("workspace_id", workspaceId)
+    .neq("status", "inactive");
+}
+
+async function queryEmployeesRelaxed(client: SupabaseClientLike, workspaceId: string) {
+  return client
+    .from("employees")
+    .select("id,level_id,role_id,location_id,base_salary,bonus,equity")
+    .eq("workspace_id", workspaceId)
+    .neq("status", "inactive");
+}
+
+async function loadEmployeesWithFallback(
+  primaryClient: SupabaseClientLike,
+  workspaceId: string
+): Promise<EmployeeRow[]> {
+  const strictPrimary = await queryEmployeesStrict(primaryClient, workspaceId);
+  if (!strictPrimary.error) return (strictPrimary.data || []) as EmployeeRow[];
+  if (isMissingRelationError(strictPrimary.error)) return [];
+  if (isAccessDeniedError(strictPrimary.error)) return [];
+
+  if (isMissingColumnError(strictPrimary.error)) {
+    const relaxedPrimary = await queryEmployeesRelaxed(primaryClient, workspaceId);
+    if (!relaxedPrimary.error) {
+      return (relaxedPrimary.data || []).map((row) => ({
+        ...(row as Omit<EmployeeRow, "status" | "employment_type">),
+        status: "active",
+        employment_type: "national",
+      }));
+    }
+    if (isMissingRelationError(relaxedPrimary.error)) return [];
+    if (isAccessDeniedError(relaxedPrimary.error)) return [];
+  }
+
+  const userClient = await createUserClient();
+  const strictUser = await queryEmployeesStrict(userClient, workspaceId);
+  if (!strictUser.error) return (strictUser.data || []) as EmployeeRow[];
+  if (isMissingRelationError(strictUser.error)) return [];
+  if (isAccessDeniedError(strictUser.error)) return [];
+
+  if (isMissingColumnError(strictUser.error)) {
+    const relaxedUser = await queryEmployeesRelaxed(userClient, workspaceId);
+    if (!relaxedUser.error) {
+      return (relaxedUser.data || []).map((row) => ({
+        ...(row as Omit<EmployeeRow, "status" | "employment_type">),
+        status: "active",
+        employment_type: "national",
+      }));
+    }
+    if (isMissingRelationError(relaxedUser.error)) return [];
+    if (isAccessDeniedError(relaxedUser.error)) return [];
+    throw new Error(relaxedUser.error?.message || "Failed to load employee data");
+  }
+
+  throw new Error(strictUser.error?.message || strictPrimary.error?.message || "Failed to load employee data");
+}
+
+async function queryBenchmarksStrict(client: SupabaseClientLike, workspaceId: string) {
+  return client
+    .from("salary_benchmarks")
+    .select("role_id,level_id,location_id,p25,p50,p75,valid_from,created_at")
+    .eq("workspace_id", workspaceId)
+    .order("valid_from", { ascending: false })
+    .order("created_at", { ascending: false });
+}
+
+async function queryBenchmarksRelaxed(client: SupabaseClientLike, workspaceId: string) {
+  return client
+    .from("salary_benchmarks")
+    .select("role_id,level_id,location_id,p25,p50,p75")
+    .eq("workspace_id", workspaceId);
+}
+
+async function loadBenchmarksWithFallback(
+  primaryClient: SupabaseClientLike,
+  workspaceId: string
+): Promise<BenchmarkRow[]> {
+  const strictPrimary = await queryBenchmarksStrict(primaryClient, workspaceId);
+  if (!strictPrimary.error) return (strictPrimary.data || []) as BenchmarkRow[];
+  if (isMissingRelationError(strictPrimary.error)) return [];
+  if (isAccessDeniedError(strictPrimary.error)) return [];
+
+  if (isMissingColumnError(strictPrimary.error)) {
+    const relaxedPrimary = await queryBenchmarksRelaxed(primaryClient, workspaceId);
+    if (!relaxedPrimary.error) return (relaxedPrimary.data || []) as BenchmarkRow[];
+    if (isMissingRelationError(relaxedPrimary.error)) return [];
+    if (isAccessDeniedError(relaxedPrimary.error)) return [];
+  }
+
+  const userClient = await createUserClient();
+  const strictUser = await queryBenchmarksStrict(userClient, workspaceId);
+  if (!strictUser.error) return (strictUser.data || []) as BenchmarkRow[];
+  if (isMissingRelationError(strictUser.error)) return [];
+  if (isAccessDeniedError(strictUser.error)) return [];
+
+  if (isMissingColumnError(strictUser.error)) {
+    const relaxedUser = await queryBenchmarksRelaxed(userClient, workspaceId);
+    if (!relaxedUser.error) return (relaxedUser.data || []) as BenchmarkRow[];
+    if (isMissingRelationError(relaxedUser.error)) return [];
+    if (isAccessDeniedError(relaxedUser.error)) return [];
+    throw new Error(relaxedUser.error?.message || "Failed to load benchmark data");
+  }
+
+  throw new Error(strictUser.error?.message || strictPrimary.error?.message || "Failed to load benchmark data");
+}
+
+export async function refreshComplianceSnapshot(workspaceId: string) {
+  let supabase: Awaited<ReturnType<typeof createUserClient>> | ReturnType<typeof createServiceClient>;
+  try {
+    supabase = createServiceClient();
+  } catch {
+    // Fall back to authenticated user client so dashboard can still compute live payloads.
+    supabase = await createUserClient();
+  }
+
+  const [employees, benchmarks] = await Promise.all([
+    loadEmployeesWithFallback(supabase, workspaceId),
+    loadBenchmarksWithFallback(supabase, workspaceId),
+  ]);
+
+  const subsystemWarnings: string[] = [];
+  let complianceSettings: SnapshotComplianceSettings = normalizeComplianceSettings(null);
+  const complianceSettingsResult = await supabase
+    .from("workspace_compliance_settings")
+    .select(
+      "prefer_integration_data,prefer_import_data,allow_manual_overrides,default_jurisdictions,visa_lead_time_days,deadline_sla_days,document_renewal_threshold_days,risk_weights,is_compliance_configured"
+    )
+    .eq("workspace_id", workspaceId)
+    .maybeSingle();
+  if (!complianceSettingsResult.error && complianceSettingsResult.data) {
+    complianceSettings = normalizeComplianceSettings(
+      complianceSettingsResult.data as unknown as Record<string, unknown>
+    );
+  } else if (complianceSettingsResult.error) {
+    subsystemWarnings.push(`settings:${complianceSettingsResult.error.message || "query_error"}`);
+  }
+
+  const [policyResult, regulatoryResult, deadlineResult, visaResult, docsResult, auditResult] =
+    await Promise.all([
+      supabase
       .from("compliance_policies")
-      .select("id,name,completion_rate,status")
+      .select("id,name,completion_rate,status,data_source")
       .eq("workspace_id", workspaceId)
       .order("updated_at", { ascending: false })
       .limit(8),
     supabase
       .from("compliance_regulatory_updates")
-      .select("id,title,description,published_date,status,impact,jurisdiction")
+      .select("id,title,description,published_date,status,impact,jurisdiction,data_source")
       .eq("workspace_id", workspaceId)
       .order("published_date", { ascending: false })
       .limit(10),
     supabase
       .from("compliance_deadlines")
-      .select("id,due_at,title,type,status")
+      .select("id,due_at,title,type,status,data_source")
       .eq("workspace_id", workspaceId)
       .order("due_at", { ascending: true })
       .limit(12),
     supabase
       .from("compliance_visa_cases")
-      .select("id,title,description,status,expires_on")
+      .select("id,title,description,status,expires_on,data_source")
       .eq("workspace_id", workspaceId)
       .order("updated_at", { ascending: false })
       .limit(12),
     supabase
       .from("compliance_documents")
-      .select("id,name,doc_type,expiry_date,status,size_bytes")
+      .select("id,name,doc_type,expiry_date,status,size_bytes,data_source")
       .eq("workspace_id", workspaceId)
       .order("expiry_date", { ascending: true })
       .limit(12),
     supabase
       .from("compliance_audit_events")
-      .select("id,action,target,actor,event_time,icon_type")
+      .select("id,action,target,actor,event_time,icon_type,data_source")
       .eq("workspace_id", workspaceId)
       .order("event_time", { ascending: false })
       .limit(20),
-  ]);
+    ]);
+  if (policyResult.error) subsystemWarnings.push(`policies:${policyResult.error.message || "query_error"}`);
+  if (regulatoryResult.error) subsystemWarnings.push(`regulatory:${regulatoryResult.error.message || "query_error"}`);
+  if (deadlineResult.error) subsystemWarnings.push(`deadlines:${deadlineResult.error.message || "query_error"}`);
+  if (visaResult.error) subsystemWarnings.push(`visa:${visaResult.error.message || "query_error"}`);
+  if (docsResult.error) subsystemWarnings.push(`documents:${docsResult.error.message || "query_error"}`);
+  if (auditResult.error) subsystemWarnings.push(`audit:${auditResult.error.message || "query_error"}`);
 
-  if (employeesResult.error) throw new Error(employeesResult.error.message);
-  if (benchmarksResult.error) throw new Error(benchmarksResult.error.message);
-  if (policyResult.error && !isMissingRelationError(policyResult.error)) {
-    throw new Error(policyResult.error.message);
-  }
-  if (regulatoryResult.error && !isMissingRelationError(regulatoryResult.error)) {
-    throw new Error(regulatoryResult.error.message);
-  }
-  if (deadlineResult.error && !isMissingRelationError(deadlineResult.error)) {
-    throw new Error(deadlineResult.error.message);
-  }
-  if (visaResult.error && !isMissingRelationError(visaResult.error)) {
-    throw new Error(visaResult.error.message);
-  }
-  if (docsResult.error && !isMissingRelationError(docsResult.error)) {
-    throw new Error(docsResult.error.message);
-  }
-  if (auditResult.error && !isMissingRelationError(auditResult.error)) {
-    throw new Error(auditResult.error.message);
-  }
-
-  const employees = (employeesResult.data || []) as EmployeeRow[];
-  const benchmarks = (benchmarksResult.data || []) as BenchmarkRow[];
-  const policies = (policyResult.error ? [] : policyResult.data || []) as PolicyRow[];
-  const regulatoryUpdates = (regulatoryResult.error ? [] : regulatoryResult.data || []) as RegulatoryRow[];
-  const deadlines = (deadlineResult.error ? [] : deadlineResult.data || []) as DeadlineRow[];
-  const visaCases = (visaResult.error ? [] : visaResult.data || []) as VisaCaseRow[];
-  const documents = (docsResult.error ? [] : docsResult.data || []) as DocumentRow[];
-  const auditEvents = (auditResult.error ? [] : auditResult.data || []) as AuditEventRow[];
+  const policies = applySourcePrecedence(
+    (policyResult.error ? [] : policyResult.data || []) as PolicyRow[],
+    complianceSettings
+  );
+  const regulatoryUpdates = applySourcePrecedence(
+    (regulatoryResult.error ? [] : regulatoryResult.data || []) as RegulatoryRow[],
+    complianceSettings
+  );
+  const deadlines = applySourcePrecedence(
+    (deadlineResult.error ? [] : deadlineResult.data || []) as DeadlineRow[],
+    complianceSettings
+  );
+  const visaCases = applySourcePrecedence(
+    (visaResult.error ? [] : visaResult.data || []) as VisaCaseRow[],
+    complianceSettings
+  );
+  const documents = applySourcePrecedence(
+    (docsResult.error ? [] : docsResult.data || []) as DocumentRow[],
+    complianceSettings
+  );
+  const auditEvents = applySourcePrecedence(
+    (auditResult.error ? [] : auditResult.data || []) as AuditEventRow[],
+    complianceSettings
+  );
 
   const benchmarkMap = new Map<string, BenchmarkRow>();
   for (const benchmark of benchmarks) {
@@ -311,13 +561,43 @@ export async function refreshComplianceSnapshot(workspaceId: string) {
         )
       : 0;
 
+  const jurisdictionsSet = new Set(
+    complianceSettings.default_jurisdictions.map((jurisdiction) => jurisdiction.toLowerCase())
+  );
+  const regulatoryScoped =
+    jurisdictionsSet.size > 0
+      ? regulatoryUpdates.filter((row) =>
+          !row.jurisdiction ? true : jurisdictionsSet.has(row.jurisdiction.toLowerCase())
+        )
+      : regulatoryUpdates;
+
   const now = new Date();
+  const deadlineWindow = complianceSettings.deadline_sla_days;
+  const docRenewalWindow = complianceSettings.document_renewal_threshold_days;
+  const visaRenewalWindow = complianceSettings.visa_lead_time_days;
   const overdueDeadlines = deadlines.filter((deadline) => {
     if (!deadline.due_at) return false;
     return new Date(deadline.due_at).getTime() < now.getTime() && deadline.status !== "done";
   }).length;
-  const expiringDocuments = documents.filter((doc) => doc.status === "Expiring").length;
-  const overduePermits = visaCases.filter((visa) => visa.status === "overdue").length;
+  const upcomingDeadlines = deadlines.filter((deadline) => {
+    if (!deadline.due_at || deadline.status === "done") return false;
+    const days = daysUntil(deadline.due_at);
+    return days !== null && days >= 0 && days <= deadlineWindow;
+  }).length;
+  const expiringDocuments = documents.filter((doc) => {
+    const days = daysUntil(doc.expiry_date);
+    if (days === null) return doc.status === "Expiring";
+    return days <= docRenewalWindow;
+  }).length;
+  const overduePermits = visaCases.filter((visa) => {
+    const days = daysUntil(visa.expires_on);
+    return visa.status === "overdue" || (days !== null && days < 0);
+  }).length;
+  const expiringPermits = visaCases.filter((visa) => {
+    const days = daysUntil(visa.expires_on);
+    if (days === null) return visa.status === "expiring";
+    return days >= 0 && days <= visaRenewalWindow;
+  }).length;
 
   const riskItems = [
     {
@@ -344,9 +624,9 @@ export async function refreshComplianceSnapshot(workspaceId: string) {
     {
       id: "risk-regulatory-deadlines",
       area: "Regulatory Deadlines",
-      level: clamp(overdueDeadlines * 20, 0, 100),
-      status: scoreStatus(clamp(overdueDeadlines * 20, 0, 100)),
-      description: `${overdueDeadlines} deadlines are overdue and require immediate action.`,
+      level: clamp(overdueDeadlines * 20 + upcomingDeadlines * 8, 0, 100),
+      status: scoreStatus(clamp(overdueDeadlines * 20 + upcomingDeadlines * 8, 0, 100)),
+      description: `${overdueDeadlines} overdue and ${upcomingDeadlines} due within ${deadlineWindow} days.`,
     },
   ];
 
@@ -375,7 +655,7 @@ export async function refreshComplianceSnapshot(workspaceId: string) {
 
   const visaStats = [
     { label: "Active Permits", value: `${visaCases.filter((row) => row.status === "active").length}`, color: "brand" },
-    { label: "Expiring <30d", value: `${visaCases.filter((row) => row.status === "expiring").length}`, color: "amber" },
+    { label: `Expiring <${visaRenewalWindow}d`, value: `${expiringPermits}`, color: "amber" },
     { label: "Overdue", value: `${overduePermits}`, color: "red" },
     { label: "Open Cases", value: `${visaCases.filter((row) => row.status === "open_case").length}`, color: "emerald" },
   ];
@@ -403,7 +683,7 @@ export async function refreshComplianceSnapshot(workspaceId: string) {
     status: row.status || "Pending",
   }));
 
-  const regulatoryPayload = regulatoryUpdates.slice(0, 8).map((row) => ({
+  const regulatoryPayload = regulatoryScoped.slice(0, 8).map((row) => ({
     id: row.id,
     title: row.title,
     description: row.description || "",
@@ -434,14 +714,15 @@ export async function refreshComplianceSnapshot(workspaceId: string) {
   const policyScore = policyCompletionPct;
   const docsScore = clamp(100 - expiringDocuments * 8, 0, 100);
   const visaScore = clamp(100 - overduePermits * 20, 0, 100);
-  const deadlinesScore = clamp(100 - overdueDeadlines * 20, 0, 100);
+  const deadlinesScore = clamp(100 - overdueDeadlines * 20 - upcomingDeadlines * 8, 0, 100);
+  const weights = complianceSettings.risk_weights;
   const deterministicScore =
-    benchmarkCoverageScore * 0.2 +
-    bandScore * 0.25 +
-    policyScore * 0.2 +
-    docsScore * 0.1 +
-    visaScore * 0.15 +
-    deadlinesScore * 0.1;
+    benchmarkCoverageScore * weights.benchmarkCoverage +
+    bandScore * weights.outOfBand +
+    policyScore * weights.policyCompletion +
+    docsScore * weights.documents +
+    visaScore * weights.visa +
+    deadlinesScore * weights.deadlines;
 
   const aiResult = await runComplianceAiScoring({
     workspaceId,
@@ -453,6 +734,8 @@ export async function refreshComplianceSnapshot(workspaceId: string) {
       expiringDocuments,
       overduePermits,
       overdueDeadlines,
+      upcomingDeadlines,
+      expiringPermits,
     },
     riskItems,
   });
@@ -482,8 +765,18 @@ export async function refreshComplianceSnapshot(workspaceId: string) {
       confidence: aiResult.confidence,
       score_delta: aiResult.scoreDelta,
       weighted_delta: weightedAiDelta,
+      active_employees: employees.length,
+      benchmark_rows: benchmarks.length,
       reasons: aiResult.reasons,
-      missing_data: aiResult.missingData,
+      missing_data: [...aiResult.missingData, ...subsystemWarnings],
+      jurisdictions_applied: complianceSettings.default_jurisdictions,
+      settings_applied: {
+        is_compliance_configured: complianceSettings.is_compliance_configured,
+        visa_lead_time_days: visaRenewalWindow,
+        deadline_sla_days: deadlineWindow,
+        document_renewal_threshold_days: docRenewalWindow,
+        risk_weights: weights,
+      },
       computed_at: nowIso(),
     },
     updated_at: nowIso(),
@@ -495,15 +788,26 @@ export async function refreshComplianceSnapshot(workspaceId: string) {
     .select("*")
     .single();
 
-  if (!initialUpsert.error) {
+  if (!initialUpsert.error && initialUpsert.data) {
     return initialUpsert.data;
   }
 
+  const upsertError = initialUpsert.error;
+  if (
+    upsertError?.code === "42501" ||
+    isMissingRelationError(upsertError) ||
+    isAccessDeniedError(upsertError)
+  ) {
+    // No write permission/table mismatch. Return computed payload anyway.
+    return snapshotPayload;
+  }
+
   const isMissingAiColumn =
-    initialUpsert.error.code === "42703" ||
-    (initialUpsert.error.message || "").includes("ai_scoring_metadata");
+    upsertError?.code === "42703" ||
+    (upsertError?.message || "").includes("ai_scoring_metadata");
   if (!isMissingAiColumn) {
-    throw new Error(initialUpsert.error.message);
+    // Preserve live API output even when persistence schema is incomplete.
+    return snapshotPayload;
   }
 
   const legacyPayload = { ...snapshotPayload };
@@ -514,6 +818,6 @@ export async function refreshComplianceSnapshot(workspaceId: string) {
     .select("*")
     .single();
 
-  if (legacyUpsert.error) throw new Error(legacyUpsert.error.message);
-  return legacyUpsert.data;
+  if (legacyUpsert.error) return legacyPayload;
+  return legacyUpsert.data || legacyPayload;
 }

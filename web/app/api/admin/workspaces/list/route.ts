@@ -1,6 +1,16 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { createClient } from "@/lib/supabase/server";
 import { requireSuperAdmin } from "@/lib/admin/auth";
+
+function isRecoverableConfigError(message: string): boolean {
+  const lower = message.toLowerCase();
+  return (
+    lower.includes("invalid api key") ||
+    lower.includes("supabase_service_role_key") ||
+    lower.includes("permission denied")
+  );
+}
 
 /**
  * GET /api/admin/workspaces/list
@@ -11,7 +21,13 @@ export async function GET() {
   const auth = await requireSuperAdmin();
   if (auth.error) return auth.error;
 
-  const supabase = createServiceClient();
+  let supabase: ReturnType<typeof createServiceClient> | Awaited<ReturnType<typeof createClient>>;
+  try {
+    supabase = createServiceClient();
+  } catch {
+    // Allow dashboard/admin shell to operate when service key is not configured locally.
+    supabase = await createClient();
+  }
 
   // Get all workspaces with basic info
   const { data: workspaces, error } = await supabase
@@ -20,6 +36,14 @@ export async function GET() {
     .order("name", { ascending: true });
 
   if (error) {
+    if (isRecoverableConfigError(error.message || "")) {
+      return NextResponse.json({
+        workspaces: [],
+        current_workspace_id: null,
+        is_super_admin: true,
+        warning: error.message,
+      });
+    }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 

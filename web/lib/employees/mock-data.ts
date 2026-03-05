@@ -27,6 +27,8 @@ export interface Employee {
   lastName: string;
   email: string;
   avatar?: string;
+  visaExpiryDate?: Date;
+  visaStatus?: string;
   department: Department;
   role: Role;
   level: Level;
