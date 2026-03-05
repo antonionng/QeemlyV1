@@ -1,5 +1,5 @@
-# Cursor / IDE
-.cursor/
+# Cursor / IDE — ignore ephemeral state, keep rules and skills
+.cursor/plans/
 
 # macOS
 .DS_Store

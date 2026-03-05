@@ -1,0 +1,43 @@
+---
+description: Superpowers workflow skills — mandatory agent behaviors for planning, coding, debugging, and review.
+alwaysApply: true
+---
+
+# Superpowers Skills
+
+Superpowers is installed at `~/.cursor/plugins/superpowers/skills/`. Before any task, check whether a skill applies and read it using the Read tool at that path.
+
+## Skill Index
+
+| Skill | Path | Trigger |
+|-------|------|---------|
+| `brainstorming` | `~/.cursor/plugins/superpowers/skills/brainstorming/SKILL.md` | Before writing ANY code — refine requirements first |
+| `writing-plans` | `~/.cursor/plugins/superpowers/skills/writing-plans/SKILL.md` | After brainstorming — create a detailed implementation plan |
+| `test-driven-development` | `~/.cursor/plugins/superpowers/skills/test-driven-development/SKILL.md` | During implementation — RED-GREEN-REFACTOR always |
+| `systematic-debugging` | `~/.cursor/plugins/superpowers/skills/systematic-debugging/SKILL.md` | When debugging any bug or unexpected behaviour |
+| `verification-before-completion` | `~/.cursor/plugins/superpowers/skills/verification-before-completion/SKILL.md` | Before declaring something fixed |
+| `subagent-driven-development` | `~/.cursor/plugins/superpowers/skills/subagent-driven-development/SKILL.md` | When executing a multi-task plan |
+| `executing-plans` | `~/.cursor/plugins/superpowers/skills/executing-plans/SKILL.md` | Batch execution with human checkpoints |
+| `dispatching-parallel-agents` | `~/.cursor/plugins/superpowers/skills/dispatching-parallel-agents/SKILL.md` | When tasks can run concurrently |
+| `requesting-code-review` | `~/.cursor/plugins/superpowers/skills/requesting-code-review/SKILL.md` | Before submitting a PR or finishing a branch |
+| `receiving-code-review` | `~/.cursor/plugins/superpowers/skills/receiving-code-review/SKILL.md` | When responding to review feedback |
+| `using-git-worktrees` | `~/.cursor/plugins/superpowers/skills/using-git-worktrees/SKILL.md` | After design approval — isolate work on a new branch |
+| `finishing-a-development-branch` | `~/.cursor/plugins/superpowers/skills/finishing-a-development-branch/SKILL.md` | When all tasks are complete — merge/PR/discard decision |
+| `writing-skills` | `~/.cursor/plugins/superpowers/skills/writing-skills/SKILL.md` | When creating a new skill |
+| `using-superpowers` | `~/.cursor/plugins/superpowers/skills/using-superpowers/SKILL.md` | Introduction and meta-guide to the skills system |
+
+## Mandatory Rules
+
+- **If there is even a 1% chance a skill applies — read it.** This is not optional.
+- **Brainstorm before coding.** Never jump straight to implementation.
+- **TDD always.** Write a failing test first, then make it pass.
+- **Systematically debug.** No guessing; follow the 4-phase process.
+- **Verify before declaring done.** Evidence over claims.
+
+## If the Plugin Is Missing
+
+If `~/.cursor/plugins/superpowers/` doesn't exist, reinstall with `/plugin-add superpowers` in Cursor Agent chat, or run:
+
+```bash
+git clone https://github.com/obra/superpowers.git ~/.cursor/plugins/superpowers
+```
