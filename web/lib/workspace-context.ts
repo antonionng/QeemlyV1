@@ -25,6 +25,12 @@ export async function getWorkspaceContext(): Promise<
   { context: WorkspaceContext; error?: never } | { context?: never; error: string; status: number }
 > {
   const supabase = await createClient();
+  let serviceClient: ReturnType<typeof createServiceClient> | null = null;
+  try {
+    serviceClient = createServiceClient();
+  } catch {
+    serviceClient = null;
+  }
 
   const {
     data: { user },
@@ -45,8 +51,7 @@ export async function getWorkspaceContext(): Promise<
     overrideWorkspaceId = cookieStore.get(WORKSPACE_OVERRIDE_COOKIE)?.value || null;
 
     // Validate override workspace exists
-    if (overrideWorkspaceId) {
-      const serviceClient = createServiceClient();
+    if (overrideWorkspaceId && serviceClient) {
       const { data: workspace } = await serviceClient
         .from("workspaces")
         .select("id")
@@ -67,8 +72,7 @@ export async function getWorkspaceContext(): Promise<
     .single();
 
   let profileWorkspaceId = profile?.workspace_id || null;
-  if (profileWorkspaceId) {
-    const serviceClient = createServiceClient();
+  if (profileWorkspaceId && serviceClient) {
     const { data: workspace } = await serviceClient
       .from("workspaces")
       .select("id")
