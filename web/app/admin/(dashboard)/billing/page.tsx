@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { AdminPageError } from "@/components/admin/admin-page-error";
+import { fetchAdminJson, normalizeAdminApiError, type NormalizedAdminApiError } from "@/lib/admin/api-client";
 import { CreditCard, DollarSign, Users, TrendingUp, FileText } from "lucide-react";
 
 type BillingActivity = {
@@ -36,16 +38,30 @@ function formatMoney(value: number) {
 
 export default function BillingPage() {
   const [data, setData] = useState<BillingResponse | null>(null);
+  const [error, setError] = useState<NormalizedAdminApiError | null>(null);
 
   useEffect(() => {
-    fetch("/api/admin/billing")
-      .then((response) => (response.ok ? response.json() : null))
-      .then((payload) => setData(payload))
-      .catch(() => setData(null));
+    let cancelled = false;
+
+    void fetchAdminJson<BillingResponse>("/api/admin/billing")
+      .then((payload) => {
+        if (cancelled) return;
+        setData(payload);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setError(normalizeAdminApiError(err));
+        setData(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return (
     <div>
+      <AdminPageError error={error} className="mb-6" />
       {/* Header */}
       <div className="mb-6">
         <h1 className="page-title">Billing</h1>
@@ -61,7 +77,7 @@ export default function BillingPage() {
             <p className="text-xs font-medium uppercase tracking-wide text-text-secondary">MRR</p>
             <DollarSign className="h-4 w-4 text-emerald-500" />
           </div>
-          <p className="mt-1 text-2xl font-bold text-text-primary">{formatMoney(data?.mrr ?? 0)}</p>
+          <p className="mt-1 text-2xl font-bold text-text-primary">{data ? formatMoney(data.mrr) : "—"}</p>
           <p className="mt-1 text-xs text-text-tertiary">Monthly recurring revenue</p>
         </div>
         <div className="panel p-4">
@@ -69,7 +85,7 @@ export default function BillingPage() {
             <p className="text-xs font-medium uppercase tracking-wide text-text-secondary">ARR</p>
             <TrendingUp className="h-4 w-4 text-brand-500" />
           </div>
-          <p className="mt-1 text-2xl font-bold text-text-primary">{formatMoney(data?.arr ?? 0)}</p>
+          <p className="mt-1 text-2xl font-bold text-text-primary">{data ? formatMoney(data.arr) : "—"}</p>
           <p className="mt-1 text-xs text-text-tertiary">Annual recurring revenue</p>
         </div>
         <div className="panel p-4">
@@ -77,7 +93,7 @@ export default function BillingPage() {
             <p className="text-xs font-medium uppercase tracking-wide text-text-secondary">Paid Tenants</p>
             <Users className="h-4 w-4 text-blue-500" />
           </div>
-          <p className="mt-1 text-2xl font-bold text-text-primary">{data?.paid_tenants ?? 0}</p>
+          <p className="mt-1 text-2xl font-bold text-text-primary">{data ? data.paid_tenants : "—"}</p>
           <p className="mt-1 text-xs text-text-tertiary">Active subscriptions</p>
         </div>
         <div className="panel p-4">
@@ -86,7 +102,7 @@ export default function BillingPage() {
             <CreditCard className="h-4 w-4 text-amber-500" />
           </div>
           <p className="mt-1 text-2xl font-bold text-text-primary">
-            {formatMoney(data?.avg_revenue_per_tenant ?? 0)}
+            {data ? formatMoney(data.avg_revenue_per_tenant) : "—"}
           </p>
           <p className="mt-1 text-xs text-text-tertiary">Per tenant</p>
         </div>
@@ -115,7 +131,7 @@ export default function BillingPage() {
                 </p>
               </div>
             ))}
-            {(data?.plan_breakdown ?? []).length === 0 && (
+            {(data?.plan_breakdown ?? []).length === 0 && !error && (
               <p className="text-sm text-text-secondary">No paid tenants yet.</p>
             )}
           </div>
@@ -131,8 +147,12 @@ export default function BillingPage() {
               <FileText className="mb-3 h-10 w-10 text-brand-200" />
               {(data?.recent_activity ?? []).length === 0 ? (
                 <>
-                  <p className="text-text-secondary">No billing activity yet</p>
-                  <p className="mt-1 text-xs text-text-tertiary">Activity will appear when tenant data flows in</p>
+                  <p className="text-text-secondary">
+                    {error ? "Billing activity is unavailable" : "No billing activity yet"}
+                  </p>
+                  <p className="mt-1 text-xs text-text-tertiary">
+                    {error ? "Fix the admin API error above and retry this page." : "Activity will appear when tenant data flows in"}
+                  </p>
                 </>
               ) : (
                 <div className="w-full space-y-2 text-left">

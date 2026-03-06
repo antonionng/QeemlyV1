@@ -1,6 +1,8 @@
 "use client";
 
 import { Fragment, useEffect, useState } from "react";
+import { AdminPageError } from "@/components/admin/admin-page-error";
+import { fetchAdminJson, normalizeAdminApiError, type NormalizedAdminApiError } from "@/lib/admin/api-client";
 import {
   Database,
   RefreshCw,
@@ -63,6 +65,7 @@ function getRelativeTime(dateStr: string): string {
 
 export default function SourcesPage() {
   const [sources, setSources] = useState<Source[]>([]);
+  const [error, setError] = useState<NormalizedAdminApiError | null>(null);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState<string | null>(null);
   const [toggling, setToggling] = useState<string | null>(null);
@@ -76,10 +79,13 @@ export default function SourcesPage() {
 
   const fetchSources = () => {
     setLoading(true);
-    fetch("/api/admin/sources")
-      .then((r) => (r.ok ? r.json() : []))
+    setError(null);
+    fetchAdminJson<Source[]>("/api/admin/sources")
       .then((data) => setSources(Array.isArray(data) ? data : []))
-      .catch(() => setSources([]))
+      .catch((err) => {
+        setError(normalizeAdminApiError(err));
+        setSources([]);
+      })
       .finally(() => setLoading(false));
   };
 
@@ -156,6 +162,7 @@ export default function SourcesPage() {
         </div>
       )}
 
+      <AdminPageError error={error} onRetry={fetchSources} className="mb-6" />
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="page-title">Ingestion Sources</h1>
@@ -206,6 +213,10 @@ export default function SourcesPage() {
         {loading ? (
           <div className="p-8 text-center">
             <RefreshCw className="mx-auto h-6 w-6 animate-spin text-brand-500" />
+          </div>
+        ) : error ? (
+          <div className="p-5">
+            <AdminPageError error={error} onRetry={fetchSources} />
           </div>
         ) : sources.length === 0 ? (
           <div className="p-12 text-center">

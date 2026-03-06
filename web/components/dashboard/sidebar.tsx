@@ -25,7 +25,8 @@ import {
 } from "lucide-react";
 import { Logo } from "@/components/logo";
 import { createClient } from "@/lib/supabase/client";
-import { useCompanySettings, getCompanyInitials } from "@/lib/company";
+import { useCompanySettings } from "@/lib/company";
+import { getDashboardOverviewRoutes } from "@/lib/company-vs-market";
 import { isFeatureEnabled, type FeatureKey } from "@/lib/release/ga-scope";
 import { WorkspaceSwitcher } from "./workspace-switcher";
 
@@ -45,9 +46,10 @@ const adminNavSections: NavSection[] = [
   {
     label: null,
     items: [
-      { href: "/dashboard/overview", label: "Company Overview", icon: LayoutDashboard },
+      { href: getDashboardOverviewRoutes()[0].href, label: getDashboardOverviewRoutes()[0].label, icon: LayoutDashboard },
       { href: "/dashboard/people", label: "People", icon: Users },
-      { href: "/dashboard/benchmarks", label: "Benchmarking", icon: ChartLine },
+      { href: getDashboardOverviewRoutes()[1].href, label: getDashboardOverviewRoutes()[1].label, icon: Globe2 },
+      { href: getDashboardOverviewRoutes()[2].href, label: getDashboardOverviewRoutes()[2].label, icon: ChartLine },
       { href: "/dashboard/salary-review", label: "Salary Review", icon: DollarSign },
     ],
   },
@@ -55,7 +57,7 @@ const adminNavSections: NavSection[] = [
     label: "Analytics",
     items: [
       { href: "/dashboard/reports", label: "Reports", icon: BarChart3 },
-      { href: "/dashboard/compliance", label: "Compliance", icon: ShieldCheck },
+      { href: "/dashboard/compliance", label: "Workforce Compliance", icon: ShieldCheck },
     ],
   },
   {
@@ -122,10 +124,6 @@ export function DashboardSidebar({
   const router = useRouter();
   const [user, setUser] = useState<UserData | null>(null);
   const companySettings = useCompanySettings();
-
-  const companyInitials = getCompanyInitials(companySettings.companyName);
-  const hasCompanyLogo = !!companySettings.companyLogo;
-  const isCompanyConfigured = companySettings.isConfigured;
 
   const isEmployee = user?.role === "employee";
   const navSections = isEmployee ? employeeNavSections : adminNavSections;
@@ -221,58 +219,14 @@ export function DashboardSidebar({
       >
         {collapsed ? (
           <Link href="/dashboard" className="flex items-center justify-center w-8 h-8">
-            {hasCompanyLogo ? (
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-white border border-border overflow-hidden">
-                <img 
-                  src={companySettings.companyLogo!} 
-                  alt={companySettings.companyName}
-                  className="h-full w-full object-contain p-1"
-                />
-              </div>
-            ) : isCompanyConfigured ? (
-              <div 
-                className="flex h-8 w-8 items-center justify-center rounded-xl text-white font-bold text-xs"
-                style={{ backgroundColor: companySettings.primaryColor }}
-              >
-                {companyInitials}
-              </div>
-            ) : (
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand-500 text-white font-bold text-xs">
-                Q
-              </div>
-            )}
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-white border border-border overflow-hidden">
+              <img src="/logo.png" alt="Qeemly" className="h-full w-full object-contain p-1" />
+            </div>
           </Link>
         ) : (
           <div className="flex flex-1 min-w-0 items-center justify-between gap-2">
             <Link href="/dashboard" className="flex items-center gap-2.5 min-w-0">
-              {hasCompanyLogo ? (
-                <>
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-white border border-border overflow-hidden">
-                    <img 
-                      src={companySettings.companyLogo!} 
-                      alt={companySettings.companyName}
-                      className="h-full w-full object-contain p-1"
-                    />
-                  </div>
-                  <span className="truncate text-sm font-semibold text-text-primary">
-                    {companySettings.companyName}
-                  </span>
-                </>
-              ) : isCompanyConfigured ? (
-                <>
-                  <div 
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-white font-bold text-xs"
-                    style={{ backgroundColor: companySettings.primaryColor }}
-                  >
-                    {companyInitials}
-                  </div>
-                  <span className="truncate text-sm font-semibold text-text-primary">
-                    {companySettings.companyName}
-                  </span>
-                </>
-              ) : (
-                <Logo compact href={null} />
-              )}
+              <Logo compact href={null} />
             </Link>
             {onToggleCollapse && (
               <button

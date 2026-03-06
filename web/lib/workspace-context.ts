@@ -7,6 +7,7 @@ const SUPERADMIN_ALLOWLIST = (process.env.QEEMLY_SUPERADMINS || "ag@experrt.com"
   .map((e) => e.trim().toLowerCase());
 
 const WORKSPACE_OVERRIDE_COOKIE = "qeemly_workspace_override";
+type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
 export type WorkspaceContext = {
   workspace_id: string;
@@ -17,6 +18,73 @@ export type WorkspaceContext = {
   user_id: string;
   user_email: string;
 };
+
+async function ensureExperrtWorkspaceForUser(
+  client: ReturnType<typeof createServiceClient> | SupabaseServerClient,
+  userId: string,
+  email: string
+): Promise<string | null> {
+  const isExperrtUser = email.endsWith("@experrt.com");
+  const isAllowlisted = SUPERADMIN_ALLOWLIST.includes(email);
+  if (!isExperrtUser && !isAllowlisted) {
+    return null;
+  }
+
+  let workspaceId: string | null = null;
+
+  const { data: existingWorkspace } = await client
+    .from("workspaces")
+    .select("id")
+    .eq("slug", "experrt")
+    .maybeSingle();
+
+  workspaceId = existingWorkspace?.id ?? null;
+
+  if (!workspaceId) {
+    const { data: createdWorkspace, error: createWorkspaceError } = await client
+      .from("workspaces")
+      .insert({ name: "Experrt", slug: "experrt" })
+      .select("id")
+      .single();
+
+    if (createWorkspaceError) {
+      const { data: retryWorkspace } = await client
+        .from("workspaces")
+        .select("id")
+        .eq("slug", "experrt")
+        .maybeSingle();
+      workspaceId = retryWorkspace?.id ?? null;
+    } else {
+      workspaceId = createdWorkspace?.id ?? null;
+    }
+  }
+
+  if (!workspaceId) {
+    return null;
+  }
+
+  const { data: existingProfile } = await client
+    .from("profiles")
+    .select("id, role")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (existingProfile?.id) {
+    await client
+      .from("profiles")
+      .update({ workspace_id: workspaceId })
+      .eq("id", userId);
+  } else {
+    await client.from("profiles").insert({
+      id: userId,
+      workspace_id: workspaceId,
+      role: "admin",
+      full_name: email.split("@")[0] || "Admin",
+    });
+  }
+
+  return workspaceId;
+}
 
 /**
  * Get the effective workspace context for the current request.
@@ -86,6 +154,10 @@ export async function getWorkspaceContext(): Promise<
     if (!wsError && !workspace) {
       profileWorkspaceId = null;
     }
+  }
+
+  if (!profileWorkspaceId) {
+    profileWorkspaceId = await ensureExperrtWorkspaceForUser(serviceClient ?? supabase, user.id, email);
   }
 
   const effectiveWorkspaceId = overrideWorkspaceId || profileWorkspaceId;

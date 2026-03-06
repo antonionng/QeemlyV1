@@ -24,8 +24,8 @@ const shortcuts = [
     icon: Download,
   },
   {
-    title: "View Benchmarks",
-    description: "Market comparison data",
+    title: "Explore Benchmarks",
+    description: "Qeemly market comparison data",
     href: "/dashboard/benchmarks",
     icon: BarChart3,
   },

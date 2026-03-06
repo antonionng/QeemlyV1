@@ -50,8 +50,16 @@ export async function fetchDbEmployees(): Promise<Employee[]> {
   try {
     const response = await fetch("/api/people", { method: "GET", cache: "no-store" });
     if (!response.ok) return [];
-    const payload = (await response.json()) as { employees?: Record<string, unknown>[]; benchmarks?: Record<string, unknown>[] };
-    return mapRowsToEmployees(payload.employees || [], payload.benchmarks || []);
+    const payload = (await response.json()) as {
+      employees?: Record<string, unknown>[];
+      benchmarks?: Record<string, unknown>[];
+      market_benchmarks?: Record<string, unknown>[];
+    };
+    return mapRowsToEmployees(
+      payload.employees || [],
+      payload.benchmarks || [],
+      payload.market_benchmarks || []
+    );
   } catch {
     return [];
   }
@@ -68,21 +76,33 @@ type BenchmarkRow = {
   p90: number;
 };
 
-function mapRowsToEmployees(dbEmployees: Record<string, unknown>[], dbBenchmarks: Record<string, unknown>[]): Employee[] {
-  if (!dbEmployees.length) return [];
-
-  const exactBenchmarkMap = new Map<string, BenchmarkRow>();
-  const roleLevelFallbackMap = new Map<string, BenchmarkRow>();
-  for (const row of dbBenchmarks) {
+function buildBenchmarkMaps(rows: Record<string, unknown>[]) {
+  const exactMap = new Map<string, BenchmarkRow>();
+  const roleLevelMap = new Map<string, BenchmarkRow>();
+  for (const row of rows) {
     const exactKey = `${row.role_id as string}::${row.location_id as string}::${row.level_id as string}`;
-    if (!exactBenchmarkMap.has(exactKey)) {
-      exactBenchmarkMap.set(exactKey, row as unknown as BenchmarkRow);
+    if (!exactMap.has(exactKey)) {
+      exactMap.set(exactKey, row as unknown as BenchmarkRow);
     }
-    const roleLevelKey = `${row.role_id as string}::${row.level_id as string}`;
-    if (!roleLevelFallbackMap.has(roleLevelKey)) {
-      roleLevelFallbackMap.set(roleLevelKey, row as unknown as BenchmarkRow);
+    const rlKey = `${row.role_id as string}::${row.level_id as string}`;
+    if (!roleLevelMap.has(rlKey)) {
+      roleLevelMap.set(rlKey, row as unknown as BenchmarkRow);
     }
   }
+  return { exactMap, roleLevelMap };
+}
+
+function mapRowsToEmployees(
+  dbEmployees: Record<string, unknown>[],
+  dbBenchmarks: Record<string, unknown>[],
+  dbMarketBenchmarks: Record<string, unknown>[]
+): Employee[] {
+  if (!dbEmployees.length) return [];
+
+  // Market benchmarks are the primary source (the Qeemly data pool)
+  const market = buildBenchmarkMaps(dbMarketBenchmarks);
+  // Workspace benchmarks are the company's own pay bands (supplementary)
+  const workspace = buildBenchmarkMaps(dbBenchmarks);
 
   const toAnnual = (value: number): number => (value < 100_000 ? value * 12 : value);
   const percentileFromComp = (comp: number, b: BenchmarkRow): number => {
@@ -111,7 +131,13 @@ function mapRowsToEmployees(dbEmployees: Record<string, unknown>[], dbBenchmarks
 
     const exactKey = `${emp.role_id as string}::${emp.location_id as string}::${emp.level_id as string}`;
     const fallbackKey = `${emp.role_id as string}::${emp.level_id as string}`;
-    const benchmark = exactBenchmarkMap.get(exactKey) ?? roleLevelFallbackMap.get(fallbackKey);
+
+    // Market data is primary; workspace bands are secondary
+    const benchmark =
+      market.exactMap.get(exactKey) ??
+      market.roleLevelMap.get(fallbackKey) ??
+      workspace.exactMap.get(exactKey) ??
+      workspace.roleLevelMap.get(fallbackKey);
 
     let bandPosition: "below" | "in-band" | "above" = "in-band";
     let bandPercentile = 50;

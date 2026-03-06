@@ -23,6 +23,10 @@ export type SendMessageOptions = {
   newThread?: boolean;
 };
 
+type StartNewChatOptions = SendMessageOptions & {
+  preserveMessages?: boolean;
+};
+
 const SUGGESTED_PROMPTS = [
   { id: "trends", label: "Market trends summary", query: "Can you summarize current market trends?" },
   { id: "underpaid", label: "Retention risk analysis", query: "Is my team at risk of being underpaid?" },
@@ -95,7 +99,7 @@ export function useAIChat() {
   );
 
   const startNewChat = useCallback(
-    async (options?: SendMessageOptions) => {
+    async (options?: StartNewChatOptions) => {
       const mode = options?.mode ?? "general";
       const response = await fetch("/api/chat/threads", {
         method: "POST",
@@ -113,7 +117,9 @@ export function useAIChat() {
       const payload = (await response.json()) as { thread: ChatThread };
       setThreads((prev) => [payload.thread, ...prev.filter((thread) => thread.id !== payload.thread.id)]);
       setActiveThreadId(payload.thread.id);
-      setMessages([]);
+      if (!options?.preserveMessages) {
+        setMessages([]);
+      }
       return payload.thread;
     },
     []
@@ -172,27 +178,6 @@ export function useAIChat() {
     if (!trimmedContent) {
       return;
     }
-
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: "user",
-      content: trimmedContent,
-      timestamp: new Date(),
-    };
-    setMessages((prev) => [...prev, userMessage]);
-
-    setIsTyping(true);
-    const assistantMessageId = (Date.now() + 1).toString();
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: assistantMessageId,
-        role: "assistant",
-        content: "",
-        timestamp: new Date(),
-      },
-    ]);
-
     const desiredMode = options?.mode ?? activeThread?.mode ?? "general";
     const desiredEmployeeId =
       desiredMode === "employee" ? options?.employeeId ?? activeThread?.employee_id ?? undefined : undefined;
@@ -205,13 +190,34 @@ export function useAIChat() {
       targetThread.employee_id &&
       desiredEmployeeId &&
       targetThread.employee_id !== desiredEmployeeId;
+    const requiresNewThread = !targetThread || options?.newThread || modeMismatch || employeeMismatch;
+
+    const userMessage: Message = {
+      id: Date.now().toString(),
+      role: "user",
+      content: trimmedContent,
+      timestamp: new Date(),
+    };
+    const assistantMessageId = (Date.now() + 1).toString();
+    setMessages((prev) => [
+      ...(requiresNewThread ? [] : prev),
+      userMessage,
+      {
+        id: assistantMessageId,
+        role: "assistant",
+        content: "",
+        timestamp: new Date(),
+      },
+    ]);
+    setIsTyping(true);
 
     try {
-      if (!targetThread || options?.newThread || modeMismatch || employeeMismatch) {
+      if (requiresNewThread) {
         targetThread = await startNewChat({
           mode: desiredMode,
           employeeId: desiredEmployeeId,
           employee: options?.employee,
+          preserveMessages: true,
         });
       }
 

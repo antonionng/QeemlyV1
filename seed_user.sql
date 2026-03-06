@@ -93,22 +93,6 @@ WITH ws AS (
     'Al-Mansoori','Al-Harbi','Al-Qahtani','Al-Khalifa','Al-Hashemi','Al-Suwaidi','Al-Nuaimi','Al-Sabah',
     'Khan','Rahman','Siddiqui','Patel','Sharma','Fernandes','Dsouza','Haddad','Nasser','Maktoum','Faris','Yazid'
   ] AS arr
-), role_base AS (
-  SELECT * FROM (VALUES
-    ('swe',32000),('swe-fe',30000),('swe-be',33000),('swe-mobile',31000),('swe-devops',34000),
-    ('swe-data',35000),('swe-ml',42000),('pm',38000),('tpm',40000),('designer',28000),
-    ('ux-researcher',26000),('data-scientist',40000),('data-analyst',25000),('security',36000),('qa',22000)
-  ) AS t(role_id, monthly_aed)
-), level_mult AS (
-  SELECT * FROM (VALUES
-    ('ic1',0.55),('ic2',0.75),('ic3',1.0),('ic4',1.35),('ic5',1.70),
-    ('m1',1.40),('m2',1.70),('d1',2.0),('d2',2.40),('vp',3.0)
-  ) AS t(level_id, multiplier)
-), location_info AS (
-  SELECT * FROM (VALUES
-    ('dubai','AED',1.00,1.00),('abu-dhabi','AED',0.95,1.00),('riyadh','SAR',1.15,1.02),('jeddah','SAR',1.05,1.02),
-    ('doha','QAR',1.20,0.99),('manama','BHD',0.85,0.103),('kuwait-city','KWD',1.10,0.084),('muscat','OMR',0.80,0.105)
-  ) AS t(location_id, currency, location_mult, fx_from_aed)
 ), generated AS (
   SELECT
     g.i,
@@ -164,6 +148,16 @@ WITH ws AS (
       ELSE 'muscat'
     END AS location_id
   FROM generated g
+), market_comp AS (
+  SELECT
+    role_id,
+    level_id,
+    location_id,
+    p25,
+    p50,
+    p75
+  FROM public_benchmark_snapshots
+  WHERE is_public = true
 ), prepared AS (
   SELECT
     (
@@ -181,18 +175,74 @@ WITH ws AS (
     w.role_id,
     w.level_id,
     w.location_id,
-    li.currency,
-    round((rb.monthly_aed * 12 * lm.multiplier * li.location_mult * li.fx_from_aed) * (0.92 + ((w.i % 9) * 0.02)))::numeric AS base_salary,
-    round((rb.monthly_aed * 12 * lm.multiplier * li.location_mult * li.fx_from_aed) * (0.04 + ((w.i % 7) * 0.01)))::numeric AS bonus,
-    CASE
-      WHEN w.level_id IN ('ic4','ic5','m1','m2','d1','d2','vp')
-      THEN round((rb.monthly_aed * 12 * lm.multiplier * li.location_mult * li.fx_from_aed) * (0.06 + ((w.i % 6) * 0.03)))::numeric
-      ELSE 0
-    END AS equity,
+    'AED'::text AS currency,
+    round(
+      (
+        coalesce(mc.p50, 20000) * 12
+      ) * (
+        CASE
+          -- 15% below-band cohort
+          WHEN (w.i % 20) IN (0, 1, 2) THEN 0.74 + ((w.i % 5) * 0.02)
+          -- 65% in-band cohort
+          WHEN (w.i % 20) BETWEEN 3 AND 15 THEN 0.88 + ((w.i % 9) * 0.03)
+          -- 20% above-band cohort
+          ELSE 1.20 + ((w.i % 5) * 0.04)
+        END
+      ) * (
+        1 - (
+          CASE
+            WHEN w.level_id IN ('m2', 'd1', 'd2', 'vp') THEN 0.18
+            WHEN w.level_id IN ('ic4', 'ic5', 'm1') THEN 0.12
+            ELSE 0.07
+          END
+          + CASE
+            WHEN w.level_id IN ('ic1', 'ic2') THEN 0.00
+            WHEN w.level_id = 'ic3' THEN 0.04
+            WHEN w.level_id IN ('ic4', 'ic5') THEN 0.07
+            ELSE 0.10
+          END
+        )
+      )
+    )::numeric AS base_salary,
+    round(
+      (
+        coalesce(mc.p50, 20000) * 12
+      ) * (
+        CASE
+          WHEN (w.i % 20) IN (0, 1, 2) THEN 0.74 + ((w.i % 5) * 0.02)
+          WHEN (w.i % 20) BETWEEN 3 AND 15 THEN 0.88 + ((w.i % 9) * 0.03)
+          ELSE 1.20 + ((w.i % 5) * 0.04)
+        END
+      ) * (
+        CASE
+          WHEN w.level_id IN ('m2', 'd1', 'd2', 'vp') THEN 0.18
+          WHEN w.level_id IN ('ic4', 'ic5', 'm1') THEN 0.12
+          ELSE 0.07
+        END
+      )
+    )::numeric AS bonus,
+    round(
+      (
+        coalesce(mc.p50, 20000) * 12
+      ) * (
+        CASE
+          WHEN (w.i % 20) IN (0, 1, 2) THEN 0.74 + ((w.i % 5) * 0.02)
+          WHEN (w.i % 20) BETWEEN 3 AND 15 THEN 0.88 + ((w.i % 9) * 0.03)
+          ELSE 1.20 + ((w.i % 5) * 0.04)
+        END
+      ) * (
+        CASE
+          WHEN w.level_id IN ('ic1', 'ic2') THEN 0.00
+          WHEN w.level_id = 'ic3' THEN 0.04
+          WHEN w.level_id IN ('ic4', 'ic5') THEN 0.07
+          ELSE 0.10
+        END
+      )
+    )::numeric AS equity,
     'active'::text AS status,
     CASE WHEN (w.i % 10) < 6 THEN 'national' ELSE 'expat' END AS employment_type,
-    (CURRENT_DATE - ((w.i * 37) % 2550))::date AS hire_date,
-    (CURRENT_DATE - ((w.i * 13) % 320))::date AS last_review_date,
+    (CURRENT_DATE - (((w.i * 37) % 2550)::int))::date AS hire_date,
+    (CURRENT_DATE - (((w.i * 13) % 320)::int))::date AS last_review_date,
     CASE
       WHEN (w.i % 20) < 2 THEN 'low'
       WHEN (w.i % 20) < 9 THEN 'meets'
@@ -200,9 +250,10 @@ WITH ws AS (
       ELSE 'exceptional'
     END AS performance_rating
   FROM with_role_level_location w
-  JOIN role_base rb ON rb.role_id = w.role_id
-  JOIN level_mult lm ON lm.level_id = w.level_id
-  JOIN location_info li ON li.location_id = w.location_id
+  LEFT JOIN market_comp mc
+    ON mc.role_id = w.role_id
+   AND mc.level_id = w.level_id
+   AND mc.location_id = w.location_id
 )
 INSERT INTO employees (
   id, workspace_id, first_name, last_name, email, department, role_id, level_id, location_id,
@@ -265,7 +316,7 @@ SELECT
   round(t.avg_monthly_total * 1.18)::numeric AS p75,
   round(t.avg_monthly_total * 1.35)::numeric AS p90,
   greatest(t.sample_size, 20) AS sample_size,
-  'market'::text AS source,
+  'uploaded'::text AS source,
   CASE WHEN t.sample_size >= 8 THEN 'high' ELSE 'medium' END::text AS confidence,
   CURRENT_DATE AS valid_from
 FROM tuples t
@@ -307,9 +358,9 @@ SELECT
   )::uuid AS id,
   emps.id AS employee_id,
   CASE
-    WHEN step.step_no = 1 THEN greatest(emps.hire_date, CURRENT_DATE - interval '6 years')::date
-    WHEN step.step_no = 2 THEN greatest(emps.hire_date + interval '18 months', CURRENT_DATE - interval '2 years')::date
-    ELSE greatest(emps.hire_date + interval '42 months', CURRENT_DATE - interval '90 days')::date
+    WHEN step.step_no = 1 THEN least(CURRENT_DATE, greatest(emps.hire_date, CURRENT_DATE - interval '6 years')::date)
+    WHEN step.step_no = 2 THEN least(CURRENT_DATE, greatest(emps.hire_date + interval '18 months', CURRENT_DATE - interval '2 years')::date)
+    ELSE least(CURRENT_DATE, greatest(emps.hire_date + interval '42 months', CURRENT_DATE - interval '90 days')::date)
   END AS effective_date,
   round(emps.base_salary * step.base_factor)::numeric AS base_salary,
   round(emps.bonus * step.bonus_factor)::numeric AS bonus,
@@ -377,7 +428,7 @@ SELECT
     WHEN least(99, greatest(68, round(r.perf_score - (r.rn * 1.7), 1))) >= 84 THEN 'Pending'
     ELSE 'Critical'
   END AS status,
-  (CURRENT_DATE + (6 + (r.rn * 5)))::date AS due_date,
+  (CURRENT_DATE + ((6 + (r.rn * 5))::int))::date AS due_date,
   'seed'::text AS data_source
 FROM ranked r
 WHERE (SELECT workspace_id FROM ws) IS NOT NULL
@@ -406,7 +457,7 @@ SELECT
     ELSE jurisdiction || ' Employment Contract Guidance'
   END AS title,
   'Review for ' || ls.headcount || ' active employees in ' || jurisdiction || ' location groups.' AS description,
-  (CURRENT_DATE - ((ls.rn * 3) + 2))::date AS published_date,
+  (CURRENT_DATE - (((ls.rn * 3) + 2)::int))::date AS published_date,
   CASE ls.rn % 3
     WHEN 1 THEN 'Active'
     WHEN 2 THEN 'Pending'
@@ -453,7 +504,7 @@ WITH ws AS (
 INSERT INTO compliance_deadlines (workspace_id, due_at, title, type, status, data_source)
 SELECT
   (SELECT workspace_id FROM ws) AS workspace_id,
-  (CURRENT_DATE + ((g.i * 5) - 8))::date AS due_at,
+  (CURRENT_DATE + (((g.i * 5) - 8)::int))::date AS due_at,
   initcap(
     (SELECT departments[((g.i - 1) % array_length(departments, 1)) + 1] FROM dept_pool)
   ) || ' compliance checkpoint #' || lpad(g.i::text, 2, '0') AS title,
@@ -463,7 +514,7 @@ SELECT
     ELSE 'Mandatory'
   END AS type,
   CASE
-    WHEN (CURRENT_DATE + ((g.i * 5) - 8))::date < CURRENT_DATE THEN 'overdue'
+    WHEN (CURRENT_DATE + (((g.i * 5) - 8)::int))::date < CURRENT_DATE THEN 'overdue'
     WHEN g.i % 5 = 0 THEN 'done'
     ELSE 'open'
   END AS status,
@@ -499,10 +550,10 @@ SELECT
     ELSE 'active'
   END AS status,
   CASE
-    WHEN e.rn % 11 IN (0, 4) THEN (CURRENT_DATE - (2 + (e.rn % 14)))::date
-    WHEN e.rn % 11 IN (2, 5, 8) THEN (CURRENT_DATE + (4 + (e.rn % 22)))::date
-    WHEN e.rn % 11 IN (3, 7) THEN (CURRENT_DATE + (18 + (e.rn % 36)))::date
-    ELSE (CURRENT_DATE + (45 + (e.rn % 160)))::date
+    WHEN e.rn % 11 IN (0, 4) THEN (CURRENT_DATE - ((2 + (e.rn % 14))::int))::date
+    WHEN e.rn % 11 IN (2, 5, 8) THEN (CURRENT_DATE + ((4 + (e.rn % 22))::int))::date
+    WHEN e.rn % 11 IN (3, 7) THEN (CURRENT_DATE + ((18 + (e.rn % 36))::int))::date
+    ELSE (CURRENT_DATE + ((45 + (e.rn % 160))::int))::date
   END AS expires_on,
   'seed'::text AS data_source
 FROM expats e
@@ -539,10 +590,10 @@ SELECT
     WHEN 5 THEN 'Registration'
     ELSE 'Certificate'
   END AS doc_type,
-  (CURRENT_DATE + (12 + (ds.rn * 17)))::date AS expiry_date,
+  (CURRENT_DATE + ((12 + (ds.rn * 17))::int))::date AS expiry_date,
   CASE
-    WHEN (CURRENT_DATE + (12 + (ds.rn * 17)))::date <= CURRENT_DATE + 45 THEN 'Expiring'
-    WHEN (CURRENT_DATE + (12 + (ds.rn * 17)))::date >= CURRENT_DATE + 120 THEN 'Active'
+    WHEN (CURRENT_DATE + ((12 + (ds.rn * 17))::int))::date <= CURRENT_DATE + 45 THEN 'Expiring'
+    WHEN (CURRENT_DATE + ((12 + (ds.rn * 17))::int))::date >= CURRENT_DATE + 120 THEN 'Active'
     ELSE 'Review'
   END AS status,
   (550000 + (ds.rn * 175000) + (ds.headcount * 22000))::bigint AS size_bytes,

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { adminRouteErrorResponse, throwIfAdminQueryError } from "@/lib/admin/api-client";
 import { createServiceClient } from "@/lib/supabase/service";
 import { requireSuperAdmin } from "@/lib/admin/auth";
 
@@ -6,37 +7,46 @@ export async function GET() {
   const auth = await requireSuperAdmin();
   if (auth.error) return auth.error;
 
-  const supabase = createServiceClient();
-  const { data } = await supabase
-    .from("ingestion_sources")
-    .select("id, slug, name, description, category, regions, enabled, approved_for_commercial, needs_review, update_cadence, config, created_at, updated_at")
-    .order("created_at", { ascending: false });
+  try {
+    const supabase = createServiceClient();
+    const { data, error } = await supabase
+      .from("ingestion_sources")
+      .select("id, slug, name, description, category, regions, enabled, approved_for_commercial, needs_review, update_cadence, config, created_at, updated_at")
+      .order("created_at", { ascending: false });
 
-  // Get last job per source for "last run" info
-  const sourceIds = (data ?? []).map((s) => s.id);
-  const { data: lastJobs } = await supabase
-    .from("ingestion_jobs")
-    .select("source_id, completed_at, status, records_created")
-    .in("source_id", sourceIds)
-    .order("completed_at", { ascending: false });
+    throwIfAdminQueryError(error, "Failed to load ingestion sources");
 
-  const lastJobBySource = new Map<string, { completed_at: string; status: string; records_created?: number }>();
-  for (const j of lastJobs ?? []) {
-    if (!lastJobBySource.has(j.source_id)) {
-      lastJobBySource.set(j.source_id, {
-        completed_at: j.completed_at ?? "",
-        status: j.status ?? "",
-        records_created: j.records_created ?? 0,
-      });
+    const sourceIds = (data ?? []).map((s) => s.id);
+    const { data: lastJobs, error: lastJobsError } = sourceIds.length
+      ? await supabase
+          .from("ingestion_jobs")
+          .select("source_id, completed_at, status, records_created")
+          .in("source_id", sourceIds)
+          .order("completed_at", { ascending: false })
+      : { data: [], error: null };
+
+    throwIfAdminQueryError(lastJobsError, "Failed to load source job history");
+
+    const lastJobBySource = new Map<string, { completed_at: string; status: string; records_created?: number }>();
+    for (const j of lastJobs ?? []) {
+      if (!lastJobBySource.has(j.source_id)) {
+        lastJobBySource.set(j.source_id, {
+          completed_at: j.completed_at ?? "",
+          status: j.status ?? "",
+          records_created: j.records_created ?? 0,
+        });
+      }
     }
+
+    const enriched = (data ?? []).map((s) => ({
+      ...s,
+      last_run: lastJobBySource.get(s.id) ?? null,
+    }));
+
+    return NextResponse.json(enriched);
+  } catch (error) {
+    return adminRouteErrorResponse(error);
   }
-
-  const enriched = (data ?? []).map((s) => ({
-    ...s,
-    last_run: lastJobBySource.get(s.id) ?? null,
-  }));
-
-  return NextResponse.json(enriched);
 }
 
 export async function POST(request: NextRequest) {

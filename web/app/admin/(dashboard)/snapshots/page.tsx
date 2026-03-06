@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { AdminPageError } from "@/components/admin/admin-page-error";
+import { fetchAdminJson, normalizeAdminApiError, type NormalizedAdminApiError } from "@/lib/admin/api-client";
 import { FileJson, RefreshCw, ChevronDown, ChevronRight, Database, Zap, AlertTriangle, HardDrive, Calendar } from "lucide-react";
 
 type Snapshot = {
@@ -52,20 +54,23 @@ function getHealthIcon(health: string | undefined) {
 export default function SnapshotsPage() {
   const [snapshots, setSnapshots] = useState<Snapshot[]>([]);
   const [sources, setSources] = useState<Source[]>([]);
+  const [error, setError] = useState<NormalizedAdminApiError | null>(null);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const fetchData = () => {
     setLoading(true);
+    setError(null);
     Promise.all([
-      fetch("/api/admin/snapshots").then((r) => r.ok ? r.json() : []),
-      fetch("/api/admin/sources").then((r) => r.ok ? r.json() : []),
+      fetchAdminJson<Snapshot[]>("/api/admin/snapshots"),
+      fetchAdminJson<Source[]>("/api/admin/sources"),
     ])
       .then(([snapshotsData, sourcesData]) => {
         setSnapshots(Array.isArray(snapshotsData) ? snapshotsData : []);
         setSources(Array.isArray(sourcesData) ? sourcesData : []);
       })
-      .catch(() => {
+      .catch((err) => {
+        setError(normalizeAdminApiError(err));
         setSnapshots([]);
         setSources([]);
       })
@@ -93,6 +98,7 @@ export default function SnapshotsPage() {
 
   return (
     <div>
+      <AdminPageError error={error} onRetry={fetchData} className="mb-6" />
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="page-title">Raw Snapshots</h1>
@@ -141,6 +147,10 @@ export default function SnapshotsPage() {
         {loading ? (
           <div className="p-8 text-center">
             <RefreshCw className="mx-auto h-6 w-6 animate-spin text-brand-500" />
+          </div>
+        ) : error ? (
+          <div className="p-5">
+            <AdminPageError error={error} onRetry={fetchData} />
           </div>
         ) : snapshots.length === 0 ? (
           <div className="p-12 text-center">

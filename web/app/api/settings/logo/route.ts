@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getWorkspaceContext } from "@/lib/workspace-context";
 
 const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
 const ALLOWED_TYPES = ["image/png", "image/jpeg", "image/jpg", "image/webp", "image/svg+xml"];
+const DEFAULT_LOGO_BUCKET = "company-logos";
+const FALLBACK_LOGO_BUCKET = "avatars";
 
 /**
  * POST /api/settings/logo
@@ -16,18 +19,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Get user's profile to find workspace_id and check admin role
+  const wsContext = await getWorkspaceContext();
+  if (!wsContext.context) {
+    return NextResponse.json({ error: wsContext.error }, { status: wsContext.status });
+  }
+
+  // Check admin access for logo updates
   const { data: profile } = await supabase
     .from("profiles")
-    .select("workspace_id, role")
+    .select("role")
     .eq("id", user.id)
     .single();
 
-  if (!profile?.workspace_id) {
-    return NextResponse.json({ error: "No workspace found" }, { status: 404 });
-  }
-
-  if (profile.role !== "admin") {
+  if (!wsContext.context.is_super_admin && profile?.role !== "admin") {
     return NextResponse.json({ error: "Admin access required" }, { status: 403 });
   }
 
@@ -52,31 +56,109 @@ export async function POST(request: NextRequest) {
 
   // Generate unique filename
   const ext = file.name.split(".").pop() || "png";
-  const fileName = `${profile.workspace_id}/logo-${Date.now()}.${ext}`;
+  const workspaceFileName = `${wsContext.context.workspace_id}/logo-${Date.now()}.${ext}`;
+  const userFileName = `${user.id}/logo-${Date.now()}.${ext}`;
 
   // Convert file to buffer
   const arrayBuffer = await file.arrayBuffer();
   const buffer = Buffer.from(arrayBuffer);
 
-  // Upload to Supabase Storage (company-logos bucket)
-  const { data: uploadData, error: uploadError } = await supabase.storage
-    .from("company-logos")
-    .upload(fileName, buffer, {
+  const preferredBucket = process.env.SUPABASE_LOGO_BUCKET || DEFAULT_LOGO_BUCKET;
+  const candidateBuckets = [preferredBucket, FALLBACK_LOGO_BUCKET].filter(
+    (bucket, index, all) => all.indexOf(bucket) === index
+  );
+
+  let activeBucket: string | null = null;
+  let activePath: string | null = null;
+  let uploadData: { path: string } | null = null;
+  let lastUploadError: Error | null = null;
+
+  // Probe by upload; avatars policy expects first folder segment to be auth.uid.
+  for (const bucket of candidateBuckets) {
+    const targetPath = bucket === FALLBACK_LOGO_BUCKET ? userFileName : workspaceFileName;
+    const { data, error } = await supabase.storage.from(bucket).upload(targetPath, buffer, {
       contentType: file.type,
       upsert: true,
     });
 
-  if (uploadError) {
-    console.error("Upload error:", uploadError);
-    return NextResponse.json({ 
-      error: "Failed to upload file: " + uploadError.message 
-    }, { status: 500 });
+    if (!error && data) {
+      activeBucket = bucket;
+      activePath = targetPath;
+      uploadData = data;
+      break;
+    }
+
+    lastUploadError = error;
+    const message = (error?.message || "").toLowerCase();
+    const isMissingBucket = message.includes("bucket") && message.includes("not found");
+    const isRlsOrPermissionIssue =
+      message.includes("row-level security") ||
+      message.includes("not allowed") ||
+      message.includes("unauthorized");
+    const shouldTryNextBucket = isMissingBucket || (bucket !== FALLBACK_LOGO_BUCKET && isRlsOrPermissionIssue);
+
+    if (!shouldTryNextBucket) {
+      console.error("Upload error:", error);
+      return NextResponse.json(
+        { error: "Failed to upload file: " + (error?.message || "Unknown upload error") },
+        { status: 500 }
+      );
+    }
+  }
+
+  if (!activeBucket || !activePath || !uploadData) {
+    // Local/dev setups often lack storage buckets or permissive storage policies.
+    // Fall back to storing a data URL in settings so users can still set a logo.
+    const dataUrl = `data:${file.type};base64,${buffer.toString("base64")}`;
+    const { data: existingSettings } = await supabase
+      .from("workspace_settings")
+      .select("id")
+      .eq("workspace_id", wsContext.context.workspace_id)
+      .single();
+
+    if (existingSettings) {
+      const { error: persistError } = await supabase
+        .from("workspace_settings")
+        .update({
+          company_logo: dataUrl,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("workspace_id", wsContext.context.workspace_id);
+      if (persistError) {
+        console.error("Failed to persist fallback logo URL:", persistError);
+        return NextResponse.json(
+          { error: "Logo uploaded but failed to save settings: " + persistError.message },
+          { status: 500 }
+        );
+      }
+    } else {
+      const { error: persistError } = await supabase.from("workspace_settings").insert({
+        workspace_id: wsContext.context.workspace_id,
+        company_logo: dataUrl,
+      });
+      if (persistError) {
+        console.error("Failed to persist fallback logo URL:", persistError);
+        return NextResponse.json(
+          { error: "Logo uploaded but failed to save settings: " + persistError.message },
+          { status: 500 }
+        );
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      logo_url: dataUrl,
+      storage_fallback: true,
+      warning:
+        "Stored logo directly in workspace settings because storage bucket/policy is unavailable.",
+      details: lastUploadError?.message || null,
+    });
   }
 
   // Get public URL
   const { data: urlData } = supabase.storage
-    .from("company-logos")
-    .getPublicUrl(uploadData.path);
+    .from(activeBucket)
+    .getPublicUrl(activePath);
 
   const logoUrl = urlData.publicUrl;
 
@@ -84,24 +166,38 @@ export async function POST(request: NextRequest) {
   const { data: existingSettings } = await supabase
     .from("workspace_settings")
     .select("id")
-    .eq("workspace_id", profile.workspace_id)
+    .eq("workspace_id", wsContext.context.workspace_id)
     .single();
 
   if (existingSettings) {
-    await supabase
+    const { error: persistError } = await supabase
       .from("workspace_settings")
       .update({ 
         company_logo: logoUrl,
         updated_at: new Date().toISOString(),
       })
-      .eq("workspace_id", profile.workspace_id);
+      .eq("workspace_id", wsContext.context.workspace_id);
+    if (persistError) {
+      console.error("Failed to persist logo URL:", persistError);
+      return NextResponse.json(
+        { error: "Logo uploaded but failed to save settings: " + persistError.message },
+        { status: 500 }
+      );
+    }
   } else {
-    await supabase
+    const { error: persistError } = await supabase
       .from("workspace_settings")
       .insert({
-        workspace_id: profile.workspace_id,
+        workspace_id: wsContext.context.workspace_id,
         company_logo: logoUrl,
       });
+    if (persistError) {
+      console.error("Failed to persist logo URL:", persistError);
+      return NextResponse.json(
+        { error: "Logo uploaded but failed to save settings: " + persistError.message },
+        { status: 500 }
+      );
+    }
   }
 
   return NextResponse.json({ 
@@ -122,17 +218,18 @@ export async function DELETE() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const wsContext = await getWorkspaceContext();
+  if (!wsContext.context) {
+    return NextResponse.json({ error: wsContext.error }, { status: wsContext.status });
+  }
+
   const { data: profile } = await supabase
     .from("profiles")
-    .select("workspace_id, role")
+    .select("role")
     .eq("id", user.id)
     .single();
 
-  if (!profile?.workspace_id) {
-    return NextResponse.json({ error: "No workspace found" }, { status: 404 });
-  }
-
-  if (profile.role !== "admin") {
+  if (!wsContext.context.is_super_admin && profile?.role !== "admin") {
     return NextResponse.json({ error: "Admin access required" }, { status: 403 });
   }
 
@@ -143,7 +240,7 @@ export async function DELETE() {
       company_logo: null,
       updated_at: new Date().toISOString(),
     })
-    .eq("workspace_id", profile.workspace_id);
+    .eq("workspace_id", wsContext.context.workspace_id);
 
   return NextResponse.json({ success: true });
 }

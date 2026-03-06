@@ -14,6 +14,7 @@ import {
   Info,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { BenchmarkSourceBadge } from "@/components/ui/benchmark-source-badge";
 import {
   useBenchmarkState,
   EXTENDED_LOCATIONS,
@@ -274,8 +275,7 @@ export function BenchmarkResults({ result }: BenchmarkResultsProps) {
           ))}
         </div>
         <div className="mt-3 flex items-center gap-3 text-xs text-brand-500">
-          <Sparkles className="h-3.5 w-3.5" />
-          <span>AI-Estimated</span>
+          <BenchmarkSourceBadge source={benchmark.benchmarkSource} />
           <span className="text-brand-300">·</span>
           <span>{benchmark.sampleSize} data points</span>
           <span className="text-brand-300">·</span>

@@ -45,7 +45,7 @@ export const REPORT_WIDGET_REGISTRY: Record<string, ReportWidgetDefinition> = {
     defaultSize: "large",
     minWidth: 8,
     minHeight: 4,
-    tooltipExplanation: "Choose from high-impact templates designed for Board reviews, compliance updates, or deep-dive benchmarks. All templates are customizable on export.",
+    tooltipExplanation: "Choose from high-impact templates designed for board reviews, workforce compliance updates, or deep-dive benchmarks. All templates are customizable on export.",
   },
   "recent-reports": {
     id: "recent-reports",
@@ -65,7 +65,7 @@ export const REPORT_WIDGET_REGISTRY: Record<string, ReportWidgetDefinition> = {
     defaultSize: "medium",
     minWidth: 4,
     minHeight: 2,
-    tooltipExplanation: "The custom builder lets you mix and match different data blocks - from benchmarks to pay equity charts - into a single professional narrative.",
+    tooltipExplanation: "The custom builder lets you mix and match different data blocks - from benchmarks to workforce compliance controls and pay equity charts - into a single professional narrative.",
   },
 };
 

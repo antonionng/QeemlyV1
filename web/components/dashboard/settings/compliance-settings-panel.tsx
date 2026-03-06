@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { AlertCircle, Loader2, RefreshCcw, Save, Trash2 } from "lucide-react";
+import { AlertCircle, Check, Loader2, RefreshCcw, Save, Trash2, X } from "lucide-react";
 import {
   DEFAULT_COMPLIANCE_SETTINGS,
   DOMAIN_CONFIG,
@@ -15,6 +15,82 @@ import {
 } from "@/lib/compliance/settings-schema";
 
 const DOMAIN_DEFS = DOMAIN_CONFIG;
+type DomainGuidance = {
+  purpose: string;
+  whyItMatters: string;
+  impacts: string[];
+  example: string;
+};
+
+const DOMAIN_GUIDANCE: Record<ComplianceDomain, DomainGuidance> = {
+  policies: {
+    purpose: "Track policy obligations and completion progress.",
+    whyItMatters: "Low completion directly increases policy risk and can block audits.",
+    impacts: ["Risk Heatmap", "Policy Completion Card", "Audit Detail Context"],
+    example: "Create one row per policy family (Code of Conduct, Data Privacy, Whistleblower).",
+  },
+  "regulatory-updates": {
+    purpose: "Store legal/regulatory changes by jurisdiction.",
+    whyItMatters: "High-impact updates raise risk and should trigger policy or process updates.",
+    impacts: ["Regulatory Updates Feed", "Risk Heatmap", "Jurisdiction Focus"],
+    example: "Log each relevant labor-law circular with impact and status.",
+  },
+  deadlines: {
+    purpose: "Capture required compliance due dates.",
+    whyItMatters: "Missed deadlines move items into overdue risk and operational escalation.",
+    impacts: ["Deadlines Side Card", "Risk Heatmap", "Operational Follow-up"],
+    example: "Track permit renewals, reporting deadlines, and mandatory filings.",
+  },
+  "visa-cases": {
+    purpose: "Manage immigration/visa lifecycle items.",
+    whyItMatters: "Expiring or overdue visas are high-severity workforce compliance risks.",
+    impacts: ["Visa Side Card", "Risk Heatmap", "Employee Compliance Readiness"],
+    example: "Add one row per active visa case with expiry and current status.",
+  },
+  documents: {
+    purpose: "Track required compliance documents and expiry.",
+    whyItMatters: "Expired or missing documents increase audit exposure and readiness gaps.",
+    impacts: ["Documents Side Card", "Risk Heatmap", "Renewal Planning"],
+    example: "Track permits, contracts, certificates, and key statutory documents.",
+  },
+  "audit-events": {
+    purpose: "Maintain an auditable activity timeline.",
+    whyItMatters: "Audit trails prove controls are operating and support investigations.",
+    impacts: ["Audit Timeline Card", "Evidence for Reviews", "Change Traceability"],
+    example: "Log major actions like policy updates, document approvals, and risk overrides.",
+  },
+};
+const JURISDICTION_SUGGESTIONS = [
+  "UAE",
+  "KSA",
+  "Qatar",
+  "Bahrain",
+  "Kuwait",
+  "Oman",
+  "Egypt",
+  "Jordan",
+  "United Kingdom",
+  "United States",
+  "Germany",
+  "Singapore",
+];
+
+function normalizeJurisdictions(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return Array.from(new Set(value.map((item) => String(item ?? "").trim()).filter(Boolean)));
+  }
+  if (typeof value === "string") {
+    return Array.from(
+      new Set(
+        value
+          .split(/[,\n;]+/)
+          .map((item) => item.trim())
+          .filter(Boolean)
+      )
+    );
+  }
+  return [];
+}
 
 export function ComplianceSettingsPanel() {
   const [loading, setLoading] = useState(true);
@@ -27,9 +103,11 @@ export function ComplianceSettingsPanel() {
   });
   const [integrationSyncCount, setIntegrationSyncCount] = useState(0);
   const [lastIntegrationSync, setLastIntegrationSync] = useState<string | null>(null);
-  const [jurisdictionsText, setJurisdictionsText] = useState(
-    DEFAULT_COMPLIANCE_SETTINGS.default_jurisdictions.join(", ")
+  const [selectedJurisdictions, setSelectedJurisdictions] = useState<string[]>(
+    DEFAULT_COMPLIANCE_SETTINGS.default_jurisdictions
   );
+  const [jurisdictionModalOpen, setJurisdictionModalOpen] = useState(false);
+  const [jurisdictionQuery, setJurisdictionQuery] = useState("");
 
   const [records, setRecords] = useState<Record<ComplianceDomain, Record<string, unknown>[]>>({
     policies: [],
@@ -51,6 +129,7 @@ export function ComplianceSettingsPanel() {
     null
   );
   const [busyKey, setBusyKey] = useState<string | null>(null);
+  const [expandedCreateDomain, setExpandedCreateDomain] = useState<ComplianceDomain | null>("policies");
 
   const loadAll = async () => {
     setLoading(true);
@@ -58,10 +137,28 @@ export function ComplianceSettingsPanel() {
     setRecordError(null);
     try {
       const settingsRes = await fetch("/api/settings/compliance");
-      if (!settingsRes.ok) throw new Error("Failed to load compliance settings");
+      if (!settingsRes.ok) {
+        let message = "Failed to load compliance settings";
+        try {
+          const body = (await settingsRes.json()) as { error?: string };
+          if (body?.error) message = body.error;
+        } catch {}
+        throw new Error(message);
+      }
       const settingsData = await settingsRes.json();
-      setSettings(settingsData.settings);
-      setJurisdictionsText((settingsData.settings?.default_jurisdictions || []).join(", "));
+      const normalizedJurisdictions = normalizeJurisdictions(settingsData.settings?.default_jurisdictions);
+      setSettings({
+        ...settingsData.settings,
+        default_jurisdictions:
+          normalizedJurisdictions.length > 0
+            ? normalizedJurisdictions
+            : DEFAULT_COMPLIANCE_SETTINGS.default_jurisdictions,
+      });
+      setSelectedJurisdictions(
+        normalizedJurisdictions.length > 0
+          ? normalizedJurisdictions
+          : DEFAULT_COMPLIANCE_SETTINGS.default_jurisdictions
+      );
       setIntegrationSyncCount(Number(settingsData.ingestion?.integration_sync_count || 0));
       setLastIntegrationSync(settingsData.ingestion?.last_integration_success_at || null);
 
@@ -92,23 +189,18 @@ export function ComplianceSettingsPanel() {
 
   useEffect(() => {
     void loadAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const saveSettings = async () => {
     setSavingSettings(true);
     setSettingsError(null);
     try {
-      const parsedJurisdictions = jurisdictionsText
-        .split(",")
-        .map((v) => v.trim())
-        .filter(Boolean);
-      if (parsedJurisdictions.length === 0) {
+      if (selectedJurisdictions.length === 0) {
         throw new Error("At least one default jurisdiction is required");
       }
       const payload: ComplianceSettingsPayload = {
         ...settings,
-        default_jurisdictions: parsedJurisdictions,
+        default_jurisdictions: selectedJurisdictions,
       };
       const res = await fetch("/api/settings/compliance", {
         method: "PATCH",
@@ -125,6 +217,32 @@ export function ComplianceSettingsPanel() {
     } finally {
       setSavingSettings(false);
     }
+  };
+
+  const filteredJurisdictionSuggestions = JURISDICTION_SUGGESTIONS.filter((item) =>
+    item.toLowerCase().includes(jurisdictionQuery.trim().toLowerCase())
+  );
+  const canAddCustomJurisdiction =
+    jurisdictionQuery.trim().length > 0 &&
+    !selectedJurisdictions.some((item) => item.toLowerCase() === jurisdictionQuery.trim().toLowerCase());
+
+  const toggleJurisdiction = (jurisdiction: string) => {
+    setSelectedJurisdictions((prev) => {
+      const exists = prev.some((item) => item.toLowerCase() === jurisdiction.toLowerCase());
+      if (exists) return prev.filter((item) => item.toLowerCase() !== jurisdiction.toLowerCase());
+      return [...prev, jurisdiction];
+    });
+  };
+
+  const addCustomJurisdiction = () => {
+    const value = jurisdictionQuery.trim();
+    if (!value) return;
+    setSelectedJurisdictions((prev) => {
+      const exists = prev.some((item) => item.toLowerCase() === value.toLowerCase());
+      if (exists) return prev;
+      return [...prev, value];
+    });
+    setJurisdictionQuery("");
   };
 
   const createRecord = async (domain: ComplianceDomain) => {
@@ -267,70 +385,118 @@ export function ComplianceSettingsPanel() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="settings-page space-y-6">
       {(settingsError || recordError) && (
-        <div className="flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div className="settings-alert settings-alert-danger flex items-center gap-2 px-4 py-3 text-sm">
           <AlertCircle className="h-4 w-4" />
           <span>{settingsError || recordError}</span>
         </div>
       )}
 
-      <Card className="p-6 space-y-4">
-        <div className="flex items-center justify-between">
+      <Card className="panel p-6 md:p-7">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
           <div>
-            <h2 className="text-lg font-semibold text-brand-900">Compliance Setup</h2>
+            <h2 className="text-lg font-semibold text-brand-900">Workforce Compliance Rules</h2>
             <p className="text-sm text-brand-600">
-              Configure source precedence and operational parameters before relying on dashboard insights.
+              Configure jurisdiction and risk timing defaults used by the workforce compliance view.
             </p>
           </div>
-          <Button variant="outline" onClick={() => void loadAll()}>
-            <RefreshCcw className="mr-2 h-4 w-4" />
-            Reload
-          </Button>
+          <div className="flex items-center gap-2">
+            {settings.is_compliance_configured && (
+              <span className="status-chip status-chip--success">Configured</span>
+            )}
+            <Button variant="outline" onClick={() => void loadAll()}>
+              <RefreshCcw className="mr-2 h-4 w-4" />
+              Reload
+            </Button>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-sm">
-          <label className="flex items-center gap-2">
+        <div className="mt-5 grid grid-cols-1 gap-3 md:grid-cols-3">
+          <div className="rounded-xl border border-border bg-surface-2 px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-500">Integration syncs</p>
+            <p className="mt-1 text-xl font-semibold text-brand-900">{integrationSyncCount}</p>
+          </div>
+          <div className="rounded-xl border border-border bg-surface-2 px-4 py-3 md:col-span-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-brand-500">Last integration success</p>
+            <p className="mt-1 text-sm font-medium text-brand-900">
+              {lastIntegrationSync ? new Date(lastIntegrationSync).toLocaleString() : "N/A"}
+            </p>
+          </div>
+        </div>
+
+        <div className="mt-5">
+          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-brand-500">
+            Data source preferences (advanced)
+          </p>
+          <div className="grid grid-cols-1 gap-3 text-sm md:grid-cols-3">
+          <label className="flex items-center gap-2 rounded-lg border border-border bg-surface-2 px-3 py-2">
             <input
               type="checkbox"
+              className="h-4 w-4 rounded border-border"
               checked={settings.prefer_integration_data}
               onChange={(e) => setSettings((p) => ({ ...p, prefer_integration_data: e.target.checked }))}
             />
             Prefer integration data
           </label>
-          <label className="flex items-center gap-2">
+          <label className="flex items-center gap-2 rounded-lg border border-border bg-surface-2 px-3 py-2">
             <input
               type="checkbox"
+              className="h-4 w-4 rounded border-border"
               checked={settings.prefer_import_data}
               onChange={(e) => setSettings((p) => ({ ...p, prefer_import_data: e.target.checked }))}
             />
             Prefer import data
           </label>
-          <label className="flex items-center gap-2">
+          <label className="flex items-center gap-2 rounded-lg border border-border bg-surface-2 px-3 py-2">
             <input
               type="checkbox"
+              className="h-4 w-4 rounded border-border"
               checked={settings.allow_manual_overrides}
               onChange={(e) => setSettings((p) => ({ ...p, allow_manual_overrides: e.target.checked }))}
             />
             Allow manual overrides
           </label>
         </div>
+        </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
-            <label className="block text-xs font-semibold text-brand-700 mb-1">Default Jurisdictions (comma-separated)</label>
-            <Input
-              value={jurisdictionsText}
-              onChange={(e) => setJurisdictionsText(e.target.value)}
-            />
-          </div>
-          <div className="text-xs text-brand-600 rounded-lg border border-border px-3 py-2 bg-brand-50/30">
-            Integrations synced: <strong>{integrationSyncCount}</strong>
-            <br />
-            Last integration success: <strong>{lastIntegrationSync ? new Date(lastIntegrationSync).toLocaleString() : "N/A"}</strong>
+            <label className="mb-2 block text-sm font-medium text-brand-700">Default Jurisdictions</label>
+            <div className="rounded-xl border border-border bg-surface-2 p-3">
+              <div className="mb-3 flex flex-wrap gap-2">
+                {selectedJurisdictions.length === 0 ? (
+                  <span className="text-sm text-brand-500">No jurisdictions selected yet.</span>
+                ) : (
+                  selectedJurisdictions.map((jurisdiction) => (
+                    <span
+                      key={jurisdiction}
+                      className="inline-flex items-center gap-1 rounded-full border border-brand-200 bg-brand-50 px-2.5 py-1 text-xs font-medium text-brand-800"
+                    >
+                      {jurisdiction}
+                      <button
+                        type="button"
+                        className="rounded-full p-0.5 text-brand-600 hover:bg-brand-100"
+                        aria-label={`Remove ${jurisdiction}`}
+                        onClick={() =>
+                          setSelectedJurisdictions((prev) =>
+                            prev.filter((item) => item.toLowerCase() !== jurisdiction.toLowerCase())
+                          )
+                        }
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))
+                )}
+              </div>
+              <Button type="button" variant="outline" onClick={() => setJurisdictionModalOpen(true)}>
+                Select jurisdictions
+              </Button>
+            </div>
           </div>
           <div>
-            <label className="block text-xs font-semibold text-brand-700 mb-1">Visa Lead Time (days)</label>
+            <label className="mb-2 block text-sm font-medium text-brand-700">Visa Lead Time (days)</label>
             <Input
               type="number"
               value={settings.visa_lead_time_days}
@@ -338,7 +504,7 @@ export function ComplianceSettingsPanel() {
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-brand-700 mb-1">Deadline SLA (days)</label>
+            <label className="mb-2 block text-sm font-medium text-brand-700">Deadline SLA (days)</label>
             <Input
               type="number"
               value={settings.deadline_sla_days}
@@ -346,7 +512,7 @@ export function ComplianceSettingsPanel() {
             />
           </div>
           <div>
-            <label className="block text-xs font-semibold text-brand-700 mb-1">Document Renewal Threshold (days)</label>
+            <label className="mb-2 block text-sm font-medium text-brand-700">Document Renewal Threshold (days)</label>
             <Input
               type="number"
               value={settings.document_renewal_threshold_days}
@@ -357,60 +523,194 @@ export function ComplianceSettingsPanel() {
           </div>
         </div>
 
-        <Button onClick={() => void saveSettings()} disabled={savingSettings}>
-          {savingSettings ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
-          Save Compliance Setup
-        </Button>
+        <div className="mt-5 border-t border-border pt-4">
+          <Button onClick={() => void saveSettings()} disabled={savingSettings}>
+            {savingSettings ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
+            Save Compliance Rules
+          </Button>
+        </div>
+
+        <div className="mt-4 rounded-xl border border-brand-100 bg-brand-50 px-4 py-3 text-sm text-brand-700">
+          <p className="font-medium text-brand-800">How these rules affect the dashboard</p>
+          <p className="mt-1">
+            Selected jurisdictions currently scope regulatory updates. Visa, deadline, and document thresholds set what counts
+            as expiring or overdue. Data source preferences filter rows by source when multiple sources are present.
+          </p>
+        </div>
+      </Card>
+
+      {jurisdictionModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4">
+          <div className="w-full max-w-xl rounded-2xl border border-border bg-white p-5 shadow-xl">
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h3 className="text-base font-semibold text-brand-900">Select default jurisdictions</h3>
+                <p className="text-sm text-brand-600">Choose from suggestions or add a custom one.</p>
+              </div>
+              <button
+                type="button"
+                className="rounded-full p-2 text-brand-600 hover:bg-surface-2"
+                aria-label="Close jurisdiction selector"
+                onClick={() => {
+                  setJurisdictionModalOpen(false);
+                  setJurisdictionQuery("");
+                }}
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <Input
+              placeholder="Search or type custom jurisdiction"
+              value={jurisdictionQuery}
+              onChange={(e) => setJurisdictionQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && canAddCustomJurisdiction) {
+                  e.preventDefault();
+                  addCustomJurisdiction();
+                }
+              }}
+            />
+
+            {canAddCustomJurisdiction && (
+              <button
+                type="button"
+                className="mt-2 rounded-lg border border-dashed border-brand-300 px-3 py-2 text-sm text-brand-700 hover:bg-brand-50"
+                onClick={addCustomJurisdiction}
+              >
+                Add &quot;{jurisdictionQuery.trim()}&quot;
+              </button>
+            )}
+
+            <div className="mt-4 max-h-64 space-y-2 overflow-y-auto pr-1">
+              {filteredJurisdictionSuggestions.map((jurisdiction) => {
+                const isSelected = selectedJurisdictions.some(
+                  (item) => item.toLowerCase() === jurisdiction.toLowerCase()
+                );
+                return (
+                  <button
+                    key={jurisdiction}
+                    type="button"
+                    onClick={() => toggleJurisdiction(jurisdiction)}
+                    className="flex w-full items-center justify-between rounded-lg border border-border px-3 py-2 text-left text-sm text-brand-900 hover:bg-surface-2"
+                  >
+                    <span>{jurisdiction}</span>
+                    {isSelected ? <Check className="h-4 w-4 text-brand-600" /> : null}
+                  </button>
+                );
+              })}
+              {filteredJurisdictionSuggestions.length === 0 && (
+                <p className="rounded-lg border border-dashed border-border px-3 py-3 text-sm text-brand-500">
+                  No suggestions found. Add a custom jurisdiction above.
+                </p>
+              )}
+            </div>
+
+            <div className="mt-4 flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setJurisdictionModalOpen(false);
+                  setJurisdictionQuery("");
+                }}
+              >
+                Done
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <Card className="panel p-6 md:p-7">
+        <div>
+          <h2 className="text-lg font-semibold text-brand-900">Compliance Records Registry</h2>
+          <p className="text-sm text-brand-600">
+            Manage the operational records that feed workforce compliance cards and audit context.
+          </p>
+        </div>
       </Card>
 
       {Object.values(DOMAIN_DEFS).map((domain) => {
         const items = records[domain.key] || [];
+        const guidance = DOMAIN_GUIDANCE[domain.key];
+        const isCreateOpen = expandedCreateDomain === domain.key;
         return (
-          <Card key={domain.key} className="p-6 space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-base font-semibold text-brand-900">{domain.label}</h3>
-              <span className="text-xs font-medium text-brand-600">{items.length} records</span>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-brand-700 mb-2">Create {domain.singularLabel}</label>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {domain.fields.map((field) => (
-                  <div key={`${domain.key}-create-${field.key}`}>
-                    <label className="block text-xs text-brand-600 mb-1">{field.label}</label>
-                    {renderField(
-                      field,
-                      drafts[domain.key][field.key],
-                      (next) =>
-                        setDrafts((prev) => ({
-                          ...prev,
-                          [domain.key]: {
-                            ...prev[domain.key],
-                            [field.key]: next,
-                          },
-                        }))
-                    )}
-                  </div>
-                ))}
+          <Card key={domain.key} className="panel space-y-5 p-6 md:p-7">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="space-y-1">
+                <h3 className="text-base font-semibold text-brand-900">{domain.label}</h3>
+                <p className="text-sm text-brand-700">{guidance.purpose}</p>
+                <p className="text-xs text-brand-600">{guidance.whyItMatters}</p>
               </div>
-              <Button
-                className="mt-2"
-                onClick={() => void createRecord(domain.key)}
-                disabled={busyKey === `create-${domain.key}`}
-              >
-                {busyKey === `create-${domain.key}` ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Add {domain.singularLabel}
-              </Button>
+              <div className="flex items-center gap-2">
+                <span className="status-chip status-chip--info">{items.length} records</span>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setExpandedCreateDomain((prev) => (prev === domain.key ? null : domain.key))}
+                >
+                  {isCreateOpen ? "Hide create form" : `Add ${domain.singularLabel}`}
+                </Button>
+              </div>
             </div>
 
-            <div className="space-y-2">
+            <div className="rounded-xl border border-brand-100 bg-brand-50/50 px-4 py-3 text-xs text-brand-700">
+              <p>
+                <span className="font-semibold text-brand-800">Impacts:</span> {guidance.impacts.join(" | ")}
+              </p>
+              <p className="mt-1">
+                <span className="font-semibold text-brand-800">Example:</span> {guidance.example}
+              </p>
+            </div>
+
+            {isCreateOpen && (
+              <div className="rounded-xl border border-border bg-surface-2 p-4">
+                <label className="mb-3 block text-sm font-semibold text-brand-800">Create {domain.singularLabel}</label>
+                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                  {domain.fields.map((field) => (
+                    <div key={`${domain.key}-create-${field.key}`}>
+                      <label className="mb-1 block text-xs font-semibold text-brand-600">{field.label}</label>
+                      {renderField(
+                        field,
+                        drafts[domain.key][field.key],
+                        (next) =>
+                          setDrafts((prev) => ({
+                            ...prev,
+                            [domain.key]: {
+                              ...prev[domain.key],
+                              [field.key]: next,
+                            },
+                          }))
+                      )}
+                    </div>
+                  ))}
+                </div>
+                <Button
+                  className="mt-4"
+                  onClick={() => void createRecord(domain.key)}
+                  disabled={busyKey === `create-${domain.key}`}
+                >
+                  {busyKey === `create-${domain.key}` ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Add {domain.singularLabel}
+                </Button>
+              </div>
+            )}
+
+            <div className="space-y-3">
+              {items.length === 0 && (
+                <div className="rounded-xl border border-dashed border-border bg-surface-2 px-4 py-6 text-sm text-brand-500">
+                  No records created yet for {domain.label.toLowerCase()}.
+                </div>
+              )}
               {items.map((item) => {
                 const id = String(item.id || "");
                 const isEditing = editing?.domain === domain.key && editing.id === id;
                 return (
-                  <div key={id} className="rounded-lg border border-border p-3">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs text-brand-600 font-mono">{id}</span>
+                  <div key={id} className="rounded-xl border border-border bg-white p-4">
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                      <span className="rounded bg-brand-50 px-2 py-1 font-mono text-xs text-brand-700">{id}</span>
                       <div className="flex items-center gap-2">
                         <Button
                           size="sm"
@@ -439,11 +739,11 @@ export function ComplianceSettingsPanel() {
                       </div>
                     </div>
                     {isEditing ? (
-                      <div className="space-y-2">
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                           {domain.fields.map((field) => (
                             <div key={`${domain.key}-edit-${field.key}`}>
-                              <label className="block text-xs text-brand-600 mb-1">{field.label}</label>
+                              <label className="mb-1 block text-xs font-semibold text-brand-600">{field.label}</label>
                               {renderField(
                                 field,
                                 editing.payload[field.key],
@@ -472,11 +772,11 @@ export function ComplianceSettingsPanel() {
                         </div>
                       </div>
                     ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs text-brand-700">
+                      <div className="grid grid-cols-1 gap-2 text-sm text-brand-700 md:grid-cols-2">
                         {domain.fields.map((field) => (
-                          <div key={`${id}-${field.key}`} className="rounded border border-border px-2 py-1">
-                            <span className="font-semibold text-brand-900">{field.label}:</span>{" "}
-                            {String(item[field.key] ?? "-")}
+                          <div key={`${id}-${field.key}`} className="rounded-lg border border-border px-3 py-2">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-brand-500">{field.label}</p>
+                            <p className="mt-1 text-sm text-brand-900">{String(item[field.key] ?? "-")}</p>
                           </div>
                         ))}
                       </div>

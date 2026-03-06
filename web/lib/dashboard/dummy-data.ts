@@ -41,6 +41,8 @@ export type TrendPoint = {
   p75: number;
 };
 
+export type BenchmarkSource = "market" | "uploaded" | "dummy";
+
 export type SalaryBenchmark = {
   roleId: string;
   locationId: string;
@@ -61,6 +63,8 @@ export type SalaryBenchmark = {
     totalEmployerCost: number;
   };
   trend: TrendPoint[];
+  /** Where this benchmark came from: "market" = Qeemly data pool, "uploaded" = company pay bands */
+  benchmarkSource?: BenchmarkSource;
 };
 
 export type WatchlistItem = {

@@ -2,6 +2,8 @@
 
 import { useEffect, useState, use } from "react";
 import { useRouter } from "next/navigation";
+import { AdminPageError } from "@/components/admin/admin-page-error";
+import { fetchAdminJson, normalizeAdminApiError, type NormalizedAdminApiError } from "@/lib/admin/api-client";
 import {
   ArrowLeft,
   RefreshCw,
@@ -70,6 +72,7 @@ export default function TenantEmployeesPage({ params }: { params: Promise<{ id: 
   const router = useRouter();
   
   const [data, setData] = useState<EmployeeResponse | null>(null);
+  const [error, setError] = useState<NormalizedAdminApiError | null>(null);
   const [loading, setLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
@@ -81,6 +84,7 @@ export default function TenantEmployeesPage({ params }: { params: Promise<{ id: 
 
   const fetchEmployees = async () => {
     setLoading(true);
+    setError(null);
     try {
       const params = new URLSearchParams({
         page: page.toString(),
@@ -90,22 +94,19 @@ export default function TenantEmployeesPage({ params }: { params: Promise<{ id: 
       if (departmentFilter) params.set("department", departmentFilter);
       if (levelFilter) params.set("level", levelFilter);
 
-      const res = await fetch(`/api/admin/workspaces/${workspaceId}/employees?${params}`);
-      if (res.ok) {
-        const result = await res.json();
-        setData(result);
-        
-        // Extract unique departments and levels for filters
-        const depts = new Set<string>();
-        const lvls = new Set<string>();
-        for (const emp of result.employees) {
-          if (emp.department) depts.add(emp.department);
-          if (emp.level_id) lvls.add(emp.level_id);
-        }
-        if (departments.length === 0) setDepartments(Array.from(depts).sort());
-        if (levels.length === 0) setLevels(Array.from(lvls).sort());
+      const result = await fetchAdminJson<EmployeeResponse>(`/api/admin/workspaces/${workspaceId}/employees?${params}`);
+      setData(result);
+
+      const depts = new Set<string>();
+      const lvls = new Set<string>();
+      for (const emp of result.employees) {
+        if (emp.department) depts.add(emp.department);
+        if (emp.level_id) lvls.add(emp.level_id);
       }
-    } catch {
+      if (departments.length === 0) setDepartments(Array.from(depts).sort());
+      if (levels.length === 0) setLevels(Array.from(lvls).sort());
+    } catch (err) {
+      setError(normalizeAdminApiError(err));
       setData(null);
     } finally {
       setLoading(false);
@@ -158,6 +159,7 @@ export default function TenantEmployeesPage({ params }: { params: Promise<{ id: 
 
   return (
     <div>
+      <AdminPageError error={error} onRetry={fetchEmployees} className="mb-6" />
       {/* Admin View Banner */}
       <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2 mb-4 flex items-center gap-2">
         <Shield className="h-4 w-4 text-amber-600" />

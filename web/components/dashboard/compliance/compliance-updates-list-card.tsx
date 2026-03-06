@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Clock,
 } from "lucide-react";
+import Link from "next/link";
 import { type RegulatoryUpdate } from "@/lib/compliance/data";
 import { useComplianceContext } from "@/lib/compliance/context";
 import clsx from "clsx";
@@ -24,7 +25,7 @@ export function ComplianceUpdatesCard({ onItemClick }: Props) {
             Recent Regulatory Updates
           </h3>
           <p className="text-xs text-accent-500">
-            Stay compliant with local laws
+            Track regulatory updates by jurisdiction
           </p>
         </div>
         <span className="rounded-full bg-brand-50 px-2.5 py-1 text-[10px] font-bold text-brand-700 border border-brand-200">
@@ -103,6 +104,17 @@ export function ComplianceUpdatesCard({ onItemClick }: Props) {
             </div>
           </button>
         ))}
+        {regulatoryUpdates.length === 0 && (
+          <div className="rounded-lg border border-dashed border-border px-3 py-2 text-xs text-accent-500">
+            <p>No regulatory updates are available for the configured jurisdictions yet.</p>
+            <Link
+              href="/dashboard/settings?tab=compliance"
+              className="mt-2 inline-block font-semibold text-brand-700 hover:text-brand-900"
+            >
+              Add regulatory records
+            </Link>
+          </div>
+        )}
       </div>
     </div>
   );

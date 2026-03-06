@@ -92,6 +92,11 @@ export function ComplianceSideVisa({ onItemClick, onViewAll }: Props) {
               </div>
             </button>
           ))}
+          {visaTimeline.length === 0 && (
+            <p className="rounded-lg border border-dashed border-border px-3 py-2 text-xs text-accent-500">
+              No active visa timeline items yet.
+            </p>
+          )}
         </div>
       </div>
 

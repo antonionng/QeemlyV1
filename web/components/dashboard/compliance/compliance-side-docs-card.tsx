@@ -58,6 +58,11 @@ export function ComplianceSideDocs({ onItemClick, onViewAll }: Props) {
             </div>
           </button>
         ))}
+        {documentItems.length === 0 && (
+          <p className="rounded-lg border border-dashed border-border px-3 py-2 text-xs text-accent-500">
+            No compliance documents available yet.
+          </p>
+        )}
       </div>
 
       {expiringDoc && (

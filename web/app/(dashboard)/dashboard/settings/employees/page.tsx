@@ -8,12 +8,14 @@ import {
   Users,
   Send,
   SendHorizonal,
-  CheckCircle,
   Mail,
   Search,
-  ArrowLeft,
   UserPlus,
   Link as LinkIcon,
+  Building2,
+  Target,
+  BarChart3,
+  ShieldCheck,
 } from "lucide-react";
 import Link from "next/link";
 import clsx from "clsx";
@@ -129,25 +131,39 @@ export default function EmployeeInvitePage() {
     { value: "linked", label: "Active", count: employees.filter((e) => e.linkedProfileId).length },
   ];
 
+  const settingsTabs = [
+    { id: "profile", label: "Company Profile", icon: Building2, href: "/dashboard/settings?tab=profile" },
+    {
+      id: "compensation",
+      label: "Compensation Defaults",
+      icon: Target,
+      href: "/dashboard/settings?tab=compensation",
+    },
+    {
+      id: "indices",
+      label: "Compensation Index",
+      icon: BarChart3,
+      href: "/dashboard/settings?tab=indices",
+    },
+    {
+      id: "compliance",
+      label: "Workforce Compliance",
+      icon: ShieldCheck,
+      href: "/dashboard/settings?tab=compliance",
+    },
+  ] as const;
+
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Settings header */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-3">
-          <Link
-            href="/dashboard/settings"
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-border bg-white hover:bg-brand-50 transition-colors"
-          >
-            <ArrowLeft className="h-4 w-4 text-brand-700" />
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-accent-800 sm:text-3xl">
-              Employee Accounts
-            </h1>
-            <p className="text-sm text-brand-600/80">
-              Invite employees to view their own compensation data
-            </p>
-          </div>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-accent-800 sm:text-3xl">
+            Company Settings
+          </h1>
+          <p className="text-sm text-brand-600/80">
+            Configure your company profile, compensation defaults, and workforce compliance rules.
+          </p>
         </div>
         {uninvitedWithEmail.length > 0 && (
           <Button onClick={handleBulkInvite} isLoading={bulkSending} className="gap-2">
@@ -155,6 +171,33 @@ export default function EmployeeInvitePage() {
             Invite All ({uninvitedWithEmail.length})
           </Button>
         )}
+      </div>
+
+      {/* Settings tab navigation */}
+      <div className="settings-tabs-wrap">
+        <div className="settings-tabs">
+          {settingsTabs.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <Link key={tab.id} href={tab.href} className="settings-tab">
+                <Icon className="h-4 w-4" />
+                {tab.label}
+              </Link>
+            );
+          })}
+          <span className="settings-tab settings-tab-active">
+            <Users className="h-4 w-4" />
+            Employee Accounts
+          </span>
+        </div>
+      </div>
+
+      {/* Page title */}
+      <div>
+        <h2 className="text-xl font-bold text-brand-900">Employee Accounts</h2>
+        <p className="text-sm text-brand-600/80">
+          Invite employees to view their own compensation data
+        </p>
       </div>
 
       {/* Feedback */}
@@ -196,7 +239,7 @@ export default function EmployeeInvitePage() {
       {/* Employee list */}
       <Card className="overflow-hidden">
         {/* Toolbar */}
-        <div className="flex flex-col gap-3 border-b border-border/50 p-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="sticky top-0 z-10 flex flex-col gap-3 border-b border-border/50 bg-white p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex gap-1.5">
             {filterTabs.map((tab) => (
               <button
@@ -226,77 +269,79 @@ export default function EmployeeInvitePage() {
         </div>
 
         {/* Table */}
-        {loading ? (
-          <div className="flex items-center justify-center py-16 text-sm text-brand-500">
-            Loading employees...
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <Users className="h-10 w-10 text-brand-300 mb-3" />
-            <p className="text-sm font-medium text-brand-700">No employees found</p>
-            <p className="text-xs text-brand-500 mt-1">
-              Upload employee data first, then invite them here.
-            </p>
-          </div>
-        ) : (
-          <div className="divide-y divide-border/50">
-            {filtered.map((emp) => {
-              const isLinked = !!emp.linkedProfileId;
-              const isInvited = emp.invited;
-              const canInvite = !!emp.email && !isLinked && !isInvited;
+        <div className="max-h-[65vh] overflow-y-auto">
+          {loading ? (
+            <div className="flex items-center justify-center py-16 text-sm text-brand-500">
+              Loading employees...
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <Users className="mb-3 h-10 w-10 text-brand-300" />
+              <p className="text-sm font-medium text-brand-700">No employees found</p>
+              <p className="mt-1 text-xs text-brand-500">
+                Upload employee data first, then invite them here.
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-border/50">
+              {filtered.map((emp) => {
+                const isLinked = !!emp.linkedProfileId;
+                const isInvited = emp.invited;
+                const canInvite = !!emp.email && !isLinked && !isInvited;
 
-              return (
-                <div
-                  key={emp.id}
-                  className="flex items-center justify-between px-5 py-3.5 hover:bg-brand-50/30 transition-colors"
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-100 text-brand-700 font-semibold text-sm">
-                      {emp.firstName.charAt(0)}
-                      {emp.lastName.charAt(0)}
+                return (
+                  <div
+                    key={emp.id}
+                    className="flex items-center justify-between px-5 py-3.5 transition-colors hover:bg-brand-50/30"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-100 text-sm font-semibold text-brand-700">
+                        {emp.firstName.charAt(0)}
+                        {emp.lastName.charAt(0)}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-brand-900">
+                          {emp.firstName} {emp.lastName}
+                        </p>
+                        <p className="truncate text-xs text-brand-500">
+                          {emp.department}
+                          {emp.email && ` · ${emp.email}`}
+                        </p>
+                      </div>
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-brand-900 truncate">
-                        {emp.firstName} {emp.lastName}
-                      </p>
-                      <p className="text-xs text-brand-500 truncate">
-                        {emp.department}
-                        {emp.email && ` · ${emp.email}`}
-                      </p>
+
+                    <div className="ml-3 shrink-0">
+                      {isLinked ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-700">
+                          <LinkIcon className="h-3 w-3" />
+                          Active
+                        </span>
+                      ) : isInvited ? (
+                        <span className="inline-flex items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
+                          <Mail className="h-3 w-3" />
+                          Invited
+                        </span>
+                      ) : canInvite ? (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          isLoading={sending === emp.id}
+                          onClick={() => handleInvite(emp.email!, emp.id)}
+                          className="gap-1.5 text-xs"
+                        >
+                          <Send className="h-3 w-3" />
+                          Invite
+                        </Button>
+                      ) : (
+                        <span className="text-xs text-brand-400">No email</span>
+                      )}
                     </div>
                   </div>
-
-                  <div className="shrink-0 ml-3">
-                    {isLinked ? (
-                      <span className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-50 border border-emerald-200 px-2.5 py-1 text-xs font-medium text-emerald-700">
-                        <LinkIcon className="h-3 w-3" />
-                        Active
-                      </span>
-                    ) : isInvited ? (
-                      <span className="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 border border-amber-200 px-2.5 py-1 text-xs font-medium text-amber-700">
-                        <Mail className="h-3 w-3" />
-                        Invited
-                      </span>
-                    ) : canInvite ? (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        isLoading={sending === emp.id}
-                        onClick={() => handleInvite(emp.email!, emp.id)}
-                        className="gap-1.5 text-xs"
-                      >
-                        <Send className="h-3 w-3" />
-                        Invite
-                      </Button>
-                    ) : (
-                      <span className="text-xs text-brand-400">No email</span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
+                );
+              })}
+            </div>
+          )}
+        </div>
       </Card>
     </div>
   );

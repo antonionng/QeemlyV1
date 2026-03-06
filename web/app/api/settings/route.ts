@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getWorkspaceContext } from "@/lib/workspace-context";
 
+const MISSING_COLUMN_ERROR =
+  /Could not find the '([^']+)' column of 'workspace_settings' in the schema cache/i;
+
 /**
  * GET /api/settings
  * Load workspace settings for the current user's workspace (or override for super admins)
@@ -131,9 +134,6 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
   }
 
-  // Add updated_at timestamp
-  updates.updated_at = new Date().toISOString();
-
   // Check if settings exist
   const { data: existingSettings } = await supabase
     .from("workspace_settings")
@@ -141,34 +141,84 @@ export async function PATCH(request: NextRequest) {
     .eq("workspace_id", workspace_id)
     .single();
 
-  let result;
-  if (existingSettings) {
-    // Update existing
-    result = await supabase
-      .from("workspace_settings")
-      .update(updates)
-      .eq("workspace_id", workspace_id)
-      .select()
-      .single();
-  } else {
-    // Insert new
-    result = await supabase
-      .from("workspace_settings")
-      .insert({
-        workspace_id,
-        ...updates,
-      })
-      .select()
-      .single();
+  const supportedUpdates: Record<string, unknown> = { ...updates };
+  const droppedColumns: string[] = [];
+  let result: { data: Record<string, unknown> | null; error: { message: string } | null } = {
+    data: null,
+    error: { message: "Unknown settings save error" },
+  };
+
+  // Retry writes after removing any missing-column payload keys.
+  while (Object.keys(supportedUpdates).length > 0) {
+    const writePayload = {
+      ...supportedUpdates,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (existingSettings) {
+      const writeResult = await supabase
+        .from("workspace_settings")
+        .update(writePayload)
+        .eq("workspace_id", workspace_id)
+        .select()
+        .single();
+      result = {
+        data: (writeResult.data as Record<string, unknown> | null) ?? null,
+        error: writeResult.error ? { message: writeResult.error.message } : null,
+      };
+    } else {
+      const writeResult = await supabase
+        .from("workspace_settings")
+        .insert({
+          workspace_id,
+          ...writePayload,
+        })
+        .select()
+        .single();
+      result = {
+        data: (writeResult.data as Record<string, unknown> | null) ?? null,
+        error: writeResult.error ? { message: writeResult.error.message } : null,
+      };
+    }
+
+    if (!result.error) {
+      break;
+    }
+
+    const missingColumn = result.error.message.match(MISSING_COLUMN_ERROR)?.[1];
+    if (!missingColumn || !(missingColumn in supportedUpdates)) {
+      break;
+    }
+
+    delete supportedUpdates[missingColumn];
+    droppedColumns.push(missingColumn);
   }
 
   if (result.error) {
-    return NextResponse.json({ error: result.error.message }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: result.error.message,
+        hint: "Run the latest database migrations to align workspace_settings schema.",
+      },
+      { status: 500 },
+    );
+  }
+
+  if (!result.data) {
+    const dropped = droppedColumns.length > 0 ? ` (${droppedColumns.join(", ")})` : "";
+    return NextResponse.json(
+      {
+        error: `No supported settings fields were available to save${dropped}.`,
+        hint: "Run the latest database migrations to align workspace_settings schema.",
+      },
+      { status: 409 },
+    );
   }
 
   return NextResponse.json({ 
     success: true, 
     settings: result.data,
     is_viewing_as_admin: is_override,
+    dropped_unsupported_fields: droppedColumns,
   });
 }

@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { AdminPageError } from "@/components/admin/admin-page-error";
+import { fetchAdminJson, normalizeAdminApiError, type NormalizedAdminApiError } from "@/lib/admin/api-client";
 import { Clock, RefreshCw, CheckCircle, AlertCircle, XCircle, TrendingUp, Database, Zap } from "lucide-react";
 
 type FreshnessRow = {
@@ -54,19 +56,22 @@ function getRelativeTime(dateStr: string): string {
 export default function FreshnessPage() {
   const [rows, setRows] = useState<FreshnessRow[]>([]);
   const [sources, setSources] = useState<Source[]>([]);
+  const [error, setError] = useState<NormalizedAdminApiError | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchData = () => {
     setLoading(true);
+    setError(null);
     Promise.all([
-      fetch("/api/admin/freshness").then((r) => r.ok ? r.json() : []),
-      fetch("/api/admin/sources").then((r) => r.ok ? r.json() : []),
+      fetchAdminJson<FreshnessRow[]>("/api/admin/freshness"),
+      fetchAdminJson<Source[]>("/api/admin/sources"),
     ])
       .then(([freshnessData, sourcesData]) => {
         setRows(Array.isArray(freshnessData) ? freshnessData : []);
         setSources(Array.isArray(sourcesData) ? sourcesData : []);
       })
-      .catch(() => {
+      .catch((err) => {
+        setError(normalizeAdminApiError(err));
         setRows([]);
         setSources([]);
       })
@@ -88,6 +93,7 @@ export default function FreshnessPage() {
 
   return (
     <div>
+      <AdminPageError error={error} onRetry={fetchData} className="mb-6" />
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="page-title">Data Freshness</h1>
@@ -144,6 +150,8 @@ export default function FreshnessPage() {
         <div className="panel p-8 text-center">
           <RefreshCw className="mx-auto h-6 w-6 animate-spin text-brand-500" />
         </div>
+      ) : error ? (
+        <AdminPageError error={error} onRetry={fetchData} />
       ) : rows.length === 0 ? (
         <div className="panel p-12 text-center">
           <Clock className="mx-auto mb-3 h-10 w-10 text-brand-200" />

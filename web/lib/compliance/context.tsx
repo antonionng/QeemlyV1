@@ -27,6 +27,7 @@ type ComplianceContextState = {
   refreshing: boolean;
   complianceScore: number;
   activeEmployees: number;
+  dataWarnings: string[];
   riskItems: RiskItem[];
   payEquityKpis: PayEquityKpi[];
   equityLevels: EquityLevel[];
@@ -47,6 +48,7 @@ const DEFAULT_STATE: ComplianceContextState = {
   refreshing: false,
   complianceScore: 0,
   activeEmployees: 0,
+  dataWarnings: [],
   riskItems: [],
   payEquityKpis: [],
   equityLevels: [],
@@ -81,6 +83,11 @@ export function ComplianceProvider({ children }: { children: ReactNode }) {
             data.ai_scoring_metadata?.activeEmployees ??
             0
         ),
+        dataWarnings: Array.isArray(data.ai_scoring_metadata?.missing_data)
+          ? data.ai_scoring_metadata.missing_data
+              .filter((entry: unknown): entry is string => typeof entry === "string")
+              .slice(0, 8)
+          : [],
         riskItems: data.risk_items || [],
         payEquityKpis: data.pay_equity_kpis || [],
         equityLevels: data.equity_levels || [],

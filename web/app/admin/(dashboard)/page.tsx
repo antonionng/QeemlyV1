@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { AdminPageError } from "@/components/admin/admin-page-error";
+import { fetchAdminJson, normalizeAdminApiError, type NormalizedAdminApiError } from "@/lib/admin/api-client";
 import {
   CheckCircle,
   XCircle,
@@ -102,6 +104,7 @@ export default function ControlTowerPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [sources, setSources] = useState<Source[]>([]);
   const [stats, setStats] = useState<HubStats | null>(null);
+  const [error, setError] = useState<NormalizedAdminApiError | null>(null);
   const [loading, setLoading] = useState(true);
   const [triggering, setTriggering] = useState(false);
   const [selectedSource, setSelectedSource] = useState<string>("");
@@ -116,10 +119,11 @@ export default function ControlTowerPage() {
   const fetchAll = (options?: { silent?: boolean }) => {
     const silent = options?.silent ?? false;
     if (!silent) setLoading(true);
+    setError(null);
     Promise.all([
-      fetch("/api/admin/jobs").then((r) => (r.ok ? r.json() : [])),
-      fetch("/api/admin/stats").then((r) => (r.ok ? r.json() : null)),
-      fetch("/api/admin/sources").then((r) => (r.ok ? r.json() : [])),
+      fetchAdminJson<Job[]>("/api/admin/jobs"),
+      fetchAdminJson<HubStats>("/api/admin/stats"),
+      fetchAdminJson<Source[]>("/api/admin/sources"),
     ])
       .then(([jobsData, statsData, sourcesData]) => {
         const safeSources = Array.isArray(sourcesData) ? (sourcesData as Source[]) : [];
@@ -138,7 +142,8 @@ export default function ControlTowerPage() {
         setStats(statsData);
         setSources(safeSources);
       })
-      .catch(() => {
+      .catch((err) => {
+        setError(normalizeAdminApiError(err));
         setJobs([]);
         setStats(null);
         setSources([]);
@@ -259,6 +264,7 @@ export default function ControlTowerPage() {
 
   return (
     <div>
+      <AdminPageError error={error} onRetry={() => fetchAll()} className="mb-6" />
       {/* Toast Notification */}
       {toast && (
         <div
@@ -359,7 +365,7 @@ export default function ControlTowerPage() {
             </div>
             <div className="space-y-2">
               <div className="text-2xl font-bold text-text-primary">{stats?.benchmarks.total ?? 0}</div>
-              <div className="text-xs text-text-secondary">salary data points</div>
+              <div className="text-xs text-text-secondary">Qeemly anonymized market datapoints</div>
               <div className={`text-xs font-medium capitalize ${
                 stats?.freshness.score === "fresh" ? "text-emerald-600" :
                 stats?.freshness.score === "stale" ? "text-amber-600" : "text-rose-600"
@@ -579,7 +585,13 @@ export default function ControlTowerPage() {
               </tr>
             </thead>
             <tbody>
-              {jobs.length === 0 ? (
+              {error ? (
+                <tr>
+                  <td colSpan={6} className="px-5 py-5">
+                    <AdminPageError error={error} onRetry={() => fetchAll()} />
+                  </td>
+                </tr>
+              ) : jobs.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="py-12 text-center">
                     <AlertCircle className="mx-auto mb-2 h-8 w-8 text-brand-200" />

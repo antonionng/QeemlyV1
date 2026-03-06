@@ -129,7 +129,7 @@ export function NewReportModal({
                 Create Custom Report
               </h3>
               <p className="mt-2 text-center text-xs leading-relaxed text-accent-500">
-                Mix benchmarks, compliance checks, and executive summaries into
+                Mix benchmarks, workforce compliance controls, and pay governance summaries into
                 a single narrative. Save layouts for recurring board packs.
               </p>
 

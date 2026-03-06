@@ -48,6 +48,11 @@ export function ComplianceSideDeadlines({ onItemClick, onViewAll }: Props) {
             </div>
           </button>
         ))}
+        {deadlineItems.length === 0 && (
+          <p className="rounded-lg border border-dashed border-border px-3 py-2 text-xs text-accent-500">
+            No upcoming deadlines found for this workspace yet.
+          </p>
+        )}
       </div>
 
       <button

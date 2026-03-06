@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateApiKey } from "../middleware";
 import { createServiceClient } from "@/lib/supabase/service";
+import { upsertBenchmarksFreshness } from "@/lib/ingestion/freshness";
 
 /**
  * GET /api/v1/benchmarks
@@ -90,6 +91,10 @@ export async function POST(request: NextRequest) {
       // Rough check: if created_at equals the current time, it was created
       created++;
     }
+  }
+
+  if (created > 0) {
+    await upsertBenchmarksFreshness(auth.workspaceId, created, null);
   }
 
   return NextResponse.json({ created, updated: 0, errors });

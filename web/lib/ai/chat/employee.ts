@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { getAdvisoryModel, getOpenAIClient } from "@/lib/ai/openai";
 import { parseEmployeeStructuredAnswer } from "@/lib/ai/chat/protocol";
+import { findMarketBenchmark } from "@/lib/benchmarks/platform-market";
 
 type EmployeeRow = {
   id: string;
@@ -86,7 +87,16 @@ export async function loadEmployeeChatContext(
     .neq("id", employee.id)
     .limit(25);
 
-  const { data: latestBenchmark } = await supabase
+  // Market benchmark is the primary source (the Qeemly data pool)
+  const marketBenchmark = await findMarketBenchmark(
+    supabase,
+    employee.role_id,
+    employee.location_id,
+    employee.level_id
+  );
+
+  // Workspace benchmark (company pay bands) as secondary
+  const { data: workspaceBenchmark } = await supabase
     .from("salary_benchmarks")
     .select(
       "p10,p25,p50,p75,p90,currency,sample_size,confidence,national_gpssa_pct,national_nafis_pct,national_total_cost_multiplier"
@@ -98,6 +108,8 @@ export async function loadEmployeeChatContext(
     .order("valid_from", { ascending: false })
     .limit(1)
     .maybeSingle();
+
+  const latestBenchmark = marketBenchmark ?? workspaceBenchmark;
 
   const { data: compHistory } = await supabase
     .from("compensation_history")
@@ -164,7 +176,8 @@ export async function loadEmployeeChatContext(
 export function buildEmployeeChatInput(context: EmployeeChatContext, question: string): string {
   return [
     "You are Qeemly Advisory, a compensation co-pilot.",
-    "Answer only using the provided employee context.",
+    "Answer using the provided employee context.",
+    "Benchmark data comes from the Qeemly market data pool (aggregated across the GCC region).",
     "If data is missing, explicitly say what is missing.",
     "Be concise, practical, and structured.",
     "",

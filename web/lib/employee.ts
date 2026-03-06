@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/server";
+import { findMarketBenchmark } from "@/lib/benchmarks/platform-market";
 
 export type EmployeeProfile = {
   id: string;
@@ -101,8 +102,16 @@ export async function getEmployeeDashboardData(): Promise<EmployeeDashboardData 
     .eq("employee_id", auth.employee_id)
     .order("effective_date", { ascending: true });
 
-  // Fetch the salary benchmark for this employee's role/level/location
-  const { data: benchmark } = await supabase
+  // Market benchmark is the primary source (the Qeemly data pool)
+  const marketBenchmark = await findMarketBenchmark(
+    supabase,
+    emp.role_id,
+    emp.location_id,
+    emp.level_id
+  );
+
+  // Workspace benchmark (company pay bands) as secondary source
+  const { data: workspaceBenchmark } = await supabase
     .from("salary_benchmarks")
     .select("p10, p25, p50, p75, p90")
     .eq("workspace_id", auth.workspace_id)
@@ -112,6 +121,8 @@ export async function getEmployeeDashboardData(): Promise<EmployeeDashboardData 
     .order("valid_from", { ascending: false })
     .limit(1)
     .maybeSingle();
+
+  const benchmark = marketBenchmark ?? workspaceBenchmark;
 
   const { data: settings } = await supabase
     .from("workspace_settings")

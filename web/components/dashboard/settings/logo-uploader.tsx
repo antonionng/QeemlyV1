@@ -10,6 +10,20 @@ interface LogoUploaderProps {
   companyName?: string;
 }
 
+function mapLogoUploadError(message: string): string {
+  const normalized = message.toLowerCase();
+  const isSchemaMismatch =
+    normalized.includes("workspace_settings") &&
+    normalized.includes("schema cache") &&
+    normalized.includes("company_logo");
+
+  if (isSchemaMismatch) {
+    return "Logo could not be saved because this database is missing the company_logo column. Run the latest Supabase migrations, then try again.";
+  }
+
+  return message;
+}
+
 export function LogoUploader({ value, onChange, companyName = "Company" }: LogoUploaderProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -54,13 +68,15 @@ export function LogoUploader({ value, onChange, companyName = "Company" }: LogoU
       
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || "Upload failed");
+        throw new Error(mapLogoUploadError(data.error || "Upload failed"));
       }
       
       const data = await res.json();
       onChange(data.logo_url);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed");
+      setError(
+        err instanceof Error ? mapLogoUploadError(err.message) : "Upload failed"
+      );
     } finally {
       setUploading(false);
     }
@@ -137,6 +153,10 @@ export function LogoUploader({ value, onChange, companyName = "Company" }: LogoU
                 src={value}
                 alt="Company logo"
                 className="h-full w-full object-contain p-2"
+                onError={() => {
+                  setError("Saved logo URL is no longer accessible. Please upload it again.");
+                  onChange(null);
+                }}
               />
             ) : (
               <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-brand-500 to-brand-600 text-white font-bold text-2xl">

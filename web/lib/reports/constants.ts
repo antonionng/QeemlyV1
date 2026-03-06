@@ -21,8 +21,8 @@ export const REPORT_TYPES: ReportType[] = [
   },
   {
     id: "compliance",
-    label: "Compliance",
-    description: "Policy adherence, pay equity, and audit notes.",
+    label: "Governance",
+    description: "Workforce compliance controls and compensation governance.",
   },
   {
     id: "custom",

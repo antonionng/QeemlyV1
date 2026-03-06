@@ -4,7 +4,10 @@ import { AlertTriangle, Info } from "lucide-react";
 import { type RiskItem } from "@/lib/compliance/data";
 import { useComplianceContext } from "@/lib/compliance/context";
 
-type Props = { onItemClick: (item: RiskItem) => void };
+type Props = {
+  onItemClick: (item: RiskItem) => void;
+  domain?: "workforce" | "governance";
+};
 
 function barColor(level: number) {
   if (level > 70) return "bg-red-500";
@@ -18,14 +21,26 @@ function textColor(level: number) {
   return "text-emerald-600";
 }
 
-export function ComplianceRiskIndexCard({ onItemClick }: Props) {
+export function ComplianceRiskIndexCard({ onItemClick, domain = "workforce" }: Props) {
   const { riskItems } = useComplianceContext();
-  const hasHighRisk = riskItems.some((risk) => risk.level > 70);
+  const filteredRiskItems =
+    domain === "governance"
+      ? riskItems.filter(
+          (risk) =>
+            risk.id === "risk-benchmark-coverage" || risk.id === "risk-out-of-band"
+        )
+      : riskItems.filter(
+          (risk) =>
+            risk.id === "risk-policy-signoff" || risk.id === "risk-regulatory-deadlines"
+        );
+  const hasHighRisk = filteredRiskItems.some((risk) => risk.level > 70);
 
   return (
     <div className="rounded-2xl border border-border bg-white p-6 shadow-sm">
       <div className="flex items-center justify-between">
-        <h3 className="text-base font-bold text-brand-900">Risk Heatmap</h3>
+        <h3 className="text-base font-bold text-brand-900">
+          {domain === "governance" ? "Pay Governance Risk Heatmap" : "Workforce Compliance Risk Heatmap"}
+        </h3>
         <div className="flex items-center gap-1.5 rounded-full bg-red-50 px-2.5 py-1 text-[11px] font-bold text-red-600">
           <AlertTriangle className="h-3 w-3" />
           {hasHighRisk ? "High Risk" : "Stable"}
@@ -33,7 +48,7 @@ export function ComplianceRiskIndexCard({ onItemClick }: Props) {
       </div>
 
       <div className="mt-6 space-y-5">
-        {riskItems.map((risk) => (
+        {filteredRiskItems.map((risk) => (
           <button
             key={risk.id}
             type="button"
@@ -60,9 +75,19 @@ export function ComplianceRiskIndexCard({ onItemClick }: Props) {
         <div className="flex items-start gap-3">
           <Info className="h-4 w-4 text-accent-400 shrink-0 mt-0.5" />
           <p className="text-[11px] leading-relaxed text-accent-600">
-            Risk scores are calculated based on <span className="font-bold">missing documentation</span>,{" "}
-            <span className="font-bold">expired licenses</span>, and{" "}
-            <span className="font-bold">recent legislative changes</span> in your operating jurisdictions.
+            {domain === "governance" ? (
+              <>
+                Governance risk scores are calculated from{" "}
+                <span className="font-bold">market benchmark coverage</span> and{" "}
+                <span className="font-bold">out-of-band compensation</span> rates.
+              </>
+            ) : (
+              <>
+                Workforce compliance risk scores are calculated from{" "}
+                <span className="font-bold">policy sign-off completion</span> and{" "}
+                <span className="font-bold">regulatory deadline exposure</span>.
+              </>
+            )}
           </p>
         </div>
       </div>

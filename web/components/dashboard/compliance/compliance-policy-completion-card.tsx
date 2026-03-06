@@ -1,6 +1,7 @@
 "use client";
 
 import { FileText } from "lucide-react";
+import Link from "next/link";
 import { type PolicyItem } from "@/lib/compliance/data";
 import { useComplianceContext } from "@/lib/compliance/context";
 import clsx from "clsx";
@@ -67,6 +68,17 @@ export function CompliancePolicyCard({ onItemClick }: Props) {
             </div>
           </button>
         ))}
+        {policyItems.length === 0 && (
+          <div className="rounded-lg border border-dashed border-border px-3 py-2 text-xs text-accent-500">
+            <p>No policy records are available yet. Add policies in Workforce Compliance settings to track completion.</p>
+            <Link
+              href="/dashboard/settings?tab=compliance"
+              className="mt-2 inline-block font-semibold text-brand-700 hover:text-brand-900"
+            >
+              Add policy records
+            </Link>
+          </div>
+        )}
       </div>
     </div>
   );

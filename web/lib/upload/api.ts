@@ -214,6 +214,18 @@ export async function uploadBenchmarks(
       onProgress(Math.min(100, Math.round(((i + batch.length) / benchmarks.length) * 100)));
     }
   }
+
+  if (insertedCount > 0) {
+    try {
+      await fetch("/api/benchmarks/freshness", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ recordCount: insertedCount }),
+      });
+    } catch {
+      // Freshness sync is best-effort; uploaded benchmark rows should still succeed.
+    }
+  }
   
   return {
     success: errors.length === 0,

@@ -15,7 +15,7 @@ export function CustomBuilderWidget() {
           Assemble a bespoke report in minutes.
         </h3>
         <p className="mt-2 text-[13px] text-accent-600 leading-relaxed">
-          Mix benchmarks, compliance checks, and executive summaries into a single narrative. Save layouts for recurring board packs.
+          Mix benchmarks, workforce compliance controls, and pay governance summaries into a single narrative. Save layouts for recurring board packs.
         </p>
         
         <div className="mt-6 space-y-3">

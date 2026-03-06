@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { adminRouteErrorResponse, throwIfAdminQueryError } from "@/lib/admin/api-client";
 import { createServiceClient } from "@/lib/supabase/service";
 import { requireSuperAdmin } from "@/lib/admin/auth";
 
@@ -18,93 +19,92 @@ export async function GET() {
   const auth = await requireSuperAdmin();
   if (auth.error) return auth.error;
 
-  const supabase = createServiceClient();
-  
-  // Get all workspaces
-  const { data: workspaces } = await supabase
-    .from("workspaces")
-    .select("id, name, slug, created_at")
-    .order("created_at", { ascending: false })
-    .limit(100);
+  try {
+    const supabase = createServiceClient();
 
-  if (!workspaces || workspaces.length === 0) {
-    return NextResponse.json([]);
-  }
+    const { data: workspaces, error: workspacesError } = await supabase
+      .from("workspaces")
+      .select("id, name, slug, created_at")
+      .order("created_at", { ascending: false })
+      .limit(100);
 
-  const workspaceIds = workspaces.map((w) => w.id);
+    throwIfAdminQueryError(workspacesError, "Failed to load workspaces");
 
-  // Get employee stats per workspace
-  const { data: employees } = await supabase
-    .from("employees")
-    .select("workspace_id, base_salary, department")
-    .in("workspace_id", workspaceIds);
+    if (!workspaces || workspaces.length === 0) {
+      return NextResponse.json([]);
+    }
 
-  // Get upload stats per workspace
-  const { data: uploads } = await supabase
-    .from("data_uploads")
-    .select("workspace_id, created_at")
-    .in("workspace_id", workspaceIds)
-    .order("created_at", { ascending: false });
+    const workspaceIds = workspaces.map((w) => w.id);
+    const { data: employees, error: employeesError } = await supabase
+      .from("employees")
+      .select("workspace_id, base_salary, department")
+      .in("workspace_id", workspaceIds);
+    throwIfAdminQueryError(employeesError, "Failed to load workspace employees");
 
-  // Aggregate stats per workspace
-  const statsMap = new Map<string, {
-    employee_count: number;
-    total_salary: number;
-    departments: Set<string>;
-    upload_count: number;
-    last_upload_at: string | null;
-  }>();
+    const { data: uploads, error: uploadsError } = await supabase
+      .from("data_uploads")
+      .select("workspace_id, created_at")
+      .in("workspace_id", workspaceIds)
+      .order("created_at", { ascending: false });
+    throwIfAdminQueryError(uploadsError, "Failed to load workspace uploads");
 
-  // Initialize stats for all workspaces
-  for (const w of workspaces) {
-    statsMap.set(w.id, {
-      employee_count: 0,
-      total_salary: 0,
-      departments: new Set(),
-      upload_count: 0,
-      last_upload_at: null,
+    const statsMap = new Map<string, {
+      employee_count: number;
+      total_salary: number;
+      departments: Set<string>;
+      upload_count: number;
+      last_upload_at: string | null;
+    }>();
+
+    for (const w of workspaces) {
+      statsMap.set(w.id, {
+        employee_count: 0,
+        total_salary: 0,
+        departments: new Set(),
+        upload_count: 0,
+        last_upload_at: null,
+      });
+    }
+
+    for (const emp of employees ?? []) {
+      const stats = statsMap.get(emp.workspace_id);
+      if (stats) {
+        stats.employee_count++;
+        stats.total_salary += Number(emp.base_salary) || 0;
+        if (emp.department) {
+          stats.departments.add(emp.department);
+        }
+      }
+    }
+
+    for (const upload of uploads ?? []) {
+      const stats = statsMap.get(upload.workspace_id);
+      if (stats) {
+        stats.upload_count++;
+        if (!stats.last_upload_at) {
+          stats.last_upload_at = upload.created_at;
+        }
+      }
+    }
+
+    const enriched: WorkspaceWithStats[] = workspaces.map((w) => {
+      const stats = statsMap.get(w.id)!;
+      return {
+        ...w,
+        employee_count: stats.employee_count,
+        avg_base_salary: stats.employee_count > 0
+          ? Math.round(stats.total_salary / stats.employee_count)
+          : null,
+        department_count: stats.departments.size,
+        upload_count: stats.upload_count,
+        last_upload_at: stats.last_upload_at,
+      };
     });
+
+    return NextResponse.json(enriched);
+  } catch (error) {
+    return adminRouteErrorResponse(error);
   }
-
-  // Aggregate employee data
-  for (const emp of employees ?? []) {
-    const stats = statsMap.get(emp.workspace_id);
-    if (stats) {
-      stats.employee_count++;
-      stats.total_salary += Number(emp.base_salary) || 0;
-      if (emp.department) {
-        stats.departments.add(emp.department);
-      }
-    }
-  }
-
-  // Aggregate upload data
-  for (const upload of uploads ?? []) {
-    const stats = statsMap.get(upload.workspace_id);
-    if (stats) {
-      stats.upload_count++;
-      if (!stats.last_upload_at) {
-        stats.last_upload_at = upload.created_at;
-      }
-    }
-  }
-
-  // Build enriched response
-  const enriched: WorkspaceWithStats[] = workspaces.map((w) => {
-    const stats = statsMap.get(w.id)!;
-    return {
-      ...w,
-      employee_count: stats.employee_count,
-      avg_base_salary: stats.employee_count > 0 
-        ? Math.round(stats.total_salary / stats.employee_count) 
-        : null,
-      department_count: stats.departments.size,
-      upload_count: stats.upload_count,
-      last_upload_at: stats.last_upload_at,
-    };
-  });
-
-  return NextResponse.json(enriched);
 }
 
 function slugify(value: string) {
@@ -139,11 +139,12 @@ export async function POST(request: Request) {
 
     for (let i = 0; i < 50; i++) {
       const candidate = i === 0 ? baseSlug : `${baseSlug}-${i + 1}`;
-      const { data: existing } = await supabase
+      const { data: existing, error: existingError } = await supabase
         .from("workspaces")
         .select("id")
         .eq("slug", candidate)
         .maybeSingle();
+      throwIfAdminQueryError(existingError, "Failed to validate workspace slug");
       if (!existing) {
         finalSlug = candidate;
         break;
@@ -162,9 +163,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json(data, { status: 201 });
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Invalid request" },
-      { status: 400 }
-    );
+    if (err instanceof SyntaxError) {
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    }
+    return adminRouteErrorResponse(err);
   }
 }

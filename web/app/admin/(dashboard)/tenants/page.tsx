@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { AdminPageError } from "@/components/admin/admin-page-error";
+import { fetchAdminJson, normalizeAdminApiError, type NormalizedAdminApiError } from "@/lib/admin/api-client";
 import {
   Building2,
   RefreshCw,
@@ -95,6 +97,7 @@ export default function TenantsPage() {
   const router = useRouter();
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
+  const [error, setError] = useState<NormalizedAdminApiError | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [selectedTenant, setSelectedTenant] = useState<Workspace | null>(null);
@@ -104,15 +107,17 @@ export default function TenantsPage() {
 
   const fetchData = () => {
     setLoading(true);
+    setError(null);
     Promise.all([
-      fetch("/api/admin/workspaces").then((r) => (r.ok ? r.json() : [])),
-      fetch("/api/admin/stats").then((r) => (r.ok ? r.json() : null)),
+      fetchAdminJson<Workspace[]>("/api/admin/workspaces"),
+      fetchAdminJson<Stats>("/api/admin/stats"),
     ])
       .then(([wsData, statsData]) => {
         setWorkspaces(Array.isArray(wsData) ? wsData : []);
         setStats(statsData);
       })
-      .catch(() => {
+      .catch((err) => {
+        setError(normalizeAdminApiError(err));
         setWorkspaces([]);
         setStats(null);
       })
@@ -188,6 +193,7 @@ export default function TenantsPage() {
 
   return (
     <div>
+      <AdminPageError error={error} onRetry={fetchData} className="mb-6" />
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -293,7 +299,13 @@ export default function TenantsPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.length === 0 ? (
+                {error ? (
+                  <tr>
+                    <td colSpan={5} className="px-5 py-5">
+                      <AdminPageError error={error} onRetry={fetchData} />
+                    </td>
+                  </tr>
+                ) : filtered.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="py-12 text-center">
                       <Building2 className="h-8 w-8 text-[#c4b5fd] mx-auto mb-2" />

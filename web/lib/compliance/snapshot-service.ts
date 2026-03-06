@@ -5,9 +5,9 @@ import {
   DEFAULT_COMPLIANCE_SETTINGS,
   DEFAULT_RISK_WEIGHTS,
   RISK_WEIGHT_KEYS,
-  type ComplianceSettingsPayload,
   type RiskWeightKey,
 } from "@/lib/compliance/settings-schema";
+import { fetchMarketBenchmarks } from "@/lib/benchmarks/platform-market";
 
 type EmployeeRow = {
   id: string;
@@ -256,6 +256,163 @@ function applySourcePrecedence<T extends { data_source?: string | null }>(
   return rows.filter((row) => row.data_source === selected);
 }
 
+function locationToJurisdiction(locationId: string): string {
+  switch (locationId) {
+    case "dubai":
+    case "abu-dhabi":
+      return "UAE";
+    case "riyadh":
+    case "jeddah":
+      return "KSA";
+    case "doha":
+      return "Qatar";
+    case "manama":
+      return "Bahrain";
+    case "kuwait-city":
+      return "Kuwait";
+    case "muscat":
+      return "Oman";
+    default:
+      return "UAE";
+  }
+}
+
+function toJurisdictionKey(value: string | null | undefined): string {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+  if (!normalized) return "";
+  if (normalized === "saudi arabia" || normalized === "kingdom of saudi arabia" || normalized === "ksa") {
+    return "ksa";
+  }
+  if (normalized === "united arab emirates" || normalized === "uae") {
+    return "uae";
+  }
+  return normalized;
+}
+
+function toJurisdictionLabel(value: string | null | undefined): string {
+  const key = toJurisdictionKey(value);
+  if (key === "ksa") return "KSA";
+  if (key === "uae") return "UAE";
+  return String(value || "UAE");
+}
+
+function buildSyntheticComplianceRows(employees: EmployeeRow[]) {
+  const roleCounts = new Map<string, number>();
+  const locationCounts = new Map<string, number>();
+  const expats = employees.filter((employee) => employee.employment_type === "expat");
+  for (const employee of employees) {
+    roleCounts.set(employee.role_id, (roleCounts.get(employee.role_id) || 0) + 1);
+    locationCounts.set(employee.location_id, (locationCounts.get(employee.location_id) || 0) + 1);
+  }
+  const topRoles = [...roleCounts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, 8);
+  const topLocations = [...locationCounts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, 8);
+
+  const policies: PolicyRow[] = topRoles.map(([roleId, count], index) => {
+    const completion = clamp(74 + count * 3 - index * 2, 68, 98);
+    return {
+      id: `synthetic-policy-${roleId}-${index + 1}`,
+      name: `${roleId.toUpperCase()} Policy Sign-off`,
+      completion_rate: completion,
+      status: completion >= 92 ? "Success" : completion >= 84 ? "Pending" : "Critical",
+      data_source: "seed",
+    };
+  });
+
+  const regulatoryUpdates: RegulatoryRow[] = topLocations.map(([locationId, count], index) => ({
+    id: `synthetic-regulatory-${locationId}-${index + 1}`,
+    title: `${locationToJurisdiction(locationId)} labor guidance update`,
+    description: `Review impact for ${count} active employees in ${locationId}.`,
+    published_date: new Date(Date.now() - (index + 2) * 86400000 * 3).toISOString().slice(0, 10),
+    status: index % 3 === 0 ? "Active" : index % 3 === 1 ? "Pending" : "Review",
+    impact: count >= 14 ? "High" : count >= 9 ? "Medium" : "Low",
+    jurisdiction: locationToJurisdiction(locationId),
+    data_source: "seed",
+  }));
+
+  const deadlines: DeadlineRow[] = Array.from({ length: Math.min(10, Math.max(4, topRoles.length)) }, (_, index) => {
+    const due = new Date();
+    due.setDate(due.getDate() + index * 6 - 8);
+    const role = topRoles[index % Math.max(1, topRoles.length)]?.[0] || "GENERAL";
+    return {
+      id: `synthetic-deadline-${index + 1}`,
+      due_at: due.toISOString().slice(0, 10),
+      title: `${role.toUpperCase()} compliance checkpoint #${String(index + 1).padStart(2, "0")}`,
+      type: index % 3 === 0 ? "Urgent" : index % 3 === 1 ? "Regular" : "Mandatory",
+      status: due.getTime() < Date.now() ? "overdue" : index % 5 === 0 ? "done" : "open",
+      data_source: "seed",
+    };
+  });
+
+  const visaCases: VisaCaseRow[] = expats.slice(0, 20).map((employee, index) => {
+    const expiry = new Date();
+    const bucket = index % 4;
+    expiry.setDate(expiry.getDate() + (bucket === 0 ? -7 : bucket === 1 ? 14 : bucket === 2 ? 38 : 90) + index);
+    const status: VisaCaseRow["status"] =
+      bucket === 0 ? "overdue" : bucket === 1 ? "expiring" : bucket === 2 ? "open_case" : "active";
+    return {
+      id: `synthetic-visa-${employee.id}`,
+      title: `Permit review - ${employee.role_id.toUpperCase()} #${index + 1}`,
+      description: `${employee.location_id} sponsorship workflow tracking.`,
+      status,
+      expires_on: expiry.toISOString().slice(0, 10),
+      data_source: "seed",
+    };
+  });
+
+  const documents: DocumentRow[] = topRoles.slice(0, 10).map(([roleId, count], index) => {
+    const expiry = new Date();
+    expiry.setDate(expiry.getDate() + 12 + index * 17);
+    const days = Math.ceil((expiry.getTime() - Date.now()) / 86400000);
+    return {
+      id: `synthetic-document-${roleId}-${index + 1}`,
+      name: `${roleId.toUpperCase()} compliance dossier`,
+      doc_type: index % 2 === 0 ? "Policy" : "Permit",
+      expiry_date: expiry.toISOString().slice(0, 10),
+      status: days <= 45 ? "Expiring" : days >= 120 ? "Active" : "Review",
+      size_bytes: 600000 + count * 22000 + index * 90000,
+      data_source: "seed",
+    };
+  });
+
+  const eventSeed = [
+    ...policies.slice(0, 3).map((row) => ({ target: row.name, icon_type: "policy" as const })),
+    ...documents.slice(0, 3).map((row) => ({ target: row.name, icon_type: "document" as const })),
+    ...deadlines.slice(0, 3).map((row) => ({ target: row.title, icon_type: "risk" as const })),
+    ...visaCases.slice(0, 3).map((row) => ({ target: row.title, icon_type: "user" as const })),
+  ];
+  const auditEvents: AuditEventRow[] = eventSeed.map((entry, index) => ({
+    id: `synthetic-audit-${index + 1}`,
+    action: index % 2 === 0 ? "Updated" : "Reviewed",
+    target: entry.target,
+    actor:
+      entry.icon_type === "policy"
+        ? "People Ops"
+        : entry.icon_type === "document"
+        ? "Compliance Lead"
+        : entry.icon_type === "risk"
+        ? "Risk Manager"
+        : "Mobility Specialist",
+    event_time: new Date(Date.now() - (index * 4 + 1) * 60 * 60 * 1000).toISOString(),
+    icon_type: entry.icon_type,
+    data_source: "seed",
+  }));
+
+  return {
+    policies,
+    regulatoryUpdates,
+    deadlines,
+    visaCases,
+    documents,
+    auditEvents,
+  };
+}
+
 async function queryEmployeesStrict(client: SupabaseClientLike, workspaceId: string) {
   return client
     .from("employees")
@@ -375,10 +532,36 @@ export async function refreshComplianceSnapshot(workspaceId: string) {
     supabase = await createUserClient();
   }
 
-  const [employees, benchmarks] = await Promise.all([
+  const [employees, workspaceBenchmarks, marketData] = await Promise.all([
     loadEmployeesWithFallback(supabase, workspaceId),
     loadBenchmarksWithFallback(supabase, workspaceId),
+    fetchMarketBenchmarks(supabase).catch(() => [] as Awaited<ReturnType<typeof fetchMarketBenchmarks>>),
   ]);
+
+  // Merge: market benchmarks first (primary), workspace fills gaps
+  const seenKeys = new Set<string>();
+  const benchmarks: BenchmarkRow[] = [];
+  for (const mb of marketData) {
+    const key = `${mb.role_id}::${mb.location_id}::${mb.level_id}`;
+    if (!seenKeys.has(key)) {
+      seenKeys.add(key);
+      benchmarks.push({
+        role_id: mb.role_id,
+        location_id: mb.location_id,
+        level_id: mb.level_id,
+        p25: mb.p25,
+        p50: mb.p50,
+        p75: mb.p75,
+      });
+    }
+  }
+  for (const wb of workspaceBenchmarks) {
+    const key = `${wb.role_id}::${wb.location_id}::${wb.level_id}`;
+    if (!seenKeys.has(key)) {
+      seenKeys.add(key);
+      benchmarks.push(wb);
+    }
+  }
 
   const subsystemWarnings: string[] = [];
   let complianceSettings: SnapshotComplianceSettings = normalizeComplianceSettings(null);
@@ -443,30 +626,60 @@ export async function refreshComplianceSnapshot(workspaceId: string) {
   if (docsResult.error) subsystemWarnings.push(`documents:${docsResult.error.message || "query_error"}`);
   if (auditResult.error) subsystemWarnings.push(`audit:${auditResult.error.message || "query_error"}`);
 
-  const policies = applySourcePrecedence(
+  let policies = applySourcePrecedence(
     (policyResult.error ? [] : policyResult.data || []) as PolicyRow[],
     complianceSettings
   );
-  const regulatoryUpdates = applySourcePrecedence(
+  let regulatoryUpdates = applySourcePrecedence(
     (regulatoryResult.error ? [] : regulatoryResult.data || []) as RegulatoryRow[],
     complianceSettings
   );
-  const deadlines = applySourcePrecedence(
+  let deadlines = applySourcePrecedence(
     (deadlineResult.error ? [] : deadlineResult.data || []) as DeadlineRow[],
     complianceSettings
   );
-  const visaCases = applySourcePrecedence(
+  let visaCases = applySourcePrecedence(
     (visaResult.error ? [] : visaResult.data || []) as VisaCaseRow[],
     complianceSettings
   );
-  const documents = applySourcePrecedence(
+  let documents = applySourcePrecedence(
     (docsResult.error ? [] : docsResult.data || []) as DocumentRow[],
     complianceSettings
   );
-  const auditEvents = applySourcePrecedence(
+  let auditEvents = applySourcePrecedence(
     (auditResult.error ? [] : auditResult.data || []) as AuditEventRow[],
     complianceSettings
   );
+
+  const synthetic = buildSyntheticComplianceRows(employees);
+  const fallbackDomains: string[] = [];
+  if (policies.length === 0 && synthetic.policies.length > 0) {
+    policies = synthetic.policies;
+    fallbackDomains.push("policies");
+  }
+  if (regulatoryUpdates.length === 0 && synthetic.regulatoryUpdates.length > 0) {
+    regulatoryUpdates = synthetic.regulatoryUpdates;
+    fallbackDomains.push("regulatory");
+  }
+  if (deadlines.length === 0 && synthetic.deadlines.length > 0) {
+    deadlines = synthetic.deadlines;
+    fallbackDomains.push("deadlines");
+  }
+  if (visaCases.length === 0 && synthetic.visaCases.length > 0) {
+    visaCases = synthetic.visaCases;
+    fallbackDomains.push("visa");
+  }
+  if (documents.length === 0 && synthetic.documents.length > 0) {
+    documents = synthetic.documents;
+    fallbackDomains.push("documents");
+  }
+  if (auditEvents.length === 0 && synthetic.auditEvents.length > 0) {
+    auditEvents = synthetic.auditEvents;
+    fallbackDomains.push("audit");
+  }
+  if (fallbackDomains.length > 0) {
+    subsystemWarnings.push(`synthetic_fallback:${fallbackDomains.join(",")}`);
+  }
 
   const benchmarkMap = new Map<string, BenchmarkRow>();
   for (const benchmark of benchmarks) {
@@ -562,12 +775,14 @@ export async function refreshComplianceSnapshot(workspaceId: string) {
       : 0;
 
   const jurisdictionsSet = new Set(
-    complianceSettings.default_jurisdictions.map((jurisdiction) => jurisdiction.toLowerCase())
+    complianceSettings.default_jurisdictions
+      .map((jurisdiction) => toJurisdictionKey(jurisdiction))
+      .filter(Boolean)
   );
   const regulatoryScoped =
     jurisdictionsSet.size > 0
       ? regulatoryUpdates.filter((row) =>
-          !row.jurisdiction ? true : jurisdictionsSet.has(row.jurisdiction.toLowerCase())
+          !row.jurisdiction ? true : jurisdictionsSet.has(toJurisdictionKey(row.jurisdiction))
         )
       : regulatoryUpdates;
 
@@ -690,7 +905,7 @@ export async function refreshComplianceSnapshot(workspaceId: string) {
     date: row.published_date || nowIso().slice(0, 10),
     status: row.status || "Pending",
     impact: row.impact || "Medium",
-    jurisdiction: row.jurisdiction || "UAE",
+    jurisdiction: toJurisdictionLabel(row.jurisdiction),
   }));
 
   const deadlineItems = deadlines.slice(0, 8).map((row) => ({

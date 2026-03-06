@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getWorkspaceContext } from "@/lib/workspace-context";
 import { refreshComplianceSnapshot } from "@/lib/compliance/snapshot-service";
+import { fetchMarketBenchmarks, type MarketBenchmark } from "@/lib/benchmarks/platform-market";
 
 function isMissingRelationError(error: { code?: string; message?: string } | null | undefined): boolean {
   if (!error) return false;
@@ -38,6 +39,13 @@ export async function GET() {
   const { workspace_id, is_override } = wsContext.context;
   const queryClient = is_override ? createServiceClient() : supabase;
 
+  let marketBenchmarks: MarketBenchmark[] = [];
+  try {
+    marketBenchmarks = await fetchMarketBenchmarks(queryClient);
+  } catch {
+    // Non-fatal — market data may not be available yet
+  }
+
   const [employeesResult, benchmarksResult, enrichmentResult, visaResult] = await Promise.all([
     queryClient
       .from("employees")
@@ -47,7 +55,7 @@ export async function GET() {
       .order("created_at", { ascending: false }),
     queryClient
       .from("salary_benchmarks")
-      .select("role_id,location_id,level_id,p10,p25,p50,p75,p90,valid_from,created_at")
+      .select("role_id,location_id,level_id,p10,p25,p50,p75,p90,valid_from,created_at,source")
       .eq("workspace_id", workspace_id)
       .order("valid_from", { ascending: false })
       .order("created_at", { ascending: false }),
@@ -107,6 +115,7 @@ export async function GET() {
     workspace_id,
     employees: employeesWithProfile,
     benchmarks: benchmarksResult.data || [],
+    market_benchmarks: marketBenchmarks,
     diagnostics:
       process.env.NODE_ENV !== "production"
         ? {

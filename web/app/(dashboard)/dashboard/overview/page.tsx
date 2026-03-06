@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import { Settings, RefreshCw, Upload, Loader2 } from "lucide-react";
+import { ArrowRight, Loader2, RefreshCw, Settings } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { 
-  StatCards, 
+import { Card } from "@/components/ui/card";
+import {
+  StatCards,
   DataHealthCard,
   KeyInsights,
   DepartmentTabs,
@@ -18,8 +19,8 @@ import {
   AdvisoryPanel,
 } from "@/components/dashboard/overview";
 import { UploadModal } from "@/components/dashboard/upload";
-import { 
-  getCompanyMetricsAsync, 
+import {
+  getCompanyMetricsAsync,
   getDepartmentSummariesAsync,
   getEmployees,
   invalidateEmployeeCache,
@@ -28,6 +29,7 @@ import {
   type Employee,
 } from "@/lib/employees";
 import { useCompanySettings } from "@/lib/company";
+import { buildCompanyOverviewHeadlineCards } from "@/lib/company-vs-market";
 import clsx from "clsx";
 
 export default function CompanyOverviewPage() {
@@ -36,7 +38,7 @@ export default function CompanyOverviewPage() {
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const { companyName, isConfigured } = useCompanySettings();
-  
+
   const [metrics, setMetrics] = useState<CompanyMetrics | null>(null);
   const [departmentSummaries, setDepartmentSummaries] = useState<DepartmentSummary[]>([]);
   const [advisoryCandidates, setAdvisoryCandidates] = useState<Employee[]>([]);
@@ -52,14 +54,17 @@ export default function CompanyOverviewPage() {
         getDepartmentSummariesAsync(),
         getEmployees(),
       ]);
+
       setMetrics(metricsData);
       setDepartmentSummaries(deptData);
+
       const activeEmployees = employees.filter((employee) => employee.status === "active");
       const benchmarkedEmployees = activeEmployees.filter((employee) => employee.hasBenchmark);
       setBenchmarkCoverage({
         activeEmployees: activeEmployees.length,
         benchmarkedEmployees: benchmarkedEmployees.length,
       });
+
       const advisory = employees
         .filter((employee) => employee.status === "active" && employee.hasBenchmark)
         .map((employee) => {
@@ -100,7 +105,7 @@ export default function CompanyOverviewPage() {
     const now = new Date();
     const diffMs = now.getTime() - lastRefresh.getTime();
     const diffMins = Math.floor(diffMs / 60000);
-    
+
     if (diffMins < 1) return "Data refreshed just now";
     if (diffMins === 1) return "Data refreshed 1 minute ago";
     if (diffMins < 60) return `Data refreshed ${diffMins} minutes ago`;
@@ -109,28 +114,39 @@ export default function CompanyOverviewPage() {
 
   if (loading || !metrics) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
+      <div className="flex min-h-[400px] items-center justify-center">
         <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin text-brand-500 mx-auto" />
+          <Loader2 className="mx-auto h-8 w-8 animate-spin text-brand-500" />
           <p className="mt-3 text-brand-600">Loading company data...</p>
         </div>
       </div>
     );
   }
 
+  const headlineCards = buildCompanyOverviewHeadlineCards(metrics, benchmarkCoverage);
+  const headlineToneClasses = {
+    neutral: "border-accent-200 bg-white text-accent-900",
+    warning: "border-amber-200 bg-amber-50 text-amber-900",
+    positive: "border-emerald-200 bg-emerald-50 text-emerald-900",
+    market: "border-brand-200 bg-brand-50 text-brand-900",
+    overlay: "border-sky-200 bg-sky-50 text-sky-900",
+  } as const;
+
   return (
     <div className="space-y-8">
-      {/* Page Header (reference: large title + pill buttons inline) */}
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="page-title">
-          Company Overview
-        </h1>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="space-y-1">
+          <h1 className="page-title">Company Overview</h1>
+          <p className="text-sm text-accent-500">
+            Review {companyName || "your company"} pay health, actions, and benchmark coverage in one place.
+          </p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
           <Button
             size="sm"
             onClick={handleRefresh}
             disabled={isRefreshing}
-            className="h-9 rounded-full bg-accent-800 px-5 text-white hover:bg-accent-700 border-0"
+            className="h-9 rounded-full border-0 bg-accent-800 px-5 text-white hover:bg-accent-700"
           >
             <RefreshCw className={clsx("mr-2 h-4 w-4", isRefreshing && "animate-spin")} />
             Refresh
@@ -138,7 +154,7 @@ export default function CompanyOverviewPage() {
           <Link href="/dashboard/settings">
             <Button
               size="sm"
-              className="h-9 rounded-full bg-accent-800 px-5 text-white hover:bg-accent-700 border-0"
+              className="h-9 rounded-full border-0 bg-accent-800 px-5 text-white hover:bg-accent-700"
             >
               <Settings className="mr-2 h-4 w-4" />
               Settings
@@ -147,7 +163,41 @@ export default function CompanyOverviewPage() {
         </div>
       </div>
 
-      {/* Configuration prompt if not configured */}
+      <Card className="dash-card border border-brand-100 bg-gradient-to-r from-brand-50 via-white to-accent-50 p-5">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-semibold text-accent-900">Executive summary</h2>
+            <p className="mt-1 max-w-2xl text-sm text-accent-600">
+              Keep this page focused on internal company performance. Use Market Overview for Qeemly dataset signals and Benchmarking for detailed market drill-downs.
+            </p>
+          </div>
+          <Link href="/dashboard/market">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 rounded-full border-border bg-white px-4 text-accent-700 hover:bg-accent-50"
+            >
+              Open Market Overview
+              <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </Link>
+        </div>
+        <div className="mt-5 grid gap-4 md:grid-cols-2">
+          {headlineCards.map((card) => (
+            <div
+              key={card.label}
+              className={clsx("rounded-2xl border p-4", headlineToneClasses[card.tone])}
+            >
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-current/70">
+                {card.label}
+              </p>
+              <p className="mt-2 text-2xl font-bold text-current">{card.value}</p>
+              <p className="mt-1 text-sm text-current/75">{card.description}</p>
+            </div>
+          ))}
+        </div>
+      </Card>
+
       {!isConfigured && (
         <div className="rounded-xl border-2 border-dashed border-amber-300 bg-amber-50 p-4">
           <div className="flex items-center gap-3">
@@ -169,10 +219,8 @@ export default function CompanyOverviewPage() {
         </div>
       )}
 
-      {/* Shortcuts row (reference: first content block) */}
       <ShortcutsRow />
 
-      {/* Key metrics: Health Score (left) + Stat Cards 2x2 (right) per reference */}
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-1">
           <HealthScore metrics={metrics} />
@@ -182,19 +230,15 @@ export default function CompanyOverviewPage() {
         </div>
       </div>
 
-      {/* Quick Actions row */}
       <QuickActions />
 
-      {/* Data Health */}
       <DataHealthCard benchmarkCoverage={benchmarkCoverage} />
 
-      {/* Charts Row - Payroll Trend and Band Distribution */}
       <div className="grid gap-6 lg:grid-cols-2">
         <PayrollTrend metrics={metrics} />
         <BandDistributionChart metrics={metrics} departmentSummaries={departmentSummaries} />
       </div>
 
-      {/* Insights + Risk row */}
       <div className="grid gap-6 lg:grid-cols-2">
         <KeyInsights
           metrics={metrics}
@@ -208,24 +252,36 @@ export default function CompanyOverviewPage() {
         />
       </div>
 
-      {/* Department breakdown gets its own full-width row for readability */}
       <DepartmentTabs summaries={departmentSummaries} />
 
-      {/* Qeemly Advisory - Employee Risk Highlights */}
       <div className="space-y-4">
-        <h2 className="text-lg font-semibold text-accent-900">Qeemly Advisory</h2>
-        <p className="text-sm text-accent-500">
-          Structured decision-support ranked by highest compensation risk and impact.
-          Expand each panel for full analysis.
-        </p>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold text-accent-900">Qeemly Advisory</h2>
+            <p className="text-sm text-accent-500">
+              Structured decision support ranked by highest compensation risk and impact.
+            </p>
+          </div>
+          <Link
+            href="/dashboard/market"
+            className="inline-flex items-center gap-2 text-sm font-semibold text-brand-700 hover:text-brand-800"
+          >
+            Open Market Overview
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
         <div className="space-y-3">
           {advisoryCandidates.map((employee) => (
             <AdvisoryPanel key={employee.id} employee={employee} />
           ))}
+          {advisoryCandidates.length === 0 && (
+            <Card className="dash-card p-5 text-sm text-accent-500">
+              Advisory recommendations will appear here once benchmarked employees are available.
+            </Card>
+          )}
         </div>
       </div>
 
-      {/* Live indicator - subtle */}
       <div className="flex items-center gap-2 text-xs text-accent-500">
         <div className="relative flex h-1.5 w-1.5">
           <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
@@ -234,7 +290,6 @@ export default function CompanyOverviewPage() {
         <span>{getRefreshText()}</span>
       </div>
 
-      {/* Upload Modal */}
       <UploadModal
         isOpen={showUploadModal}
         onClose={() => setShowUploadModal(false)}

@@ -107,15 +107,15 @@ export const DEFAULT_REPORT_TEMPLATE_SEEDS: ReportTemplateSeed[] = [
   },
   {
     slug: "pay-equity-and-fairness-monthly",
-    title: "Pay Equity & Fairness (Monthly)",
+    title: "Pay Governance & Equity (Monthly)",
     type_id: "compliance",
     category: "equity",
     description:
-      "Monitors pay equity gaps by level and function with remediation priorities for HRBP and compliance teams.",
+      "Monitors pay equity gaps by level and function with remediation priorities for HRBP and governance teams.",
     cadence: "Monthly",
     coverage: "All employees",
     confidence: "High",
-    owner: "Compliance",
+    owner: "Comp Governance",
     tags: ["Equity", "Audit", "Remediation"],
     config: {
       data_dependencies: ["compliance_snapshots"],
@@ -127,7 +127,7 @@ export const DEFAULT_REPORT_TEMPLATE_SEEDS: ReportTemplateSeed[] = [
   },
   {
     slug: "offer-policy-compliance-weekly",
-    title: "Offer Policy Compliance (Weekly)",
+    title: "Offer Policy Governance (Weekly)",
     type_id: "compliance",
     category: "policy",
     description:
@@ -171,7 +171,7 @@ export const DEFAULT_REPORT_TEMPLATE_SEEDS: ReportTemplateSeed[] = [
     type_id: "custom",
     category: "leadership",
     description:
-      "Configurable executive pack combining market movement, compliance posture, and cost narrative for board reviews.",
+      "Configurable executive pack combining market movement, governance posture, and cost narrative for board reviews.",
     cadence: "Quarterly",
     coverage: "Executive audience",
     confidence: "High",
@@ -183,7 +183,7 @@ export const DEFAULT_REPORT_TEMPLATE_SEEDS: ReportTemplateSeed[] = [
         "compliance_snapshots",
         "billing_invoices",
       ],
-      sections: ["market_story", "compliance_story", "cost_story", "decisions_needed"],
+      sections: ["market_story", "governance_story", "cost_story", "decisions_needed"],
       metrics: ["market_gap_pct", "compliance_score", "spend_trend_pct"],
     },
     is_active: true,
@@ -211,7 +211,7 @@ export const DEFAULT_REPORT_TEMPLATE_SEEDS: ReportTemplateSeed[] = [
   },
   {
     slug: "healthcare-compliance-and-staffing-monthly",
-    title: "Healthcare Compliance & Staffing (Monthly)",
+    title: "Healthcare Governance & Staffing (Monthly)",
     type_id: "compliance",
     category: "industry-healthcare",
     description:
@@ -220,7 +220,7 @@ export const DEFAULT_REPORT_TEMPLATE_SEEDS: ReportTemplateSeed[] = [
     coverage: "Clinical and non-clinical roles",
     confidence: "High",
     owner: "People Operations",
-    tags: ["Healthcare", "Compliance", "Staffing", "Overtime"],
+    tags: ["Healthcare", "Governance", "Staffing", "Overtime"],
     config: {
       data_dependencies: ["compliance_snapshots", "reports"],
       sections: ["staffing_pressure", "control_exceptions", "audit_readiness"],

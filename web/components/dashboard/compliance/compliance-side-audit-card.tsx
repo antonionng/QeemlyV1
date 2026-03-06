@@ -68,6 +68,11 @@ export function ComplianceSideAudit({ onItemClick, onViewAll }: Props) {
             </button>
           );
         })}
+        {auditLogItems.length === 0 && (
+          <p className="rounded-lg border border-dashed border-border px-3 py-2 text-xs text-accent-500">
+            No audit activity captured yet.
+          </p>
+        )}
       </div>
     </div>
   );

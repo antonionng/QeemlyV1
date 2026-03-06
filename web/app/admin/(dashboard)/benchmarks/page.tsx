@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { AdminPageError } from "@/components/admin/admin-page-error";
+import { fetchAdminJson, normalizeAdminApiError, type NormalizedAdminApiError } from "@/lib/admin/api-client";
 import {
   BarChart3,
   RefreshCw,
@@ -60,6 +62,7 @@ export default function BenchmarksPage() {
   const [data, setData] = useState<Benchmark[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
+  const [error, setError] = useState<NormalizedAdminApiError | null>(null);
   const [loading, setLoading] = useState(true);
   const limit = 20;
 
@@ -84,6 +87,7 @@ export default function BenchmarksPage() {
 
   const fetchBenchmarks = useCallback((p = 0) => {
     setLoading(true);
+    setError(null);
     const params = new URLSearchParams();
     params.set("page", String(p));
     params.set("limit", String(limit));
@@ -92,14 +96,14 @@ export default function BenchmarksPage() {
     if (levelFilter) params.set("level_id", levelFilter);
     if (sourceFilter) params.set("source", sourceFilter);
 
-    fetch(`/api/admin/benchmarks?${params}`)
-      .then((r) => (r.ok ? r.json() : { data: [], total: 0 }))
+    fetchAdminJson<{ data: Benchmark[]; total: number }>(`/api/admin/benchmarks?${params}`)
       .then((res) => {
         setData(Array.isArray(res.data) ? res.data : []);
         setTotal(res.total ?? 0);
         setPage(p);
       })
-      .catch(() => {
+      .catch((err) => {
+        setError(normalizeAdminApiError(err));
         setData([]);
         setTotal(0);
       })
@@ -107,13 +111,8 @@ export default function BenchmarksPage() {
   }, [roleFilter, locationFilter, levelFilter, sourceFilter]);
 
   const fetchStats = useCallback(() => {
-    fetch("/api/admin/benchmarks/meta")
-      .then((r) => (r.ok ? r.json() : null))
+    fetchAdminJson<MetaResponse>("/api/admin/benchmarks/meta")
       .then((payload) => {
-        if (!payload) {
-          setStats(null);
-          return;
-        }
         setMeta({
           roles: payload.roles ?? [],
           locations: payload.locations ?? [],
@@ -126,7 +125,8 @@ export default function BenchmarksPage() {
           uniqueLevels: (payload.levels ?? []).length,
         });
       })
-      .catch(() => {
+      .catch((err) => {
+        setError(normalizeAdminApiError(err));
         setMeta({ roles: [], locations: [], levels: [], sources: [] });
         setStats(null);
       });
@@ -155,11 +155,15 @@ export default function BenchmarksPage() {
 
   return (
     <div>
+      <AdminPageError error={error} onRetry={() => {
+        fetchStats();
+        fetchBenchmarks(page);
+      }} className="mb-6" />
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="page-title">Salary Benchmarks</h1>
+          <h1 className="page-title">Qeemly Market Benchmarks</h1>
           <p className="page-subtitle">
-            Normalized benchmark data from all market sources
+            Anonymized, aggregated market benchmark pool across contributing tenants
           </p>
         </div>
         <button
@@ -273,12 +277,22 @@ export default function BenchmarksPage() {
           <div className="p-8 text-center">
             <RefreshCw className="mx-auto h-6 w-6 animate-spin text-brand-500" />
           </div>
+        ) : error ? (
+          <div className="p-5">
+            <AdminPageError
+              error={error}
+              onRetry={() => {
+                fetchStats();
+                fetchBenchmarks(page);
+              }}
+            />
+          </div>
         ) : data.length === 0 ? (
           <div className="p-12 text-center">
             <BarChart3 className="mx-auto mb-3 h-10 w-10 text-brand-200" />
             <p className="text-text-secondary">No benchmarks found</p>
             <p className="mt-1 text-xs text-text-tertiary">
-              {hasFilters ? "Try adjusting your filters" : "Run ingestion to populate benchmark data"}
+              {hasFilters ? "Try adjusting your filters" : "No market datapoints found in the Qeemly pool yet"}
             </p>
           </div>
         ) : (

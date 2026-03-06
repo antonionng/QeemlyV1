@@ -5,10 +5,27 @@ Frontend-only implementation of the Qeemly marketing site and dashboard shell. S
 ## Run locally
 
 ```bash
+# from the repo root
+npm run db:start
+npm run db:reset
+
+# then start the web app
 npm install
 npm run dev
+
 # visit http://localhost:3000
 ```
+
+## Admin prerequisites
+
+The admin panel does not use mock data. It reads live data from the shared Supabase-backed admin API routes under `/api/admin/*`.
+
+- `SUPABASE_SERVICE_ROLE_KEY` is required for most admin routes. If it is missing, the admin API will fail and the dashboard will now show an explicit configuration error instead of empty data.
+- `QEEMLY_SUPERADMINS` must include the email address you use to sign in to `/admin/login`.
+- `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are required for auth/session handling.
+- `PLATFORM_WORKSPACE_ID` is recommended for platform benchmark ingestion and benchmark fallback reads.
+- `npm run db:reset` is the supported way to apply migrations and seed local admin data. The in-app admin seed endpoint is intentionally disabled.
+- `/admin/freshness`, `/admin/snapshots`, and parts of `/admin` remain empty until ingestion has run at least once.
 
 ## Structure
 - `app/(marketing)/*` - marketing pages (home, search, pricing, contact) plus root route.

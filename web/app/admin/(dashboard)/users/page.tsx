@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { AdminPageError } from "@/components/admin/admin-page-error";
+import { fetchAdminJson, normalizeAdminApiError, type NormalizedAdminApiError } from "@/lib/admin/api-client";
 import { Users, RefreshCw, Search, UserPlus, Shield, User, Building2, Eye, Mail, Calendar } from "lucide-react";
 
 type Profile = { 
@@ -37,6 +39,7 @@ function getRelativeTime(dateStr: string | undefined): string {
 
 export default function UsersPage() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [error, setError] = useState<NormalizedAdminApiError | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [selectedUser, setSelectedUser] = useState<Profile | null>(null);
@@ -46,19 +49,24 @@ export default function UsersPage() {
 
   const fetchUsers = () => {
     setLoading(true);
-    fetch("/api/admin/users")
-      .then((r) => (r.ok ? r.json() : []))
+    setError(null);
+    fetchAdminJson<Profile[]>("/api/admin/users")
       .then((data) => setProfiles(Array.isArray(data) ? data : []))
-      .catch(() => setProfiles([]))
+      .catch((err) => {
+        setError(normalizeAdminApiError(err));
+        setProfiles([]);
+      })
       .finally(() => setLoading(false));
   };
 
   useEffect(() => {
     fetchUsers();
-    fetch("/api/admin/workspaces")
-      .then((r) => (r.ok ? r.json() : []))
+    fetchAdminJson<WorkspaceOption[]>("/api/admin/workspaces")
       .then((rows) => setWorkspaces(Array.isArray(rows) ? rows : []))
-      .catch(() => setWorkspaces([]));
+      .catch((err) => {
+        setError(normalizeAdminApiError(err));
+        setWorkspaces([]);
+      });
   }, []);
 
   const handleInvite = async () => {
@@ -126,6 +134,7 @@ export default function UsersPage() {
 
   return (
     <div>
+      <AdminPageError error={error} onRetry={fetchUsers} className="mb-6" />
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -240,7 +249,13 @@ export default function UsersPage() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.length === 0 ? (
+                {error ? (
+                  <tr>
+                    <td colSpan={4} className="px-5 py-5">
+                      <AdminPageError error={error} onRetry={fetchUsers} />
+                    </td>
+                  </tr>
+                ) : filtered.length === 0 ? (
                   <tr>
                     <td colSpan={4} className="py-12 text-center">
                       <Users className="h-8 w-8 text-[#c4b5fd] mx-auto mb-2" />

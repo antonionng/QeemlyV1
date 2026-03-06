@@ -11,6 +11,7 @@ import {
   X,
   ShieldAlert,
 } from "lucide-react";
+import { getCompanyInitials, useCompanySettings } from "@/lib/company";
 
 type Workspace = {
   id: string;
@@ -24,9 +25,11 @@ type Props = {
 
 export function WorkspaceSwitcher({ collapsed = false }: Props) {
   const router = useRouter();
+  const companySettings = useCompanySettings();
   const [loading, setLoading] = useState(true);
   const [switching, setSwitching] = useState(false);
   const [open, setOpen] = useState(false);
+  const [logoLoadFailed, setLogoLoadFailed] = useState(false);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [currentWorkspaceId, setCurrentWorkspaceId] = useState<string | null>(null);
   const [currentWorkspace, setCurrentWorkspace] = useState<Workspace | null>(null);
@@ -121,6 +124,10 @@ export function WorkspaceSwitcher({ collapsed = false }: Props) {
     }
   };
 
+  useEffect(() => {
+    setLogoLoadFailed(false);
+  }, [companySettings.companyLogo]);
+
   // Don't render if not super admin or still loading
   if (loading || !isSuperAdmin) {
     return null;
@@ -131,6 +138,8 @@ export function WorkspaceSwitcher({ collapsed = false }: Props) {
     workspaces.find((w) => w.id === currentWorkspaceId) ||
     currentWorkspace;
   const isOverriding = !!overrideWorkspace;
+  const companyInitials = getCompanyInitials(companySettings.companyName || activeWorkspace?.name || "Workspace");
+  const hasCompanyLogo = !!companySettings.companyLogo && !logoLoadFailed;
 
   if (collapsed) {
     return (
@@ -144,7 +153,16 @@ export function WorkspaceSwitcher({ collapsed = false }: Props) {
           }`}
           title={activeWorkspace?.name || "Switch Workspace"}
         >
-          {isOverriding ? <Eye className="h-4 w-4" /> : <Building2 className="h-4 w-4" />}
+          {hasCompanyLogo ? (
+            <img
+              src={companySettings.companyLogo!}
+              alt={companySettings.companyName || activeWorkspace?.name || "Workspace"}
+              className="h-6 w-6 rounded-md object-contain"
+              onError={() => setLogoLoadFailed(true)}
+            />
+          ) : (
+            <span className="text-xs font-semibold">{companyInitials}</span>
+          )}
         </button>
 
         {open && (
@@ -201,19 +219,31 @@ export function WorkspaceSwitcher({ collapsed = false }: Props) {
             : "bg-brand-50 border border-brand-200 text-brand-800 hover:bg-brand-100"
         }`}
       >
-        {switching ? (
-          <Loader2 className="h-4 w-4 animate-spin flex-shrink-0" />
-        ) : isOverriding ? (
-          <Eye className="h-4 w-4 flex-shrink-0" />
-        ) : (
-          <Building2 className="h-4 w-4 flex-shrink-0" />
-        )}
+        <div
+          className={`flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0 ${
+            isOverriding ? "bg-amber-100 text-amber-700" : "bg-brand-100 text-brand-700"
+          }`}
+        >
+          {switching ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : hasCompanyLogo ? (
+            <img
+              src={companySettings.companyLogo!}
+              alt={companySettings.companyName || activeWorkspace?.name || "Workspace"}
+              className="h-6 w-6 rounded-md object-contain"
+              onError={() => setLogoLoadFailed(true)}
+            />
+          ) : (
+            <span className="text-xs font-semibold">{companyInitials}</span>
+          )}
+        </div>
         <div className="flex-1 min-w-0">
           <div className="text-xs font-medium truncate">
             {isOverriding ? "Viewing as" : "Workspace"}
           </div>
           <div className="text-sm font-semibold truncate">{activeWorkspace?.name || "Select"}</div>
         </div>
+        {isOverriding && <Eye className="h-4 w-4 flex-shrink-0 text-amber-700" />}
         <ChevronDown
           className={`h-4 w-4 flex-shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
         />

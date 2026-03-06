@@ -51,7 +51,7 @@ export type BenchmarkRecord = {
   companySize?: string;
   experienceBand?: string;
   compTypes?: string[];
-  source: "dummy" | "uploaded";
+  source: "dummy" | "uploaded" | "market";
 };
 
 function parseList(value: string | null): string[] {

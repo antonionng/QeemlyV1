@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { Suspense, useState, useEffect, useCallback } from "react";
 import { 
   Save, 
   Building2, 
@@ -20,6 +20,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,8 +51,38 @@ import clsx from "clsx";
 type SettingsTab = "profile" | "compensation" | "indices" | "compliance";
 type IndexView = "family" | "family-level";
 
-export default function SettingsPage() {
-  const zustandSettings = useCompanySettings();
+function mapSettingsSaveError(errorMessage: string): string {
+  const normalized = errorMessage.toLowerCase();
+  const isSchemaMismatch =
+    normalized.includes("workspace_settings") &&
+    (normalized.includes("schema cache") ||
+      normalized.includes("could not find the") ||
+      normalized.includes("column"));
+
+  if (isSchemaMismatch) {
+    return "Settings could not be saved because this environment is missing the latest database columns. Run the latest Supabase migrations, then try again.";
+  }
+
+  return errorMessage;
+}
+
+function SettingsPageLoading() {
+  return (
+    <div className="flex min-h-[400px] items-center justify-center">
+      <div className="text-center">
+        <Loader2 className="mx-auto h-8 w-8 animate-spin text-brand-500" />
+        <p className="mt-3 text-brand-600">Loading settings...</p>
+      </div>
+    </div>
+  );
+}
+
+function SettingsPageContent() {
+  const searchParams = useSearchParams();
+  const updateCompanySettings = useCompanySettings((state) => state.updateSettings);
+  const markCompanyConfigured = useCompanySettings((state) => state.markAsConfigured);
+  const isCompanyConfigured = useCompanySettings((state) => state.isConfigured);
+  const companySettingsLastUpdated = useCompanySettings((state) => state.lastUpdated);
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -118,7 +149,7 @@ export default function SettingsPage() {
       setCompSplitOtherPct(s.comp_split_other_pct ?? 5);
       
       // Also sync to Zustand store for sidebar
-      zustandSettings.updateSettings({
+      updateCompanySettings({
         companyName: s.company_name || data.workspace_name || "",
         companyLogo: s.company_logo || "",
         companyWebsite: s.company_website || "",
@@ -142,18 +173,26 @@ export default function SettingsPage() {
         compSplitOtherPct: s.comp_split_other_pct ?? 5,
       });
       if (s.is_configured) {
-        zustandSettings.markAsConfigured();
+        markCompanyConfigured();
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load settings");
     } finally {
       setLoading(false);
     }
-  }, [zustandSettings]);
+  }, [markCompanyConfigured, updateCompanySettings]);
 
   useEffect(() => {
     loadSettings();
   }, [loadSettings]);
+
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (!tab) return;
+    if (tab === "profile" || tab === "compensation" || tab === "indices" || tab === "compliance") {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
 
   const handleSave = async () => {
     try {
@@ -193,11 +232,14 @@ export default function SettingsPage() {
       
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || "Failed to save settings");
+        const errorMessage =
+          typeof data?.error === "string" ? data.error : "Failed to save settings";
+        const hint = typeof data?.hint === "string" ? data.hint : "";
+        throw new Error([errorMessage, hint].filter(Boolean).join(" "));
       }
       
       // Sync to Zustand store for sidebar
-      zustandSettings.updateSettings({
+      updateCompanySettings({
         companyName,
         companyLogo,
         companyWebsite,
@@ -220,40 +262,42 @@ export default function SettingsPage() {
         compSplitTransportPct,
         compSplitOtherPct,
       });
-      zustandSettings.markAsConfigured();
+      markCompanyConfigured();
       
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to save settings");
+      const rawMessage = err instanceof Error ? err.message : "Failed to save settings";
+      setError(mapSettingsSaveError(rawMessage));
     } finally {
       setSaving(false);
     }
   };
 
+  const handleCompanyLogoChange = useCallback(
+    (logo: string | null) => {
+      setCompanyLogo(logo);
+      updateCompanySettings({ companyLogo: logo });
+    },
+    [updateCompanySettings]
+  );
+
   const tabs = [
     { id: "profile" as const, label: "Company Profile", icon: Building2 },
     { id: "compensation" as const, label: "Compensation Defaults", icon: Target },
     { id: "indices" as const, label: "Compensation Index", icon: BarChart3 },
-    { id: "compliance" as const, label: "Compliance Setup", icon: ShieldCheck },
+    { id: "compliance" as const, label: "Workforce Compliance", icon: ShieldCheck },
   ];
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin text-brand-500 mx-auto" />
-          <p className="mt-3 text-brand-600">Loading settings...</p>
-        </div>
-      </div>
-    );
+    return <SettingsPageLoading />;
   }
 
   return (
-    <div className="space-y-6 max-w-4xl">
+    <div className="settings-page space-y-8">
       {/* Error Banner */}
       {error && (
-        <div className="flex items-center gap-3 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-red-700">
+        <div className="settings-alert settings-alert-danger flex items-center gap-3 px-4 py-3">
           <AlertCircle className="h-5 w-5 flex-shrink-0" />
           <p className="text-sm">{error}</p>
           <button
@@ -266,52 +310,62 @@ export default function SettingsPage() {
       )}
 
       {/* Page Header */}
-      <div>
-        <h1 className="page-title">
-          Company Settings
-        </h1>
-        <p className="page-subtitle">
-          Configure your company profile and compensation defaults. These settings are used across all benchmarks and reports.
-        </p>
+      <div className="panel p-6 md:p-7">
+        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+          <div>
+            <h1 className="page-title">Company Settings</h1>
+            <p className="page-subtitle max-w-3xl">
+              Configure your company profile, compensation defaults, and workforce compliance rules. These settings are used across benchmarks, governance views, and reports.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {isCompanyConfigured && (
+              <span className="status-chip status-chip--success">Configured</span>
+            )}
+            <Link href="/dashboard/settings/employees">
+              <Button variant="outline" size="sm">
+                <Users className="mr-2 h-4 w-4" />
+                Employee Accounts
+              </Button>
+            </Link>
+          </div>
+        </div>
       </div>
 
       {/* Tab Navigation */}
-      <div className="flex gap-2 border-b border-border pb-px">
-        {tabs.map((tab) => {
-          const Icon = tab.icon;
-          return (
-            <button
-              key={tab.id}
-              type="button"
-              onClick={() => setActiveTab(tab.id)}
-              className={clsx(
-                "flex items-center gap-2 px-4 py-3 text-sm font-medium transition-all border-b-2 -mb-px",
-                activeTab === tab.id
-                  ? "border-brand-500 text-brand-900"
-                  : "border-transparent text-brand-600 hover:text-brand-800 hover:border-brand-200"
-              )}
-            >
-              <Icon className="h-4 w-4" />
-              {tab.label}
-            </button>
-          );
-        })}
-        <Link
-          href="/dashboard/settings/employees"
-          className="flex items-center gap-2 px-4 py-3 text-sm font-medium transition-all border-b-2 -mb-px border-transparent text-brand-600 hover:text-brand-800 hover:border-brand-200"
-        >
-          <Users className="h-4 w-4" />
-          Employee Accounts
-        </Link>
+      <div className="settings-tabs-wrap">
+        <div className="settings-tabs">
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                className={clsx(
+                  "settings-tab",
+                  activeTab === tab.id && "settings-tab-active"
+                )}
+              >
+                <Icon className="h-4 w-4" />
+                {tab.label}
+              </button>
+            );
+          })}
+          <Link href="/dashboard/settings/employees" className="settings-tab">
+            <Users className="h-4 w-4" />
+            Employee Accounts
+          </Link>
+        </div>
       </div>
 
       {/* Company Profile Tab */}
       {activeTab === "profile" && (
-        <div className="space-y-6">
+        <div className="space-y-8">
           {/* Logo & Branding Card */}
-          <Card className="p-6">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-100 text-brand-600">
+          <Card className="panel p-6 md:p-7">
+            <div className="settings-section-head mb-6">
+              <div className="settings-section-icon bg-brand-100 text-brand-600">
                 <Palette className="h-5 w-5" />
               </div>
               <div>
@@ -324,7 +378,7 @@ export default function SettingsPage() {
               {/* Logo Upload */}
               <LogoUploader
                 value={companyLogo}
-                onChange={setCompanyLogo}
+                onChange={handleCompanyLogoChange}
                 companyName={companyName}
               />
 
@@ -370,7 +424,8 @@ export default function SettingsPage() {
                   value={companyDescription}
                   onChange={(e) => setCompanyDescription(e.target.value)}
                   placeholder="Tell us about your company, mission, and what makes your workplace unique..."
-                  rows={5}
+                  rows={6}
+                  fullWidth
                   className="rounded-xl resize-none"
                   maxLength={500}
                 />
@@ -417,9 +472,9 @@ export default function SettingsPage() {
           </Card>
 
           {/* Company Details Card */}
-          <Card className="p-6">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-100 text-brand-600">
+          <Card className="panel p-6 md:p-7">
+            <div className="settings-section-head mb-6">
+              <div className="settings-section-icon bg-brand-100 text-brand-600">
                 <Building2 className="h-5 w-5" />
               </div>
               <div>
@@ -522,11 +577,11 @@ export default function SettingsPage() {
 
       {/* Compensation Defaults Tab */}
       {activeTab === "compensation" && (
-        <div className="space-y-6">
+        <div className="space-y-8">
           {/* Target & Positioning Card */}
-          <Card className="p-6">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600">
+          <Card className="panel p-6 md:p-7">
+            <div className="settings-section-head mb-6">
+              <div className="settings-section-icon bg-emerald-100 text-emerald-600">
                 <Target className="h-5 w-5" />
               </div>
               <div>
@@ -632,9 +687,9 @@ export default function SettingsPage() {
           </Card>
 
           {/* Compensation Structure Card */}
-          <Card className="p-6">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 text-amber-600">
+          <Card className="panel p-6 md:p-7">
+            <div className="settings-section-head mb-6">
+              <div className="settings-section-icon bg-amber-100 text-amber-600">
                 <Percent className="h-5 w-5" />
               </div>
               <div>
@@ -719,9 +774,9 @@ export default function SettingsPage() {
           </Card>
 
           {/* Benefits Card */}
-          <Card className="p-6">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-100 text-purple-600">
+          <Card className="panel p-6 md:p-7">
+            <div className="settings-section-head mb-6">
+              <div className="settings-section-icon bg-purple-100 text-purple-600">
                 <Gift className="h-5 w-5" />
               </div>
               <div>
@@ -764,9 +819,9 @@ export default function SettingsPage() {
           </Card>
 
           {/* Compensation Split Card */}
-          <Card className="p-6">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-sky-100 text-sky-600">
+          <Card className="panel p-6 md:p-7">
+            <div className="settings-section-head mb-6">
+              <div className="settings-section-icon bg-sky-100 text-sky-600">
                 <BarChart3 className="h-5 w-5" />
               </div>
               <div>
@@ -863,31 +918,41 @@ export default function SettingsPage() {
 
       {/* Save Button */}
       {activeTab !== "compliance" && (
-      <div className="flex items-center justify-between pt-4 border-t border-border sticky bottom-0 bg-white py-4 -mx-6 px-6">
-        <div>
-          {saved && (
-            <div className="flex items-center gap-2 text-sm text-emerald-600">
-              <CheckCircle className="h-4 w-4" />
-              <span>Settings saved successfully</span>
-            </div>
-          )}
-          {zustandSettings.isConfigured && !saved && (
-            <div className="flex items-center gap-2 text-xs text-brand-500">
-              <span>Last updated: {new Date(zustandSettings.lastUpdated).toLocaleDateString("en-GB")}</span>
-            </div>
-          )}
+      <div className="sticky bottom-4 z-20">
+        <div className="panel flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+          <div>
+            {saved && (
+              <div className="flex items-center gap-2 text-sm text-emerald-600">
+                <CheckCircle className="h-4 w-4" />
+                <span>Settings saved successfully</span>
+              </div>
+            )}
+            {isCompanyConfigured && !saved && (
+              <div className="flex items-center gap-2 text-xs text-brand-500">
+                <span>Last updated: {new Date(companySettingsLastUpdated).toLocaleDateString("en-GB")}</span>
+              </div>
+            )}
+          </div>
+          <Button onClick={handleSave} disabled={saving} className="px-8">
+            {saving ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Save className="mr-2 h-4 w-4" />
+            )}
+            {saving ? "Saving..." : "Save Settings"}
+          </Button>
         </div>
-        <Button onClick={handleSave} disabled={saving} className="px-8">
-          {saving ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : (
-            <Save className="mr-2 h-4 w-4" />
-          )}
-          {saving ? "Saving..." : "Save Settings"}
-        </Button>
       </div>
       )}
     </div>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={<SettingsPageLoading />}>
+      <SettingsPageContent />
+    </Suspense>
   );
 }
 
@@ -1035,7 +1100,7 @@ function CompensationIndexPanel({ targetPercentile }: { targetPercentile: number
   return (
     <div className="space-y-6">
       {/* Explanation Card */}
-      <Card className="p-6">
+      <Card className="panel p-6 md:p-7">
         <div className="flex items-start gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
             <Info className="h-5 w-5" />
@@ -1071,7 +1136,7 @@ function CompensationIndexPanel({ targetPercentile }: { targetPercentile: number
       </Card>
 
       {/* View Toggle */}
-      <div className="flex gap-1 rounded-lg bg-brand-100/50 p-1 w-fit">
+      <div className="inline-flex gap-1 rounded-xl border border-border bg-surface-2 p-1">
         <button
           type="button"
           onClick={() => setIndexView("family")}
@@ -1099,7 +1164,7 @@ function CompensationIndexPanel({ targetPercentile }: { targetPercentile: number
       </div>
 
       {/* Index Table */}
-      <Card className="p-0 overflow-hidden">
+      <Card className="panel overflow-hidden p-0">
         <div className="p-4 border-b border-border">
           <h3 className="text-base font-semibold text-brand-900">Compensation Index</h3>
           <p className="text-sm text-brand-500">

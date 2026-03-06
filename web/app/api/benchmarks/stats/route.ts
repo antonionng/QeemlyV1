@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { fetchMarketBenchmarks } from "@/lib/benchmarks/platform-market";
 
 /**
  * GET /api/benchmarks/stats
- * Get benchmark data statistics for the current workspace
+ * Returns both market (Qeemly data pool) and workspace (company bands) stats.
  */
 export async function GET() {
   const supabase = await createClient();
@@ -13,52 +14,71 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Get user's workspace
   const { data: profile } = await supabase
     .from("profiles")
     .select("workspace_id")
     .eq("id", user.id)
     .single();
 
-  if (!profile?.workspace_id) {
-    return NextResponse.json({ 
-      total: 0,
-      uniqueRoles: 0,
-      uniqueLocations: 0,
-      sources: [],
-      lastUpdated: null,
-      hasRealData: false,
-    });
+  // Market benchmarks (Qeemly data pool — always available)
+  let marketBenchmarkCount = 0;
+  let marketRoles = 0;
+  let marketLocations = 0;
+  try {
+    const marketData = await fetchMarketBenchmarks(supabase);
+    marketBenchmarkCount = marketData.length;
+    marketRoles = new Set(marketData.map(b => b.role_id)).size;
+    marketLocations = new Set(marketData.map(b => b.location_id)).size;
+  } catch {
+    // Market data may not be available yet
   }
 
-  // Get benchmark statistics
-  const { data: benchmarks, error: benchmarkError } = await supabase
-    .from("salary_benchmarks")
-    .select("id, role_id, location_id, source, updated_at")
-    .eq("workspace_id", profile.workspace_id);
+  // Workspace benchmarks (company pay bands)
+  let workspaceBenchmarkCount = 0;
+  let workspaceRoles = 0;
+  let workspaceLocations = 0;
+  let workspaceSources: string[] = [];
+  let lastUpdated: string | null = null;
 
-  if (benchmarkError) {
-    return NextResponse.json({ error: benchmarkError.message }, { status: 500 });
+  if (profile?.workspace_id) {
+    const { data: benchmarks, error: benchmarkError } = await supabase
+      .from("salary_benchmarks")
+      .select("id, role_id, location_id, source, updated_at")
+      .eq("workspace_id", profile.workspace_id);
+
+    if (!benchmarkError && benchmarks) {
+      workspaceBenchmarkCount = benchmarks.length;
+      workspaceRoles = new Set(benchmarks.map(b => b.role_id)).size;
+      workspaceLocations = new Set(benchmarks.map(b => b.location_id)).size;
+      workspaceSources = [...new Set(benchmarks.map(b => b.source))];
+      lastUpdated = benchmarks.length
+        ? benchmarks.reduce((latest, b) => {
+            const date = new Date(b.updated_at);
+            return date > latest ? date : latest;
+          }, new Date(0)).toISOString()
+        : null;
+    }
   }
 
-  const total = benchmarks?.length || 0;
-  const uniqueRoles = new Set(benchmarks?.map(b => b.role_id) || []).size;
-  const uniqueLocations = new Set(benchmarks?.map(b => b.location_id) || []).size;
-  const sources = [...new Set(benchmarks?.map(b => b.source) || [])];
-  
-  const lastUpdated = benchmarks?.length 
-    ? benchmarks.reduce((latest, b) => {
-        const date = new Date(b.updated_at);
-        return date > latest ? date : latest;
-      }, new Date(0)).toISOString()
-    : null;
+  const total = marketBenchmarkCount + workspaceBenchmarkCount;
 
   return NextResponse.json({
     total,
-    uniqueRoles,
-    uniqueLocations,
-    sources,
+    uniqueRoles: marketRoles + workspaceRoles,
+    uniqueLocations: Math.max(marketLocations, workspaceLocations),
+    sources: [...new Set(["market", ...workspaceSources])],
     lastUpdated,
     hasRealData: total > 0,
+    market: {
+      count: marketBenchmarkCount,
+      uniqueRoles: marketRoles,
+      uniqueLocations: marketLocations,
+    },
+    workspace: {
+      count: workspaceBenchmarkCount,
+      uniqueRoles: workspaceRoles,
+      uniqueLocations: workspaceLocations,
+      sources: workspaceSources,
+    },
   });
 }

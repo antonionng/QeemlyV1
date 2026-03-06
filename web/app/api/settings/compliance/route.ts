@@ -9,6 +9,17 @@ import {
   DEFAULT_COMPLIANCE_SETTINGS,
 } from "@/lib/compliance/settings-schema";
 
+function isMissingRelationError(error: { message?: string | null; code?: string | null } | null) {
+  if (!error) return false;
+  const message = (error.message || "").toLowerCase();
+  return (
+    error.code === "42P01" ||
+    error.code === "PGRST205" ||
+    message.includes("does not exist") ||
+    message.includes("schema cache")
+  );
+}
+
 export async function GET() {
   const resolved = await getWorkspaceContextOrError();
   if ("error" in resolved) return resolved.error;
@@ -16,7 +27,7 @@ export async function GET() {
   const supabase = await createClient();
   const { workspace_id } = resolved.context;
 
-  const [{ data: settings, error }, { data: syncRows }] = await Promise.all([
+  const [{ data: settings, error }, { data: syncRows, error: syncError }] = await Promise.all([
     supabase
       .from("workspace_compliance_settings")
       .select("*")
@@ -28,14 +39,30 @@ export async function GET() {
       .eq("workspace_id", workspace_id),
   ]);
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    // Local/dev environments may be missing the latest migrations; keep setup page usable.
+    if (isMissingRelationError(error)) {
+      return NextResponse.json({
+        settings: { workspace_id, ...DEFAULT_COMPLIANCE_SETTINGS },
+        ingestion: {
+          integration_sync_count: 0,
+          last_integration_success_at: null,
+        },
+        warning:
+          "Compliance settings tables are not available yet. Run the latest database migrations to persist settings.",
+      });
+    }
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 
   return NextResponse.json({
     settings: settings || { workspace_id, ...DEFAULT_COMPLIANCE_SETTINGS },
     ingestion: {
-      integration_sync_count: syncRows?.length || 0,
+      integration_sync_count: syncError ? 0 : syncRows?.length || 0,
       last_integration_success_at:
-        syncRows?.map((row) => row.last_success_at).filter(Boolean).sort().at(-1) || null,
+        syncError
+          ? null
+          : syncRows?.map((row) => row.last_success_at).filter(Boolean).sort().at(-1) || null,
     },
   });
 }

@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { AdminPageError } from "@/components/admin/admin-page-error";
+import { fetchAdminJson, normalizeAdminApiError, type NormalizedAdminApiError } from "@/lib/admin/api-client";
 import {
   Globe,
   Database,
@@ -66,19 +68,22 @@ function getRelativeTime(dateStr: string): string {
 export default function PipelinePage() {
   const [sources, setSources] = useState<Source[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
+  const [error, setError] = useState<NormalizedAdminApiError | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchData = () => {
     setLoading(true);
+    setError(null);
     Promise.all([
-      fetch("/api/admin/sources").then((r) => r.ok ? r.json() : []),
-      fetch("/api/admin/stats").then((r) => r.ok ? r.json() : null),
+      fetchAdminJson<Source[]>("/api/admin/sources"),
+      fetchAdminJson<Stats>("/api/admin/stats"),
     ])
       .then(([sourcesData, statsData]) => {
         setSources(Array.isArray(sourcesData) ? sourcesData : []);
         setStats(statsData);
       })
-      .catch(() => {
+      .catch((err) => {
+        setError(normalizeAdminApiError(err));
         setSources([]);
         setStats(null);
       })
@@ -98,6 +103,7 @@ export default function PipelinePage() {
 
   return (
     <div>
+      <AdminPageError error={error} onRetry={fetchData} className="mb-6" />
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="page-title">Data Pipeline</h1>

@@ -27,9 +27,9 @@ const STARTER_REPORT_FALLBACKS: Array<{
     tags: ["Market", "GCC", "Roles", "Percentiles"],
   },
   {
-    title: "Pay Equity & Fairness (Monthly)",
+    title: "Pay Governance & Equity (Monthly)",
     type_id: "compliance",
-    tags: ["Equity", "Audit", "Remediation"],
+    tags: ["Equity", "Governance", "Remediation"],
   },
 ];
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Briefcase, MessageSquare, Plus, Send, Sparkles, Trash2, User, X } from "lucide-react";
 import clsx from "clsx";
 import { useAIChat } from "@/lib/dashboard/use-ai-chat";
@@ -8,6 +8,7 @@ import type { ChatMode } from "@/lib/ai/chat/protocol";
 import type { EmployeeContextSnapshot } from "@/lib/ai/chat/threads";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { createClient } from "@/lib/supabase/client";
 
 export type AIDrawerInitialRequest = {
   requestId: string;
@@ -99,6 +100,38 @@ function parseMessageBlocks(text: string): MessageBlock[] {
   return blocks.length > 0 ? blocks : [{ kind: "paragraph", text }];
 }
 
+function renderInlineMarkdown(text: string) {
+  const nodes: Array<string | JSX.Element> = [];
+  const boldPattern = /\*\*(.+?)\*\*/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null = boldPattern.exec(text);
+
+  while (match) {
+    if (match.index > lastIndex) {
+      nodes.push(text.slice(lastIndex, match.index));
+    }
+    nodes.push(
+      <strong key={`strong-${match.index}`} className="font-semibold text-brand-900">
+        {match[1]}
+      </strong>
+    );
+    lastIndex = match.index + match[0].length;
+    match = boldPattern.exec(text);
+  }
+
+  if (lastIndex < text.length) {
+    nodes.push(text.slice(lastIndex));
+  }
+
+  if (nodes.length === 0) {
+    return text;
+  }
+
+  return nodes.map((node, index) =>
+    typeof node === "string" ? <Fragment key={`text-${index}`}>{node}</Fragment> : node
+  );
+}
+
 function AssistantMessageBody({ text }: { text: string }) {
   const blocks = useMemo(() => parseMessageBlocks(text), [text]);
 
@@ -108,7 +141,7 @@ function AssistantMessageBody({ text }: { text: string }) {
         if (block.kind === "paragraph") {
           return (
             <p key={`p-${idx}`} className="whitespace-pre-wrap break-words">
-              {block.text}
+              {renderInlineMarkdown(block.text)}
             </p>
           );
         }
@@ -118,7 +151,7 @@ function AssistantMessageBody({ text }: { text: string }) {
             <ul key={`ul-${idx}`} className="list-disc space-y-1 pl-5">
               {block.items.map((item, itemIdx) => (
                 <li key={`ul-item-${idx}-${itemIdx}`} className="break-words">
-                  {item}
+                  {renderInlineMarkdown(item)}
                 </li>
               ))}
             </ul>
@@ -129,7 +162,7 @@ function AssistantMessageBody({ text }: { text: string }) {
           <ol key={`ol-${idx}`} className="list-decimal space-y-1 pl-5">
             {block.items.map((item, itemIdx) => (
               <li key={`ol-item-${idx}-${itemIdx}`} className="break-words">
-                {item}
+                {renderInlineMarkdown(item)}
               </li>
             ))}
           </ol>
@@ -141,8 +174,7 @@ function AssistantMessageBody({ text }: { text: string }) {
 
 function QeemlyAIAvatar({ size = "md" }: { size?: "sm" | "md" }) {
   const wrapper = size === "sm" ? "h-6 w-6 rounded-lg" : "h-10 w-10 rounded-xl";
-  const icon = size === "sm" ? "h-3.5 w-3.5" : "h-5 w-5";
-  const [logoLoadFailed, setLogoLoadFailed] = useState(false);
+  const mark = size === "sm" ? "text-[9px]" : "text-sm";
 
   return (
     <div
@@ -150,19 +182,11 @@ function QeemlyAIAvatar({ size = "md" }: { size?: "sm" | "md" }) {
         "flex items-center justify-center overflow-hidden bg-gradient-to-br from-brand-500 to-brand-600 text-white shadow-brand-500/20",
         wrapper,
       )}
+      aria-label="Qeemly AI avatar"
     >
-      {!logoLoadFailed ? (
-        <div className="flex h-[88%] w-[88%] items-center justify-center rounded-md bg-white p-1">
-          <img
-            src="/logo.png"
-            alt="Qeemly AI"
-            className="h-full w-full object-contain"
-            onError={() => setLogoLoadFailed(true)}
-          />
-        </div>
-      ) : (
-        <Sparkles className={icon} />
-      )}
+      <div className="flex h-[88%] w-[88%] items-center justify-center rounded-md bg-white text-brand-600">
+        <span className={clsx("font-bold tracking-tight", mark)}>Q</span>
+      </div>
     </div>
   );
 }
@@ -176,6 +200,11 @@ function formatThreadGroup(dateValue: string): "Today" | "Previous 7 days" | "Ol
   if (diffDays <= 7) return "Previous 7 days";
   return "Older";
 }
+
+type UserProfile = {
+  full_name?: string | null;
+  avatar_url?: string | null;
+};
 
 export function AIDrawer({
   isOpen,
@@ -201,6 +230,20 @@ export function AIDrawer({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const lastHandledRequestIdRef = useRef<string | null>(null);
   const [deletingThreadId, setDeletingThreadId] = useState<string | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return;
+      supabase
+        .from("profiles")
+        .select("full_name,avatar_url")
+        .eq("id", user.id)
+        .single()
+        .then(({ data }) => setUserProfile(data));
+    });
+  }, []);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -451,8 +494,18 @@ export function AIDrawer({
                           {msg.role === "assistant" ? "Qeemly AI" : "You"}
                         </span>
                         {msg.role === "user" && (
-                          <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-brand-900 text-white">
-                            <User className="h-3.5 w-3.5" />
+                          <div className="flex h-6 w-6 items-center justify-center overflow-hidden rounded-lg bg-brand-900 text-white">
+                            {userProfile?.avatar_url ? (
+                              <img
+                                src={userProfile.avatar_url}
+                                alt={userProfile.full_name ?? "You"}
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <span className="text-[10px] font-semibold">
+                                {userProfile?.full_name?.charAt(0).toUpperCase() ?? <User className="h-3.5 w-3.5" />}
+                              </span>
+                            )}
                           </div>
                         )}
                       </div>

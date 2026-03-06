@@ -3,7 +3,7 @@
 import clsx from "clsx";
 import { ArrowDownRight, ArrowUpRight, Layers, MapPin, TrendingUp } from "lucide-react";
 import { useBenchmarksContext } from "@/lib/benchmarks/context";
-// SalaryViewToggle is now in the global topbar
+import { BenchmarkSourceBadge } from "@/components/ui/benchmark-source-badge";
 import {
   formatCurrency,
   formatCurrencyK,
@@ -45,18 +45,21 @@ export function SalaryOverviewWidget() {
           <h3 className="truncate text-lg font-bold text-brand-900">{selectedRole.title}</h3>
           <p className="text-xs text-accent-500">{selectedRole.family}</p>
         </div>
-        <span
-          className={clsx(
-            "shrink-0 rounded-full px-2.5 py-1 text-xs font-semibold",
-            selectedBenchmark.confidence === "High"
-              ? "bg-emerald-100 text-emerald-700"
-              : selectedBenchmark.confidence === "Medium"
-              ? "bg-amber-100 text-amber-700"
-              : "bg-rose-100 text-rose-700"
-          )}
-        >
-          {selectedBenchmark.confidence}
-        </span>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <BenchmarkSourceBadge source={selectedBenchmark.benchmarkSource} />
+          <span
+            className={clsx(
+              "rounded-full px-2.5 py-1 text-xs font-semibold",
+              selectedBenchmark.confidence === "High"
+                ? "bg-emerald-100 text-emerald-700"
+                : selectedBenchmark.confidence === "Medium"
+                ? "bg-amber-100 text-amber-700"
+                : "bg-rose-100 text-rose-700"
+            )}
+          >
+            {selectedBenchmark.confidence}
+          </span>
+        </div>
       </div>
 
       {/* Salary view is controlled by the global toggle in the topbar */}

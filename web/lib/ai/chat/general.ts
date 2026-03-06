@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import type { WorkspaceContext } from "@/lib/workspace-context";
+import { fetchMarketBenchmarks } from "@/lib/benchmarks/platform-market";
 
 type WorkspaceSnapshot = {
   employeeCount: number;
@@ -38,14 +39,19 @@ export async function buildGeneralChatInput(
   workspaceContext: WorkspaceContext,
   question: string
 ): Promise<string> {
-  const snapshot = await getWorkspaceSnapshot(workspaceContext.workspace_id);
+  const supabase = await createClient();
+  const [snapshot, marketBenchmarks] = await Promise.all([
+    getWorkspaceSnapshot(workspaceContext.workspace_id),
+    fetchMarketBenchmarks(supabase).catch(() => []),
+  ]);
   const todayIso = new Date().toISOString().slice(0, 10);
 
-  return [
+  const sections = [
     "You are Qeemly AI, a GCC-focused compensation sidekick.",
     "Give concise, practical answers.",
-    "Use only provided workspace snapshot details as facts about this customer.",
-    "If a requested fact is unavailable, say so clearly and provide a safe next step.",
+    "Use the workspace snapshot for facts about this customer's organisation.",
+    "Use the Qeemly Market Data to answer questions about market rates, salary comparisons across roles, levels, and locations.",
+    "If data for a specific combination is not in the market data, say what is available and suggest the closest match.",
     "",
     "Workspace snapshot (do not invent missing values):",
     JSON.stringify(
@@ -59,6 +65,26 @@ export async function buildGeneralChatInput(
       null,
       2
     ),
+  ];
+
+  if (marketBenchmarks.length > 0) {
+    const condensed = marketBenchmarks.map((b) => ({
+      role: b.role_id,
+      location: b.location_id,
+      level: b.level_id,
+      currency: b.currency,
+      p25: b.p25,
+      p50: b.p50,
+      p75: b.p75,
+    }));
+    sections.push(
+      "",
+      `Qeemly Market Data (${condensed.length} benchmarks — p25/p50/p75 are annual base salary):`,
+      JSON.stringify(condensed, null, 2),
+    );
+  }
+
+  sections.push(
     "",
     `User question: ${question}`,
     "",
@@ -66,5 +92,7 @@ export async function buildGeneralChatInput(
     "- Start with a one-line direct answer.",
     "- Use short sections and bullet points for actions.",
     "- Put each bullet on its own new line.",
-  ].join("\n");
+  );
+
+  return sections.join("\n");
 }

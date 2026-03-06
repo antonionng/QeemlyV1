@@ -7,7 +7,7 @@ export function CompliancePayEquityCard() {
   const { payEquityKpis, equityLevels } = useComplianceContext();
   return (
     <div className="rounded-2xl border border-border bg-white p-6 shadow-sm">
-      <h3 className="text-base font-bold text-brand-900">Pay Equity Audit</h3>
+      <h3 className="text-base font-bold text-brand-900">Compensation Governance: Pay Equity</h3>
 
       {/* KPI row */}
       <div className="mt-5 grid grid-cols-3 gap-4">
@@ -95,11 +95,8 @@ export function CompliancePayEquityCard() {
       <div className="mt-5 flex items-center gap-2 rounded-xl bg-brand-50 p-3 text-brand-700">
         <Info className="h-4 w-4 shrink-0 text-brand-500" />
         <p className="text-[11px] leading-tight">
-          Your current pay gap is{" "}
-          <span className="font-bold">
-            below the industry median
-          </span>{" "}
-          for technology companies in the UAE.
+          Equity indicators are benchmark-informed and should be reviewed alongside your
+          out-of-band compensation and benchmark coverage controls.
         </p>
       </div>
     </div>
