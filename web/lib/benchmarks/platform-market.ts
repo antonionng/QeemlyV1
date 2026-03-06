@@ -26,11 +26,24 @@ export type MarketBenchmark = {
 
 type QueryRow = Record<string, unknown>;
 
-type SupabaseQuery = {
+type SupabaseQueryBuilder = {
   select: (columns: string) => SupabaseQuery;
+};
+
+type SupabaseQuery = {
   eq: (column: string, value: unknown) => SupabaseQuery;
   order: (column: string, options: { ascending: boolean }) => SupabaseQuery;
-  range: (start: number, end: number) => Promise<{ data: QueryRow[] | null }>;
+  range: (start: number, end: number) => Promise<{
+    data: QueryRow[] | null;
+    error?: { message?: string } | null;
+  }>;
+};
+
+type SupabaseRangeQuery = {
+  range: (start: number, end: number) => Promise<{
+    data: QueryRow[] | null;
+    error?: { message?: string } | null;
+  }>;
 };
 
 type SupabaseLike = {
@@ -102,13 +115,23 @@ export function invalidateMarketBenchmarkCache() {
   cacheTimestamp = 0;
 }
 
+function isSupabaseQueryBuilder(value: unknown): value is SupabaseQueryBuilder {
+  if (!value || typeof value !== "object") return false;
+
+  return typeof (value as Record<string, unknown>).select === "function";
+}
+
 function isSupabaseQuery(value: unknown): value is SupabaseQuery {
   if (!value || typeof value !== "object") return false;
 
-  return ["select", "eq", "order", "range"].every((key) => {
-    const candidate = value as Record<string, unknown>;
-    return typeof candidate[key] === "function";
-  });
+  const candidate = value as Record<string, unknown>;
+  return ["eq", "order", "range"].every((key) => typeof candidate[key] === "function");
+}
+
+function isSupabaseRangeQuery(value: unknown): value is SupabaseRangeQuery {
+  if (!value || typeof value !== "object") return false;
+
+  return typeof (value as Record<string, unknown>).range === "function";
 }
 
 // ---------------------------------------------------------------------------
@@ -192,7 +215,7 @@ function estimateP90(p75: number): number {
 async function fetchAllRows(
   client: SupabaseLike,
   table: string,
-  buildQuery: (query: SupabaseQuery) => SupabaseQuery
+  buildQuery: (query: SupabaseQueryBuilder) => SupabaseQuery
 ): Promise<QueryRow[]> {
   const rows: QueryRow[] = [];
   let start = 0;
@@ -200,10 +223,17 @@ async function fetchAllRows(
   while (true) {
     const end = start + PAGE_SIZE - 1;
     const query = client.from(table);
-    if (!isSupabaseQuery(query)) {
+    if (!isSupabaseQueryBuilder(query)) {
       throw new Error(`Unsupported Supabase query client for table: ${table}`);
     }
-    const { data } = await buildQuery(query).range(start, end);
+    const builtQuery = buildQuery(query);
+    if (!isSupabaseRangeQuery(builtQuery)) {
+      throw new Error(`Unsupported Supabase query chain for table: ${table}`);
+    }
+    const { data, error } = await builtQuery.range(start, end);
+    if (error) {
+      throw new Error(error.message || `Failed to fetch rows from ${table}`);
+    }
     const page = data ?? [];
     rows.push(...page);
 

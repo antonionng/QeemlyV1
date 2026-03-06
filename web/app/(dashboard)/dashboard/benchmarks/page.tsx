@@ -16,6 +16,16 @@ type BenchmarkStats = {
   sources: string[];
   lastUpdated: string | null;
   hasRealData: boolean;
+  diagnostics?: {
+    market: {
+      readMode: "service" | "session";
+      clientWarning: string | null;
+      error: string | null;
+      warning: string | null;
+      hasServiceRoleKey: boolean;
+      hasPlatformWorkspaceId: boolean;
+    };
+  };
 };
 
 export default function BenchmarksPage() {
@@ -45,6 +55,10 @@ export default function BenchmarksPage() {
   const freshnessLabel = stats?.lastUpdated
     ? new Date(stats.lastUpdated).toLocaleDateString("en-GB")
     : "Unknown";
+  const marketDiagnosticMessage =
+    stats?.diagnostics?.market.error ||
+    stats?.diagnostics?.market.warning ||
+    stats?.diagnostics?.market.clientWarning;
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -98,13 +112,21 @@ export default function BenchmarksPage() {
       </div>
 
       {stats && (
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-surface-1 px-4 py-3 text-xs text-accent-600">
-          <span className="rounded-full bg-brand-100 px-2.5 py-1 text-brand-700">
-            Source: {stats.sources.length > 0 ? stats.sources.slice(0, 2).join(", ") : "N/A"}
-          </span>
-          <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-emerald-700">
-            Refreshed: {freshnessLabel}
-          </span>
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-surface-1 px-4 py-3 text-xs text-accent-600">
+            <span className="rounded-full bg-brand-100 px-2.5 py-1 text-brand-700">
+              Source: {stats.sources.length > 0 ? stats.sources.slice(0, 2).join(", ") : "N/A"}
+            </span>
+            <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-emerald-700">
+              Refreshed: {freshnessLabel}
+            </span>
+          </div>
+
+          {marketDiagnosticMessage && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
+              Market dataset diagnostics: {marketDiagnosticMessage}
+            </div>
+          )}
         </div>
       )}
 

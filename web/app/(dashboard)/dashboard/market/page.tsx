@@ -54,6 +54,9 @@ export default function MarketOverviewPage() {
   const freshnessLabel = stats?.lastUpdated
     ? new Date(stats.lastUpdated).toLocaleDateString("en-GB")
     : "Awaiting refresh";
+  const marketDiagnostics = stats?.diagnostics?.market;
+  const marketDiagnosticMessage =
+    marketDiagnostics?.error || marketDiagnostics?.warning || marketDiagnostics?.clientWarning;
   const toneClasses = {
     neutral: "border-accent-200 bg-white text-accent-900",
     warning: "border-amber-200 bg-amber-50 text-amber-900",
@@ -116,6 +119,18 @@ export default function MarketOverviewPage() {
           </div>
         </div>
       </Card>
+
+      {marketDiagnosticMessage && (
+        <Card className="dash-card border border-amber-200 bg-amber-50 p-5 text-amber-950">
+          <h3 className="text-base font-semibold">Market dataset diagnostics</h3>
+          <p className="mt-2 text-sm">
+            {marketDiagnosticMessage}
+          </p>
+          <p className="mt-2 text-xs text-amber-800">
+            Read mode: {marketDiagnostics?.readMode === "service" ? "service role" : "session"}
+          </p>
+        </Card>
+      )}
 
       {stats ? (
         <>

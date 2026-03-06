@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { fetchMarketBenchmarks } from "@/lib/benchmarks/platform-market";
 
 /**
@@ -24,13 +25,44 @@ export async function GET() {
   let marketBenchmarkCount = 0;
   let marketRoles = 0;
   let marketLocations = 0;
+  const combinedRoleIds = new Set<string>();
+  const combinedLocationIds = new Set<string>();
+  const diagnostics = {
+    market: {
+      readMode: "session" as "service" | "session",
+      clientWarning: null as string | null,
+      error: null as string | null,
+      warning: null as string | null,
+      hasServiceRoleKey: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
+      hasPlatformWorkspaceId: Boolean(process.env.PLATFORM_WORKSPACE_ID),
+    },
+  };
+
+  let marketSupabase: Awaited<ReturnType<typeof createClient>> | ReturnType<typeof createServiceClient> =
+    supabase;
+
   try {
-    const marketData = await fetchMarketBenchmarks(supabase);
+    marketSupabase = createServiceClient();
+    diagnostics.market.readMode = "service";
+  } catch (error) {
+    diagnostics.market.clientWarning = getErrorMessage(error);
+  }
+
+  try {
+    const marketData = await fetchMarketBenchmarks(marketSupabase);
     marketBenchmarkCount = marketData.length;
     marketRoles = new Set(marketData.map(b => b.role_id)).size;
     marketLocations = new Set(marketData.map(b => b.location_id)).size;
-  } catch {
-    // Market data may not be available yet
+    marketData.forEach((benchmark) => {
+      combinedRoleIds.add(benchmark.role_id);
+      combinedLocationIds.add(benchmark.location_id);
+    });
+    if (marketData.length === 0) {
+      diagnostics.market.warning =
+        "No market benchmark rows were returned from public snapshots or the platform workspace fallback.";
+    }
+  } catch (error) {
+    diagnostics.market.error = getErrorMessage(error);
   }
 
   // Workspace benchmarks (company pay bands)
@@ -50,6 +82,10 @@ export async function GET() {
       workspaceBenchmarkCount = benchmarks.length;
       workspaceRoles = new Set(benchmarks.map(b => b.role_id)).size;
       workspaceLocations = new Set(benchmarks.map(b => b.location_id)).size;
+      benchmarks.forEach((benchmark) => {
+        combinedRoleIds.add(benchmark.role_id);
+        combinedLocationIds.add(benchmark.location_id);
+      });
       workspaceSources = [...new Set(benchmarks.map(b => b.source))];
       lastUpdated = benchmarks.length
         ? benchmarks.reduce((latest, b) => {
@@ -64,11 +100,12 @@ export async function GET() {
 
   return NextResponse.json({
     total,
-    uniqueRoles: marketRoles + workspaceRoles,
-    uniqueLocations: Math.max(marketLocations, workspaceLocations),
+    uniqueRoles: combinedRoleIds.size,
+    uniqueLocations: combinedLocationIds.size,
     sources: [...new Set(["market", ...workspaceSources])],
     lastUpdated,
     hasRealData: total > 0,
+    diagnostics,
     market: {
       count: marketBenchmarkCount,
       uniqueRoles: marketRoles,
@@ -81,4 +118,9 @@ export async function GET() {
       sources: workspaceSources,
     },
   });
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return String(error);
 }

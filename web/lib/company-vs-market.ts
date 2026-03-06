@@ -7,6 +7,16 @@ export type BenchmarkStatsSummary = {
   sources: string[];
   lastUpdated: string | null;
   hasRealData: boolean;
+  diagnostics?: {
+    market: {
+      readMode: "service" | "session";
+      clientWarning: string | null;
+      error: string | null;
+      warning: string | null;
+      hasServiceRoleKey: boolean;
+      hasPlatformWorkspaceId: boolean;
+    };
+  };
   market: {
     count: number;
     uniqueRoles: number;

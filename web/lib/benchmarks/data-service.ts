@@ -181,6 +181,22 @@ export async function getBenchmark(
   locationId: string,
   levelId: string
 ): Promise<SalaryBenchmark | null> {
+  try {
+    const params = new URLSearchParams({ roleId, locationId, levelId });
+    const response = await fetch(`/api/benchmarks/search?${params.toString()}`, {
+      cache: "no-store",
+    });
+
+    if (response.ok) {
+      const payload = (await response.json()) as { benchmark: SalaryBenchmark | null };
+      if (payload.benchmark) {
+        return payload.benchmark;
+      }
+    }
+  } catch {
+    // Fall back to direct reads if the API is unavailable in the current context.
+  }
+
   const supabase = createClient();
 
   // Market data first (the product)
