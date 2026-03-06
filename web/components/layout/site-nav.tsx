@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { Menu, X, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
+import { createClient } from "@/lib/supabase/client";
 
 const navLinks = [
   { href: "/home", label: "Home" },
@@ -33,7 +34,29 @@ export function SiteNav() {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const dropdownRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const supabase = createClient();
+    let mounted = true;
+
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!mounted) return;
+      setIsAuthenticated(Boolean(user));
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsAuthenticated(Boolean(session?.user));
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     if (!openDropdown) return;
@@ -132,15 +155,23 @@ export function SiteNav() {
 
           {/* Right actions */}
           <div className="flex items-center gap-3">
-            <Link
-              href="/login"
-              className="hidden rounded-lg px-4 py-2 text-sm font-semibold text-brand-700 transition-colors hover:bg-muted hover:text-brand-900 sm:inline-flex"
-            >
-              Log in
-            </Link>
-            <Link href="/register" className="hidden sm:inline-flex">
-              <Button size="sm">Get Started</Button>
-            </Link>
+            {isAuthenticated ? (
+              <Link href="/dashboard" className="hidden sm:inline-flex">
+                <Button size="sm">Dashboard</Button>
+              </Link>
+            ) : (
+              <>
+                <Link
+                  href="/login"
+                  className="hidden rounded-lg px-4 py-2 text-sm font-semibold text-brand-700 transition-colors hover:bg-muted hover:text-brand-900 sm:inline-flex"
+                >
+                  Log in
+                </Link>
+                <Link href="/register" className="hidden sm:inline-flex">
+                  <Button size="sm">Get Started</Button>
+                </Link>
+              </>
+            )}
 
             {/* Mobile menu button */}
             <button
@@ -191,12 +222,20 @@ export function SiteNav() {
               })}
             </nav>
             <div className="mt-4 flex flex-col gap-2 border-t border-border pt-4">
-              <Link href="/login" className="rounded-lg px-3 py-2 text-sm font-medium text-brand-700 hover:bg-muted">
-                Log in
-              </Link>
-              <Link href="/register">
-                <Button size="sm" className="w-full">Get Started</Button>
-              </Link>
+              {isAuthenticated ? (
+                <Link href="/dashboard">
+                  <Button size="sm" className="w-full">Dashboard</Button>
+                </Link>
+              ) : (
+                <>
+                  <Link href="/login" className="rounded-lg px-3 py-2 text-sm font-medium text-brand-700 hover:bg-muted">
+                    Log in
+                  </Link>
+                  <Link href="/register">
+                    <Button size="sm" className="w-full">Get Started</Button>
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         )}

@@ -99,10 +99,10 @@ function mapRowsToEmployees(
 ): Employee[] {
   if (!dbEmployees.length) return [];
 
-  // Market benchmarks are the primary source (the Qeemly data pool)
-  const market = buildBenchmarkMaps(dbMarketBenchmarks);
-  // Workspace benchmarks are the company's own pay bands (supplementary)
+  // Workspace benchmarks are the company's own pay bands (primary for internal health views)
   const workspace = buildBenchmarkMaps(dbBenchmarks);
+  // Market benchmarks are used as fallback coverage when workspace rows are missing
+  const market = buildBenchmarkMaps(dbMarketBenchmarks);
 
   const toAnnual = (value: number): number => (value < 100_000 ? value * 12 : value);
   const percentileFromComp = (comp: number, b: BenchmarkRow): number => {
@@ -132,12 +132,12 @@ function mapRowsToEmployees(
     const exactKey = `${emp.role_id as string}::${emp.location_id as string}::${emp.level_id as string}`;
     const fallbackKey = `${emp.role_id as string}::${emp.level_id as string}`;
 
-    // Market data is primary; workspace bands are secondary
+    // Company Overview should align to internal pay bands first, then market fallback.
     const benchmark =
-      market.exactMap.get(exactKey) ??
-      market.roleLevelMap.get(fallbackKey) ??
       workspace.exactMap.get(exactKey) ??
-      workspace.roleLevelMap.get(fallbackKey);
+      workspace.roleLevelMap.get(fallbackKey) ??
+      market.exactMap.get(exactKey) ??
+      market.roleLevelMap.get(fallbackKey);
 
     let bandPosition: "below" | "in-band" | "above" = "in-band";
     let bandPercentile = 50;
