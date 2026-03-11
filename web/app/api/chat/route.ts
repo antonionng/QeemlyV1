@@ -9,9 +9,11 @@ import {
   validateChatRequest,
 } from "@/lib/ai/chat/protocol";
 import { buildGeneralChatInput } from "@/lib/ai/chat/general";
+import { resolveGeneralHelperQuestion } from "@/lib/ai/chat/general-helper";
 import { buildEmployeeChatInput, loadEmployeeChatContext } from "@/lib/ai/chat/employee";
 import { encodeChatEvent, extractOutputTextDelta } from "@/lib/ai/chat/stream";
 import { buildThreadTitle } from "@/lib/ai/chat/threads";
+import { fetchMarketBenchmarks } from "@/lib/benchmarks/platform-market";
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -66,43 +68,68 @@ export async function POST(request: NextRequest) {
 
       const run = async () => {
         try {
-          let input: string;
+          send({ type: "start", mode: thread.mode });
+
+          let finalPayload: ChatFinalPayload;
+
           if (thread.mode === "general") {
-            input = await buildGeneralChatInput(wsContext.context, chatRequest.message);
+            const helperResolution = await resolveGeneralHelperQuestion({
+              supabase: supabase as { from: (table: string) => unknown },
+              workspaceId: wsContext.context.workspace_id,
+              message: chatRequest.message,
+              marketBenchmarks: await fetchMarketBenchmarks(supabase as never).catch(() => []),
+            });
+
+            if (helperResolution.handled) {
+              finalPayload = helperResolution.payload;
+            } else {
+              const input = await buildGeneralChatInput(wsContext.context, chatRequest.message);
+              const client = getOpenAIClient();
+              const responseStream = await client.responses.create({
+                model: getChatModel(),
+                input,
+                stream: true,
+              });
+
+              let fullText = "";
+              for await (const event of responseStream as AsyncIterable<unknown>) {
+                const delta = extractOutputTextDelta(event);
+                if (!delta) {
+                  continue;
+                }
+
+                fullText += delta;
+                send({ type: "delta", text: delta });
+              }
+
+              finalPayload = {
+                mode: "general",
+                answer: fullText.trim() || "I could not generate a response right now.",
+              };
+            }
           } else {
             const { context } = await loadEmployeeChatContext(
               wsContext.context.workspace_id,
               thread.employee_id!
             );
-            input = buildEmployeeChatInput(context, chatRequest.message);
-          }
+            const input = buildEmployeeChatInput(context, chatRequest.message);
+            const client = getOpenAIClient();
+            const responseStream = await client.responses.create({
+              model: getAdvisoryModel(),
+              input,
+              stream: true,
+            });
 
-          send({ type: "start", mode: thread.mode });
+            let fullText = "";
+            for await (const event of responseStream as AsyncIterable<unknown>) {
+              const delta = extractOutputTextDelta(event);
+              if (!delta) {
+                continue;
+              }
 
-          const client = getOpenAIClient();
-          const model = thread.mode === "general" ? getChatModel() : getAdvisoryModel();
-
-          const responseStream = await client.responses.create({
-            model,
-            input,
-            stream: true,
-          });
-
-          let fullText = "";
-          for await (const event of responseStream as AsyncIterable<unknown>) {
-            const delta = extractOutputTextDelta(event);
-            if (!delta) {
-              continue;
+              fullText += delta;
             }
 
-            fullText += delta;
-            if (thread.mode === "general") {
-              send({ type: "delta", text: delta });
-            }
-          }
-
-          let finalPayload: ChatFinalPayload;
-          if (thread.mode === "employee") {
             const parsed = parseEmployeeStructuredAnswer(fullText);
             finalPayload = {
               mode: "employee",
@@ -111,12 +138,8 @@ export async function POST(request: NextRequest) {
               reasons: parsed.reasons,
               missing_data: parsed.missing_data,
             };
-          } else {
-            finalPayload = {
-              mode: "general",
-              answer: fullText.trim() || "I could not generate a response right now.",
-            };
           }
+
           send({ type: "final", ...finalPayload });
 
           const userMessageTime = new Date();

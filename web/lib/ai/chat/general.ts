@@ -92,6 +92,7 @@ export async function buildGeneralChatInput(
     "- Start with a one-line direct answer.",
     "- Use short sections and bullet points for actions.",
     "- Put each bullet on its own new line.",
+    "- Do not use markdown headings or ### prefixes.",
   );
 
   return sections.join("\n");

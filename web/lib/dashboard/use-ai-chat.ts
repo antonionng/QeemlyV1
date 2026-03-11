@@ -28,10 +28,10 @@ type StartNewChatOptions = SendMessageOptions & {
 };
 
 const SUGGESTED_PROMPTS = [
-  { id: "trends", label: "Market trends summary", query: "Can you summarize current market trends?" },
-  { id: "underpaid", label: "Retention risk analysis", query: "Is my team at risk of being underpaid?" },
-  { id: "compare", label: "Dubai vs Riyadh comparison", query: "Compare senior dev salaries in Dubai and Riyadh." },
-  { id: "budget", label: "Hiring budget tips", query: "How can I optimize my hiring budget?" },
+  { id: "under-market", label: "Most under-market employees", query: "Find my most under-market employees." },
+  { id: "risk", label: "Highest retention risk", query: "Who is my highest retention risk employee?" },
+  { id: "department", label: "Department pay gaps", query: "Which department is furthest below market?" },
+  { id: "coverage", label: "Benchmark coverage gaps", query: "Where do we have weak benchmark coverage?" },
 ];
 
 export function useAIChat() {
