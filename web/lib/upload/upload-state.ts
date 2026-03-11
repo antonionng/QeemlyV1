@@ -14,6 +14,8 @@ export type WizardStep =
   | "confirm"
   | "success";
 
+export type UploadImportMode = "upsert" | "replace";
+
 export type UploadState = {
   // Wizard navigation
   currentStep: WizardStep;
@@ -37,6 +39,7 @@ export type UploadState = {
   importProgress: number;
   importError: string | null;
   importedCount: number;
+  importMode: UploadImportMode;
   
   // Actions
   setMode: (mode: "page" | "modal") => void;
@@ -51,6 +54,7 @@ export type UploadState = {
   setImportProgress: (progress: number) => void;
   setImportError: (error: string | null) => void;
   setImportedCount: (count: number) => void;
+  setImportMode: (mode: UploadImportMode) => void;
   goToStep: (step: WizardStep) => void;
   nextStep: () => void;
   prevStep: () => void;
@@ -78,6 +82,7 @@ const initialState = {
   importProgress: 0,
   importError: null,
   importedCount: 0,
+  importMode: "upsert" as UploadImportMode,
 };
 
 export const useUploadStore = create<UploadState>()(
@@ -133,6 +138,8 @@ export const useUploadStore = create<UploadState>()(
       setImportError: (error) => set({ importError: error }),
 
       setImportedCount: (count) => set({ importedCount: count }),
+
+      setImportMode: (mode) => set({ importMode: mode }),
 
       goToStep: (step) => set({ currentStep: step }),
 

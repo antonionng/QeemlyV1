@@ -1,56 +1,23 @@
 "use client";
 
 import { Users, BarChart3, DollarSign, Download, ArrowRight } from "lucide-react";
-import { useUploadStore, type UploadDataType, downloadTemplate } from "@/lib/upload";
+import {
+  getSelectableUploadTypes,
+  useUploadStore,
+  type UploadDataType,
+  downloadTemplate,
+} from "@/lib/upload";
 import clsx from "clsx";
 
-const DATA_TYPES: {
-  id: UploadDataType;
-  title: string;
-  description: string;
-  icon: typeof Users;
-  features: string[];
-}[] = [
-  {
-    id: "employees",
-    title: "Employee Data",
-    description: "Import your employee roster with compensation details",
-    icon: Users,
-    features: [
-      "Employee names and contact info",
-      "Department, role, and level",
-      "Base salary, bonus, and equity",
-      "Hire dates and performance ratings",
-    ],
-  },
-  {
-    id: "benchmarks",
-    title: "Salary Benchmarks",
-    description: "Upload market salary data for benchmarking",
-    icon: BarChart3,
-    features: [
-      "Role and location mappings",
-      "Percentile data (P10-P90)",
-      "Sample sizes for confidence",
-      "Supports multiple markets",
-    ],
-  },
-  {
-    id: "compensation",
-    title: "Compensation Updates",
-    description: "Bulk update salaries for existing employees",
-    icon: DollarSign,
-    features: [
-      "Match by email address",
-      "Update base, bonus, equity",
-      "Set effective dates",
-      "Track change reasons",
-    ],
-  },
-];
+const ICONS: Record<UploadDataType, typeof Users> = {
+  employees: Users,
+  benchmarks: BarChart3,
+  compensation: DollarSign,
+};
 
 export function StepDataType() {
   const { dataType, setDataType, nextStep } = useUploadStore();
+  const dataTypes = getSelectableUploadTypes();
 
   const handleSelect = (type: UploadDataType) => {
     setDataType(type);
@@ -74,13 +41,13 @@ export function StepDataType() {
           What type of data are you uploading?
         </h2>
         <p className="text-sm text-brand-600 mt-1">
-          Select the type of data to get started with the appropriate template
+          Choose the dataset you want to import. You can add incremental updates later or replace your current company data with a fresh file.
         </p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        {DATA_TYPES.map((type) => {
-          const Icon = type.icon;
+      <div className="grid gap-4 md:grid-cols-2">
+        {dataTypes.map((type) => {
+          const Icon = ICONS[type.id];
           const isSelected = dataType === type.id;
 
           return (

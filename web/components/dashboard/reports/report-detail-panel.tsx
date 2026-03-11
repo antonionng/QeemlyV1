@@ -79,6 +79,11 @@ export function ReportDetailPanel({ report, onClose }: ReportDetailPanelProps) {
   const handleExport = () => {
     exportSingleReport(report);
   };
+  const reportResult = (report.result_data || {}) as {
+    summary?: string;
+    metrics?: Array<{ id?: string; label?: string; value?: string | number }>;
+    sections?: Array<{ title?: string; notes?: string }>;
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -222,6 +227,27 @@ export function ReportDetailPanel({ report, onClose }: ReportDetailPanelProps) {
               <div>Last Run: <span className="font-medium text-accent-700">{new Date(report.last_run_at).toLocaleDateString("en-GB")}</span></div>
             )}
           </div>
+
+          {reportResult.summary && (
+            <div className="rounded-xl border border-border p-4">
+              <label className="block text-xs font-semibold text-accent-500 uppercase tracking-wider mb-2">
+                Generated Summary
+              </label>
+              <p className="text-sm text-accent-700">{reportResult.summary}</p>
+              {Array.isArray(reportResult.metrics) && reportResult.metrics.length > 0 && (
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  {reportResult.metrics.slice(0, 6).map((metric, index) => (
+                    <div key={`${metric.id || metric.label || "metric"}-${index}`} className="rounded-lg bg-accent-50 px-3 py-2">
+                      <div className="text-[11px] uppercase tracking-wider text-accent-500">
+                        {metric.label || metric.id || "Metric"}
+                      </div>
+                      <div className="mt-1 text-sm font-semibold text-brand-900">{String(metric.value ?? "")}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Tags */}
           <div>

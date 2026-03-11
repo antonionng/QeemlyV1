@@ -70,8 +70,8 @@ export default function BenchmarksPage() {
   /* ── Titles per step ── */
   const titles: Record<string, string> = {
     form: "Benchmarking",
-    results: "Benchmark Results",
-    detail: "Detailed Breakdown",
+    results: "Role Pricing",
+    detail: "Benchmark Analysis",
   };
 
   return (
@@ -132,18 +132,26 @@ export default function BenchmarksPage() {
 
       {/* ── Form step ── */}
       {step === "form" && (
-        <div className="grid gap-8 lg:grid-cols-[1fr_340px]">
+        <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
           <BenchmarkForm />
 
-          {/* Right sidebar */}
-          <div className="space-y-6">
-            {/* Recent Searches */}
+          <div className="space-y-6 lg:sticky lg:top-6 self-start">
             <div className="bench-section">
-              <h3 className="bench-section-header">Recent Searches</h3>
+              <div className="pb-4">
+                <h3 className="bench-section-header pb-1">Recent Searches</h3>
+                <p className="text-sm text-brand-500">
+                  Reopen the last roles you priced without rebuilding the form.
+                </p>
+              </div>
               {recentResults.length === 0 ? (
-                <p className="text-xs text-brand-400 py-4 text-center">No recent searches yet.</p>
+                <div className="rounded-2xl border border-dashed border-brand-200 bg-brand-50/40 px-4 py-6 text-center">
+                  <p className="text-sm font-medium text-brand-700">No recent searches yet</p>
+                  <p className="mt-1 text-xs text-brand-500">
+                    Your latest role pricing runs will appear here.
+                  </p>
+                </div>
               ) : (
-                <div className="space-y-1">
+                <div className="space-y-3">
                   {recentResults.slice(0, 5).map((result, index) => (
                     <button
                       key={index}
@@ -155,21 +163,32 @@ export default function BenchmarksPage() {
                           step: "results",
                         });
                       }}
-                      className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-brand-50 transition-colors group"
+                      className="group w-full rounded-2xl border border-border bg-surface-1 p-4 text-left transition-colors hover:border-brand-200 hover:bg-brand-50"
                     >
-                      <div className="text-left">
-                        <div className="text-sm font-semibold text-brand-900">
-                          {result.role.title}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-brand-900">
+                            {result.role.title}
+                          </div>
+                          <div className="mt-1 text-xs text-brand-500">
+                            {result.location.city}, {result.location.country}
+                          </div>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-brand-700 ring-1 ring-border">
+                              {result.level.name}
+                            </span>
+                            <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-brand-700 ring-1 ring-border">
+                              {result.formData.employmentType === "expat" ? "Expat" : "National"}
+                            </span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-1.5 mt-0.5 text-xs text-brand-500">
-                          <span>{result.level.name}</span>
-                          <span>·</span>
-                          <span>{result.location.city}, {result.location.country}</span>
-                          <span>·</span>
-                          <span>{result.formData.employmentType === "expat" ? "Expat" : "National"}</span>
+                        <div className="flex flex-col items-end gap-3">
+                          <span className="text-[11px] text-brand-400">
+                            {new Date(result.createdAt).toLocaleDateString("en-GB")}
+                          </span>
+                          <ArrowRight className="h-4 w-4 text-brand-300 transition-colors group-hover:text-brand-500" />
                         </div>
                       </div>
-                      <ArrowRight className="h-4 w-4 text-brand-300 group-hover:text-brand-500 transition-colors" />
                     </button>
                   ))}
                   {recentResults.length > 5 && (

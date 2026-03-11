@@ -7,13 +7,13 @@ import Link from "next/link";
 import clsx from "clsx";
 import { 
   type Department, 
-  type DepartmentSummary, 
   formatAEDCompact,
 } from "@/lib/employees";
+import type { OverviewDepartmentSummary } from "@/lib/dashboard/company-overview";
 import { useSalaryView, applyViewMode } from "@/lib/salary-view-store";
 
 interface DepartmentTabsProps {
-  summaries: DepartmentSummary[];
+  summaries: OverviewDepartmentSummary[];
 }
 
 type ViewMode = "overview" | "payroll" | "band";
@@ -60,7 +60,15 @@ export function DepartmentTabs({ summaries }: DepartmentTabsProps) {
       {/* Department pills for quick selection */}
       <div className="mb-6 flex flex-wrap gap-2 rounded-xl bg-surface-2 p-3">
         {summaries.map((summary) => {
-          const inBandPct = Math.round((summary.inBandCount / summary.activeCount) * 100);
+          const inBandPct = summary.inBandPct;
+          const statusDot =
+            summary.benchmarkedCount === 0
+              ? "bg-accent-300"
+              : inBandPct >= 70
+                ? "bg-emerald-400"
+                : inBandPct >= 50
+                  ? "bg-amber-400"
+                  : "bg-rose-400";
           return (
             <button
               key={summary.department}
@@ -75,10 +83,7 @@ export function DepartmentTabs({ summaries }: DepartmentTabsProps) {
               )}
             >
               <span className="flex items-center gap-2">
-                <span className={clsx(
-                  "w-1.5 h-1.5 rounded-full",
-                  inBandPct >= 70 ? "bg-emerald-400" : inBandPct >= 50 ? "bg-amber-400" : "bg-rose-400"
-                )} />
+                <span className={clsx("w-1.5 h-1.5 rounded-full", statusDot)} />
                 {summary.department}
                 <span className="opacity-60">({summary.activeCount})</span>
               </span>
@@ -91,9 +96,15 @@ export function DepartmentTabs({ summaries }: DepartmentTabsProps) {
       <div className="space-y-5">
         <div className="grid gap-2.5 xl:grid-cols-2">
           {summaries.map((summary) => {
-            const inBandPct = Math.round((summary.inBandCount / summary.activeCount) * 100);
+            const inBandPct = summary.inBandPct;
             const statusColor =
-              inBandPct >= 70 ? "bg-emerald-500" : inBandPct >= 50 ? "bg-amber-400" : "bg-rose-400";
+              summary.benchmarkedCount === 0
+                ? "bg-accent-300"
+                : inBandPct >= 70
+                  ? "bg-emerald-500"
+                  : inBandPct >= 50
+                    ? "bg-amber-400"
+                    : "bg-rose-400";
             const value =
               viewMode === "payroll"
                 ? formatAEDCompact(applyViewMode(summary.totalPayroll, salaryView))
@@ -135,15 +146,19 @@ export function DepartmentTabs({ summaries }: DepartmentTabsProps) {
         <div className="flex flex-wrap items-center gap-4 border-t border-border pt-4 text-xs">
           <div className="flex items-center gap-1.5">
             <div className="h-2 w-2 rounded-full bg-emerald-400" />
-            <span className="text-accent-500">On target</span>
+            <span className="text-accent-500">High in-band</span>
           </div>
           <div className="flex items-center gap-1.5">
             <div className="h-2 w-2 rounded-full bg-amber-400" />
-            <span className="text-accent-500">Below market</span>
+            <span className="text-accent-500">Mixed alignment</span>
           </div>
           <div className="flex items-center gap-1.5">
             <div className="h-2 w-2 rounded-full bg-rose-400" />
-            <span className="text-accent-500">Above market</span>
+            <span className="text-accent-500">Low in-band</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <div className="h-2 w-2 rounded-full bg-accent-300" />
+            <span className="text-accent-500">No benchmark coverage</span>
           </div>
         </div>
       </div>
@@ -161,11 +176,11 @@ export function DepartmentTabs({ summaries }: DepartmentTabsProps) {
               </div>
             </div>
             
-            <div className="flex items-center gap-3 p-3 rounded-xl bg-emerald-50">
-              <Target className="h-4 w-4 text-emerald-600" />
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-brand-50">
+              <Target className="h-4 w-4 text-brand-600" />
               <div>
-                <div className="text-lg font-bold text-emerald-900">{selectedSummary.inBandCount}</div>
-                <div className="text-xs text-emerald-600">In Band</div>
+                <div className="text-lg font-bold text-brand-900">{selectedSummary.benchmarkedCount}</div>
+                <div className="text-xs text-brand-600">Benchmarked</div>
               </div>
             </div>
             
@@ -210,19 +225,22 @@ export function DepartmentTabs({ summaries }: DepartmentTabsProps) {
                 <div
                   className="h-full w-full rounded-full"
                   style={{
-                    background: `conic-gradient(var(--success) 0deg ${(
-                      (selectedSummary.inBandCount / selectedSummary.activeCount) * 360
-                    ).toFixed(2)}deg, var(--warning) ${(
-                      (selectedSummary.inBandCount / selectedSummary.activeCount) * 360
-                    ).toFixed(2)}deg ${(
-                      ((selectedSummary.inBandCount + selectedSummary.belowBandCount) /
-                        selectedSummary.activeCount) *
-                      360
-                    ).toFixed(2)}deg, #fb7185 ${(
-                      ((selectedSummary.inBandCount + selectedSummary.belowBandCount) /
-                        selectedSummary.activeCount) *
-                      360
-                    ).toFixed(2)}deg 360deg)`,
+                    background:
+                      selectedSummary.benchmarkedCount > 0
+                        ? `conic-gradient(var(--success) 0deg ${(
+                            (selectedSummary.inBandCount / selectedSummary.benchmarkedCount) * 360
+                          ).toFixed(2)}deg, var(--warning) ${(
+                            (selectedSummary.inBandCount / selectedSummary.benchmarkedCount) * 360
+                          ).toFixed(2)}deg ${(
+                            ((selectedSummary.inBandCount + selectedSummary.belowBandCount) /
+                              selectedSummary.benchmarkedCount) *
+                            360
+                          ).toFixed(2)}deg, #fb7185 ${(
+                            ((selectedSummary.inBandCount + selectedSummary.belowBandCount) /
+                              selectedSummary.benchmarkedCount) *
+                            360
+                          ).toFixed(2)}deg 360deg)`
+                        : "conic-gradient(var(--color-accent-300) 0deg 360deg)",
                   }}
                 />
                 <div className="pointer-events-none absolute inset-2 rounded-full bg-white" />
@@ -230,16 +248,19 @@ export function DepartmentTabs({ summaries }: DepartmentTabsProps) {
               <div className="flex flex-col gap-1 text-xs">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                  <span className="text-accent-600">In Band: {Math.round((selectedSummary.inBandCount / selectedSummary.activeCount) * 100)}%</span>
+                  <span className="text-accent-600">In Band: {selectedSummary.inBandPct}%</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-amber-500" />
-                  <span className="text-accent-600">Below: {Math.round((selectedSummary.belowBandCount / selectedSummary.activeCount) * 100)}%</span>
+                  <span className="text-accent-600">Below: {selectedSummary.belowBandPct}%</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 rounded-full bg-rose-500" />
-                  <span className="text-accent-600">Above: {Math.round((selectedSummary.aboveBandCount / selectedSummary.activeCount) * 100)}%</span>
+                  <span className="text-accent-600">Above: {selectedSummary.aboveBandPct}%</span>
                 </div>
+                <p className="pt-1 text-[11px] text-accent-500">
+                  Coverage {selectedSummary.coveragePct}% of department headcount
+                </p>
               </div>
             </div>
           </div>

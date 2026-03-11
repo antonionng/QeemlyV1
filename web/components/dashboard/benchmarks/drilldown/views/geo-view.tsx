@@ -34,7 +34,10 @@ export function GeoView({ result }: GeoViewProps) {
       const entries = await Promise.all(
         ALL_LOCATIONS.map(async (loc) => {
           const sourceLocationId = loc.id === "london" || loc.id === "manchester" ? "dubai" : loc.id;
-          const benchmark = await getBenchmark(role.id, sourceLocationId, level.id);
+          const benchmark = await getBenchmark(role.id, sourceLocationId, level.id, {
+            industry: result.formData.industry,
+            companySize: result.formData.companySize,
+          });
           return benchmark ? { locationId: loc.id, benchmark } : null;
         }),
       );
@@ -46,7 +49,7 @@ export function GeoView({ result }: GeoViewProps) {
       setBenchmarksByLocation(next);
     };
     void run();
-  }, [level.id, role.id]);
+  }, [level.id, result.formData.companySize, result.formData.industry, role.id]);
 
   // Build comparison data for locations where real rows exist
   const locationData = ALL_LOCATIONS.map((loc) => {

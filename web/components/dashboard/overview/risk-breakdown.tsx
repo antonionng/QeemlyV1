@@ -5,20 +5,20 @@ import { Card } from "@/components/ui/card";
 import { AlertTriangle, AlertCircle, AlertOctagon, Info, ArrowRight } from "lucide-react";
 import Link from "next/link";
 import clsx from "clsx";
-import { type CompanyMetrics, type DepartmentSummary, formatAEDCompact } from "@/lib/employees";
-import { useSalaryView, applyViewMode } from "@/lib/salary-view-store";
+import { type CompanyMetrics } from "@/lib/employees";
+import type { OverviewRiskSummary } from "@/lib/dashboard/company-overview";
+import { getRiskCardPresentation } from "@/lib/dashboard/overview-card-helpers";
 
 interface RiskBreakdownProps {
   metrics: CompanyMetrics;
-  departmentSummaries: DepartmentSummary[];
+  summary: OverviewRiskSummary;
   benchmarkCoverage?: {
     activeEmployees: number;
     benchmarkedEmployees: number;
   };
 }
 
-export function RiskBreakdown({ metrics, departmentSummaries, benchmarkCoverage }: RiskBreakdownProps) {
-  const { salaryView } = useSalaryView();
+export function RiskBreakdown({ metrics, summary, benchmarkCoverage }: RiskBreakdownProps) {
   const coveragePct =
     benchmarkCoverage && benchmarkCoverage.activeEmployees > 0
       ? Math.round((benchmarkCoverage.benchmarkedEmployees / benchmarkCoverage.activeEmployees) * 100)
@@ -43,57 +43,24 @@ export function RiskBreakdown({ metrics, departmentSummaries, benchmarkCoverage 
 
   const getSeverityColor = (severity: string) => {
     switch (severity) {
-      case "critical": return { bg: "bg-rose-50", text: "text-rose-700", dot: "bg-rose-500" };
-      case "high": return { bg: "bg-orange-50", text: "text-orange-700", dot: "bg-orange-500" };
-      case "medium": return { bg: "bg-amber-50", text: "text-amber-700", dot: "bg-amber-500" };
-      default: return { bg: "bg-yellow-50", text: "text-yellow-700", dot: "bg-yellow-500" };
+      case "critical": return { border: "border-rose-200", text: "text-rose-700", dot: "bg-rose-500" };
+      case "high": return { border: "border-amber-200", text: "text-amber-700", dot: "bg-amber-500" };
+      case "medium": return { border: "border-blue-200", text: "text-blue-700", dot: "bg-blue-500" };
+      default: return { border: "border-accent-200", text: "text-accent-700", dot: "bg-accent-400" };
     }
   };
 
-  // Filter to only show non-zero risk items
   const activeRisks = metrics.riskBreakdown.filter(r => r.count > 0);
-  const totalRiskEmployees = activeRisks.reduce((sum, r) => sum + r.count, 0);
-
-  // Calculate risk by department
-  const deptRiskData = departmentSummaries
-    .map(d => ({
-      name: d.department,
-      value: d.aboveBandCount,
-    }))
-    .filter(d => d.value > 0)
-    .sort((a, b) => b.value - a.value);
-
-  // Estimate cost impact (rough calculation)
-  const estimatedOverpayment = totalRiskEmployees * 50000; // Assume avg 50k AED overpayment per risk employee
-  const ringSegments = activeRisks.map((risk) => ({
-    value: risk.count,
-    color:
-      risk.severity === "critical"
-        ? "var(--danger)"
-        : risk.severity === "high"
-          ? "var(--warning)"
-          : "var(--color-brand-300)",
-  }));
-  const totalRing = ringSegments.reduce((sum, seg) => sum + seg.value, 0) || 1;
-  const ringGradientParts = ringSegments.reduce<{ cursor: number; parts: string[] }>(
-    (acc, segment) => {
-      const start = (acc.cursor / totalRing) * 360;
-      const nextCursor = acc.cursor + segment.value;
-      const end = (nextCursor / totalRing) * 360;
-      acc.parts.push(`${segment.color} ${start}deg ${end}deg`);
-      return { cursor: nextCursor, parts: acc.parts };
-    },
-    { cursor: 0, parts: [] },
-  );
-  const ringGradient = ringGradientParts.parts.join(", ");
+  const totalRiskEmployees = summary.totalAtRisk;
+  const presentation = getRiskCardPresentation(metrics, summary);
 
   return (
     <Card className="dash-card p-5">
       <div className="mb-4 flex items-start justify-between">
         <div>
-          <h3 className="text-sm font-semibold text-accent-900">Risk Analysis</h3>
+          <h3 className="text-sm font-semibold text-accent-900">{presentation.title}</h3>
           <p className="text-xs text-accent-500 mt-0.5">
-            Compensation risk indicators
+            {presentation.subtitle}
             {typeof coveragePct === "number" && (
               <span className={clsx("font-semibold", coverageTextClass)}>
                 {` · Coverage ${coveragePct}%`}
@@ -102,10 +69,10 @@ export function RiskBreakdown({ metrics, departmentSummaries, benchmarkCoverage 
           </p>
         </div>
         {totalRiskEmployees > 0 && (
-          <div className="flex items-center gap-1.5 rounded-full bg-danger-soft px-2.5 py-1">
+          <div className="flex items-center gap-1.5 rounded-full border border-rose-200 bg-rose-50 px-2.5 py-1">
             <AlertTriangle className="h-3.5 w-3.5 text-rose-600" />
             <span className="text-xs font-semibold text-rose-700">
-              {totalRiskEmployees} at risk
+              {presentation.badgeLabel}
             </span>
           </div>
         )}
@@ -123,27 +90,36 @@ export function RiskBreakdown({ metrics, departmentSummaries, benchmarkCoverage 
         </div>
       ) : (
         <div className="space-y-5">
-          {/* Severity breakdown with donut */}
-          <div className="flex items-center gap-6">
-            <div className="relative h-24 w-24 shrink-0">
-              <div
-                className="h-full w-full rounded-full"
-                style={{
-                  background: `conic-gradient(${ringGradient})`,
-                }}
-              />
-              <div className="absolute inset-[16%] rounded-full bg-white" />
-            </div>
-            <div className="flex-1 space-y-2">
+          <div className="rounded-xl border border-accent-200 bg-accent-50 p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent-500">
+              Primary Focus
+            </p>
+            <p className="mt-2 text-base font-semibold text-accent-900">
+              {presentation.primaryFocusTitle}
+            </p>
+            <p className="mt-1 text-sm text-accent-600">
+              {presentation.primaryFocusDescription}
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <h4 className="text-xs font-semibold uppercase tracking-[0.18em] text-accent-500">
+              Severity Breakdown
+            </h4>
+            <div className="space-y-2">
               {activeRisks.map((risk) => {
                 const Icon = getSeverityIcon(risk.severity);
                 const colors = getSeverityColor(risk.severity);
                 return (
                   <div
                     key={risk.severity}
-                    className={clsx("flex items-center justify-between rounded-lg p-2", colors.bg)}
+                    className={clsx(
+                      "flex items-center justify-between rounded-xl border bg-white px-3 py-2.5",
+                      colors.border,
+                    )}
                   >
                     <div className="flex items-center gap-2">
+                      <span className={clsx("h-2.5 w-2.5 rounded-full", colors.dot)} />
                       <Icon className={clsx("h-4 w-4", colors.text)} />
                       <span className={clsx("text-xs font-medium", colors.text)}>
                         {risk.severity.charAt(0).toUpperCase() + risk.severity.slice(1)}
@@ -158,35 +134,20 @@ export function RiskBreakdown({ metrics, departmentSummaries, benchmarkCoverage 
             </div>
           </div>
 
-          {/* Cost impact callout */}
-          <div className="rounded-xl border border-rose-100 bg-rose-50 p-3">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs font-medium text-rose-700">Estimated Annual Overpayment</p>
-                <p className="text-lg font-bold text-rose-800">
-                  {formatAEDCompact(applyViewMode(estimatedOverpayment, salaryView))}
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="text-xs text-rose-600">
-                  Addressing these risks could save
-                </p>
-                <p className="text-xs font-semibold text-rose-700">
-                  up to {formatAEDCompact(applyViewMode(estimatedOverpayment * 0.6, salaryView))} {salaryView === "monthly" ? "monthly" : "annually"}
-                </p>
-              </div>
-            </div>
+          <div className="rounded-xl border border-accent-200 bg-accent-50 p-3">
+            <p className="text-xs font-medium text-accent-700">Methodology</p>
+            <p className="mt-1 text-sm text-accent-900">{summary.methodologyLabel}</p>
+            <p className="mt-1 text-xs text-accent-600">{summary.coverageNote}</p>
           </div>
 
-          {/* Risk by department */}
-          {deptRiskData.length > 0 && (
+          {summary.departmentRows.length > 0 && (
             <div>
               <h4 className="text-xs font-semibold text-brand-600 uppercase tracking-wider mb-3">
-                By Department
+                Where To Start
               </h4>
               <BarList
-                data={deptRiskData}
-                color="rose"
+                data={summary.departmentRows}
+                color="indigo"
                 showAnimation={true}
               />
             </div>
@@ -195,10 +156,10 @@ export function RiskBreakdown({ metrics, departmentSummaries, benchmarkCoverage 
           {/* Action link */}
           <Link
             href="/dashboard/salary-review?filter=above-band"
-            className="group flex items-center justify-between rounded-xl bg-brand-50 p-3 transition-colors hover:bg-brand-100"
+            className="group flex items-center justify-between rounded-xl border border-brand-200 bg-white p-3 transition-colors hover:bg-brand-50"
           >
             <span className="text-sm font-medium text-brand-700">
-              Review all risk employees
+              {presentation.actionLabel}
             </span>
             <ArrowRight className="h-4 w-4 text-brand-500 group-hover:translate-x-1 transition-transform" />
           </Link>

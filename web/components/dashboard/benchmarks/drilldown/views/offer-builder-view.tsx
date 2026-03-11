@@ -126,7 +126,10 @@ export function OfferBuilderView({ result }: OfferBuilderViewProps) {
     const run = async () => {
       const entries = await Promise.all(
         shownLevels.map(async (lvl) => {
-          const bm = await getBenchmark(role.id, location.id, lvl.id);
+          const bm = await getBenchmark(role.id, location.id, lvl.id, {
+            industry: result.formData.industry,
+            companySize: result.formData.companySize,
+          });
           return bm ? { levelId: lvl.id, benchmark: bm } : null;
         }),
       );
@@ -138,7 +141,7 @@ export function OfferBuilderView({ result }: OfferBuilderViewProps) {
       setLevelBenchmarks(next);
     };
     void run();
-  }, [location.id, role.id, shownLevels]);
+  }, [location.id, result.formData.companySize, result.formData.industry, role.id, shownLevels]);
 
   const downloadExportPayload = (payload: OfferExportPayload, offerId: string) => {
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
@@ -193,10 +196,14 @@ export function OfferBuilderView({ result }: OfferBuilderViewProps) {
       salary_breakdown: breakdownSnapshot,
       benchmark_snapshot: {
         benchmark_percentiles: benchmark.percentiles,
+        benchmark_source: benchmark.benchmarkSource || "dummy",
+        sample_size: benchmark.sampleSize,
+        confidence: benchmark.confidence,
+        last_updated: benchmark.lastUpdated,
         role,
         level,
         location,
-        form_data: result.formData,
+        form_data: result.formData as unknown as Record<string, unknown>,
       },
       export_format: "JSON",
       status: "ready",
@@ -215,87 +222,101 @@ export function OfferBuilderView({ result }: OfferBuilderViewProps) {
 
   return (
     <div id="offer-builder-view" className="space-y-6">
-      {/* ── Top: Context + Summary ── */}
       <div className="bench-section">
         <div className="text-xs text-brand-500 mb-4">
           {role.title} · {level.name} · {location.city}, {location.country} ·{" "}
           {result.formData.employmentType === "expat" ? "Expat" : "National"}
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-6">
-          {/* Negotiation range */}
-          <div className="flex-1 rounded-xl bg-brand-50 p-5">
-            <p className="text-xs font-semibold text-brand-700 mb-1">
-              recommended offer
+        <div className="grid gap-4 lg:grid-cols-3">
+          <div className="rounded-2xl border border-brand-100 bg-brand-50 p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-500">
+              Target percentile
             </p>
-            <p className="text-xs font-semibold text-brand-700">
-              negotiation range
+            <div className="mt-3 text-2xl font-bold text-brand-900">P{offerTarget}</div>
+            <p className="mt-2 text-sm text-brand-600">
+              Based on your workspace compensation policy.
             </p>
-            <div className="mt-3 text-lg font-bold text-brand-900">
-              {formatValue(offerRange.low)} – {formatValue(offerRange.high)}
-            </div>
           </div>
-
-          {/* Breakdown card */}
-          <div className="flex-1">
-            <p className="text-xs font-semibold text-brand-700 mb-2">
-              Salary Breakdown
+          <div className="rounded-2xl border border-border bg-white p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-500">
+              Recommended package
             </p>
-            <p className="text-[10px] text-brand-400 mb-3">
-              {level.name} · {location.city} · at P{offerTarget}
-            </p>
-
-            <div className="flex items-start gap-5">
-              {/* Legend + values */}
-              <div className="flex-1 space-y-2">
-                {breakdownItems.map((item) => {
-                  return (
-                    <div
-                      key={item.name}
-                      className="flex items-center justify-between text-xs"
-                    >
-                      <div className="flex items-center gap-2">
-                        <div
-                          className={`w-3 h-3 rounded-sm ${item.bg}`}
-                        />
-                        <span className={`font-medium ${item.label}`}>
-                          {item.name}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-brand-400">{item.percent}%</span>
-                        <span className="font-semibold text-brand-900 w-16 text-right">
-                          {formatShort(item.amount)}
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
-
-                <div className="pt-2 border-t border-border flex items-center justify-between text-xs font-semibold text-brand-900">
-                  <span>Total Compensation</span>
-                  <span>{formatShort(offerValue)}</span>
-                </div>
-              </div>
-
-              {/* Donut placeholder */}
-              <div className="bench-donut shrink-0" style={{
-                background: `conic-gradient(
-                  var(--color-brand-500) 0% ${basicPercent}%,
-                  #2dd4bf ${basicPercent}% ${basicPercent + housingPercent}%,
-                  #fbbf24 ${basicPercent + housingPercent}% ${basicPercent + housingPercent + transportPercent}%,
-                  #f472b6 ${basicPercent + housingPercent + transportPercent}% 100%
-                )`,
-              }}>
-                <div className="absolute inset-3 rounded-full bg-white" />
-              </div>
+            <div className="mt-3 text-2xl font-bold text-brand-900">
+              {formatValue(offerValue)}
             </div>
+            <p className="mt-2 text-sm text-brand-600">
+              Anchor point before negotiation or recruiter calibration.
+            </p>
+          </div>
+          <div className="rounded-2xl border border-border bg-white p-5">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-500">
+              Negotiation range
+            </p>
+            <div className="mt-3 text-2xl font-bold text-brand-900">
+              {formatValue(offerRange.low)} to {formatValue(offerRange.high)}
+            </div>
+            <p className="mt-2 text-sm text-brand-600">
+              A 4% buffer on either side of the recommendation.
+            </p>
           </div>
         </div>
       </div>
 
-      {/* ── Offer recipient + submit ── */}
+      <div className="bench-section">
+        <div className="flex items-center justify-between gap-3 pb-4">
+          <div>
+            <h3 className="bench-section-header pb-0">Package breakdown</h3>
+            <p className="mt-2 text-sm text-brand-600">
+              Keep the package readable. The main salary stays dominant, with allowances shown as a
+              simple split instead of a decorative chart.
+            </p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-brand-500">Total compensation</p>
+            <p className="text-lg font-bold text-brand-900">{formatValue(offerValue)}</p>
+          </div>
+        </div>
+
+        <div className="mb-5 flex h-4 overflow-hidden rounded-full bg-brand-100">
+          {breakdownItems.map((item) => (
+            <div
+              key={item.name}
+              className={item.bg}
+              style={{ width: `${item.percent}%` }}
+              title={`${item.name}: ${formatValue(item.amount)} (${item.percent}%)`}
+            />
+          ))}
+        </div>
+
+        <div className="space-y-3">
+          {breakdownItems.map((item) => (
+            <div
+              key={item.name}
+              className="flex items-center justify-between rounded-2xl border border-border bg-surface-1 px-4 py-3 text-sm"
+            >
+              <div className="flex items-center gap-3">
+                <div className={`h-3 w-3 rounded-full ${item.bg}`} />
+                <div>
+                  <p className={`font-medium ${item.label}`}>{item.name}</p>
+                  <p className="text-xs text-brand-500">{item.percent}% of total package</p>
+                </div>
+              </div>
+              <div className="font-semibold text-brand-900">{formatShort(item.amount)}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       <div className="bench-section space-y-4">
+        <div>
+          <h3 className="bench-section-header pb-0">Create offer</h3>
+          <p className="mt-2 text-sm text-brand-600">
+            Pick a recipient, then create a stored offer package from this benchmark. Export becomes
+            available after the offer is created.
+          </p>
+        </div>
+
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
@@ -381,24 +402,35 @@ export function OfferBuilderView({ result }: OfferBuilderViewProps) {
           >
             {isSubmitting ? "Creating..." : "Create Offer"} <ArrowRight className="h-4 w-4" />
           </button>
-
-          {lastExportPayload && lastOfferId && (
-            <button
-              type="button"
-              onClick={() => downloadExportPayload(lastExportPayload, lastOfferId)}
-              className="rounded-full border border-border bg-white px-4 py-2 text-sm font-semibold text-brand-700"
-            >
-              Download Export JSON
-            </button>
-          )}
         </div>
 
         {submitError && <p className="text-sm font-medium text-red-600">{submitError}</p>}
-        {submitSuccess && <p className="text-sm font-medium text-emerald-700">{submitSuccess}</p>}
+        {submitSuccess && (
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4">
+            <p className="text-sm font-semibold text-emerald-800">{submitSuccess}</p>
+            <p className="mt-1 text-sm text-emerald-700">
+              The offer is saved in Qeemly and ready for export or downstream review.
+            </p>
+            {lastExportPayload && lastOfferId && (
+              <button
+                type="button"
+                onClick={() => downloadExportPayload(lastExportPayload, lastOfferId)}
+                className="mt-4 rounded-full border border-emerald-300 bg-white px-4 py-2 text-sm font-semibold text-emerald-700"
+              >
+                Download Export JSON
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* ── Box Plots for adjacent levels ── */}
       <div className="bench-section">
+        <div className="pb-4">
+          <h3 className="bench-section-header pb-0">Market anchor by adjacent levels</h3>
+          <p className="mt-2 text-sm text-brand-600">
+            Check the proposed package against nearby seniority levels before sending the offer.
+          </p>
+        </div>
         <div className="space-y-8">
           {shownLevels.map((lvl) => {
             const bench = levelBenchmarks[lvl.id];

@@ -10,7 +10,7 @@ const baseRequest: SalaryReviewAiPlanRequest = {
 };
 
 describe("buildSalaryReviewAiPlan", () => {
-  it("prefers workspace benchmarks over ingestion benchmarks", () => {
+  it("prefers platform market benchmarks over workspace benchmarks", () => {
     const plan = buildSalaryReviewAiPlan({
       request: { ...baseRequest, budgetAbsolute: 10_000 },
       employees: [
@@ -55,8 +55,8 @@ describe("buildSalaryReviewAiPlan", () => {
     });
 
     expect(plan.items).toHaveLength(1);
-    expect(plan.items[0].benchmark.provenance).toBe("workspace");
-    expect(plan.items[0].benchmark.sourceSlug).toBe("workspace_uploaded");
+    expect(plan.items[0].benchmark.provenance).toBe("ingestion");
+    expect(plan.items[0].benchmark.sourceSlug).toBe("qeemly_ingestion");
   });
 
   it("falls back to ingestion role+level match when location match is missing", () => {

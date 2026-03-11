@@ -18,73 +18,46 @@ import {
   ShortcutsRow,
   AdvisoryPanel,
 } from "@/components/dashboard/overview";
-import { UploadModal } from "@/components/dashboard/upload";
-import {
-  getCompanyMetricsAsync,
-  getDepartmentSummariesAsync,
-  getEmployees,
-  invalidateEmployeeCache,
-  type CompanyMetrics,
-  type DepartmentSummary,
-  type Employee,
-} from "@/lib/employees";
 import { useCompanySettings } from "@/lib/company";
 import { buildCompanyOverviewHeadlineCards } from "@/lib/company-vs-market";
+import {
+  hydrateCompanyOverviewSnapshot,
+  type CompanyOverviewSnapshot,
+} from "@/lib/dashboard/company-overview";
 import clsx from "clsx";
 
 export default function CompanyOverviewPage() {
-  const [showUploadModal, setShowUploadModal] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const { companyName, isConfigured } = useCompanySettings();
+  const [snapshot, setSnapshot] = useState<CompanyOverviewSnapshot | null>(null);
 
-  const [metrics, setMetrics] = useState<CompanyMetrics | null>(null);
-  const [departmentSummaries, setDepartmentSummaries] = useState<DepartmentSummary[]>([]);
-  const [advisoryCandidates, setAdvisoryCandidates] = useState<Employee[]>([]);
-  const [benchmarkCoverage, setBenchmarkCoverage] = useState({
-    activeEmployees: 0,
-    benchmarkedEmployees: 0,
-  });
-
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async ({ refresh = false }: { refresh?: boolean } = {}) => {
     try {
-      const [metricsData, deptData, employees] = await Promise.all([
-        getCompanyMetricsAsync(),
-        getDepartmentSummariesAsync(),
-        getEmployees(),
-      ]);
+      const response = await fetch(
+        refresh ? "/api/dashboard/company-overview?refresh=1" : "/api/dashboard/company-overview",
+        {
+          method: "GET",
+          cache: "no-store",
+        },
+      );
 
-      setMetrics(metricsData);
-      setDepartmentSummaries(deptData);
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => ({}))) as { error?: string };
+        throw new Error(payload.error || "Failed to load company overview.");
+      }
 
-      const activeEmployees = employees.filter((employee) => employee.status === "active");
-      const benchmarkedEmployees = activeEmployees.filter((employee) => employee.hasBenchmark);
-      setBenchmarkCoverage({
-        activeEmployees: activeEmployees.length,
-        benchmarkedEmployees: benchmarkedEmployees.length,
-      });
-
-      const advisory = employees
-        .filter((employee) => employee.status === "active" && employee.hasBenchmark)
-        .map((employee) => {
-          let riskScore = 0;
-          if (employee.bandPosition === "below") riskScore += 20;
-          if (employee.bandPosition === "above") riskScore += 8;
-          if (employee.performanceRating === "exceptional") riskScore += 20;
-          if (employee.performanceRating === "exceeds") riskScore += 12;
-          if (employee.performanceRating === "low") riskScore += 16;
-          if (employee.marketComparison < 0) riskScore += Math.min(30, Math.abs(employee.marketComparison));
-          if (employee.marketComparison > 10) riskScore += 8;
-          return { employee, riskScore };
-        })
-        .sort((a, b) => b.riskScore - a.riskScore)
-        .slice(0, 5)
-        .map((entry) => entry.employee);
-      setAdvisoryCandidates(advisory);
+      const payload = hydrateCompanyOverviewSnapshot(
+        (await response.json()) as CompanyOverviewSnapshot,
+      );
+      setSnapshot(payload);
+      setError(null);
       setLastRefresh(new Date());
     } catch (err) {
-      console.error("Failed to load metrics:", err);
+      console.error("Failed to load company overview:", err);
+      setError(err instanceof Error ? err.message : "Failed to load company overview.");
     } finally {
       setLoading(false);
       setIsRefreshing(false);
@@ -97,8 +70,7 @@ export default function CompanyOverviewPage() {
 
   const handleRefresh = useCallback(() => {
     setIsRefreshing(true);
-    invalidateEmployeeCache();
-    loadData();
+    void loadData({ refresh: true });
   }, [loadData]);
 
   const getRefreshText = () => {
@@ -112,7 +84,7 @@ export default function CompanyOverviewPage() {
     return `Data refreshed ${Math.floor(diffMins / 60)} hours ago`;
   };
 
-  if (loading || !metrics) {
+  if (loading) {
     return (
       <div className="flex min-h-[400px] items-center justify-center">
         <div className="text-center">
@@ -123,6 +95,37 @@ export default function CompanyOverviewPage() {
     );
   }
 
+  if (!snapshot) {
+    return (
+      <Card className="dash-card flex min-h-[280px] flex-col items-center justify-center gap-4 p-8 text-center">
+        <div>
+          <h2 className="text-lg font-semibold text-accent-900">Unable to load Company Overview</h2>
+          <p className="mt-1 text-sm text-accent-500">{error || "Try refreshing the page."}</p>
+        </div>
+        <Button
+          size="sm"
+          onClick={handleRefresh}
+          disabled={isRefreshing}
+          className="h-9 rounded-full border-0 bg-accent-800 px-5 text-white hover:bg-accent-700"
+        >
+          <RefreshCw className={clsx("mr-2 h-4 w-4", isRefreshing && "animate-spin")} />
+          Retry
+        </Button>
+      </Card>
+    );
+  }
+
+  const {
+    metrics,
+    departmentSummaries,
+    benchmarkCoverage,
+    benchmarkTrust,
+    advisoryCandidates,
+    actions,
+    insights,
+    riskSummary,
+    dataHealth,
+  } = snapshot;
   const headlineCards = buildCompanyOverviewHeadlineCards(metrics, benchmarkCoverage);
   const headlineToneClasses = {
     neutral: "border-accent-200 bg-white text-accent-900",
@@ -196,7 +199,55 @@ export default function CompanyOverviewPage() {
             </div>
           ))}
         </div>
+        {benchmarkTrust.benchmarkedEmployees > 0 && (
+          <div className="mt-4 flex flex-wrap gap-2">
+            <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-brand-700">
+              Primary source: {benchmarkTrust.primarySourceLabel}
+            </span>
+            <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-brand-700">
+              Market-backed: {benchmarkTrust.marketBacked}
+            </span>
+            <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-brand-700">
+              Exact matches: {benchmarkTrust.exactMatches}
+            </span>
+            {benchmarkTrust.freshestAt && (
+              <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-brand-700">
+                Latest refresh: {new Date(benchmarkTrust.freshestAt).toLocaleDateString("en-GB")}
+              </span>
+            )}
+          </div>
+        )}
       </Card>
+
+      {error && (
+        <Card className="dash-card border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          {error}
+        </Card>
+      )}
+
+      {metrics.activeEmployees === 0 && (
+        <Card className="dash-card border-dashed border-brand-200 bg-brand-50/60 p-5">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="max-w-2xl">
+              <h2 className="text-base font-semibold text-accent-900">Import company data to unlock this view</h2>
+              <p className="mt-1 text-sm text-accent-600">
+                Company Overview compares your employee roster against Qeemly market data. Import
+                your latest roster to start generating coverage, trust, and company-versus-market insights.
+              </p>
+            </div>
+            <Link href="/dashboard/upload">
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9 rounded-full border-border bg-white px-4 text-accent-700 hover:bg-accent-50"
+              >
+                Import Company Data
+                <ArrowRight className="ml-2 h-4 w-4" />
+              </Button>
+            </Link>
+          </div>
+        </Card>
+      )}
 
       {!isConfigured && (
         <div className="rounded-xl border-2 border-dashed border-amber-300 bg-amber-50 p-4">
@@ -230,24 +281,24 @@ export default function CompanyOverviewPage() {
         </div>
       </div>
 
-      <QuickActions />
+      <QuickActions actions={actions} />
 
-      <DataHealthCard benchmarkCoverage={benchmarkCoverage} />
+      <DataHealthCard
+        benchmarkCoverage={benchmarkCoverage}
+        benchmarkTrust={benchmarkTrust}
+        dataHealth={dataHealth}
+      />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <PayrollTrend metrics={metrics} />
-        <BandDistributionChart metrics={metrics} departmentSummaries={departmentSummaries} />
+        <BandDistributionChart metrics={metrics} benchmarkCoverage={benchmarkCoverage} />
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <KeyInsights
-          metrics={metrics}
-          departmentSummaries={departmentSummaries}
-          benchmarkCoverage={benchmarkCoverage}
-        />
+        <KeyInsights items={insights} benchmarkCoverage={benchmarkCoverage} />
         <RiskBreakdown
           metrics={metrics}
-          departmentSummaries={departmentSummaries}
+          summary={riskSummary}
           benchmarkCoverage={benchmarkCoverage}
         />
       </div>
@@ -289,17 +340,6 @@ export default function CompanyOverviewPage() {
         </div>
         <span>{getRefreshText()}</span>
       </div>
-
-      <UploadModal
-        isOpen={showUploadModal}
-        onClose={() => setShowUploadModal(false)}
-        type="employees"
-        onSuccess={() => {
-          invalidateEmployeeCache();
-          loadData();
-          setShowUploadModal(false);
-        }}
-      />
     </div>
   );
 }

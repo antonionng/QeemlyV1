@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getWorkspaceContext } from "@/lib/workspace-context";
+import { refreshPlatformMarketPoolBestEffort } from "@/lib/benchmarks/platform-market-sync";
 import { refreshComplianceSnapshot } from "@/lib/compliance/snapshot-service";
 import { fetchMarketBenchmarks, type MarketBenchmark } from "@/lib/benchmarks/platform-market";
 
@@ -55,7 +56,7 @@ export async function GET() {
       .order("created_at", { ascending: false }),
     queryClient
       .from("salary_benchmarks")
-      .select("role_id,location_id,level_id,p10,p25,p50,p75,p90,valid_from,created_at,source")
+      .select("role_id,location_id,level_id,p10,p25,p50,p75,p90,valid_from,created_at,source,sample_size,confidence")
       .eq("workspace_id", workspace_id)
       .order("valid_from", { ascending: false })
       .order("created_at", { ascending: false }),
@@ -160,6 +161,7 @@ export async function POST(request: NextRequest) {
   } catch {
     // Keep mutation success even if compliance refresh fails.
   }
+  await refreshPlatformMarketPoolBestEffort();
 
   return NextResponse.json({ ok: true, employee: data });
 }
@@ -194,6 +196,7 @@ export async function PATCH(request: NextRequest) {
   } catch {
     // Keep mutation success even if compliance refresh fails.
   }
+  await refreshPlatformMarketPoolBestEffort();
 
   return NextResponse.json({ ok: true, count: ids.length });
 }

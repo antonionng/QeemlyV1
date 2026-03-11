@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { Check, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { buildBenchmarkTrustLabels } from "@/lib/benchmarks/trust";
 import type { Department, Employee } from "@/lib/employees";
 import { formatAEDCompact } from "@/lib/employees";
 import { DropdownItem, DropdownMenu } from "@/components/ui/dropdown-menu";
@@ -134,6 +135,7 @@ export function PeopleTable({
           <tbody className="divide-y divide-border">
             {employees.map((employee) => {
               const visa = visaBadge(employee);
+              const benchmarkTrust = buildBenchmarkTrustLabels(employee.benchmarkContext);
               return (
               <tr
                 key={employee.id}
@@ -235,6 +237,21 @@ export function PeopleTable({
                         style={{ width: `${Math.min(100, Math.max(10, Math.abs(employee.marketComparison) * 3))}%` }}
                       />
                     </div>
+                    {benchmarkTrust && (
+                      <div className="flex flex-wrap gap-1 pt-1">
+                        <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-medium text-brand-700">
+                          {benchmarkTrust.sourceLabel}
+                        </span>
+                        <span className="rounded-full bg-accent-100 px-2 py-0.5 text-[10px] font-medium text-accent-600">
+                          {benchmarkTrust.matchLabel}
+                        </span>
+                        {benchmarkTrust.freshnessLabel && (
+                          <span className="rounded-full bg-accent-100 px-2 py-0.5 text-[10px] font-medium text-accent-600">
+                            {benchmarkTrust.freshnessLabel}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </td>
                 <td className="px-4 py-3 text-sm text-brand-800 capitalize" onClick={(event) => event.stopPropagation()}>

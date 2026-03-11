@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getWorkspaceContext } from "@/lib/workspace-context";
-import { generateReportResult } from "@/lib/reports/generation";
-import type { Report } from "@/lib/reports/types";
 
 const ALLOWED_TYPES = new Set(["overview", "benchmark", "compliance", "custom"]);
 const ALLOWED_FORMATS = new Set(["PDF", "XLSX", "Slides"]);
@@ -62,8 +60,9 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  if ((data || []).length > 0) {
-    return NextResponse.json({ reports: data || [] });
+  const existingReports = (data || []) as Array<Record<string, unknown>>;
+  if (existingReports.length > 0) {
+    return NextResponse.json({ reports: existingReports });
   }
 
   // First-time workspace bootstrap: create starter reports from active templates.
@@ -94,11 +93,11 @@ export async function GET() {
             starter_seeded: true,
           },
           format: "PDF",
-          status: "Ready",
+          status: "In Review",
           template_id: template.id,
           template_version: template.version ?? 1,
           build_error: null,
-          last_run_at: now,
+          last_run_at: null,
           updated_at: now,
         }))
       : STARTER_REPORT_FALLBACKS.map((fallback) => ({
@@ -111,11 +110,11 @@ export async function GET() {
           recipients: [],
           config: { starter_seeded: true, fallback_seeded: true },
           format: "PDF",
-          status: "Ready",
+          status: "In Review",
           template_id: null,
           template_version: null,
           build_error: null,
-          last_run_at: now,
+          last_run_at: null,
           updated_at: now,
         }));
 
@@ -126,19 +125,6 @@ export async function GET() {
 
   if (insertError || !inserted) {
     return NextResponse.json({ reports: [] });
-  }
-
-  // Enrich seeded reports with generated starter result payload.
-  for (const row of inserted) {
-    const generated = generateReportResult(row as Report);
-    await supabase
-      .from("reports")
-      .update({
-        result_data: generated,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", row.id)
-      .eq("workspace_id", workspace_id);
   }
 
   const { data: seededReports } = await supabase
@@ -228,7 +214,7 @@ export async function POST(request: NextRequest) {
       recipients: resolvedRecipients || [],
       config: resolvedConfig || {},
       format: resolvedFormat,
-      status: "Building",
+      status: "In Review",
       template_id: resolvedTemplateId,
       template_version: templateVersion,
       build_error: null,

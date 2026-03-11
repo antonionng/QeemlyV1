@@ -513,3 +513,32 @@ export function transformBenchmark(data: Record<string, unknown>): TransformedBe
     sampleSize: data.sampleSize as number | null,
   };
 }
+
+export type TransformedCompensationUpdate = {
+  email: string;
+  baseSalary: number;
+  bonus: number | null;
+  equity: number | null;
+  effectiveDate: string | null;
+  changeReason: string | null;
+};
+
+export function transformCompensationUpdate(
+  data: Record<string, unknown>,
+): TransformedCompensationUpdate | null {
+  const email = (data.email as string | undefined)?.toLowerCase().trim();
+  const baseSalary = parseNumber(String(data.baseSalary || ""));
+
+  if (!email || baseSalary === null) {
+    return null;
+  }
+
+  return {
+    email,
+    baseSalary,
+    bonus: parseNumber(String(data.bonus || "")),
+    equity: parseNumber(String(data.equity || "")),
+    effectiveDate: parseDate(String(data.effectiveDate || "")),
+    changeReason: (data.changeReason as string | undefined)?.trim() || null,
+  };
+}

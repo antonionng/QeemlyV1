@@ -1,5 +1,6 @@
 "use client";
 
+import { summarizeBenchmarkTrust } from "@/lib/benchmarks/trust";
 import type { Employee } from "@/lib/employees";
 
 type Props = {
@@ -21,6 +22,10 @@ export function PeopleStatsBar({ employees }: Props) {
   const below = employees.filter((employee) => employee.bandPosition === "below").length;
   const inBand = employees.filter((employee) => employee.bandPosition === "in-band").length;
   const above = employees.filter((employee) => employee.bandPosition === "above").length;
+  const benchmarkTrust = summarizeBenchmarkTrust(employees);
+  const trustFreshness = benchmarkTrust.freshestAt
+    ? new Date(benchmarkTrust.freshestAt).toLocaleDateString("en-GB")
+    : "Unknown";
 
   const denom = Math.max(1, totalEmployees);
   const belowPct = Math.round((below / denom) * 100);
@@ -28,7 +33,7 @@ export function PeopleStatsBar({ employees }: Props) {
   const abovePct = Math.max(0, 100 - belowPct - inBandPct);
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
       <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
         <p className="text-xs font-semibold uppercase tracking-wider text-accent-500">Headcount</p>
         <p className="mt-2 text-2xl font-bold text-brand-900">{totalEmployees}</p>
@@ -59,6 +64,15 @@ export function PeopleStatsBar({ employees }: Props) {
         <p className="mt-2 text-xs text-accent-500">
           {below} below • {inBand} in-band • {above} above
         </p>
+      </div>
+
+      <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
+        <p className="text-xs font-semibold uppercase tracking-wider text-accent-500">Benchmark Trust</p>
+        <p className="mt-2 text-lg font-bold text-brand-900">{benchmarkTrust.primarySourceLabel}</p>
+        <p className="mt-1 text-xs text-accent-500">
+          {benchmarkTrust.exactMatches} exact • {benchmarkTrust.fallbackMatches} fallback
+        </p>
+        <p className="mt-1 text-xs text-accent-500">Freshness: {trustFreshness}</p>
       </div>
     </div>
   );

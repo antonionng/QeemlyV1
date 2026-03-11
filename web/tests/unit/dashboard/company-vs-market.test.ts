@@ -75,6 +75,22 @@ const benchmarkStats: BenchmarkStatsSummary = {
   },
 };
 
+const criticalMetrics: CompanyMetrics = {
+  ...metrics,
+  activeEmployees: 85,
+  inBandPercentage: 0,
+  outOfBandPercentage: 100,
+  avgMarketPosition: 91,
+  rolesOutsideBand: 85,
+  payrollRiskFlags: 73,
+  healthScore: 0,
+  bandDistribution: {
+    below: 14,
+    inBand: 0,
+    above: 86,
+  },
+};
+
 describe("company vs market helpers", () => {
   it("defines separate overview routes for company, market, and benchmark drill-down", () => {
     expect(getDashboardOverviewRoutes()).toEqual([
@@ -174,6 +190,28 @@ describe("company vs market helpers", () => {
         value: "82%",
         description: "active employees benchmarked to market",
         tone: "neutral",
+      },
+    ]);
+  });
+
+  it("builds a status-first headline card when compensation health is critical", () => {
+    expect(
+      buildCompanyOverviewHeadlineCards(criticalMetrics, {
+        activeEmployees: 85,
+        benchmarkedEmployees: 85,
+      }),
+    ).toEqual([
+      {
+        label: "Compensation Health",
+        value: "Critical",
+        description: "85 of 85 benchmarked employees are outside the target band",
+        tone: "warning",
+      },
+      {
+        label: "Coverage Confidence",
+        value: "100%",
+        description: "active employees benchmarked to market",
+        tone: "positive",
       },
     ]);
   });

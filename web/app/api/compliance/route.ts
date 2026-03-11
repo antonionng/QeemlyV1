@@ -54,6 +54,8 @@ function buildSnapshotPayload(snapshot: Record<string, unknown> | null) {
       document_items: [],
       audit_log_items: [],
       ai_scoring_metadata: {},
+      uses_synthetic_fallback: false,
+      synthetic_fallback_domains: [],
       updated_at: null,
     };
   }
@@ -71,6 +73,20 @@ function buildSnapshotPayload(snapshot: Record<string, unknown> | null) {
     document_items: snapshot.document_items || [],
     audit_log_items: snapshot.audit_log_items || [],
     ai_scoring_metadata: snapshot.ai_scoring_metadata || {},
+    uses_synthetic_fallback: Boolean(
+      (snapshot.ai_scoring_metadata as { uses_synthetic_fallback?: boolean } | null)
+        ?.uses_synthetic_fallback,
+    ),
+    synthetic_fallback_domains: Array.isArray(
+      (snapshot.ai_scoring_metadata as { synthetic_fallback_domains?: unknown[] } | null)
+        ?.synthetic_fallback_domains,
+    )
+      ? (
+          snapshot.ai_scoring_metadata as { synthetic_fallback_domains?: unknown[] } | null
+        )?.synthetic_fallback_domains
+          ?.filter((entry): entry is string => typeof entry === "string")
+          ?? []
+      : [],
     updated_at: snapshot.updated_at || null,
   };
 }

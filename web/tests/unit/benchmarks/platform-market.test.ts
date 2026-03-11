@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   fetchMarketBenchmarks,
+  findMarketBenchmark,
   invalidateMarketBenchmarkCache,
   type MarketBenchmark,
 } from "@/lib/benchmarks/platform-market";
@@ -26,6 +27,12 @@ type PlatformRow = {
   p75: number;
   p90: number;
   sample_size: number | null;
+};
+
+type PooledRow = PlatformRow & {
+  provenance: "employee" | "uploaded" | "admin" | "blended";
+  industry?: string | null;
+  company_size?: string | null;
 };
 
 function makeSnapshotRows(count: number): SnapshotRow[] {
@@ -165,6 +172,58 @@ function createPlatformFallbackClient(snapshotRows: SnapshotRow[], platformRows:
   };
 }
 
+function createCanonicalPoolClient(pooledRows: PooledRow[], snapshotRows: SnapshotRow[]) {
+  return {
+    from(table: string) {
+      if (table === "platform_market_benchmarks") {
+        return {
+          select() {
+            return {
+              eq() {
+                return {
+                  order() {
+                    return {
+                      range(start: number, end: number) {
+                        return Promise.resolve({
+                          data: pooledRows.slice(start, end + 1),
+                        });
+                      },
+                    };
+                  },
+                };
+              },
+            };
+          },
+        };
+      }
+
+      if (table === "public_benchmark_snapshots") {
+        return {
+          select() {
+            return {
+              eq() {
+                return {
+                  order() {
+                    return {
+                      range(start: number, end: number) {
+                        return Promise.resolve({
+                          data: snapshotRows.slice(start, end + 1),
+                        });
+                      },
+                    };
+                  },
+                };
+              },
+            };
+          },
+        };
+      }
+
+      throw new Error(`Unexpected table: ${table}`);
+    },
+  };
+}
+
 function createErroredSnapshotClient(message: string) {
   return {
     from(table: string) {
@@ -246,6 +305,40 @@ describe("fetchMarketBenchmarks", () => {
     });
   });
 
+  it("prefers canonical pooled market rows before public snapshots", async () => {
+    const client = createCanonicalPoolClient(
+      [
+        {
+          role_id: "pooled-role",
+          location_id: "doha",
+          level_id: "ic4",
+          currency: "QAR",
+          p10: 15000,
+          p25: 18000,
+          p50: 21000,
+          p75: 24000,
+          p90: 27000,
+          sample_size: 32,
+          provenance: "blended",
+        },
+      ],
+      makeSnapshotRows(2),
+    );
+
+    const result = await fetchMarketBenchmarks(client);
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject<Partial<MarketBenchmark>>({
+      role_id: "pooled-role",
+      location_id: "doha",
+      level_id: "ic4",
+      currency: "QAR",
+      p50: 21000,
+      sample_size: 32,
+      source: "market",
+    });
+  });
+
   it("loads all public snapshot rows across pages instead of truncating at 1000", async () => {
     invalidateMarketBenchmarkCache();
     const client = createPublicSnapshotClient(makeSnapshotRows(1200));
@@ -270,5 +363,95 @@ describe("fetchMarketBenchmarks", () => {
     await expect(fetchMarketBenchmarks(createErroredSnapshotClient("RLS denied"))).rejects.toThrow(
       "RLS denied",
     );
+  });
+});
+
+describe("findMarketBenchmark", () => {
+  it("prefers an exact segmented cohort over the base market row", async () => {
+    const client = createCanonicalPoolClient(
+      [
+        {
+          role_id: "swe",
+          location_id: "dubai",
+          level_id: "ic3",
+          currency: "AED",
+          p10: 12000,
+          p25: 14000,
+          p50: 16000,
+          p75: 18000,
+          p90: 20000,
+          sample_size: 20,
+          provenance: "blended",
+          industry: null,
+          company_size: null,
+        },
+        {
+          role_id: "swe",
+          location_id: "dubai",
+          level_id: "ic3",
+          currency: "AED",
+          p10: 15000,
+          p25: 17000,
+          p50: 19000,
+          p75: 21000,
+          p90: 23000,
+          sample_size: 8,
+          provenance: "blended",
+          industry: "Fintech",
+          company_size: "201-500",
+        },
+      ],
+      [],
+    );
+
+    const result = await findMarketBenchmark(client, "swe", "dubai", "ic3", {
+      industry: "Fintech",
+      companySize: "201-500",
+    });
+
+    expect(result).toMatchObject<Partial<MarketBenchmark>>({
+      role_id: "swe",
+      location_id: "dubai",
+      level_id: "ic3",
+      industry: "Fintech",
+      company_size: "201-500",
+      p50: 19000,
+    });
+  });
+
+  it("falls back to the base market cohort when no segmented row exists", async () => {
+    const client = createCanonicalPoolClient(
+      [
+        {
+          role_id: "swe",
+          location_id: "dubai",
+          level_id: "ic3",
+          currency: "AED",
+          p10: 12000,
+          p25: 14000,
+          p50: 16000,
+          p75: 18000,
+          p90: 20000,
+          sample_size: 20,
+          provenance: "blended",
+          industry: null,
+          company_size: null,
+        },
+      ],
+      [],
+    );
+
+    const result = await findMarketBenchmark(client, "swe", "dubai", "ic3", {
+      industry: "Fintech",
+    });
+
+    expect(result).toMatchObject<Partial<MarketBenchmark>>({
+      role_id: "swe",
+      location_id: "dubai",
+      level_id: "ic3",
+      industry: null,
+      company_size: null,
+      p50: 16000,
+    });
   });
 });

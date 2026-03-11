@@ -6,6 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { isSourceAllowedForIngestion } from "@/lib/ingestion/source-registry";
 import { createServiceClient } from "@/lib/supabase/service";
 import { claimNextJob, completeJob, failJobForRetry } from "@/lib/ingestion/job-runner";
 import { runIngestionForJob } from "@/lib/ingestion/worker";
@@ -37,10 +38,9 @@ export async function GET(request: NextRequest) {
   // 1. Enqueue jobs for all enabled sources
   const { data: sources } = await supabase
     .from("ingestion_sources")
-    .select("id, slug, update_cadence")
-    .eq("enabled", true);
+    .select("id, slug, name, enabled, approved_for_commercial, needs_review, category, regions, update_cadence, expected_fields, config, description, license_url, terms_summary, created_at, updated_at");
 
-  for (const source of sources || []) {
+  for (const source of (sources || []).filter(isSourceAllowedForIngestion)) {
     const { count } = await supabase
       .from("ingestion_jobs")
       .select("id", { count: "exact", head: true })

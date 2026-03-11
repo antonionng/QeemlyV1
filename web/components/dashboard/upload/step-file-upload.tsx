@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import {
+  getFileUploadGuidance,
   useUploadStore,
   parseFile,
   formatFileSize,
@@ -20,10 +21,14 @@ import {
 } from "@/lib/upload";
 
 export function StepFileUpload() {
-  const { dataType, file, setFile, setMappings, nextStep } = useUploadStore();
+  const { dataType, file, importMode, setImportMode, setFile, setMappings, nextStep } =
+    useUploadStore();
   const [isDragging, setIsDragging] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const guidance = dataType ? getFileUploadGuidance(dataType, importMode) : null;
+  const supportsReplaceMode = dataType === "employees" || dataType === "benchmarks";
 
   const handleFile = useCallback(
     async (selectedFile: File) => {
@@ -104,9 +109,53 @@ export function StepFileUpload() {
       <div className="mb-6">
         <h2 className="text-lg font-semibold text-brand-900">Upload your file</h2>
         <p className="text-sm text-brand-600 mt-1">
-          Drag and drop a CSV or Excel file, or click to browse
+          {guidance?.helperText || "Drag and drop a CSV or Excel file, or click to browse."}
         </p>
       </div>
+
+      {supportsReplaceMode && (
+        <div className="mb-6 rounded-xl border border-border bg-white p-4">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div className="max-w-2xl">
+              <h3 className="text-sm font-semibold text-brand-900">How should Qeemly apply this file?</h3>
+              <p className="mt-1 text-sm text-brand-600">{guidance?.matchingRule}</p>
+              <p className="mt-1 text-xs text-brand-500">{guidance?.templateHint}</p>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <button
+                type="button"
+                onClick={() => setImportMode("upsert")}
+                className={clsx(
+                  "rounded-lg border px-4 py-3 text-left transition-colors",
+                  importMode === "upsert"
+                    ? "border-brand-500 bg-brand-50 text-brand-900"
+                    : "border-border bg-white text-brand-700 hover:border-brand-300",
+                )}
+              >
+                <p className="text-sm font-semibold">Update existing and add new</p>
+                <p className="mt-1 text-xs text-brand-500">
+                  Keep current company data, update matched rows, and create new ones.
+                </p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setImportMode("replace")}
+                className={clsx(
+                  "rounded-lg border px-4 py-3 text-left transition-colors",
+                  importMode === "replace"
+                    ? "border-amber-500 bg-amber-50 text-amber-900"
+                    : "border-border bg-white text-brand-700 hover:border-amber-300",
+                )}
+              >
+                <p className="text-sm font-semibold">Replace current company data</p>
+                <p className="mt-1 text-xs text-brand-500">
+                  Remove the current workspace data first, then import this file as the fresh batch.
+                </p>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Drop zone */}
       {!file && (

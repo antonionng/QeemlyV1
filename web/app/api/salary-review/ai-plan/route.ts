@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { fetchMarketBenchmarks } from "@/lib/benchmarks/platform-market";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getWorkspaceContext } from "@/lib/workspace-context";
@@ -28,9 +29,6 @@ type BenchmarkRow = {
   level_id: string;
   location_id: string;
   p50: number | null;
-  source: string | null;
-  valid_from: string | null;
-  created_at: string;
 };
 
 type FreshnessRow = {
@@ -155,18 +153,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: workspaceBenchmarkError.message }, { status: 500 });
   }
 
-  const { data: ingestionBenchmarkRows, error: ingestionBenchmarkError } = await serviceClient
-    .from("salary_benchmarks")
-    .select("role_id, level_id, location_id, p50, source, valid_from, created_at")
-    .neq("workspace_id", workspace_id)
-    .eq("source", "market")
-    .order("valid_from", { ascending: false })
-    .order("created_at", { ascending: false })
-    .limit(8000);
-
-  if (ingestionBenchmarkError) {
-    return NextResponse.json({ error: ingestionBenchmarkError.message }, { status: 500 });
-  }
+  const marketBenchmarkRows = (await fetchMarketBenchmarks(serviceClient)).filter((row) => {
+    const roleMatch = roleIds.length === 0 || roleIds.includes(row.role_id);
+    const levelMatch = levelIds.length === 0 || levelIds.includes(row.level_id);
+    const locationMatch = locationIds.length === 0 || locationIds.includes(row.location_id);
+    return roleMatch && levelMatch && locationMatch;
+  });
 
   const { data: freshnessRows } = await serviceClient
     .from("data_freshness_metrics")
@@ -208,7 +200,7 @@ export async function POST(request: Request) {
     "Workspace Benchmarks"
   );
   const ingestionBenchmarks = dedupeBenchmarks(
-    (ingestionBenchmarkRows ?? []) as BenchmarkRow[],
+    marketBenchmarkRows as BenchmarkRow[],
     "ingestion",
     (Array.isArray(allowedIngestionFreshness?.ingestion_sources)
       ? allowedIngestionFreshness?.ingestion_sources[0]?.slug

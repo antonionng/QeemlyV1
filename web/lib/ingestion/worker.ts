@@ -2,7 +2,9 @@
  * Ingestion worker - orchestrates fetch, normalize, DQ, upsert.
  */
 
+import { createHash } from "node:crypto";
 import { createServiceClient } from "@/lib/supabase/service";
+import { refreshPlatformMarketPoolBestEffort } from "@/lib/benchmarks/platform-market-sync";
 import { normalizeBenchmarkRow, type NormalizedBenchmarkRow } from "./normalizer";
 import { validateBenchmarkRow, buildDQReport, type BenchmarkRow } from "./data-quality";
 import { getIngestorForSource } from "./adapters";
@@ -57,10 +59,7 @@ export async function runIngestionForJob(
   }
 
   // Target workspace for benchmarks (platform-wide uses env or first workspace)
-  const targetWorkspaceId =
-    workspaceId ||
-    process.env.PLATFORM_WORKSPACE_ID ||
-    (await getFirstWorkspaceId(supabase));
+  const targetWorkspaceId = workspaceId || process.env.PLATFORM_WORKSPACE_ID;
 
   if (!targetWorkspaceId) {
     return {
@@ -73,6 +72,11 @@ export async function runIngestionForJob(
   }
 
   const rawRows = await ingestor.fetch(sourceId);
+  await persistRawSnapshot(supabase, {
+    sourceId,
+    workspaceId: targetWorkspaceId,
+    rows: rawRows as Record<string, unknown>[],
+  });
   if (rawRows.length === 0) {
     return {
       status: "success",
@@ -123,6 +127,8 @@ export async function runIngestionForJob(
         role_id: row.roleId,
         location_id: row.locationId,
         level_id: row.levelId,
+        industry: row.industry || null,
+        company_size: row.companySize || null,
         currency: row.currency,
         p10: row.p10,
         p25: row.p25,
@@ -136,7 +142,7 @@ export async function runIngestionForJob(
         valid_to: null,
       },
       {
-        onConflict: "workspace_id,role_id,location_id,level_id,valid_from",
+        onConflict: "workspace_id,role_id,location_id,level_id,industry_key,company_size_key,valid_from",
       }
     );
     if (!error) {
@@ -171,6 +177,7 @@ export async function runIngestionForJob(
 
   if (succeeded > 0) {
     await upsertBenchmarksFreshness(targetWorkspaceId, succeeded, sourceId);
+    await refreshPlatformMarketPoolBestEffort();
   }
 
   return {
@@ -186,9 +193,27 @@ export async function runIngestionForJob(
   };
 }
 
-async function getFirstWorkspaceId(
-  supabase: ReturnType<typeof createServiceClient>
-): Promise<string | null> {
-  const { data } = await supabase.from("workspaces").select("id").limit(1).single();
-  return data?.id ?? null;
+async function persistRawSnapshot(
+  supabase: ReturnType<typeof createServiceClient>,
+  args: {
+    sourceId: string;
+    workspaceId: string;
+    rows: Record<string, unknown>[];
+  },
+): Promise<void> {
+  const checksum = createHash("sha256")
+    .update(JSON.stringify(args.rows))
+    .digest("hex");
+
+  await supabase.from("raw_source_snapshots").insert({
+    source_id: args.sourceId,
+    workspace_id: args.workspaceId,
+    fetched_at: new Date().toISOString(),
+    schema_version: "v1",
+    checksum,
+    row_count: args.rows.length,
+    storage_path: null,
+    sample_preview: args.rows.slice(0, 5),
+  });
 }
+

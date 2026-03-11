@@ -5,7 +5,48 @@
 import { createClient } from "@/lib/supabase/client";
 import type { SalaryBenchmark, Currency } from "@/lib/dashboard/dummy-data";
 import { LOCATIONS } from "@/lib/dashboard/dummy-data";
-import { fetchMarketBenchmarks, type MarketBenchmark } from "@/lib/benchmarks/platform-market";
+import {
+  fetchMarketBenchmarks,
+  findMarketBenchmark,
+  type MarketBenchmark,
+} from "@/lib/benchmarks/platform-market";
+
+export type BenchmarkLookupFilters = {
+  industry?: string | null;
+  companySize?: string | null;
+};
+
+function normalizeFilterValue(value: string | null | undefined): string | null {
+  const normalized = value?.trim();
+  return normalized ? normalized : null;
+}
+
+function buildBenchmarkSegmentation(
+  matched: { industry?: string | null; company_size?: string | null },
+  filters: BenchmarkLookupFilters = {},
+) {
+  const requestedIndustry = normalizeFilterValue(filters.industry);
+  const requestedCompanySize = normalizeFilterValue(filters.companySize);
+  const matchedIndustry = normalizeFilterValue(matched.industry);
+  const matchedCompanySize = normalizeFilterValue(matched.company_size);
+
+  return {
+    requestedIndustry,
+    requestedCompanySize,
+    matchedIndustry,
+    matchedCompanySize,
+    isSegmented: Boolean(matchedIndustry || matchedCompanySize),
+    isFallback:
+      (!!requestedIndustry && requestedIndustry !== matchedIndustry) ||
+      (!!requestedCompanySize && requestedCompanySize !== matchedCompanySize),
+  };
+}
+
+function getConfidenceFromSampleSize(sampleSize: number): "High" | "Medium" | "Low" {
+  if (sampleSize >= 20) return "High";
+  if (sampleSize >= 8) return "Medium";
+  return "Low";
+}
 
 let hasDbBenchmarksCache: boolean | null = null;
 let cacheTimestamp = 0;
@@ -26,6 +67,8 @@ export type DbBenchmark = {
   sample_size: number | null;
   source: string;
   confidence: string;
+  industry?: string | null;
+  company_size?: string | null;
   valid_from: string;
   created_at: string;
 };
@@ -120,9 +163,14 @@ export async function fetchDbBenchmarks(): Promise<DbBenchmark[]> {
   }
 }
 
-function transformMarketBenchmark(mb: MarketBenchmark): SalaryBenchmark {
+function transformMarketBenchmark(
+  mb: MarketBenchmark,
+  filters: BenchmarkLookupFilters = {},
+): SalaryBenchmark {
   const location = LOCATIONS.find(l => l.id === mb.location_id);
   const currency = (location?.currency || mb.currency || "AED") as Currency;
+  const sampleSize = Number(mb.sample_size) || 0;
+  const confidence = getConfidenceFromSampleSize(sampleSize);
 
   return {
     roleId: mb.role_id,
@@ -136,19 +184,29 @@ function transformMarketBenchmark(mb: MarketBenchmark): SalaryBenchmark {
       p75: mb.p75,
       p90: mb.p90,
     },
-    sampleSize: mb.sample_size || 0,
-    confidence: "High" as const,
-    lastUpdated: new Date().toISOString(),
+    sampleSize,
+    confidence,
+    lastUpdated: mb.freshness_at || new Date().toISOString(),
     momChange: 0,
     yoyChange: 0,
     trend: [],
     benchmarkSource: "market",
+    benchmarkTrust: {
+      source: "market",
+      provenance: mb.provenance || null,
+      sampleSize,
+      confidence,
+      freshnessAt: mb.freshness_at || null,
+      contributorCount: mb.contributor_count || null,
+    },
+    benchmarkSegmentation: buildBenchmarkSegmentation(mb, filters),
   };
 }
 
 function transformDbBenchmark(db: DbBenchmark): SalaryBenchmark {
   const location = LOCATIONS.find(l => l.id === db.location_id);
   const currency = (location?.currency || db.currency || "AED") as Currency;
+  const confidence = (db.confidence || "medium") as "High" | "Medium" | "Low";
   
   return {
     roleId: db.role_id,
@@ -163,12 +221,19 @@ function transformDbBenchmark(db: DbBenchmark): SalaryBenchmark {
       p90: Number(db.p90),
     },
     sampleSize: db.sample_size || 0,
-    confidence: (db.confidence || "medium") as "High" | "Medium" | "Low",
+    confidence,
     lastUpdated: db.created_at,
     momChange: 0,
     yoyChange: 0,
     trend: [],
     benchmarkSource: "uploaded",
+    benchmarkTrust: {
+      source: "uploaded",
+      provenance: "uploaded",
+      sampleSize: db.sample_size || 0,
+      confidence,
+      lastUpdated: db.created_at,
+    },
   };
 }
 
@@ -179,10 +244,13 @@ function transformDbBenchmark(db: DbBenchmark): SalaryBenchmark {
 export async function getBenchmark(
   roleId: string,
   locationId: string,
-  levelId: string
+  levelId: string,
+  filters: BenchmarkLookupFilters = {},
 ): Promise<SalaryBenchmark | null> {
   try {
     const params = new URLSearchParams({ roleId, locationId, levelId });
+    if (filters.industry) params.set("industry", filters.industry);
+    if (filters.companySize) params.set("companySize", filters.companySize);
     const response = await fetch(`/api/benchmarks/search?${params.toString()}`, {
       cache: "no-store",
     });
@@ -201,11 +269,8 @@ export async function getBenchmark(
 
   // Market data first (the product)
   try {
-    const marketData = await fetchMarketBenchmarks(supabase);
-    const marketMatch = marketData.find(
-      (b) => b.role_id === roleId && b.location_id === locationId && b.level_id === levelId
-    );
-    if (marketMatch) return transformMarketBenchmark(marketMatch);
+    const marketMatch = await findMarketBenchmark(supabase, roleId, locationId, levelId, filters);
+    if (marketMatch) return transformMarketBenchmark(marketMatch, filters);
   } catch {
     // Continue to workspace lookup
   }

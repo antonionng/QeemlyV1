@@ -4,42 +4,20 @@ import { AreaChart } from "@tremor/react";
 import { Card } from "@/components/ui/card";
 import { TrendingUp, TrendingDown } from "lucide-react";
 import clsx from "clsx";
-import { formatAEDCompact, type CompanyMetrics } from "@/lib/employees";
+import type { OverviewMetrics } from "@/lib/dashboard/company-overview";
 import { useSalaryView, applyViewMode } from "@/lib/salary-view-store";
 import { useState } from "react";
+import { buildPayrollTrendViewModel, type PayrollTrendRange } from "@/lib/dashboard/payroll-trend";
 
 interface PayrollTrendProps {
-  metrics: CompanyMetrics;
+  metrics: OverviewMetrics;
 }
-
-type TimeRange = "3m" | "6m" | "12m";
 
 export function PayrollTrend({ metrics }: PayrollTrendProps) {
   const { salaryView } = useSalaryView();
-  const [timeRange, setTimeRange] = useState<TimeRange>("12m");
+  const [timeRange, setTimeRange] = useState<PayrollTrendRange>("12m");
+  const viewModel = buildPayrollTrendViewModel({ metrics, salaryView, timeRange });
 
-  // Filter data based on time range
-  const getFilteredData = () => {
-    const months = timeRange === "3m" ? 3 : timeRange === "6m" ? 6 : 12;
-    const sliced = metrics.payrollTrend.slice(-months);
-
-    // Figma shows fewer x-axis labels (e.g., Mar/May/Jul/Sep/Nov/Jan on 12m).
-    // We downsample the 12m view to encourage the same tick density.
-    if (timeRange === "12m" && sliced.length > 6) {
-      return sliced.filter((_, idx) => idx % 2 === 0);
-    }
-
-    return sliced;
-  };
-
-  const trendData = getFilteredData();
-  
-  // Calculate period change
-  const startValue = trendData[0]?.value || 0;
-  const endValue = trendData[trendData.length - 1]?.value || 0;
-  const periodChange = startValue > 0 ? ((endValue - startValue) / startValue) * 100 : 0;
-
-  const formatHeaderValue = (value: number) => `AED ${formatAEDCompact(applyViewMode(value, salaryView))}`;
   const formatAxisValue = (value: number) => {
     const v = applyViewMode(value, salaryView);
     if (!Number.isFinite(v)) return "AED 0";
@@ -47,23 +25,22 @@ export function PayrollTrend({ metrics }: PayrollTrendProps) {
     return `AED ${(v / 1_000_000).toFixed(1)}M`;
   };
 
-  // Prepare chart data
-  const chartData = trendData.map(d => ({
-    month: d.month,
-    Payroll: d.value,
-  }));
-
   return (
     <Card className="dash-card p-5">
       <div className="flex items-start justify-between mb-4">
         <div>
           <h3 className="text-sm font-semibold text-accent-900">Payroll Trend</h3>
-          <p className="text-xs text-accent-500 mt-0.5">Total compensation over time</p>
+          <p className="text-xs text-accent-500 mt-0.5">How payroll is moving across the selected period</p>
+          {viewModel.trustLabel && (
+            <p className="mt-1 text-[11px] text-accent-400">
+              {viewModel.trustLabel}
+            </p>
+          )}
         </div>
         
         {/* Time range selector */}
         <div className="flex gap-1 rounded-full bg-accent-100 p-1">
-          {(["3m", "6m", "12m"] as TimeRange[]).map(range => (
+          {(["3m", "6m", "12m"] as PayrollTrendRange[]).map(range => (
             <button
               key={range}
               type="button"
@@ -82,29 +59,32 @@ export function PayrollTrend({ metrics }: PayrollTrendProps) {
       </div>
 
       {/* Period summary */}
-      <div className="flex items-baseline gap-10 mb-4">
+      <div className="mb-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
         <div>
-          <p className="text-xs font-medium text-accent-500">Period Start</p>
+          <p className="text-xs font-medium text-accent-500">Period start</p>
           <p className="text-[28px] leading-none font-extrabold text-accent-900">
-            {formatHeaderValue(startValue)}
+            {viewModel.startDisplay}
           </p>
         </div>
         <div>
           <div className="flex items-center gap-2">
-            <p className="text-xs font-medium text-accent-500">Current</p>
+            <p className="text-xs font-medium text-accent-500">{viewModel.changeLabel}</p>
             <span className={clsx(
               "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold",
-              periodChange >= 0 ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"
+              viewModel.periodChange >= 0 ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"
             )}>
-              {periodChange >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-              {periodChange >= 0 ? "+" : ""}{periodChange.toFixed(1)}%
+              {viewModel.periodChange >= 0 ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
+              {viewModel.periodChange >= 0 ? "+" : ""}{viewModel.periodChange.toFixed(1)}%
             </span>
           </div>
           <p className="text-[28px] leading-none font-extrabold text-accent-900">
-            {formatHeaderValue(endValue)}
+            {viewModel.currentDisplay}
           </p>
+          <p className="mt-1 text-xs text-accent-500">{viewModel.currentLabel}</p>
         </div>
       </div>
+
+      <p className="mb-4 text-xs text-accent-500">{viewModel.driverSummary}</p>
 
       {/* Area Chart */}
       <div
@@ -119,7 +99,7 @@ export function PayrollTrend({ metrics }: PayrollTrendProps) {
       >
         <AreaChart
           className="h-full"
-          data={chartData}
+          data={viewModel.chartData}
           index="month"
           categories={["Payroll"]}
           colors={["gray"]}

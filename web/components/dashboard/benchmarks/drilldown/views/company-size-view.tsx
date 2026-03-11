@@ -1,7 +1,10 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import { type BenchmarkResult } from "@/lib/benchmarks/benchmark-state";
 import { useCompanySettings } from "@/lib/company";
+import { getBenchmark } from "@/lib/benchmarks/data-service";
+import { COMPANY_SIZES, type SalaryBenchmark } from "@/lib/dashboard/dummy-data";
 import { formatBenchmarkCompact, toBenchmarkDisplayValue } from "@/lib/utils/currency";
 import { useSalaryView } from "@/lib/salary-view-store";
 
@@ -10,40 +13,76 @@ interface CompanySizeViewProps {
 }
 
 export function CompanySizeView({ result }: CompanySizeViewProps) {
-  const { location, benchmark } = result;
+  const { role, level, location } = result;
   const companySettings = useCompanySettings();
   const { salaryView } = useSalaryView();
-  
-  // Company branding - match size category
-  const companySize = companySettings.companySize;
-  
-  const sourceLocationId = location.id === "london" ? "dubai" : location.id;
-  const sourceCurrency = location.id === "london" ? "AED" : location.currency;
-  const targetCurrency = location.currency;
+  const companySize = result.formData.companySize || companySettings.companySize;
+  const [companySizeBenchmarks, setCompanySizeBenchmarks] = useState<Record<string, SalaryBenchmark>>({});
 
-  const companySizeData = [
-    {
-      size: companySize || "Selected size",
-      median: toBenchmarkDisplayValue(benchmark.percentiles.p50, {
-        salaryView,
-        sourceCurrency,
-        targetCurrency,
-      }),
-      isCompanySize: true,
-    },
-  ];
+  const targetCurrency = location.currency;
+  const sizesToLoad = useMemo(() => {
+    const ordered = [companySize, ...COMPANY_SIZES.filter((size) => size !== companySize)];
+    return ordered.filter(Boolean).slice(0, 5);
+  }, [companySize]);
+
+  useEffect(() => {
+    const run = async () => {
+      const entries = await Promise.all(
+        sizesToLoad.map(async (size) => {
+          const nextBenchmark = await getBenchmark(role.id, location.id, level.id, {
+            industry: result.formData.industry,
+            companySize: size,
+          });
+          if (!nextBenchmark?.benchmarkSegmentation?.matchedCompanySize) return null;
+          if (nextBenchmark.benchmarkSegmentation.matchedCompanySize !== size) return null;
+          return { size, benchmark: nextBenchmark };
+        }),
+      );
+
+      const next: Record<string, SalaryBenchmark> = {};
+      for (const entry of entries) {
+        if (!entry) continue;
+        next[entry.size] = entry.benchmark;
+      }
+      setCompanySizeBenchmarks(next);
+    };
+
+    void run();
+  }, [level.id, location.id, result.formData.industry, role.id, sizesToLoad]);
+
+  const companySizeData = sizesToLoad
+    .map((size) => {
+      const nextBenchmark = companySizeBenchmarks[size];
+      if (!nextBenchmark) return null;
+      return {
+        size,
+        median: toBenchmarkDisplayValue(nextBenchmark.percentiles.p50, {
+          salaryView,
+          sourceCurrency: nextBenchmark.currency,
+          targetCurrency,
+        }),
+        isCompanySize: size === companySize,
+        sampleSize: nextBenchmark.sampleSize,
+      };
+    })
+    .filter(Boolean) as Array<{
+    size: string;
+    median: number;
+    isCompanySize: boolean;
+    sampleSize: number;
+  }>;
+  const maxMedian = Math.max(...companySizeData.map((item) => item.median), 1);
 
   return (
     <div className="bench-section">
       <div className="flex items-center justify-between pb-4">
         <h3 className="bench-section-header pb-0">Top Company Sizes</h3>
-        {companySettings.isConfigured && (
+        {companySize && (
           <span className="text-xs text-brand-500">Your size: {companySize}</span>
         )}
       </div>
       <div className="space-y-3">
         {companySizeData.map((item) => {
-          const maxMedian = companySizeData[companySizeData.length - 1].median;
           const percentage = (item.median / maxMedian) * 100;
           
           return (
@@ -74,11 +113,22 @@ export function CompanySizeView({ result }: CompanySizeViewProps) {
               <div className="w-20 text-right text-sm font-medium text-brand-900">
                 {formatBenchmarkCompact(item.median, targetCurrency)}
               </div>
+              <div className="w-16 text-right text-xs text-brand-500">
+                n={item.sampleSize}
+              </div>
             </div>
           );
         })}
       </div>
-      <p className="mt-4 text-xs text-brand-500">Company-size segmented premiums are not yet available in this workspace dataset.</p>
+      {companySizeData.length === 0 ? (
+        <p className="mt-4 text-xs text-brand-500">
+          No company-size-specific cohort is available for this role yet. Qeemly is using the broader market row.
+        </p>
+      ) : (
+        <p className="mt-4 text-xs text-brand-500">
+          Only cohorts with real segmented market matches are shown here. Missing cohorts fall back to the broader market row.
+        </p>
+      )}
     </div>
   );
 }

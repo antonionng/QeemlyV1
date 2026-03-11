@@ -12,7 +12,7 @@ import {
   parseNumber,
   normalize,
 } from "@/lib/upload/transformers";
-import { LOCATIONS } from "@/lib/dashboard/dummy-data";
+import { COMPANY_SIZES, INDUSTRIES, LOCATIONS } from "@/lib/dashboard/dummy-data";
 
 export type MappingConfidence = "high" | "medium" | "low";
 
@@ -124,6 +124,8 @@ export type NormalizedBenchmarkRow = {
   locationId: string;
   levelId: string;
   currency: string;
+  industry?: string | null;
+  companySize?: string | null;
   p10: number;
   p25: number;
   p50: number;
@@ -135,6 +137,22 @@ export type NormalizedBenchmarkRow = {
   originalLocation?: string;
   originalLevel?: string;
 };
+
+function normalizeIndustryValue(value: unknown): string | null {
+  const input = String(value ?? "").trim();
+  if (!input) return null;
+  return INDUSTRIES.find((option) => normalize(option) === normalize(input)) ?? input;
+}
+
+function normalizeCompanySizeValue(value: unknown): string | null {
+  const input = String(value ?? "").trim();
+  if (!input) return null;
+
+  const compactInput = input.replace(/\s+/g, "");
+  return (
+    COMPANY_SIZES.find((option) => option.replace(/\s+/g, "") === compactInput) ?? input
+  );
+}
 
 /**
  * Transform a raw benchmark row into a normalized record with confidence.
@@ -155,6 +173,12 @@ export function normalizeBenchmarkRow(
   const p50 = parseNumber(String(row.p50 ?? row.median ?? row.p50th ?? "")) ?? 0;
   const p75 = parseNumber(String(row.p75 ?? row.p75th ?? "")) ?? 0;
   const p90 = parseNumber(String(row.p90 ?? row.p90th ?? "")) ?? 0;
+  const industry = normalizeIndustryValue(
+    row.industry ?? row.sector ?? row.activity ?? row.economic_activity,
+  );
+  const companySize = normalizeCompanySizeValue(
+    row.company_size ?? row.companySize ?? row.company ?? row.employer_size ?? row.organization_size,
+  );
 
   const sampleSize = row.sample_size != null ? Number(row.sample_size) : null;
 
@@ -170,6 +194,8 @@ export function normalizeBenchmarkRow(
       locationId: locationResult.locationId,
       levelId: levelResult.levelId,
       currency: (row.currency as string) || locationResult.currency,
+      industry,
+      companySize,
       p10,
       p25,
       p50,

@@ -982,8 +982,17 @@ export async function refreshComplianceSnapshot(workspaceId: string) {
       weighted_delta: weightedAiDelta,
       active_employees: employees.length,
       benchmark_rows: benchmarks.length,
+      benchmark_sources: [
+        ...new Set(
+          benchmarks.map((benchmark) =>
+            String((benchmark as { source?: string | null }).source || "unknown"),
+          ),
+        ),
+      ],
       reasons: aiResult.reasons,
       missing_data: [...aiResult.missingData, ...subsystemWarnings],
+      uses_synthetic_fallback: fallbackDomains.length > 0,
+      synthetic_fallback_domains: fallbackDomains,
       jurisdictions_applied: complianceSettings.default_jurisdictions,
       settings_applied: {
         is_compliance_configured: complianceSettings.is_compliance_configured,

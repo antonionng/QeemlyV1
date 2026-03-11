@@ -35,4 +35,25 @@ describe("normalizeBenchmarkRow", () => {
       expect(result.ok.p50).toBe(14000);
     }
   });
+
+  it("carries industry and company size segmentation when provided", () => {
+    const result = normalizeBenchmarkRow({
+      role: "swe",
+      location: "Dubai",
+      level: "ic3",
+      industry: "Fintech",
+      company_size: "201-500",
+      p10: "10000",
+      p25: "12000",
+      p50: "14000",
+      p75: "16000",
+      p90: "18000",
+    });
+
+    expect("ok" in result).toBe(true);
+    if ("ok" in result) {
+      expect(result.ok.industry).toBe("Fintech");
+      expect(result.ok.companySize).toBe("201-500");
+    }
+  });
 });

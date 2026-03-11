@@ -1,6 +1,8 @@
 // Comprehensive dummy data for Qeemly Dashboard
 // Covering GCC markets with realistic compensation data
 
+import type { BenchmarkTrustMetadata } from "@/lib/benchmarks/trust";
+
 export type Currency = "AED" | "SAR" | "QAR" | "BHD" | "KWD" | "OMR" | "GBP";
 
 export type Location = {
@@ -65,6 +67,15 @@ export type SalaryBenchmark = {
   trend: TrendPoint[];
   /** Where this benchmark came from: "market" = Qeemly data pool, "uploaded" = company pay bands */
   benchmarkSource?: BenchmarkSource;
+  benchmarkTrust?: BenchmarkTrustMetadata;
+  benchmarkSegmentation?: {
+    requestedIndustry?: string | null;
+    requestedCompanySize?: string | null;
+    matchedIndustry?: string | null;
+    matchedCompanySize?: string | null;
+    isSegmented: boolean;
+    isFallback: boolean;
+  };
 };
 
 export type WatchlistItem = {

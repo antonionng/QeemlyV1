@@ -19,8 +19,8 @@ import {
   type BenchmarkContext,
   type BenchmarkFormData,
 } from "@/lib/benchmarks/benchmark-state";
-import { ROLES, LEVELS, INDUSTRIES, COMPANY_SIZES } from "@/lib/dashboard/dummy-data";
-import { useCompanySettings, FUNDING_STAGES, type TargetPercentile } from "@/lib/company";
+import { ROLES, LEVELS } from "@/lib/dashboard/dummy-data";
+import { type TargetPercentile } from "@/lib/company";
 
 interface FilterSidebarProps {
   className?: string;
@@ -34,7 +34,6 @@ export function FilterSidebar({ className }: FilterSidebarProps) {
     runBenchmark,
   } = useBenchmarkState();
   
-  const companySettings = useCompanySettings();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [roleSearch, setRoleSearch] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -266,64 +265,7 @@ export function FilterSidebar({ className }: FilterSidebarProps) {
             <div className="space-y-3">
               <div className="flex items-center gap-1.5 text-xs text-amber-600 bg-amber-50 px-2 py-1.5 rounded-lg">
                 <Info className="h-3 w-3 flex-shrink-0" />
-                <span>Overrides for this search only</span>
-              </div>
-
-              {/* Industry */}
-              <div>
-                <label className="block text-xs font-medium text-brand-700 mb-1.5">
-                  Industry
-                </label>
-                <select
-                  value={formData.industry || ""}
-                  onChange={(e) => handleFieldChange("industry", e.target.value || null)}
-                  className="w-full h-8 rounded-lg border border-border bg-white px-2.5 text-xs text-brand-900 focus:border-brand-300 focus:outline-none"
-                >
-                  <option value="">Default ({companySettings.industry})</option>
-                  {INDUSTRIES.map((industry) => (
-                    <option key={industry} value={industry}>
-                      {industry}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Company Size */}
-              <div>
-                <label className="block text-xs font-medium text-brand-700 mb-1.5">
-                  Company Size
-                </label>
-                <select
-                  value={formData.companySize || ""}
-                  onChange={(e) => handleFieldChange("companySize", e.target.value || null)}
-                  className="w-full h-8 rounded-lg border border-border bg-white px-2.5 text-xs text-brand-900 focus:border-brand-300 focus:outline-none"
-                >
-                  <option value="">Default ({companySettings.companySize})</option>
-                  {COMPANY_SIZES.map((size) => (
-                    <option key={size} value={size}>
-                      {size}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Funding Stage */}
-              <div>
-                <label className="block text-xs font-medium text-brand-700 mb-1.5">
-                  Funding Stage
-                </label>
-                <select
-                  value={formData.fundingStage || ""}
-                  onChange={(e) => handleFieldChange("fundingStage", e.target.value || null)}
-                  className="w-full h-8 rounded-lg border border-border bg-white px-2.5 text-xs text-brand-900 focus:border-brand-300 focus:outline-none"
-                >
-                  <option value="">Default ({companySettings.fundingStage})</option>
-                  {FUNDING_STAGES.map((stage) => (
-                    <option key={stage} value={stage}>
-                      {stage}
-                    </option>
-                  ))}
-                </select>
+                <span>Only live filters are shown here right now</span>
               </div>
 
               {/* Target Percentile */}
@@ -336,12 +278,16 @@ export function FilterSidebar({ className }: FilterSidebarProps) {
                   onChange={(e) => handleFieldChange("targetPercentile", e.target.value ? Number(e.target.value) as TargetPercentile : null)}
                   className="w-full h-8 rounded-lg border border-border bg-white px-2.5 text-xs text-brand-900 focus:border-brand-300 focus:outline-none"
                 >
-                  <option value="">Default (P{companySettings.targetPercentile})</option>
+                  <option value="">Use workspace target percentile</option>
                   <option value="25">P25 - Below Market</option>
                   <option value="50">P50 - Market Median</option>
                   <option value="75">P75 - Above Market</option>
                   <option value="90">P90 - Premium</option>
                 </select>
+              </div>
+
+              <div className="rounded-lg border border-dashed border-brand-200 bg-brand-50/40 px-3 py-2 text-[11px] text-brand-700">
+                Industry, company size, and funding stage are hidden until the shared market dataset supports them end to end.
               </div>
             </div>
           )}

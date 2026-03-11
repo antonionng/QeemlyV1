@@ -3,7 +3,12 @@
 import { useEffect } from "react";
 import clsx from "clsx";
 import { Check, ChevronLeft, X } from "lucide-react";
-import { useUploadStore, type WizardStep, type UploadDataType } from "@/lib/upload";
+import {
+  getUploadHeaderSubtitle,
+  useUploadStore,
+  type WizardStep,
+  type UploadDataType,
+} from "@/lib/upload";
 import { StepDataType } from "./step-data-type";
 import { StepFileUpload } from "./step-file-upload";
 import { StepColumnMapping } from "./step-column-mapping";
@@ -92,11 +97,7 @@ export function UploadWizard({
               {isSuccess ? "Import Complete" : "Upload Data"}
             </h1>
             {dataType && !isSuccess && (
-              <p className="text-sm text-brand-600">
-                {dataType === "employees" && "Import employee data"}
-                {dataType === "benchmarks" && "Import salary benchmarks"}
-                {dataType === "compensation" && "Bulk compensation update"}
-              </p>
+              <p className="text-sm text-brand-600">{getUploadHeaderSubtitle(dataType)}</p>
             )}
           </div>
         </div>

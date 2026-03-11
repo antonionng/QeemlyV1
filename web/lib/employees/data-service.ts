@@ -2,6 +2,7 @@
 
 import type { Employee, CompanyMetrics, DepartmentSummary, Department, PerformanceRating } from "./mock-data";
 import { LOCATIONS, LEVELS, ROLES } from "@/lib/dashboard/dummy-data";
+import type { BenchmarkMatchQuality, BenchmarkTrustMetadata } from "@/lib/benchmarks/trust";
 
 // Cache for database employee count check
 let hasDbEmployeesCache: boolean | null = null;
@@ -74,6 +75,19 @@ type BenchmarkRow = {
   p50: number;
   p75: number;
   p90: number;
+  source?: string | null;
+  confidence?: string | null;
+  sample_size?: number | null;
+  provenance?: string | null;
+  freshness_at?: string | null;
+  created_at?: string | null;
+  contributor_count?: number | null;
+};
+
+type BenchmarkMatch = {
+  row: BenchmarkRow;
+  source: "market" | "uploaded";
+  matchQuality: BenchmarkMatchQuality;
 };
 
 function buildBenchmarkMaps(rows: Record<string, unknown>[]) {
@@ -92,6 +106,52 @@ function buildBenchmarkMaps(rows: Record<string, unknown>[]) {
   return { exactMap, roleLevelMap };
 }
 
+function normalizeConfidence(value: string | null | undefined): "High" | "Medium" | "Low" | null {
+  const normalized = (value || "").toLowerCase();
+  if (normalized === "high") return "High";
+  if (normalized === "medium") return "Medium";
+  if (normalized === "low") return "Low";
+  return null;
+}
+
+function resolveBenchmarkMatch(
+  exactKey: string,
+  fallbackKey: string,
+  market: ReturnType<typeof buildBenchmarkMaps>,
+  workspace: ReturnType<typeof buildBenchmarkMaps>
+): BenchmarkMatch | null {
+  const marketExact = market.exactMap.get(exactKey);
+  if (marketExact) return { row: marketExact, source: "market", matchQuality: "exact" };
+
+  const marketFallback = market.roleLevelMap.get(fallbackKey);
+  if (marketFallback) return { row: marketFallback, source: "market", matchQuality: "role_level_fallback" };
+
+  const workspaceExact = workspace.exactMap.get(exactKey);
+  if (workspaceExact) return { row: workspaceExact, source: "uploaded", matchQuality: "exact" };
+
+  const workspaceFallback = workspace.roleLevelMap.get(fallbackKey);
+  if (workspaceFallback) {
+    return { row: workspaceFallback, source: "uploaded", matchQuality: "role_level_fallback" };
+  }
+
+  return null;
+}
+
+function buildBenchmarkContext(match: BenchmarkMatch | null): BenchmarkTrustMetadata | undefined {
+  if (!match) return undefined;
+  return {
+    source: match.source,
+    provenance: match.row.provenance || (match.source === "uploaded" ? "uploaded" : null),
+    matchQuality: match.matchQuality,
+    sampleSize: typeof match.row.sample_size === "number" ? match.row.sample_size : null,
+    confidence: normalizeConfidence(match.row.confidence),
+    freshnessAt: match.row.freshness_at || null,
+    lastUpdated: match.row.created_at || null,
+    contributorCount:
+      typeof match.row.contributor_count === "number" ? match.row.contributor_count : null,
+  };
+}
+
 function mapRowsToEmployees(
   dbEmployees: Record<string, unknown>[],
   dbBenchmarks: Record<string, unknown>[],
@@ -99,10 +159,9 @@ function mapRowsToEmployees(
 ): Employee[] {
   if (!dbEmployees.length) return [];
 
-  // Workspace benchmarks are the company's own pay bands (primary for internal health views)
-  const workspace = buildBenchmarkMaps(dbBenchmarks);
-  // Market benchmarks are used as fallback coverage when workspace rows are missing
+  // Market rows are primary. Workspace bands are an overlay when the market pool has gaps.
   const market = buildBenchmarkMaps(dbMarketBenchmarks);
+  const workspace = buildBenchmarkMaps(dbBenchmarks);
 
   const toAnnual = (value: number): number => (value < 100_000 ? value * 12 : value);
   const percentileFromComp = (comp: number, b: BenchmarkRow): number => {
@@ -132,12 +191,8 @@ function mapRowsToEmployees(
     const exactKey = `${emp.role_id as string}::${emp.location_id as string}::${emp.level_id as string}`;
     const fallbackKey = `${emp.role_id as string}::${emp.level_id as string}`;
 
-    // Company Overview should align to internal pay bands first, then market fallback.
-    const benchmark =
-      workspace.exactMap.get(exactKey) ??
-      workspace.roleLevelMap.get(fallbackKey) ??
-      market.exactMap.get(exactKey) ??
-      market.roleLevelMap.get(fallbackKey);
+    const benchmarkMatch = resolveBenchmarkMatch(exactKey, fallbackKey, market, workspace);
+    const benchmark = benchmarkMatch?.row;
 
     let bandPosition: "below" | "in-band" | "above" = "in-band";
     let bandPercentile = 50;
@@ -179,6 +234,7 @@ function mapRowsToEmployees(
       bandPercentile,
       marketComparison,
       hasBenchmark,
+      benchmarkContext: hasBenchmark ? buildBenchmarkContext(benchmarkMatch) : undefined,
       hireDate: emp.hire_date ? new Date(String(emp.hire_date)) : new Date(),
       lastReviewDate: emp.last_review_date ? new Date(String(emp.last_review_date)) : undefined,
       performanceRating: (emp.performance_rating as PerformanceRating | null) ?? undefined,
@@ -192,6 +248,10 @@ function mapRowsToEmployees(
 export async function getEmployees(): Promise<Employee[]> {
   return fetchDbEmployees();
 }
+
+export const __internal = {
+  mapRowsToEmployees,
+};
 
 // Note: getCompanyMetrics, getDepartmentSummaries, getEmployeesByDepartment
 // are exported from mock-data.ts - use those for sync access

@@ -1,70 +1,61 @@
 "use client";
 
 import { useRef } from "react";
+import type { OverviewAction } from "@/lib/dashboard/company-overview";
 import { Card } from "@/components/ui/card";
 import {
   Users,
   AlertTriangle,
-  Flame,
   BarChart3,
+  Shield,
+  Upload,
   ArrowRight,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
 import Link from "next/link";
+import clsx from "clsx";
 
-interface ActionCard {
-  label: string;
-  description: string;
-  icon: typeof Users;
-  iconBg: string;
-  iconColor: string;
-  href: string;
-  actionText: string;
-  count?: string;
-}
+const ICONS = {
+  users: Users,
+  alert: AlertTriangle,
+  chart: BarChart3,
+  shield: Shield,
+  upload: Upload,
+} as const;
 
-const actions: ActionCard[] = [
-  {
-    label: "56 employees outside compensation band",
-    description: "Review & align compensation levels",
-    icon: Users,
-    iconBg: "bg-orange-100",
-    iconColor: "text-orange-600",
-    href: "/dashboard/salary-review?filter=outside-band",
-    actionText: "Review Employees",
-    count: "56 emp",
+const TONE_STYLES = {
+  danger: {
+    card: "border-rose-200 bg-rose-50/60 hover:bg-rose-50",
+    iconBg: "bg-rose-100",
+    iconColor: "text-rose-600",
+    count: "text-rose-700 bg-white",
   },
-  {
-    label: "Medium Importance Action",
-    description: "Learn your full/shared and unusual.",
-    icon: AlertTriangle,
-    iconBg: "bg-red-100",
-    iconColor: "text-red-600",
-    href: "/dashboard/salary-review",
-    actionText: "Start Action",
-  },
-  {
-    label: "High Importance Action",
-    description: "Employees require immediate attention",
-    icon: Flame,
+  warning: {
+    card: "border-amber-200 bg-amber-50/60 hover:bg-amber-50",
     iconBg: "bg-amber-100",
     iconColor: "text-amber-600",
-    href: "/dashboard/reports",
-    actionText: "Start Action",
+    count: "text-amber-700 bg-white",
   },
-  {
-    label: "Regular Action",
-    description: "Learn your full/shared and unusual.",
-    icon: BarChart3,
-    iconBg: "bg-purple-100",
-    iconColor: "text-purple-600",
-    href: "/dashboard/benchmarks",
-    actionText: "Start Action",
+  info: {
+    card: "border-brand-200 bg-brand-50/70 hover:bg-brand-50",
+    iconBg: "bg-brand-100",
+    iconColor: "text-brand-600",
+    count: "text-brand-700 bg-white",
   },
-];
+  positive: {
+    card: "border-emerald-200 bg-emerald-50/70 hover:bg-emerald-50",
+    iconBg: "bg-emerald-100",
+    iconColor: "text-emerald-600",
+    count: "text-emerald-700 bg-white",
+  },
+} as const;
 
-export function QuickActions() {
+interface QuickActionsProps {
+  actions: OverviewAction[];
+}
+
+export function QuickActions({ actions }: QuickActionsProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const scroll = (dir: "left" | "right") => {
@@ -103,25 +94,42 @@ export function QuickActions() {
         className="flex gap-4 overflow-x-auto pb-1 scrollbar-none"
         style={{ scrollbarWidth: "none" }}
       >
-        {actions.map((action) => (
-          <Link key={action.label} href={action.href} className="shrink-0 w-[240px]">
-            <Card className="dash-card p-5 h-full flex flex-col hover:shadow-md transition-shadow">
-              <div className={`h-10 w-10 rounded-xl ${action.iconBg} flex items-center justify-center mb-3`}>
-                <action.icon className={`h-5 w-5 ${action.iconColor}`} />
-              </div>
-              <p className="text-sm font-semibold text-accent-900 leading-snug mb-1">
-                {action.label}
-              </p>
-              <p className="text-xs text-accent-500 mb-4 flex-1">
-                {action.description}
-              </p>
-              <div className="flex items-center gap-1 text-xs font-semibold text-accent-700 group">
-                {action.actionText}
-                <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-              </div>
-            </Card>
-          </Link>
-        ))}
+        {actions.map((action) => {
+          const Icon = ICONS[action.icon];
+          const tone = TONE_STYLES[action.tone];
+
+          return (
+            <Link key={action.id} href={action.href} className="shrink-0 w-[260px]">
+              <Card
+                className={clsx(
+                  "dash-card flex h-full flex-col border p-5 transition-shadow hover:shadow-md",
+                  tone.card,
+                )}
+              >
+                <div className={clsx("mb-3 flex h-10 w-10 items-center justify-center rounded-xl", tone.iconBg)}>
+                  <Icon className={clsx("h-5 w-5", tone.iconColor)} />
+                </div>
+                <div className="mb-2 flex items-start justify-between gap-2">
+                  <p className="text-sm font-semibold text-accent-900 leading-snug">
+                    {action.title}
+                  </p>
+                  {action.countLabel && (
+                    <span className={clsx("rounded-full px-2 py-0.5 text-[10px] font-semibold", tone.count)}>
+                      {action.countLabel}
+                    </span>
+                  )}
+                </div>
+                <p className="mb-4 flex-1 text-xs text-accent-600">
+                  {action.description}
+                </p>
+                <div className="flex items-center gap-1 text-xs font-semibold text-accent-700 group">
+                  {action.actionLabel}
+                  <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+                </div>
+              </Card>
+            </Link>
+          );
+        })}
       </div>
     </div>
   );

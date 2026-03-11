@@ -111,6 +111,12 @@ export async function PATCH(
   if (hasManual && !isValidEmail(String(merged.recipient_email))) {
     return NextResponse.json({ error: "recipient_email is invalid." }, { status: 400 });
   }
+  if (updates.export_format && updates.export_format !== "JSON") {
+    return NextResponse.json(
+      { error: "Only JSON offer exports are currently supported." },
+      { status: 400 },
+    );
+  }
 
   if (hasEmployee && merged.employee_id) {
     const { data: employee } = await supabase

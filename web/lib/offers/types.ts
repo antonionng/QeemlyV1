@@ -2,6 +2,20 @@ export type OfferStatus = "draft" | "ready" | "sent" | "archived";
 export type OfferExportFormat = "PDF" | "DOCX" | "JSON";
 export type EmploymentType = "national" | "expat";
 
+export interface OfferBenchmarkSnapshot {
+  benchmark_percentiles: Record<string, number>;
+  benchmark_source: "market" | "uploaded" | "dummy";
+  sample_size?: number;
+  confidence?: string;
+  last_updated?: string | null;
+  freshness_at?: string | null;
+  provenance?: string | null;
+  role: Record<string, unknown>;
+  level: Record<string, unknown>;
+  location: Record<string, unknown>;
+  form_data: Record<string, unknown>;
+}
+
 export interface Offer {
   id: string;
   workspace_id: string;
@@ -19,7 +33,7 @@ export interface Offer {
   offer_high: number;
   currency: string;
   salary_breakdown: Record<string, unknown>;
-  benchmark_snapshot: Record<string, unknown>;
+  benchmark_snapshot: OfferBenchmarkSnapshot;
   export_format: OfferExportFormat;
   status: OfferStatus;
   created_at: string;
@@ -40,7 +54,7 @@ export interface CreateOfferPayload {
   offer_high: number;
   currency: string;
   salary_breakdown?: Record<string, unknown>;
-  benchmark_snapshot?: Record<string, unknown>;
+  benchmark_snapshot?: OfferBenchmarkSnapshot;
   export_format?: OfferExportFormat;
   status?: OfferStatus;
 }
@@ -52,7 +66,7 @@ export interface UpdateOfferPayload {
   status?: OfferStatus;
   export_format?: OfferExportFormat;
   salary_breakdown?: Record<string, unknown>;
-  benchmark_snapshot?: Record<string, unknown>;
+  benchmark_snapshot?: OfferBenchmarkSnapshot;
 }
 
 export interface OfferExportPayload {

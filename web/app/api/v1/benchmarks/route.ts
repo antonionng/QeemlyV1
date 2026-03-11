@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateApiKey } from "../middleware";
+import { fetchMarketBenchmarks } from "@/lib/benchmarks/platform-market";
+import { refreshPlatformMarketPoolBestEffort } from "@/lib/benchmarks/platform-market-sync";
 import { createServiceClient } from "@/lib/supabase/service";
 import { upsertBenchmarksFreshness } from "@/lib/ingestion/freshness";
 
@@ -20,23 +22,36 @@ export async function GET(request: NextRequest) {
 
   const supabase = createServiceClient();
 
-  let query = supabase
-    .from("salary_benchmarks")
-    .select("*")
-    .eq("workspace_id", auth.workspaceId)
-    .order("created_at", { ascending: false });
+  const [marketRows, workspaceResult] = await Promise.all([
+    fetchMarketBenchmarks(supabase),
+    supabase
+      .from("salary_benchmarks")
+      .select("*")
+      .eq("workspace_id", auth.workspaceId)
+      .order("created_at", { ascending: false }),
+  ]);
 
-  if (roleId) query = query.eq("role_id", roleId);
-  if (levelId) query = query.eq("level_id", levelId);
-  if (locationId) query = query.eq("location_id", locationId);
-
-  const { data, error } = await query;
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (workspaceResult.error) {
+    return NextResponse.json({ error: workspaceResult.error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ data: data || [] });
+  const filteredMarketRows = marketRows.filter((row) => {
+    if (roleId && row.role_id !== roleId) return false;
+    if (levelId && row.level_id !== levelId) return false;
+    if (locationId && row.location_id !== locationId) return false;
+    return true;
+  });
+  const filteredWorkspaceRows = (workspaceResult.data || []).filter((row) => {
+    if (roleId && row.role_id !== roleId) return false;
+    if (levelId && row.level_id !== levelId) return false;
+    if (locationId && row.location_id !== locationId) return false;
+    return true;
+  });
+
+  return NextResponse.json({
+    market: filteredMarketRows,
+    workspace_overlay: filteredWorkspaceRows,
+  });
 }
 
 /**
@@ -80,7 +95,7 @@ export async function POST(request: NextRequest) {
           source: bm.source || "uploaded",
           valid_from: bm.valid_from || new Date().toISOString().split("T")[0],
         },
-        { onConflict: "workspace_id,role_id,location_id,level_id,valid_from" }
+        { onConflict: "workspace_id,role_id,location_id,level_id,industry_key,company_size_key,valid_from" }
       )
       .select()
       .single();
@@ -95,6 +110,7 @@ export async function POST(request: NextRequest) {
 
   if (created > 0) {
     await upsertBenchmarksFreshness(auth.workspaceId, created, null);
+    await refreshPlatformMarketPoolBestEffort();
   }
 
   return NextResponse.json({ created, updated: 0, errors });

@@ -10,12 +10,13 @@ import {
   Download,
 } from "lucide-react";
 import clsx from "clsx";
-import { useUploadStore, getIssueSummary } from "@/lib/upload";
+import { getValidationLegend, useUploadStore, getIssueSummary } from "@/lib/upload";
 
 type FilterType = "all" | "valid" | "warning" | "error";
 
 export function StepValidation() {
   const {
+    dataType,
     validationResult,
     excludedRows,
     toggleRowExclusion,
@@ -41,6 +42,8 @@ export function StepValidation() {
     if (!validationResult) return new Map();
     return getIssueSummary(validationResult.issues);
   }, [validationResult]);
+
+  const legend = getValidationLegend(dataType ?? "employees");
 
   if (!validationResult) return null;
 
@@ -79,8 +82,17 @@ export function StepValidation() {
       <div className="mb-6">
         <h2 className="text-lg font-semibold text-brand-900">Review your data</h2>
         <p className="text-sm text-brand-600 mt-1">
-          We&apos;ve validated your data. Review any issues before importing.
+          We&apos;ve validated your data. Review what is ready, what needs attention, and what will be skipped before importing.
         </p>
+      </div>
+
+      <div className="mb-6 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        {legend.map((item) => (
+          <div key={item.id} className="rounded-lg border border-border bg-white p-3">
+            <p className="text-sm font-semibold text-brand-900">{item.label}</p>
+            <p className="mt-1 text-xs text-brand-600">{item.description}</p>
+          </div>
+        ))}
       </div>
 
       {/* Summary cards */}

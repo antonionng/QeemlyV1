@@ -98,12 +98,22 @@ export function buildCompanyOverviewHeadlineCards(
     benchmarkCoverage && benchmarkCoverage.activeEmployees > 0
       ? Math.round((benchmarkCoverage.benchmarkedEmployees / benchmarkCoverage.activeEmployees) * 100)
       : 0;
+  const healthSummary =
+    metrics.healthScore <= 20 && metrics.rolesOutsideBand > 0 && (benchmarkCoverage?.benchmarkedEmployees ?? 0) > 0
+      ? {
+          value: "Critical",
+          description: `${metrics.rolesOutsideBand} of ${benchmarkCoverage?.benchmarkedEmployees} benchmarked employees are outside the target band`,
+        }
+      : {
+          value: `${metrics.healthScore}/100`,
+          description: "overall pay health score",
+        };
 
   return [
     {
       label: "Compensation Health",
-      value: `${metrics.healthScore}/100`,
-      description: "overall pay health score",
+      value: healthSummary.value,
+      description: healthSummary.description,
       tone: metrics.healthScore < 60 ? "warning" : metrics.healthScore >= 80 ? "positive" : "neutral",
     },
     {

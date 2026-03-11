@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateApiKey } from "../middleware";
+import { refreshPlatformMarketPoolBestEffort } from "@/lib/benchmarks/platform-market-sync";
 import { createServiceClient } from "@/lib/supabase/service";
 import { refreshComplianceSnapshot } from "@/lib/compliance/snapshot-service";
 
@@ -139,6 +140,7 @@ export async function POST(request: NextRequest) {
     } catch {
       // Avoid failing employee ingestion when compliance refresh is unavailable.
     }
+    await refreshPlatformMarketPoolBestEffort();
   }
 
   return NextResponse.json({ created, updated, failed, errors });

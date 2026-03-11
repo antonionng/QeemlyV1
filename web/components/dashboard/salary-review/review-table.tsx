@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { buildBenchmarkTrustLabels } from "@/lib/benchmarks/trust";
 import { useSalaryReview, type ReviewEmployee, type ColumnKey } from "@/lib/salary-review";
 import { formatAED, computeTenure, type Department } from "@/lib/employees";
 import { useSalaryView, applyViewMode } from "@/lib/salary-view-store";
@@ -367,6 +368,7 @@ export function ReviewTable() {
               {sortedEmployees.map((employee) => {
                 const tenure = computeTenure(employee.hireDate);
                 const isNew = tenure.totalMonths < 12;
+                const benchmarkTrust = buildBenchmarkTrustLabels(employee.benchmarkContext);
 
                 return (
                   <tr
@@ -491,7 +493,19 @@ export function ReviewTable() {
                     )}
                     {show("band") && (
                       <td className="px-4 py-3 text-center">
-                        {getBandBadge(employee.bandPosition)}
+                        <div className="space-y-1">
+                          {getBandBadge(employee.bandPosition)}
+                          {benchmarkTrust && (
+                            <div className="flex flex-col items-center gap-1">
+                              <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-medium text-brand-700">
+                                {benchmarkTrust.sourceLabel}
+                              </span>
+                              <span className="rounded-full bg-accent-100 px-2 py-0.5 text-[10px] font-medium text-accent-600">
+                                {benchmarkTrust.matchLabel}
+                              </span>
+                            </div>
+                          )}
+                        </div>
                       </td>
                     )}
                     {show("performance") && (

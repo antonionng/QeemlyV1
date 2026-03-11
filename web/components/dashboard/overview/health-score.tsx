@@ -3,17 +3,11 @@
 import { Card } from "@/components/ui/card";
 import { CheckCircle, AlertCircle, XCircle } from "lucide-react";
 import clsx from "clsx";
-import { type CompanyMetrics } from "@/lib/employees";
+import type { OverviewMetrics } from "@/lib/dashboard/company-overview";
+import { getHealthScorePresentation } from "@/lib/dashboard/overview-card-helpers";
 
 interface HealthScoreProps {
-  metrics: CompanyMetrics;
-}
-
-function getScoreLabel(score: number): { label: string; color: string } {
-  if (score >= 80) return { label: "Excellent", color: "text-emerald-500" };
-  if (score >= 60) return { label: "Good", color: "text-emerald-500" };
-  if (score >= 40) return { label: "Fair", color: "text-amber-500" };
-  return { label: "Needs Attention", color: "text-rose-500" };
+  metrics: OverviewMetrics;
 }
 
 function getStrokeColor(score: number): string {
@@ -23,8 +17,15 @@ function getStrokeColor(score: number): string {
 }
 
 export function HealthScore({ metrics }: HealthScoreProps) {
-  const { label, color } = getScoreLabel(metrics.healthScore);
+  const presentation = getHealthScorePresentation(metrics);
   const strokeColor = getStrokeColor(metrics.healthScore);
+  const riskDenominator = Math.max(metrics.benchmarkedEmployees, 1);
+  const StatusIcon =
+    presentation.icon === "check-circle"
+      ? CheckCircle
+      : presentation.icon === "alert-circle"
+        ? AlertCircle
+        : XCircle;
 
   const factors = [
     {
@@ -41,7 +42,7 @@ export function HealthScore({ metrics }: HealthScoreProps) {
     },
     {
       label: "Risk Management",
-      value: Math.max(0, 100 - (metrics.payrollRiskFlags / metrics.activeEmployees) * 500),
+      value: Math.max(0, 100 - (metrics.payrollRiskFlags / riskDenominator) * 500),
       target: 90,
       description: `${metrics.payrollRiskFlags} risk flags`,
     },
@@ -85,14 +86,29 @@ export function HealthScore({ metrics }: HealthScoreProps) {
             />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className={clsx("text-3xl font-bold", color)}>
-              {metrics.healthScore}%
+            <span className={clsx("text-3xl font-bold", presentation.accentClass)}>
+              {presentation.primaryValue}
             </span>
-            <span className="flex items-center gap-1 mt-0.5">
-              <CheckCircle className={clsx("h-3.5 w-3.5", color)} />
-              <span className={clsx("text-xs font-semibold", color)}>{label}</span>
+            <span className="mt-0.5 flex items-center gap-1">
+              <StatusIcon className={clsx("h-3.5 w-3.5", presentation.accentClass)} />
+              <span className={clsx("text-xs font-semibold", presentation.accentClass)}>
+                {presentation.secondaryValue}
+              </span>
             </span>
           </div>
+        </div>
+
+        <div
+          className={clsx(
+            "mb-5 w-full rounded-xl border px-3 py-2 text-center text-xs font-medium",
+            presentation.tone === "critical"
+              ? "border-rose-200 bg-rose-50 text-rose-700"
+              : presentation.tone === "warning"
+                ? "border-amber-200 bg-amber-50 text-amber-700"
+                : "border-emerald-200 bg-emerald-50 text-emerald-700",
+          )}
+        >
+          {presentation.summary}
         </div>
 
         {/* Contributing factors */}
@@ -119,6 +135,11 @@ export function HealthScore({ metrics }: HealthScoreProps) {
             </div>
           ))}
         </div>
+        {metrics.benchmarkedEmployees < metrics.activeEmployees && (
+          <p className="mt-4 text-center text-[11px] text-accent-500">
+            Score factors are based on {metrics.benchmarkedEmployees} benchmarked employees.
+          </p>
+        )}
       </div>
     </Card>
   );

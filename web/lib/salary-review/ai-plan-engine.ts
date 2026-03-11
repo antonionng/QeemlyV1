@@ -179,17 +179,17 @@ function resolveBenchmarkMatch(
   const exactKey = `${employee.roleId}::${employee.locationId}::${employee.levelId}`;
   const fallbackKey = `${employee.roleId}::${employee.levelId}`;
 
-  const workspaceExact = workspaceMaps.exactMap.get(exactKey);
-  if (workspaceExact) return { benchmark: workspaceExact, matchQuality: "exact" };
-
-  const workspaceFallback = workspaceMaps.roleLevelMap.get(fallbackKey);
-  if (workspaceFallback) return { benchmark: workspaceFallback, matchQuality: "role_level_fallback" };
-
   const ingestionExact = ingestionMaps.exactMap.get(exactKey);
   if (ingestionExact) return { benchmark: ingestionExact, matchQuality: "exact" };
 
   const ingestionFallback = ingestionMaps.roleLevelMap.get(fallbackKey);
   if (ingestionFallback) return { benchmark: ingestionFallback, matchQuality: "role_level_fallback" };
+
+  const workspaceExact = workspaceMaps.exactMap.get(exactKey);
+  if (workspaceExact) return { benchmark: workspaceExact, matchQuality: "exact" };
+
+  const workspaceFallback = workspaceMaps.roleLevelMap.get(fallbackKey);
+  if (workspaceFallback) return { benchmark: workspaceFallback, matchQuality: "role_level_fallback" };
 
   return { benchmark: null, matchQuality: "none" };
 }

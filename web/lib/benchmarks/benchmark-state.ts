@@ -13,6 +13,14 @@ import {
 } from "../dashboard/dummy-data";
 import { useCompanySettings, type TargetPercentile } from "../company/settings";
 import { getBenchmark } from "./data-service";
+import {
+  getDefaultBenchmarkDetailTab,
+  type BenchmarkDetailTabId,
+} from "./detail-tabs";
+import {
+  getPersistedBenchmarkStateSlice,
+  migratePersistedBenchmarkState,
+} from "./form-presentation";
 
 // Types
 export type BenchmarkContext = "existing" | "new-hire" | "relocating";
@@ -91,12 +99,15 @@ export interface BenchmarkState {
   
   // UI state
   step: "form" | "results" | "detail";
+  detailTab: BenchmarkDetailTabId;
   
   // Form actions
   updateFormField: <K extends keyof BenchmarkFormData>(field: K, value: BenchmarkFormData[K]) => void;
   resetForm: () => void;
   runBenchmark: () => Promise<void>;
   goToStep: (step: "form" | "results" | "detail") => void;
+  openDetailTab: (tab: BenchmarkDetailTabId) => void;
+  setDetailTab: (tab: BenchmarkDetailTabId) => void;
   clearResult: () => void;
   
   // Saved filter actions
@@ -141,6 +152,7 @@ export const useBenchmarkState = create<BenchmarkState>()(
       recentResults: [],
       savedFilters: [],
       step: "form",
+      detailTab: getDefaultBenchmarkDetailTab(),
       
       updateFormField: (field, value) => {
         set((state) => {
@@ -158,19 +170,27 @@ export const useBenchmarkState = create<BenchmarkState>()(
           isFormComplete: false,
           currentResult: null,
           step: "form",
+          detailTab: getDefaultBenchmarkDetailTab(),
         });
       },
       
       runBenchmark: async () => {
         const { formData } = get();
+        const companySettings = useCompanySettings.getState();
         
         if (!formData.roleId || !formData.levelId || !formData.locationId) {
           return;
         }
+
+        const resolvedFormData: BenchmarkFormData = {
+          ...formData,
+          industry: formData.industry || companySettings.industry || null,
+          companySize: formData.companySize || companySettings.companySize || null,
+        };
         
-        const role = ROLES.find(r => r.id === formData.roleId)!;
-        const level = LEVELS.find(l => l.id === formData.levelId)!;
-        const location = LOCATIONS.find(l => l.id === formData.locationId) || {
+        const role = ROLES.find(r => r.id === resolvedFormData.roleId)!;
+        const level = LEVELS.find(l => l.id === resolvedFormData.levelId)!;
+        const location = LOCATIONS.find(l => l.id === resolvedFormData.locationId) || {
           id: "london",
           city: "London",
           country: "United Kingdom",
@@ -179,12 +199,14 @@ export const useBenchmarkState = create<BenchmarkState>()(
           flag: "GB",
         };
         
-        // Fetch benchmark from workspace dataset (use dubai as proxy for non-GCC locations)
-        const isGccLocation = LOCATIONS.some(l => l.id === formData.locationId);
         const benchmark = await getBenchmark(
-          formData.roleId,
-          isGccLocation ? formData.locationId : "dubai",
-          formData.levelId
+          resolvedFormData.roleId!,
+          resolvedFormData.locationId!,
+          resolvedFormData.levelId!,
+          {
+            industry: resolvedFormData.industry,
+            companySize: resolvedFormData.companySize,
+          },
         );
         if (!benchmark) {
           return;
@@ -192,14 +214,13 @@ export const useBenchmarkState = create<BenchmarkState>()(
         
         // Check if any settings were overridden
         const isOverridden = !!(
+          formData.targetPercentile ||
           formData.industry ||
-          formData.companySize ||
-          formData.fundingStage ||
-          formData.targetPercentile
+          formData.companySize
         );
         
         const result: BenchmarkResult = {
-          formData: { ...formData },
+          formData: resolvedFormData,
           benchmark,
           role,
           level,
@@ -212,17 +233,30 @@ export const useBenchmarkState = create<BenchmarkState>()(
           currentResult: result,
           recentResults: [result, ...state.recentResults.slice(0, 9)],
           step: "results",
+          detailTab: getDefaultBenchmarkDetailTab(),
         }));
       },
       
       goToStep: (step) => {
         set({ step });
       },
+
+      openDetailTab: (tab) => {
+        set({
+          detailTab: tab,
+          step: "detail",
+        });
+      },
+
+      setDetailTab: (tab) => {
+        set({ detailTab: tab });
+      },
       
       clearResult: () => {
         set({
           currentResult: null,
           step: "form",
+          detailTab: getDefaultBenchmarkDetailTab(),
         });
       },
       
@@ -255,6 +289,7 @@ export const useBenchmarkState = create<BenchmarkState>()(
             formData: { ...filter.formData },
             isFormComplete: isFormComplete(filter.formData),
             step: "form",
+            detailTab: getDefaultBenchmarkDetailTab(),
           });
         }
       },
@@ -291,15 +326,11 @@ export const useBenchmarkState = create<BenchmarkState>()(
     }),
     {
       name: "qeemly:benchmark-state",
-      partialize: (state) => ({
-        // Persist current form data so filters survive refresh
-        formData: state.formData,
-        isFormComplete: state.isFormComplete,
-        // Persist saved filters
-        savedFilters: state.savedFilters,
-        // Persist recent results for history
-        recentResults: state.recentResults,
-      }),
+      version: 2,
+      migrate: (persistedState) => migratePersistedBenchmarkState(
+        persistedState as Partial<BenchmarkState>,
+      ),
+      partialize: (state) => getPersistedBenchmarkStateSlice(state),
     }
   )
 );

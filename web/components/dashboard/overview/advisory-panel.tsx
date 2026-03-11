@@ -16,6 +16,7 @@ import { Card } from "@/components/ui/card";
 import { generateAdvisory } from "@/lib/advisory/generator";
 import type { AdvisoryRisk } from "@/lib/advisory/types";
 import type { Employee } from "@/lib/employees";
+import { buildBenchmarkTrustLabels } from "@/lib/benchmarks/trust";
 import clsx from "clsx";
 
 interface AdvisoryPanelProps {
@@ -63,6 +64,7 @@ export function AdvisoryPanel({ employee, proposedIncrease }: AdvisoryPanelProps
       }),
     [employee, proposedIncrease]
   );
+  const benchmarkTrust = buildBenchmarkTrustLabels(employee.benchmarkContext);
 
   const confidenceColor =
     advisory.confidence_score >= 80
@@ -154,6 +156,21 @@ export function AdvisoryPanel({ employee, proposedIncrease }: AdvisoryPanelProps
             <p className="text-sm text-brand-900 leading-relaxed">
               {advisory.recommendation_summary}
             </p>
+            {benchmarkTrust && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-brand-700">
+                  {benchmarkTrust.sourceLabel}
+                </span>
+                <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-brand-700">
+                  {benchmarkTrust.matchLabel}
+                </span>
+                {benchmarkTrust.freshnessLabel && (
+                  <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-medium text-brand-700">
+                    {benchmarkTrust.freshnessLabel}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Rationale Bullets */}

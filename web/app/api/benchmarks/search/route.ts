@@ -17,6 +17,8 @@ export async function GET(request: NextRequest) {
   const roleId = searchParams.get("roleId");
   const locationId = searchParams.get("locationId");
   const levelId = searchParams.get("levelId");
+  const industry = searchParams.get("industry");
+  const companySize = searchParams.get("companySize");
 
   if (!roleId || !locationId || !levelId) {
     return NextResponse.json(
@@ -44,10 +46,13 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const marketBenchmark = await findMarketBenchmark(marketClient, roleId, locationId, levelId);
+    const marketBenchmark = await findMarketBenchmark(marketClient, roleId, locationId, levelId, {
+      industry,
+      companySize,
+    });
     if (marketBenchmark) {
       return NextResponse.json({
-        benchmark: transformMarketBenchmark(marketBenchmark),
+        benchmark: transformMarketBenchmark(marketBenchmark, { industry, companySize }),
         diagnostics,
       });
     }
@@ -86,20 +91,31 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({ benchmark, diagnostics });
 }
 
+function normalizeFilterValue(value: string | null | undefined): string | null {
+  const normalized = value?.trim();
+  return normalized ? normalized : null;
+}
+
 function transformMarketBenchmark(marketBenchmark: {
   role_id: string;
   location_id: string;
   level_id: string;
   currency: string;
+  industry?: string | null;
+  company_size?: string | null;
   p10: number;
   p25: number;
   p50: number;
   p75: number;
   p90: number;
   sample_size: number | null;
-}): SalaryBenchmark {
+}, filters: { industry?: string | null; companySize?: string | null } = {}): SalaryBenchmark {
   const location = LOCATIONS.find((entry) => entry.id === marketBenchmark.location_id);
   const currency = (location?.currency || marketBenchmark.currency || "AED") as Currency;
+  const requestedIndustry = normalizeFilterValue(filters.industry);
+  const requestedCompanySize = normalizeFilterValue(filters.companySize);
+  const matchedIndustry = normalizeFilterValue(marketBenchmark.industry);
+  const matchedCompanySize = normalizeFilterValue(marketBenchmark.company_size);
 
   return {
     roleId: marketBenchmark.role_id,
@@ -120,6 +136,16 @@ function transformMarketBenchmark(marketBenchmark: {
     yoyChange: 0,
     trend: [],
     benchmarkSource: "market",
+    benchmarkSegmentation: {
+      requestedIndustry,
+      requestedCompanySize,
+      matchedIndustry,
+      matchedCompanySize,
+      isSegmented: Boolean(matchedIndustry || matchedCompanySize),
+      isFallback:
+        (!!requestedIndustry && requestedIndustry !== matchedIndustry) ||
+        (!!requestedCompanySize && requestedCompanySize !== matchedCompanySize),
+    },
   };
 }
 

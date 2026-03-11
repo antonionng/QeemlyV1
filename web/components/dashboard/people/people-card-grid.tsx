@@ -1,6 +1,7 @@
 "use client";
 
 import { MapPin, Pencil, Trash2 } from "lucide-react";
+import { buildBenchmarkTrustLabels } from "@/lib/benchmarks/trust";
 import type { Employee } from "@/lib/employees";
 import { formatAEDCompact } from "@/lib/employees";
 
@@ -36,6 +37,7 @@ export function PeopleCardGrid({ employees, onOpenDetails, onDelete }: Props) {
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
       {employees.map((employee) => {
         const visa = visaBadge(employee);
+        const benchmarkTrust = buildBenchmarkTrustLabels(employee.benchmarkContext);
         return (
         <div
           key={employee.id}
@@ -89,6 +91,16 @@ export function PeopleCardGrid({ employees, onOpenDetails, onDelete }: Props) {
                 {employee.marketComparison}%
               </span>
             </p>
+            {benchmarkTrust && (
+              <div className="flex flex-wrap gap-1">
+                <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-medium text-brand-700">
+                  {benchmarkTrust.sourceLabel}
+                </span>
+                <span className="rounded-full bg-accent-100 px-2 py-0.5 text-[10px] font-medium text-accent-600">
+                  {benchmarkTrust.matchLabel}
+                </span>
+              </div>
+            )}
             {visa && (
               <p className={`inline-flex rounded-full border px-2 py-1 text-[10px] font-semibold ${visa.cls}`}>
                 {visa.label}

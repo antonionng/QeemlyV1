@@ -13,11 +13,13 @@ import {
   FileJson,
   BarChart3,
   GitBranch,
+  TrendingUp,
 } from "lucide-react";
 import { Logo } from "@/components/logo";
 
 const nav = [
   { href: "/admin", label: "Control Tower", icon: Activity },
+  { href: "/admin/insights", label: "Insights", icon: TrendingUp },
   { href: "/admin/pipeline", label: "Data Pipeline", icon: GitBranch },
   { href: "/admin/sources", label: "Sources", icon: Database },
   { href: "/admin/benchmarks", label: "Benchmarks", icon: BarChart3 },

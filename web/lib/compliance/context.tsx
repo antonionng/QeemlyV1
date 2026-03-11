@@ -65,6 +65,14 @@ const DEFAULT_STATE: ComplianceContextState = {
 export function ComplianceProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<ComplianceContextState>(DEFAULT_STATE);
 
+  const formatWarning = (warning: string): string => {
+    if (warning.startsWith("synthetic_fallback:")) {
+      const domains = warning.split(":")[1] || "";
+      return `Synthetic fallback in use for: ${domains.split(",").join(", ")}.`;
+    }
+    return warning;
+  };
+
   const loadCompliance = async (triggerRefresh: boolean) => {
     try {
       if (triggerRefresh) {
@@ -86,6 +94,7 @@ export function ComplianceProvider({ children }: { children: ReactNode }) {
         dataWarnings: Array.isArray(data.ai_scoring_metadata?.missing_data)
           ? data.ai_scoring_metadata.missing_data
               .filter((entry: unknown): entry is string => typeof entry === "string")
+              .map(formatWarning)
               .slice(0, 8)
           : [],
         riskItems: data.risk_items || [],

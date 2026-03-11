@@ -44,7 +44,10 @@ export function LevelTableView({ result }: LevelTableViewProps) {
       const benchmarks = await Promise.all(
         targetLevels.map(async (lvl) => ({
           level: lvl,
-          benchmark: await getBenchmark(role.id, sourceLocationId, lvl.id),
+          benchmark: await getBenchmark(role.id, sourceLocationId, lvl.id, {
+            industry: result.formData.industry,
+            companySize: result.formData.companySize,
+          }),
         })),
       );
       const nextRows = benchmarks
@@ -65,7 +68,7 @@ export function LevelTableView({ result }: LevelTableViewProps) {
       setRows(nextRows);
     };
     void run();
-  }, [level.id, location.id, role.id]);
+  }, [level.id, location.id, result.formData.companySize, result.formData.industry, role.id]);
 
   return (
     <div className="bench-section p-0 overflow-hidden">

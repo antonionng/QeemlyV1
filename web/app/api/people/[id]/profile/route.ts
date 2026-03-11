@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { refreshPlatformMarketPoolBestEffort } from "@/lib/benchmarks/platform-market-sync";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getWorkspaceContext } from "@/lib/workspace-context";
@@ -259,6 +260,7 @@ export async function PATCH(
   } catch {
     // Keep profile mutation success even if compliance refresh fails.
   }
+  await refreshPlatformMarketPoolBestEffort();
 
   const aggregate = await loadProfileAggregate(queryClient, workspaceId, id);
   return NextResponse.json({ ok: true, ...aggregate });

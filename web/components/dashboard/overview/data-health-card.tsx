@@ -1,66 +1,31 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Database, RefreshCw, AlertCircle, CheckCircle } from "lucide-react";
+import { Database, AlertCircle, CheckCircle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import Link from "next/link";
-
-type FreshnessRow = {
-  id: string;
-  metric_type: string;
-  last_updated_at: string;
-  record_count: number;
-  confidence: string;
-};
-
-type SyncLog = {
-  id: string;
-  status: string;
-  records_created: number;
-  records_updated: number;
-  records_failed: number;
-  started_at: string;
-  completed_at: string | null;
-};
+import type { BenchmarkTrustSummary } from "@/lib/benchmarks/trust";
+import type { OverviewDataHealth } from "@/lib/dashboard/company-overview";
 
 interface DataHealthCardProps {
   benchmarkCoverage?: {
     activeEmployees: number;
     benchmarkedEmployees: number;
   };
+  benchmarkTrust?: BenchmarkTrustSummary;
+  dataHealth: OverviewDataHealth;
 }
 
-export function DataHealthCard({ benchmarkCoverage }: DataHealthCardProps) {
-  const [freshness, setFreshness] = useState<FreshnessRow[]>([]);
-  const [syncLogs, setSyncLogs] = useState<SyncLog[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch("/api/data/health")
-      .then((r) => r.json())
-      .then((data) => {
-        setFreshness(data.freshness ?? []);
-        setSyncLogs(data.syncLogs ?? []);
-      })
-      .finally(() => setLoading(false));
-  }, []);
-
-  if (loading) {
-    return (
-      <Card className="dash-card p-4">
-        <div className="animate-pulse h-20 rounded bg-accent-100" />
-      </Card>
-    );
-  }
-
-  const hasFreshness = freshness.length > 0;
-  const latestFresh = freshness[0];
-  const lastSync = syncLogs[0];
+export function DataHealthCard({ benchmarkCoverage, benchmarkTrust, dataHealth }: DataHealthCardProps) {
+  const latestFresh = dataHealth.latestBenchmarkFreshness;
+  const lastSync = dataHealth.lastSync;
   const activeEmployees = benchmarkCoverage?.activeEmployees ?? 0;
   const benchmarkedEmployees = benchmarkCoverage?.benchmarkedEmployees ?? 0;
   const hasCoverage = activeEmployees > 0;
   const coveragePct = hasCoverage ? Math.round((benchmarkedEmployees / activeEmployees) * 100) : 0;
+  const trustFreshness = benchmarkTrust?.freshestAt
+    ? new Date(benchmarkTrust.freshestAt).toLocaleDateString()
+    : null;
 
   return (
     <Card className="dash-card p-4">
@@ -95,12 +60,39 @@ export function DataHealthCard({ benchmarkCoverage }: DataHealthCardProps) {
             )}
           </div>
         )}
-        {hasFreshness && latestFresh && (
+        {benchmarkTrust && benchmarkTrust.benchmarkedEmployees > 0 && (
+          <div className="rounded-lg border border-brand-100 bg-brand-50/50 p-3">
+            <div className="mb-2 flex items-center justify-between">
+              <span className="font-medium text-brand-700">Primary benchmark source</span>
+              <Badge variant="outline" className="border-brand-200 text-brand-700">
+                {benchmarkTrust.primarySourceLabel}
+              </Badge>
+            </div>
+            <div className="grid gap-2 text-xs text-accent-600 sm:grid-cols-2">
+              <span>
+                Market-backed: {benchmarkTrust.marketBacked}/{benchmarkTrust.benchmarkedEmployees}
+              </span>
+              <span>
+                Workspace-backed: {benchmarkTrust.workspaceBacked}/{benchmarkTrust.benchmarkedEmployees}
+              </span>
+              <span>
+                Exact matches: {benchmarkTrust.exactMatches}/{benchmarkTrust.benchmarkedEmployees}
+              </span>
+              <span>
+                Role + level fallback: {benchmarkTrust.fallbackMatches}/{benchmarkTrust.benchmarkedEmployees}
+              </span>
+            </div>
+            {trustFreshness && (
+              <p className="mt-2 text-xs text-accent-500">Latest benchmark refresh: {trustFreshness}</p>
+            )}
+          </div>
+        )}
+        {latestFresh && (
           <div className="flex items-center justify-between">
-            <span className="text-accent-700">Benchmarks</span>
+            <span className="text-accent-700">Benchmark freshness</span>
             <div className="flex items-center gap-2">
               <span className="text-accent-500">
-                {new Date(latestFresh.last_updated_at).toLocaleDateString()}
+                {new Date(latestFresh.lastUpdatedAt).toLocaleDateString()}
               </span>
               <Badge
                 variant="outline"
@@ -117,24 +109,22 @@ export function DataHealthCard({ benchmarkCoverage }: DataHealthCardProps) {
             </div>
           </div>
         )}
-        {syncLogs.length > 0 && (
+        {lastSync && (
           <div className="flex items-center justify-between">
             <span className="text-accent-700">Last sync</span>
-            {lastSync ? (
-              <div className="flex items-center gap-2">
-                {lastSync.status === "success" ? (
-                  <CheckCircle className="h-4 w-4 text-emerald-500" />
-                ) : (
-                  <AlertCircle className="h-4 w-4 text-rose-500" />
-                )}
-                <span className="text-accent-500">
-                  {new Date(lastSync.started_at).toLocaleDateString()}
-                </span>
-              </div>
-            ) : null}
+            <div className="flex items-center gap-2">
+              {lastSync.status === "success" ? (
+                <CheckCircle className="h-4 w-4 text-emerald-500" />
+              ) : (
+                <AlertCircle className="h-4 w-4 text-rose-500" />
+              )}
+              <span className="text-accent-500">
+                {new Date(lastSync.startedAt).toLocaleDateString()}
+              </span>
+            </div>
           </div>
         )}
-        {!hasFreshness && syncLogs.length === 0 && (
+        {!latestFresh && !lastSync && (
           <p className="text-accent-500">No data health metrics yet.</p>
         )}
       </div>

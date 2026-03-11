@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { requireSuperAdmin } from "@/lib/admin/auth";
+import { isSourceAllowedForIngestion } from "@/lib/ingestion/source-registry";
 import { completeJob, failJobForRetry } from "@/lib/ingestion/job-runner";
 import { runIngestionForJob } from "@/lib/ingestion/worker";
 
@@ -26,7 +27,7 @@ export async function POST(request: NextRequest) {
     // Verify source exists
     const { data: source, error: sourceErr } = await supabase
       .from("ingestion_sources")
-      .select("id, slug")
+      .select("id, slug, name, enabled, approved_for_commercial, needs_review, category, regions, update_cadence, expected_fields, config, description, license_url, terms_summary, created_at, updated_at")
       .eq("id", sourceId)
       .single();
 
@@ -34,6 +35,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: "Source not found" },
         { status: 404 }
+      );
+    }
+
+    if (!isSourceAllowedForIngestion(source)) {
+      return NextResponse.json(
+        { error: `Source ${source.slug} is not approved for ingestion` },
+        { status: 400 },
       );
     }
 

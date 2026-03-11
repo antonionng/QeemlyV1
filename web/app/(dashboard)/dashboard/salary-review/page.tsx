@@ -12,6 +12,7 @@ import { REVIEW_CYCLES, type ReviewCycle } from "@/lib/company";
 import { formatAED, formatAEDCompact, type Department } from "@/lib/employees";
 import { useSalaryView, applyViewMode } from "@/lib/salary-view-store";
 import { LOCATIONS, LEVELS, ROLES } from "@/lib/dashboard/dummy-data";
+import { summarizeBenchmarkTrust } from "@/lib/benchmarks/trust";
 import { createEmployee } from "./actions";
 
 const PERCENTAGE_BUDGET_SUGGESTIONS = [2, 3, 5, 8, 10];
@@ -112,6 +113,7 @@ export default function SalaryReviewPage() {
     budgetAbsolute: settings.budgetAbsolute,
     selectedEmployeeIds,
   };
+  const benchmarkTrust = summarizeBenchmarkTrust(employees);
 
   const handleBudgetInputChange = (value: string) => {
     const normalizedValue = value.replace(/,/g, "").trim();
@@ -462,6 +464,35 @@ export default function SalaryReviewPage() {
           </div>
         </div>
       </Card>
+
+      {benchmarkTrust.benchmarkedEmployees > 0 && (
+        <Card className="dash-card p-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold text-accent-900">Benchmark Trust</div>
+              <div className="text-xs text-accent-500 mt-1">
+                Salary Review now resolves against the shared market pool first, then workspace overlays.
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700">
+                Primary: {benchmarkTrust.primarySourceLabel}
+              </span>
+              <span className="rounded-full bg-accent-100 px-3 py-1 text-xs font-medium text-accent-700">
+                Exact: {benchmarkTrust.exactMatches}
+              </span>
+              <span className="rounded-full bg-accent-100 px-3 py-1 text-xs font-medium text-accent-700">
+                Fallback: {benchmarkTrust.fallbackMatches}
+              </span>
+              {benchmarkTrust.freshestAt && (
+                <span className="rounded-full bg-accent-100 px-3 py-1 text-xs font-medium text-accent-700">
+                  Refreshed: {new Date(benchmarkTrust.freshestAt).toLocaleDateString("en-GB")}
+                </span>
+              )}
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* Review Table */}
       {employees.length === 0 ? (

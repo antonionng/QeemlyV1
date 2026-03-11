@@ -96,6 +96,28 @@ function createMarketSupabase() {
   };
 }
 
+function createSegmentedMarketSupabase(rows: Array<Record<string, unknown>>) {
+  return {
+    from: vi.fn((table: string) => {
+      if (table !== "platform_market_benchmarks") {
+        throw new Error(`Unexpected table: ${table}`);
+      }
+
+      return {
+        select: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            order: vi.fn(() => ({
+              range: vi.fn().mockResolvedValue({
+                data: rows,
+              }),
+            })),
+          })),
+        })),
+      };
+    }),
+  };
+}
+
 describe("GET /api/benchmarks/search", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -123,5 +145,107 @@ describe("GET /api/benchmarks/search", () => {
     expect(payload.benchmark.percentiles.p50).toBe(16247);
     expect(payload.diagnostics.market.error).toBeNull();
     expect(payload.diagnostics.market.readMode).toBe("service");
+  });
+
+  it("returns an exact segmented cohort when one exists", async () => {
+    createClientMock.mockResolvedValue(createSessionSupabase());
+    createServiceClientMock.mockReturnValue(
+      createSegmentedMarketSupabase([
+        {
+          role_id: "swe-devops",
+          location_id: "dubai",
+          level_id: "ic2",
+          currency: "AED",
+          industry: null,
+          company_size: null,
+          p10: 12000,
+          p25: 14000,
+          p50: 16247,
+          p75: 19000,
+          p90: 21500,
+          sample_size: 18,
+          contributor_count: 18,
+          provenance: "blended",
+          freshness_at: "2026-03-11T00:00:00.000Z",
+          source_breakdown: { employee: 8, uploaded: 5, admin: 5 },
+        },
+        {
+          role_id: "swe-devops",
+          location_id: "dubai",
+          level_id: "ic2",
+          currency: "AED",
+          industry: "Fintech",
+          company_size: "201-500",
+          p10: 14000,
+          p25: 15500,
+          p50: 18000,
+          p75: 20500,
+          p90: 23000,
+          sample_size: 8,
+          contributor_count: 8,
+          provenance: "blended",
+          freshness_at: "2026-03-11T00:00:00.000Z",
+          source_breakdown: { employee: 3, uploaded: 3, admin: 2 },
+        },
+      ]),
+    );
+
+    const request = new Request(
+      "http://localhost/api/benchmarks/search?roleId=swe-devops&locationId=dubai&levelId=ic2&industry=Fintech&companySize=201-500",
+    ) as unknown as Parameters<typeof GET>[0];
+
+    const response = await GET(request);
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.benchmark.percentiles.p50).toBe(18000);
+    expect(payload.benchmark.benchmarkSegmentation).toMatchObject({
+      matchedIndustry: "Fintech",
+      matchedCompanySize: "201-500",
+      isSegmented: true,
+      isFallback: false,
+    });
+  });
+
+  it("labels a broader-market fallback when no exact segmented cohort exists", async () => {
+    createClientMock.mockResolvedValue(createSessionSupabase());
+    createServiceClientMock.mockReturnValue(
+      createSegmentedMarketSupabase([
+        {
+          role_id: "swe-devops",
+          location_id: "dubai",
+          level_id: "ic2",
+          currency: "AED",
+          industry: null,
+          company_size: null,
+          p10: 12000,
+          p25: 14000,
+          p50: 16247,
+          p75: 19000,
+          p90: 21500,
+          sample_size: 18,
+          contributor_count: 18,
+          provenance: "blended",
+          freshness_at: "2026-03-11T00:00:00.000Z",
+          source_breakdown: { employee: 8, uploaded: 5, admin: 5 },
+        },
+      ]),
+    );
+
+    const request = new Request(
+      "http://localhost/api/benchmarks/search?roleId=swe-devops&locationId=dubai&levelId=ic2&industry=Fintech",
+    ) as unknown as Parameters<typeof GET>[0];
+
+    const response = await GET(request);
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.benchmark.percentiles.p50).toBe(16247);
+    expect(payload.benchmark.benchmarkSegmentation).toMatchObject({
+      requestedIndustry: "Fintech",
+      matchedIndustry: null,
+      isSegmented: false,
+      isFallback: true,
+    });
   });
 });

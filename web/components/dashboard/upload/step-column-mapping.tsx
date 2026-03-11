@@ -58,8 +58,17 @@ export function StepColumnMapping() {
       <div className="mb-6">
         <h2 className="text-lg font-semibold text-brand-900">Map your columns</h2>
         <p className="text-sm text-brand-600 mt-1">
-          We&apos;ve auto-detected some mappings. Review and adjust as needed.
+          We&apos;ve auto-detected some mappings. Review them carefully so Qeemly can match your rows to the right employee or benchmark cohort.
         </p>
+      </div>
+
+      <div className="mb-6 rounded-lg border border-brand-200 bg-brand-50 p-4 text-sm text-brand-700">
+        {dataType === "employees" &&
+          "Include email whenever possible. Qeemly uses it to update existing employees during incremental imports."}
+        {dataType === "benchmarks" &&
+          "Map role, level, location, and percentile columns so your company benchmark overlay can sit alongside Qeemly market data."}
+        {dataType === "compensation" &&
+          "Map employee email and the compensation fields you want to update. Unmapped optional columns will be ignored."}
       </div>
 
       {/* Missing required fields warning */}

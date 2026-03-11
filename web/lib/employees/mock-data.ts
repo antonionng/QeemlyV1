@@ -1,6 +1,7 @@
 // Mock employee data for Company Overview and Salary Review
 // This simulates a company with 150 employees across departments
 
+import type { BenchmarkTrustMetadata } from "@/lib/benchmarks/trust";
 import { LOCATIONS, LEVELS, ROLES, type Location, type Level, type Role, generateBenchmark } from "../dashboard/dummy-data";
 
 // Types
@@ -43,6 +44,7 @@ export interface Employee {
   bandPercentile: number; // 0-100, where they sit in the band
   marketComparison: number; // % vs market median (-20 to +30)
   hasBenchmark?: boolean; // true when band/market fields were computed from real benchmark data
+  benchmarkContext?: BenchmarkTrustMetadata;
   hireDate: Date;
   lastReviewDate?: Date;
   performanceRating?: PerformanceRating;

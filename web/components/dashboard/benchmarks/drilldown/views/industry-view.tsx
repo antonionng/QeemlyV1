@@ -1,7 +1,10 @@
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import { type BenchmarkResult } from "@/lib/benchmarks/benchmark-state";
 import { useCompanySettings } from "@/lib/company";
+import { getBenchmark } from "@/lib/benchmarks/data-service";
+import { INDUSTRIES, type SalaryBenchmark } from "@/lib/dashboard/dummy-data";
 import { formatBenchmarkCompact, toBenchmarkDisplayValue } from "@/lib/utils/currency";
 import { useSalaryView } from "@/lib/salary-view-store";
 
@@ -10,42 +13,76 @@ interface IndustryViewProps {
 }
 
 export function IndustryView({ result }: IndustryViewProps) {
-  const { location, benchmark } = result;
+  const { role, level, location } = result;
   const companySettings = useCompanySettings();
   const { salaryView } = useSalaryView();
-  
-  // Company branding
-  const companyIndustry = companySettings.industry;
-  
-  const sourceLocationId = location.id === "london" ? "dubai" : location.id;
-  const sourceCurrency = location.id === "london" ? "AED" : location.currency;
+  const companyIndustry = result.formData.industry || companySettings.industry;
+  const [industryBenchmarks, setIndustryBenchmarks] = useState<Record<string, SalaryBenchmark>>({});
+
   const targetCurrency = location.currency;
+  const industriesToLoad = useMemo(() => {
+    const ordered = [companyIndustry, ...INDUSTRIES.filter((industry) => industry !== companyIndustry)];
+    return ordered.filter(Boolean).slice(0, 5);
+  }, [companyIndustry]);
 
-  const baselineMedian = toBenchmarkDisplayValue(benchmark.percentiles.p50, {
-    salaryView,
-    sourceCurrency,
-    targetCurrency,
-  });
+  useEffect(() => {
+    const run = async () => {
+      const entries = await Promise.all(
+        industriesToLoad.map(async (industry) => {
+          const nextBenchmark = await getBenchmark(role.id, location.id, level.id, {
+            industry,
+            companySize: result.formData.companySize,
+          });
+          if (!nextBenchmark?.benchmarkSegmentation?.matchedIndustry) return null;
+          if (nextBenchmark.benchmarkSegmentation.matchedIndustry !== industry) return null;
+          return { industry, benchmark: nextBenchmark };
+        }),
+      );
 
-  const industryData = [
-    {
-      industry: companyIndustry || "Selected industry",
-      median: baselineMedian,
-      isCompanyIndustry: true,
-    },
-  ];
+      const next: Record<string, SalaryBenchmark> = {};
+      for (const entry of entries) {
+        if (!entry) continue;
+        next[entry.industry] = entry.benchmark;
+      }
+      setIndustryBenchmarks(next);
+    };
+
+    void run();
+  }, [industriesToLoad, level.id, location.id, result.formData.companySize, role.id]);
+
+  const industryData = industriesToLoad
+    .map((industry) => {
+      const nextBenchmark = industryBenchmarks[industry];
+      if (!nextBenchmark) return null;
+      return {
+        industry,
+        median: toBenchmarkDisplayValue(nextBenchmark.percentiles.p50, {
+          salaryView,
+          sourceCurrency: nextBenchmark.currency,
+          targetCurrency,
+        }),
+        isCompanyIndustry: industry === companyIndustry,
+        sampleSize: nextBenchmark.sampleSize,
+      };
+    })
+    .filter(Boolean) as Array<{
+    industry: string;
+    median: number;
+    isCompanyIndustry: boolean;
+    sampleSize: number;
+  }>;
+  const maxMedian = Math.max(...industryData.map((item) => item.median), 1);
 
   return (
     <div className="bench-section">
       <div className="flex items-center justify-between pb-4">
         <h3 className="bench-section-header pb-0">Industry Breakdown</h3>
-        {companySettings.isConfigured && (
+        {companyIndustry && (
           <span className="text-xs text-brand-500">Your industry: {companyIndustry}</span>
         )}
       </div>
       <div className="space-y-3">
         {industryData.map((item, index) => {
-          const maxMedian = industryData[0].median;
           const percentage = (item.median / maxMedian) * 100;
           
           return (
@@ -76,11 +113,22 @@ export function IndustryView({ result }: IndustryViewProps) {
               <div className="w-20 text-right text-sm font-medium text-brand-900">
                 {formatBenchmarkCompact(item.median, targetCurrency)}
               </div>
+              <div className="w-16 text-right text-xs text-brand-500">
+                n={item.sampleSize}
+              </div>
             </div>
           );
         })}
       </div>
-      <p className="mt-4 text-xs text-brand-500">Cross-industry segmented benchmarks are not yet available in this workspace dataset.</p>
+      {industryData.length === 0 ? (
+        <p className="mt-4 text-xs text-brand-500">
+          No industry-specific cohort is available for this role yet. Qeemly is using the broader market row.
+        </p>
+      ) : (
+        <p className="mt-4 text-xs text-brand-500">
+          Only cohorts with real segmented market matches are shown here. Missing cohorts fall back to the broader market row.
+        </p>
+      )}
     </div>
   );
 }

@@ -6,8 +6,9 @@
  * fallback — it is the primary benchmark source.
  *
  * Data sources (in priority order):
- *  1. public_benchmark_snapshots  (is_public = true)
- *  2. salary_benchmarks where source = 'market' under PLATFORM_WORKSPACE_ID
+ *  1. platform_market_benchmarks (canonical pooled market rows)
+ *  2. public_benchmark_snapshots (public mirror of the pooled rows)
+ *  3. salary_benchmarks where source = 'market' under PLATFORM_WORKSPACE_ID
  */
 
 export type MarketBenchmark = {
@@ -15,6 +16,8 @@ export type MarketBenchmark = {
   location_id: string;
   level_id: string;
   currency: string;
+  industry?: string | null;
+  company_size?: string | null;
   p10: number;
   p25: number;
   p50: number;
@@ -22,6 +25,16 @@ export type MarketBenchmark = {
   p90: number;
   sample_size: number | null;
   source: "market";
+  contributor_count?: number | null;
+  provenance?: "employee" | "uploaded" | "admin" | "blended";
+  freshness_at?: string | null;
+  source_breakdown?: Record<string, number> | null;
+};
+
+export type MarketBenchmarkQuery = {
+  industry?: string | null;
+  companySize?: string | null;
+  includeSegmented?: boolean;
 };
 
 type QueryRow = Record<string, unknown>;
@@ -60,22 +73,32 @@ const PAGE_SIZE = 1000;
  * Accepts any Supabase client (server, client, or service) so callers in
  * different contexts can reuse this.
  */
-export async function fetchMarketBenchmarks(supabase: SupabaseLike): Promise<MarketBenchmark[]> {
+export async function fetchMarketBenchmarks(
+  supabase: SupabaseLike,
+  query: MarketBenchmarkQuery = {},
+): Promise<MarketBenchmark[]> {
   if (cachedMarketBenchmarks && Date.now() - cacheTimestamp < CACHE_TTL) {
-    return cachedMarketBenchmarks;
+    return filterMarketBenchmarks(cachedMarketBenchmarks, query);
   }
 
-  const benchmarks = await fetchFromPublicSnapshots(supabase);
+  const benchmarks = await fetchFromCanonicalPoolSafe(supabase);
   if (benchmarks.length > 0) {
     cachedMarketBenchmarks = benchmarks;
     cacheTimestamp = Date.now();
-    return benchmarks;
+    return filterMarketBenchmarks(benchmarks, query);
+  }
+
+  const snapshotBenchmarks = await fetchFromPublicSnapshots(supabase);
+  if (snapshotBenchmarks.length > 0) {
+    cachedMarketBenchmarks = snapshotBenchmarks;
+    cacheTimestamp = Date.now();
+    return filterMarketBenchmarks(snapshotBenchmarks, query);
   }
 
   const platformBenchmarks = await fetchFromPlatformWorkspace(supabase);
   cachedMarketBenchmarks = platformBenchmarks;
   cacheTimestamp = Date.now();
-  return platformBenchmarks;
+  return filterMarketBenchmarks(platformBenchmarks, query);
 }
 
 /**
@@ -86,13 +109,13 @@ export async function findMarketBenchmark(
   supabase: SupabaseLike,
   roleId: string,
   locationId: string,
-  levelId: string
+  levelId: string,
+  query: MarketBenchmarkQuery = {},
 ): Promise<MarketBenchmark | null> {
-  const all = await fetchMarketBenchmarks(supabase);
-  return (
-    all.find(
-      (b) => b.role_id === roleId && b.location_id === locationId && b.level_id === levelId
-    ) ?? null
+  const all = await fetchMarketBenchmarks(supabase, { includeSegmented: true });
+  return selectBestMarketBenchmark(
+    all.filter((b) => b.role_id === roleId && b.location_id === locationId && b.level_id === levelId),
+    query,
   );
 }
 
@@ -115,17 +138,65 @@ export function invalidateMarketBenchmarkCache() {
   cacheTimestamp = 0;
 }
 
+function normalizeSegmentValue(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim();
+  return normalized ? normalized : null;
+}
+
+function isBaseMarketBenchmark(row: MarketBenchmark): boolean {
+  return !normalizeSegmentValue(row.industry) && !normalizeSegmentValue(row.company_size);
+}
+
+function filterMarketBenchmarks(
+  rows: MarketBenchmark[],
+  query: MarketBenchmarkQuery,
+): MarketBenchmark[] {
+  if (query.includeSegmented) return rows;
+  return rows.filter(isBaseMarketBenchmark);
+}
+
+function selectBestMarketBenchmark(
+  rows: MarketBenchmark[],
+  query: MarketBenchmarkQuery,
+): MarketBenchmark | null {
+  const requestedIndustry = normalizeSegmentValue(query.industry);
+  const requestedCompanySize = normalizeSegmentValue(query.companySize);
+  if (rows.length === 0) return null;
+
+  const exactCombined = rows.find(
+    (row) =>
+      normalizeSegmentValue(row.industry) === requestedIndustry &&
+      normalizeSegmentValue(row.company_size) === requestedCompanySize &&
+      (requestedIndustry || requestedCompanySize),
+  );
+  if (exactCombined) return exactCombined;
+
+  const exactIndustry = requestedIndustry
+    ? rows.find(
+        (row) =>
+          normalizeSegmentValue(row.industry) === requestedIndustry &&
+          !normalizeSegmentValue(row.company_size),
+      )
+    : null;
+  if (exactIndustry) return exactIndustry;
+
+  const exactCompanySize = requestedCompanySize
+    ? rows.find(
+        (row) =>
+          !normalizeSegmentValue(row.industry) &&
+          normalizeSegmentValue(row.company_size) === requestedCompanySize,
+      )
+    : null;
+  if (exactCompanySize) return exactCompanySize;
+
+  return rows.find(isBaseMarketBenchmark) ?? rows[0] ?? null;
+}
+
 function isSupabaseQueryBuilder(value: unknown): value is SupabaseQueryBuilder {
   if (!value || typeof value !== "object") return false;
 
   return typeof (value as Record<string, unknown>).select === "function";
-}
-
-function isSupabaseQuery(value: unknown): value is SupabaseQuery {
-  if (!value || typeof value !== "object") return false;
-
-  const candidate = value as Record<string, unknown>;
-  return ["eq", "order", "range"].every((key) => typeof candidate[key] === "function");
 }
 
 function isSupabaseRangeQuery(value: unknown): value is SupabaseRangeQuery {
@@ -153,6 +224,8 @@ async function fetchFromPublicSnapshots(supabase: SupabaseLike): Promise<MarketB
     location_id: String(row.location_id),
     level_id: String(row.level_id),
     currency: String(row.currency),
+    industry: normalizeSegmentValue(row.industry),
+    company_size: normalizeSegmentValue(row.company_size),
     p10: estimateP10(Number(row.p25)),
     p25: Number(row.p25),
     p50: Number(row.p50),
@@ -163,13 +236,63 @@ async function fetchFromPublicSnapshots(supabase: SupabaseLike): Promise<MarketB
   }));
 }
 
+async function fetchFromCanonicalPool(supabase: SupabaseLike): Promise<MarketBenchmark[]> {
+  const data = await fetchAllRows(supabase, "platform_market_benchmarks", (query) =>
+    query
+      .select(
+        "role_id,location_id,level_id,currency,industry,company_size,p10,p25,p50,p75,p90,sample_size,contributor_count,provenance,freshness_at,source_breakdown",
+      )
+      .eq("is_public", true)
+      .order("freshness_at", { ascending: false }),
+  );
+
+  if (!data || data.length === 0) return [];
+
+  return (data as Array<Record<string, unknown>>).map((row) => ({
+    role_id: String(row.role_id),
+    location_id: String(row.location_id),
+    level_id: String(row.level_id),
+    currency: String(row.currency),
+    industry: normalizeSegmentValue(row.industry),
+    company_size: normalizeSegmentValue(row.company_size),
+    p10: Number(row.p10),
+    p25: Number(row.p25),
+    p50: Number(row.p50),
+    p75: Number(row.p75),
+    p90: Number(row.p90),
+    sample_size: row.sample_size != null ? Number(row.sample_size) : null,
+    contributor_count: row.contributor_count != null ? Number(row.contributor_count) : null,
+    provenance:
+      row.provenance === "employee" ||
+      row.provenance === "uploaded" ||
+      row.provenance === "admin" ||
+      row.provenance === "blended"
+        ? row.provenance
+        : undefined,
+    freshness_at: row.freshness_at ? String(row.freshness_at) : null,
+    source_breakdown:
+      row.source_breakdown && typeof row.source_breakdown === "object"
+        ? (row.source_breakdown as Record<string, number>)
+        : null,
+    source: "market" as const,
+  }));
+}
+
+async function fetchFromCanonicalPoolSafe(supabase: SupabaseLike): Promise<MarketBenchmark[]> {
+  try {
+    return await fetchFromCanonicalPool(supabase);
+  } catch {
+    return [];
+  }
+}
+
 async function fetchFromPlatformWorkspace(supabase: SupabaseLike): Promise<MarketBenchmark[]> {
   const platformWsId = process.env.PLATFORM_WORKSPACE_ID;
   if (!platformWsId) return [];
 
   const data = await fetchAllRows(supabase, "salary_benchmarks", (query) =>
     query
-      .select("role_id,location_id,level_id,currency,p10,p25,p50,p75,p90,sample_size")
+      .select("role_id,location_id,level_id,currency,industry,company_size,p10,p25,p50,p75,p90,sample_size")
       .eq("workspace_id", platformWsId)
       .eq("source", "market")
       .order("valid_from", { ascending: false })
@@ -188,6 +311,8 @@ async function fetchFromPlatformWorkspace(supabase: SupabaseLike): Promise<Marke
       location_id: String(row.location_id),
       level_id: String(row.level_id),
       currency: String(row.currency),
+      industry: normalizeSegmentValue(row.industry),
+      company_size: normalizeSegmentValue(row.company_size),
       p10: Number(row.p10),
       p25: Number(row.p25),
       p50: Number(row.p50),

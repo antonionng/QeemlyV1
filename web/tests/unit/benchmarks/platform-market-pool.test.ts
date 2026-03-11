@@ -1,0 +1,167 @@
+import { describe, expect, it } from "vitest";
+import {
+  aggregateMarketPoolObservations,
+  type MarketPoolObservation,
+} from "@/lib/benchmarks/platform-market-pool";
+
+describe("aggregateMarketPoolObservations", () => {
+  it("suppresses cohorts that do not meet the privacy threshold", () => {
+    const observations: MarketPoolObservation[] = [
+      {
+        workspaceId: "w1",
+        role_id: "swe",
+        location_id: "dubai",
+        level_id: "ic3",
+        currency: "AED",
+        value: 100_000,
+        sourceType: "employee",
+      },
+      {
+        workspaceId: "w2",
+        role_id: "swe",
+        location_id: "dubai",
+        level_id: "ic3",
+        currency: "AED",
+        value: 110_000,
+        sourceType: "employee",
+      },
+    ];
+
+    const rows = aggregateMarketPoolObservations(observations, {
+      minimumContributors: 3,
+      effectiveDate: "2026-03-10",
+    });
+
+    expect(rows).toEqual([]);
+  });
+
+  it("builds a blended pooled row from employee, uploaded, and admin observations", () => {
+    const observations: MarketPoolObservation[] = [
+      {
+        workspaceId: "w1",
+        role_id: "swe",
+        location_id: "dubai",
+        level_id: "ic3",
+        currency: "AED",
+        value: 100_000,
+        sourceType: "employee",
+      },
+      {
+        workspaceId: "w2",
+        role_id: "swe",
+        location_id: "dubai",
+        level_id: "ic3",
+        currency: "AED",
+        value: 120_000,
+        sourceType: "uploaded",
+      },
+      {
+        workspaceId: "platform",
+        role_id: "swe",
+        location_id: "dubai",
+        level_id: "ic3",
+        currency: "AED",
+        value: 140_000,
+        sourceType: "admin",
+      },
+    ];
+
+    const [row] = aggregateMarketPoolObservations(observations, {
+      minimumContributors: 3,
+      effectiveDate: "2026-03-10",
+    });
+
+    expect(row).toMatchObject({
+      role_id: "swe",
+      location_id: "dubai",
+      level_id: "ic3",
+      currency: "AED",
+      sample_size: 3,
+      contributor_count: 3,
+      provenance: "blended",
+      valid_from: "2026-03-10",
+      source_breakdown: {
+        employee: 1,
+        uploaded: 1,
+        admin: 1,
+      },
+    });
+    expect(row.p10).toBe(100_000);
+    expect(row.p25).toBe(100_000);
+    expect(row.p50).toBe(120_000);
+    expect(row.p75).toBe(140_000);
+    expect(row.p90).toBe(140_000);
+  });
+
+  it("creates segmented cohorts alongside the base fallback cohort", () => {
+    const observations: MarketPoolObservation[] = [
+      {
+        workspaceId: "w1",
+        role_id: "swe",
+        location_id: "dubai",
+        level_id: "ic3",
+        currency: "AED",
+        value: 100_000,
+        sourceType: "employee",
+        industry: "Fintech",
+        company_size: "201-500",
+      },
+      {
+        workspaceId: "w2",
+        role_id: "swe",
+        location_id: "dubai",
+        level_id: "ic3",
+        currency: "AED",
+        value: 110_000,
+        sourceType: "uploaded",
+        industry: "Fintech",
+        company_size: "201-500",
+      },
+      {
+        workspaceId: "platform",
+        role_id: "swe",
+        location_id: "dubai",
+        level_id: "ic3",
+        currency: "AED",
+        value: 125_000,
+        sourceType: "admin",
+        industry: "Fintech",
+        company_size: "201-500",
+      },
+    ];
+
+    const rows = aggregateMarketPoolObservations(observations, {
+      minimumContributors: 3,
+      effectiveDate: "2026-03-11",
+    });
+
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          role_id: "swe",
+          location_id: "dubai",
+          level_id: "ic3",
+          industry: null,
+          company_size: null,
+          sample_size: 3,
+        }),
+        expect.objectContaining({
+          role_id: "swe",
+          location_id: "dubai",
+          level_id: "ic3",
+          industry: "Fintech",
+          company_size: null,
+          sample_size: 3,
+        }),
+        expect.objectContaining({
+          role_id: "swe",
+          location_id: "dubai",
+          level_id: "ic3",
+          industry: "Fintech",
+          company_size: "201-500",
+          sample_size: 3,
+        }),
+      ]),
+    );
+  });
+});

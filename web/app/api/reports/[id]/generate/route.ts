@@ -62,7 +62,7 @@ export async function POST(
     .eq("workspace_id", workspace_id);
 
   try {
-    const resultData = generateReportResult(report);
+    const resultData = await generateReportResult(report);
     const completedAt = new Date().toISOString();
 
     const { data: completedRun, error: runUpdateError } = await supabase

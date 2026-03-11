@@ -30,6 +30,7 @@ import {
 } from "@/lib/employees";
 import { useSalaryView, applyViewMode } from "@/lib/salary-view-store";
 import { generateAdvisory } from "@/lib/advisory/generator";
+import { buildBenchmarkTrustLabels } from "@/lib/benchmarks/trust";
 
 interface EmployeeDetailPanelProps {
   employee: ReviewEmployee;
@@ -248,6 +249,7 @@ export function EmployeeDetailPanel({ employee, onClose }: EmployeeDetailPanelPr
   const lastIncrease = history.find(
     (h) => h.changeReason !== "hire" && h.changePercentage > 0
   );
+  const benchmarkTrust = buildBenchmarkTrustLabels(employee.benchmarkContext);
 
   const riskCfg = RISK_CONFIG[risk.overall];
   const RiskIcon = riskCfg.icon;
@@ -332,10 +334,51 @@ export function EmployeeDetailPanel({ employee, onClose }: EmployeeDetailPanelPr
                 {PERFORMANCE_BADGE[employee.performanceRating].label}
               </span>
             )}
+            {benchmarkTrust && (
+              <>
+                <span className="inline-flex items-center gap-1 rounded-full bg-brand-100 px-2.5 py-1 text-xs text-brand-700">
+                  {benchmarkTrust.sourceLabel}
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full bg-accent-100 px-2.5 py-1 text-xs text-accent-600">
+                  {benchmarkTrust.matchLabel}
+                </span>
+              </>
+            )}
           </div>
         </div>
 
         <div className="space-y-5 px-6 py-5">
+          {benchmarkTrust && (
+            <section className="rounded-xl border border-brand-100 bg-brand-50/40 px-4 py-3">
+              <h3 className="text-[11px] font-semibold uppercase tracking-widest text-brand-600">
+                Benchmark Trust
+              </h3>
+              <div className="mt-2 flex flex-wrap gap-2">
+                <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-brand-700">
+                  {benchmarkTrust.sourceLabel}
+                </span>
+                <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-brand-700">
+                  {benchmarkTrust.matchLabel}
+                </span>
+                {benchmarkTrust.confidenceLabel && (
+                  <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-brand-700">
+                    {benchmarkTrust.confidenceLabel}
+                  </span>
+                )}
+                {benchmarkTrust.sampleLabel && (
+                  <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-brand-700">
+                    {benchmarkTrust.sampleLabel}
+                  </span>
+                )}
+                {benchmarkTrust.freshnessLabel && (
+                  <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-brand-700">
+                    {benchmarkTrust.freshnessLabel}
+                  </span>
+                )}
+              </div>
+            </section>
+          )}
+
           <section className="rounded-xl border border-border/50 bg-white">
             <button
               type="button"
