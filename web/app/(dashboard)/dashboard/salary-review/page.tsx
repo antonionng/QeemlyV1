@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AiDistributionModal, ApprovalProposalDetail, ApprovalProposalList, ReviewTable, ReviewTabs } from "@/components/dashboard/salary-review";
 import { UploadModal } from "@/components/dashboard/upload";
+import { SalaryReviewOverview } from "@/components/salary-review";
 import { useSalaryReview, type SalaryReviewAiPlanRequest } from "@/lib/salary-review";
 import { REVIEW_CYCLES, type ReviewCycle } from "@/lib/company";
 import { formatAEDCompact, type Department } from "@/lib/employees";
@@ -33,6 +34,7 @@ import {
   getBuildReviewFlowModel,
   getPostSubmitReviewOutcome,
   getSalaryReviewWorkspaceVisibility,
+  shouldRedirectSalaryReviewTab,
 } from "@/lib/salary-review/dashboard";
 import type { SalaryReviewTab } from "@/lib/salary-review/url-state";
 import { createEmployee } from "./actions";
@@ -99,10 +101,13 @@ function SalaryReviewPageContent() {
     applyAiProposal,
     resetReview,
     loadEmployeesFromDb,
+    loadCycles,
     activeProposal,
     isProposalLoading,
+    cycles,
     loadLatestProposal,
     loadApprovalProposalList,
+    selectCycle,
     selectApprovalProposal,
     reviewSelectedApprovalProposal,
     addApprovalProposalNote,
@@ -125,6 +130,7 @@ function SalaryReviewPageContent() {
     void (async () => {
       try {
         await loadEmployeesFromDb();
+        await loadCycles();
         await loadLatestProposal();
         await loadApprovalProposalList();
       } catch (error) {
@@ -134,7 +140,7 @@ function SalaryReviewPageContent() {
         });
       }
     })();
-  }, [loadEmployeesFromDb, loadLatestProposal, loadApprovalProposalList]);
+  }, [loadEmployeesFromDb, loadCycles, loadLatestProposal, loadApprovalProposalList]);
 
   useEffect(() => {
     if (activeProposal?.cycle) {
@@ -174,11 +180,12 @@ function SalaryReviewPageContent() {
     [searchParams]
   );
   const activeTab = initialQueryState.tab;
+  const renderedTab = shouldRedirectSalaryReviewTab(activeTab) ? "overview" : activeTab;
   const dashboardModel = useMemo(
-    () => buildSalaryReviewDashboardModel({ activeProposal, approvalQueue }),
-    [activeProposal, approvalQueue]
+    () => buildSalaryReviewDashboardModel({ activeProposal, cycles, approvalQueue }),
+    [activeProposal, approvalQueue, cycles]
   );
-  const detailProposals = activeTab === "history" ? dashboardModel.history : dashboardModel.awaitingReview;
+  const detailProposals = renderedTab === "history" ? dashboardModel.history : dashboardModel.awaitingReview;
   const requestedApprovalProposalId = initialQueryState.proposalId;
   const activeApprovalProposalId = useMemo(
     () =>
@@ -191,7 +198,7 @@ function SalaryReviewPageContent() {
   const approvalViewLevel = getApprovalViewLevel(activeApprovalProposalId);
 
   useEffect(() => {
-    if (activeTab !== "approvals" && activeTab !== "history") {
+    if (renderedTab !== "approvals" && renderedTab !== "history") {
       return;
     }
 
@@ -203,7 +210,7 @@ function SalaryReviewPageContent() {
       void selectApprovalProposal(activeApprovalProposalId);
     }
   }, [
-    activeTab,
+    renderedTab,
     activeApprovalProposalId,
     selectedApprovalProposalId,
     selectApprovalProposal,
@@ -231,10 +238,17 @@ function SalaryReviewPageContent() {
   });
   const reviewTabs = [
     dashboardModel.tabs.overview,
-    dashboardModel.tabs.review,
     dashboardModel.tabs.approvals,
     dashboardModel.tabs.history,
   ];
+  useEffect(() => {
+    if (!shouldRedirectSalaryReviewTab(initialQueryState.tab)) {
+      return;
+    }
+
+    router.replace("/dashboard/salary-review/new");
+  }, [initialQueryState.tab, router]);
+
   const buildReviewFlow = useMemo(
     () =>
       getBuildReviewFlowModel({
@@ -285,26 +299,15 @@ function SalaryReviewPageContent() {
   };
 
   const handleStartNewCycle = async () => {
-    resetReview();
-    setRequestedBuildReviewStep("setup");
-    await loadApprovalProposalList();
-    handleTabChange("review");
+    router.push("/dashboard/salary-review/new");
   };
 
   const handleContinueDraft = () => {
-    setRequestedBuildReviewStep("draft");
-    handleTabChange("review");
+    router.push("/dashboard/salary-review/new");
   };
 
   const handleStartWithAiDraft = async () => {
-    if (!activeProposal) {
-      resetReview();
-      setRequestedBuildReviewStep("setup");
-      await loadApprovalProposalList();
-    }
-    setRequestedBuildReviewStep("draft");
-    handleTabChange("review");
-    setShowAiModal(true);
+    router.push("/dashboard/salary-review/new");
   };
 
   const handleBuildManually = () => {
@@ -581,7 +584,7 @@ function SalaryReviewPageContent() {
         ) : null}
       </div>
 
-      <ReviewTabs activeTab={activeTab} items={reviewTabs} onChange={handleTabChange} />
+      <ReviewTabs activeTab={renderedTab} items={reviewTabs} onChange={handleTabChange} />
 
       {activeTab === "review" ? (
         <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-brand-100 bg-gradient-to-r from-brand-50/70 via-white to-accent-50/60 p-4">
@@ -619,77 +622,17 @@ function SalaryReviewPageContent() {
         </div>
       ) : null}
 
-      {activeTab === "overview" && (
-        <>
-          <Card className="dash-card border border-brand-100 bg-gradient-to-r from-brand-50 via-white to-accent-50 p-6">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div className="max-w-3xl">
-                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brand-700">Overview</p>
-                <h2 className="mt-2 text-xl font-semibold text-accent-950">Start a new cycle or continue where the team left off</h2>
-                <p className="mt-2 text-sm text-accent-700">
-                  Use this overview to understand what needs attention, review recent cycles, and choose whether to build the next proposal manually or start with AI.
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button onClick={() => void handleStartNewCycle()} className="h-9 rounded-full bg-brand-500 px-5 text-white hover:bg-brand-600">
-                  Start New Review Cycle
-                </Button>
-                {dashboardModel.hasDraft ? (
-                  <Button
-                    variant="outline"
-                    onClick={handleContinueDraft}
-                    className="h-9 rounded-full border-border bg-white px-5 text-accent-700 hover:bg-accent-50"
-                  >
-                    Continue Latest Draft
-                  </Button>
-                ) : null}
-                <Button
-                  variant="outline"
-                  onClick={() => void handleStartWithAiDraft()}
-                  className="h-9 rounded-full border-border bg-white px-5 text-accent-700 hover:bg-accent-50"
-                >
-                  <Sparkles className="mr-2 h-4 w-4" />
-                  Start With AI Draft
-                </Button>
-              </div>
-            </div>
-
-            <div className="mt-5 grid gap-3 md:grid-cols-4">
-              <OverviewMetric label="Active draft" value={dashboardModel.hasDraft ? "Ready" : "None"} body={dashboardModel.hasDraft ? "Continue your latest proposal workspace." : "Start a new review cycle to create a draft."} />
-              <OverviewMetric label="Pending approvals" value={`${dashboardModel.awaitingReview.length}`} body="Cycles currently waiting on reviewer action." />
-              <OverviewMetric label="Past cycles" value={`${dashboardModel.history.length}`} body="Completed review records available to inspect." />
-              <OverviewMetric label="Selected employees" value={`${selectedCount}`} body={withIncreaseCount > 0 ? `${withIncreaseCount} currently have a proposal value.` : "No proposal values applied yet."} />
-            </div>
-          </Card>
-
-          <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-            <ReviewWatchouts items={insightModel.watchouts} />
-            <ReviewDataHealth benchmarkTrust={benchmarkTrust} activeEmployees={employees.length} />
-          </div>
-
-          <div className="grid items-start gap-6 xl:grid-cols-[0.95fr_1.05fr]">
-            <ApprovalProposalList
-              proposals={dashboardModel.awaitingReview}
-              isLoading={isApprovalQueueLoading}
-              onSelect={(proposalId) => handleProposalSelect("approvals", proposalId)}
-              eyebrow="Alerts"
-              title="Needs Review Now"
-              description="Cycles that are submitted or in review appear here so managers know what is waiting on action."
-              emptyMessage="No review cycles are awaiting action right now."
-              countLabel={`${dashboardModel.awaitingReview.length} awaiting`}
-            />
-            <ApprovalProposalList
-              proposals={dashboardModel.history.slice(0, 4)}
-              isLoading={isApprovalQueueLoading}
-              onSelect={(proposalId) => handleProposalSelect("history", proposalId)}
-              eyebrow="History"
-              title="Past Review Cycles"
-              description="Browse recent completed cycles to understand decisions, status, and prior salary review outcomes."
-              emptyMessage="No completed review cycles yet."
-              countLabel={`${dashboardModel.history.length} cycle${dashboardModel.history.length === 1 ? "" : "s"}`}
-            />
-          </div>
-        </>
+      {renderedTab === "overview" && (
+        <SalaryReviewOverview
+          cycles={cycles}
+          activeCycle={activeProposal}
+          actionLabel={dashboardModel.hasDraft ? "Continue Draft" : "Start New Review Cycle"}
+          onPrimaryAction={dashboardModel.hasDraft ? handleContinueDraft : () => void handleStartNewCycle()}
+          onImport={() => setShowUploadModal(true)}
+          onExport={handleExport}
+          onReset={resetReview}
+          onSelectCycle={(proposalId) => void selectCycle(proposalId)}
+        />
       )}
 
       {activeTab === "review" && (
@@ -1039,7 +982,7 @@ function SalaryReviewPageContent() {
         </>
       )}
 
-      {activeTab === "approvals" && (
+      {renderedTab === "approvals" && (
         <>
           <Card className="dash-card border border-brand-100 bg-gradient-to-r from-brand-50 via-white to-accent-50 p-5">
             <div className="flex flex-wrap items-start justify-between gap-4">
@@ -1087,7 +1030,7 @@ function SalaryReviewPageContent() {
         </>
       )}
 
-      {activeTab === "history" && (
+      {renderedTab === "history" && (
         <>
           <Card className="dash-card border border-brand-100 bg-gradient-to-r from-brand-50 via-white to-accent-50 p-5">
             <div className="flex flex-wrap items-start justify-between gap-4">

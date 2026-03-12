@@ -43,7 +43,7 @@ export type TrendPoint = {
   p75: number;
 };
 
-export type BenchmarkSource = "market" | "uploaded" | "dummy";
+export type BenchmarkSource = "market" | "uploaded";
 
 export type SalaryBenchmark = {
   roleId: string;

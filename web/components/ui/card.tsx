@@ -20,8 +20,8 @@ export function Card({
       className={clsx(
         "rounded-[var(--dash-card-radius,1rem)] border border-border bg-surface-1 text-text-primary shadow-[var(--dash-card-shadow)] transition-all duration-200",
         muted && "bg-surface-3",
-        clickable && "hover:-translate-y-1 hover:shadow-md cursor-pointer",
-        glow && "hover:-translate-y-0.5 hover:shadow-[var(--overlay-shadow)]",
+        clickable && "hover:-translate-y-0.5 hover:shadow-md cursor-pointer",
+        glow && "hover:shadow-[var(--overlay-shadow)]",
         className,
       )}
       {...rest}

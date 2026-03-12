@@ -19,28 +19,32 @@ const ICON_BY_ID: Record<OverviewShortcutIcon, typeof PlayCircle> = {
 
 export function ShortcutsRow() {
   return (
-    <div className="space-y-3">
+    <section className="overview-section">
       <div className="space-y-1">
-        <h2 className="text-sm font-semibold text-accent-800">Shortcuts</h2>
-        <p className="text-xs text-accent-500">{getOverviewShortcutGuidance()}</p>
+        <h2 className="overview-section-title">Shortcuts</h2>
+        <p className="overview-supporting-text">{getOverviewShortcutGuidance()}</p>
       </div>
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-5">
         {OVERVIEW_SHORTCUTS.map((item) => {
           const Icon = ICON_BY_ID[item.icon];
           return (
           <Link key={item.href} href={item.href}>
-            <Card className="dash-card flex h-full items-center gap-4 p-4 transition-colors hover:border-accent-300 hover:shadow-md">
-              <div className="min-w-0 flex-1">
-                <p className="font-medium text-accent-900">{item.title}</p>
-                <p className="text-xs text-accent-500 mt-0.5">{item.description}</p>
+            <Card className="flex h-full min-h-[140px] flex-col gap-4 rounded-[14px] p-5 transition-all hover:shadow-md">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent-50 text-accent-600">
+                  <Icon className="h-5 w-5" strokeWidth={1.5} />
+                </div>
+                <ChevronRight className="h-5 w-5 shrink-0 text-accent-400" strokeWidth={1.5} />
               </div>
-              <Icon className="h-4 w-4 shrink-0 text-accent-400" />
-              <ChevronRight className="h-4 w-4 shrink-0 text-accent-400" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-accent-900">{item.title}</p>
+                <p className="overview-supporting-text mt-2">{item.description}</p>
+              </div>
             </Card>
           </Link>
           );
         })}
       </div>
-    </div>
+    </section>
   );
 }

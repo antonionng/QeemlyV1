@@ -14,8 +14,8 @@ import clsx from "clsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { 
-  useBenchmarkState, 
-  EXTENDED_LOCATIONS, 
+  useBenchmarkState,
+  BENCHMARK_LOCATIONS,
   type BenchmarkContext,
   type BenchmarkFormData,
 } from "@/lib/benchmarks/benchmark-state";
@@ -199,20 +199,11 @@ export function FilterSidebar({ className }: FilterSidebarProps) {
                 className="w-full h-9 rounded-lg border border-border bg-white px-3 pr-8 text-sm text-brand-900 focus:border-brand-300 focus:outline-none appearance-none"
               >
                 <option value="">Select location...</option>
-                <optgroup label="United Kingdom">
-                  {EXTENDED_LOCATIONS.filter(l => l.countryCode === "GB").map((location) => (
-                    <option key={location.id} value={location.id}>
-                      {location.city}
-                    </option>
-                  ))}
-                </optgroup>
-                <optgroup label="GCC">
-                  {EXTENDED_LOCATIONS.filter(l => l.countryCode !== "GB").map((location) => (
-                    <option key={location.id} value={location.id}>
-                      {location.city}
-                    </option>
-                  ))}
-                </optgroup>
+                {BENCHMARK_LOCATIONS.map((location) => (
+                  <option key={location.id} value={location.id}>
+                    {location.city}
+                  </option>
+                ))}
               </select>
               <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-brand-400 pointer-events-none" />
             </div>

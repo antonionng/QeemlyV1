@@ -1,11 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { AlertTriangle, Save, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { AlertTriangle, BrainCircuit, BriefcaseBusiness, Landmark, MapPin, Save, ShieldCheck, X } from "lucide-react";
+import { AdvisoryPanel } from "@/components/dashboard/overview/advisory-panel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LEVELS, LOCATIONS, ROLES } from "@/lib/dashboard/dummy-data";
-import type { Department, Employee, PerformanceRating } from "@/lib/employees";
+import { formatAEDCompact, type Department, type Employee, type PerformanceRating } from "@/lib/employees";
 
 type Props = {
   employee: Employee | null;
@@ -85,6 +86,11 @@ export function EmployeeDrawer({ employee, open, mutating, onClose, onSave, onDe
   const [form, setForm] = useState<FormState>(() => toFormState(employee));
   const [confirmDelete, setConfirmDelete] = useState(false);
 
+  useEffect(() => {
+    setForm(toFormState(employee));
+    setConfirmDelete(false);
+  }, [employee]);
+
   const changeSet = useMemo(() => {
     if (!employee) return {};
     const updates: Record<string, unknown> = {};
@@ -109,6 +115,12 @@ export function EmployeeDrawer({ employee, open, mutating, onClose, onSave, onDe
 
   if (!open || !employee) return null;
 
+  const employeeLabel = employee.displayName || `${employee.firstName} ${employee.lastName}`.trim();
+  const benchmarkLabel = employee.hasBenchmark ? "Benchmark linked" : "Benchmark pending";
+  const benchmarkTone = employee.hasBenchmark
+    ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+    : "bg-amber-50 text-amber-700 border-amber-200";
+
   return (
     <div className="fixed inset-0 z-[80] flex justify-end">
       <button
@@ -118,12 +130,13 @@ export function EmployeeDrawer({ employee, open, mutating, onClose, onSave, onDe
         onClick={onClose}
       />
       <aside className="relative h-full w-full max-w-xl overflow-y-auto border-l border-border bg-white p-6 shadow-xl">
-        <div className="mb-5 flex items-start justify-between">
-          <div>
-            <h3 className="text-xl font-semibold text-brand-900">
-              {employee.firstName} {employee.lastName}
-            </h3>
-            <p className="text-sm text-accent-500">{employee.role.title}</p>
+        <div className="mb-5 flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent-500">
+              Employee profile
+            </p>
+            <h3 className="mt-2 truncate text-xl font-semibold text-brand-900">{employeeLabel}</h3>
+            <p className="mt-1 text-sm text-accent-500">{employee.role.title}</p>
           </div>
           <button
             type="button"
@@ -135,8 +148,83 @@ export function EmployeeDrawer({ employee, open, mutating, onClose, onSave, onDe
         </div>
 
         <div className="space-y-5">
+          <section className="overflow-hidden rounded-2xl border border-brand-100 bg-[linear-gradient(180deg,rgba(108,92,231,0.08),rgba(108,92,231,0.02))] p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="space-y-2">
+                <div className="flex flex-wrap gap-2">
+                  <span className="inline-flex items-center rounded-full border border-white/80 bg-white px-3 py-1 text-[11px] font-semibold text-brand-700 shadow-sm">
+                    {employee.level.name}
+                  </span>
+                  <span className="inline-flex items-center rounded-full border border-white/80 bg-white px-3 py-1 text-[11px] font-semibold text-accent-600 shadow-sm">
+                    {employee.department}
+                  </span>
+                  <span className={`inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-semibold shadow-sm ${benchmarkTone}`}>
+                    {benchmarkLabel}
+                  </span>
+                </div>
+                <div className="grid gap-2 text-sm text-accent-600 sm:grid-cols-2">
+                  <div className="inline-flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-brand-500" />
+                    <span>
+                      {employee.location.city}, {employee.location.country}
+                    </span>
+                  </div>
+                  <div className="inline-flex items-center gap-2">
+                    <BriefcaseBusiness className="h-4 w-4 text-brand-500" />
+                    <span>{employee.email || "No work email yet"}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="grid min-w-[220px] gap-3 sm:grid-cols-3">
+                <div className="rounded-xl border border-white/80 bg-white/90 p-3 shadow-sm">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-500">
+                    Base
+                  </p>
+                  <p className="mt-2 text-sm font-semibold text-brand-900">
+                    {formatAEDCompact(employee.baseSalary)}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-white/80 bg-white/90 p-3 shadow-sm">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-500">
+                    Total
+                  </p>
+                  <p className="mt-2 text-sm font-semibold text-brand-900">
+                    {formatAEDCompact(employee.totalComp)}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-white/80 bg-white/90 p-3 shadow-sm">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-500">
+                    Market
+                  </p>
+                  <p className={`mt-2 text-sm font-semibold ${employee.marketComparison > 0 ? "text-red-600" : "text-emerald-600"}`}>
+                    {employee.marketComparison > 0 ? "+" : ""}
+                    {employee.marketComparison}%
+                  </p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-border p-4">
+            <div className="mb-4 flex items-start gap-3">
+              <div className="mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-xl bg-brand-50 text-brand-600">
+                <BrainCircuit className="h-4 w-4" />
+              </div>
+              <div>
+                <h4 className="text-sm font-semibold text-brand-900">Qeemly Advisory</h4>
+                <p className="mt-1 text-sm text-accent-500">
+                  Ask about compensation, fairness, or retention risks for this employee.
+                </p>
+              </div>
+            </div>
+            <AdvisoryPanel employee={employee} />
+          </section>
+
           <section className="rounded-xl border border-border p-4">
-            <h4 className="text-sm font-semibold text-brand-900">Profile</h4>
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-brand-500" />
+              <h4 className="text-sm font-semibold text-brand-900">Profile</h4>
+            </div>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <Input value={form.firstName} onChange={(e) => setForm((prev) => ({ ...prev, firstName: e.target.value }))} fullWidth />
               <Input value={form.lastName} onChange={(e) => setForm((prev) => ({ ...prev, lastName: e.target.value }))} fullWidth />
@@ -189,7 +277,10 @@ export function EmployeeDrawer({ employee, open, mutating, onClose, onSave, onDe
           </section>
 
           <section className="rounded-xl border border-border p-4">
-            <h4 className="text-sm font-semibold text-brand-900">Compensation</h4>
+            <div className="flex items-center gap-2">
+              <Landmark className="h-4 w-4 text-brand-500" />
+              <h4 className="text-sm font-semibold text-brand-900">Compensation</h4>
+            </div>
             <div className="mt-3 grid gap-3 sm:grid-cols-3">
               <Input type="number" value={form.baseSalary} onChange={(e) => setForm((prev) => ({ ...prev, baseSalary: e.target.value }))} fullWidth />
               <Input type="number" value={form.bonus} onChange={(e) => setForm((prev) => ({ ...prev, bonus: e.target.value }))} fullWidth />
@@ -198,7 +289,10 @@ export function EmployeeDrawer({ employee, open, mutating, onClose, onSave, onDe
           </section>
 
           <section className="rounded-xl border border-border p-4">
-            <h4 className="text-sm font-semibold text-brand-900">Employment</h4>
+            <div className="flex items-center gap-2">
+              <BriefcaseBusiness className="h-4 w-4 text-brand-500" />
+              <h4 className="text-sm font-semibold text-brand-900">Employment</h4>
+            </div>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <select
                 value={form.status}

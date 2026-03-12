@@ -51,6 +51,7 @@ describe("benchmark form presentation", () => {
   it("does not persist transient form inputs between visits", () => {
     expect(
       getPersistedBenchmarkStateSlice({
+        workspaceId: "ws-1",
         formData: {
           roleId: "role-1",
           levelId: "level-1",
@@ -61,6 +62,7 @@ describe("benchmark form presentation", () => {
         recentResults: [{ id: "recent-1" }],
       }),
     ).toEqual({
+      workspaceId: "ws-1",
       savedFilters: [{ id: "saved-1" }],
       recentResults: [{ id: "recent-1" }],
     });
@@ -69,18 +71,34 @@ describe("benchmark form presentation", () => {
   it("drops stale persisted form values from older benchmark sessions", () => {
     expect(
       migratePersistedBenchmarkState({
+        workspaceId: "ws-1",
         formData: {
           roleId: "role-1",
           levelId: "level-1",
           locationId: "london",
         },
         isFormComplete: true,
-        savedFilters: [{ id: "saved-1" }],
-        recentResults: [{ id: "recent-1" }],
+        savedFilters: [{ id: "saved-1", formData: { locationId: "london" } }],
+        recentResults: [{ id: "recent-1", formData: { locationId: "london" } }],
       }),
     ).toEqual({
-      savedFilters: [{ id: "saved-1" }],
-      recentResults: [{ id: "recent-1" }],
+      workspaceId: "ws-1",
+      savedFilters: [],
+      recentResults: [],
+    });
+  });
+
+  it("keeps persisted benchmark items that still point at supported Gulf locations", () => {
+    expect(
+      migratePersistedBenchmarkState({
+        workspaceId: "ws-1",
+        savedFilters: [{ id: "saved-1", formData: { locationId: "dubai" } }],
+        recentResults: [{ id: "recent-1", formData: { locationId: "riyadh" } }],
+      }),
+    ).toEqual({
+      workspaceId: "ws-1",
+      savedFilters: [{ id: "saved-1", formData: { locationId: "dubai" } }],
+      recentResults: [{ id: "recent-1", formData: { locationId: "riyadh" } }],
     });
   });
 });

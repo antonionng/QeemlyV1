@@ -18,6 +18,7 @@ export function CompanySizeView({ result }: CompanySizeViewProps) {
   const { salaryView } = useSalaryView();
   const companySize = result.formData.companySize || companySettings.companySize;
   const [companySizeBenchmarks, setCompanySizeBenchmarks] = useState<Record<string, SalaryBenchmark>>({});
+  const [fallbackBenchmark, setFallbackBenchmark] = useState<SalaryBenchmark | null>(null);
 
   const targetCurrency = location.currency;
   const sizesToLoad = useMemo(() => {
@@ -33,18 +34,34 @@ export function CompanySizeView({ result }: CompanySizeViewProps) {
             industry: result.formData.industry,
             companySize: size,
           });
-          if (!nextBenchmark?.benchmarkSegmentation?.matchedCompanySize) return null;
-          if (nextBenchmark.benchmarkSegmentation.matchedCompanySize !== size) return null;
-          return { size, benchmark: nextBenchmark };
+          if (!nextBenchmark) return null;
+          if (
+            nextBenchmark.benchmarkSegmentation?.matchedCompanySize &&
+            nextBenchmark.benchmarkSegmentation.matchedCompanySize === size
+          ) {
+            return { size, benchmark: nextBenchmark, fallback: false };
+          }
+
+          if (nextBenchmark.benchmarkSegmentation?.isFallback) {
+            return { size, benchmark: nextBenchmark, fallback: true };
+          }
+
+          return null;
         }),
       );
 
       const next: Record<string, SalaryBenchmark> = {};
+      let nextFallback: SalaryBenchmark | null = null;
       for (const entry of entries) {
         if (!entry) continue;
+        if (entry.fallback) {
+          nextFallback ??= entry.benchmark;
+          continue;
+        }
         next[entry.size] = entry.benchmark;
       }
       setCompanySizeBenchmarks(next);
+      setFallbackBenchmark(nextFallback);
     };
 
     void run();
@@ -70,8 +87,24 @@ export function CompanySizeView({ result }: CompanySizeViewProps) {
     median: number;
     isCompanySize: boolean;
     sampleSize: number;
+    isFallback?: boolean;
   }>;
-  const maxMedian = Math.max(...companySizeData.map((item) => item.median), 1);
+  const fallbackRow =
+    companySizeData.length === 0 && fallbackBenchmark
+      ? {
+          size: "Broader market",
+          median: toBenchmarkDisplayValue(fallbackBenchmark.percentiles.p50, {
+            salaryView,
+            sourceCurrency: fallbackBenchmark.currency,
+            targetCurrency,
+          }),
+          isCompanySize: false,
+          sampleSize: fallbackBenchmark.sampleSize,
+          isFallback: true,
+        }
+      : null;
+  const displayedCompanySizeData = fallbackRow ? [fallbackRow] : companySizeData;
+  const maxMedian = Math.max(...displayedCompanySizeData.map((item) => item.median), 1);
 
   return (
     <div className="bench-section">
@@ -82,7 +115,7 @@ export function CompanySizeView({ result }: CompanySizeViewProps) {
         )}
       </div>
       <div className="space-y-3">
-        {companySizeData.map((item) => {
+        {displayedCompanySizeData.map((item) => {
           const percentage = (item.median / maxMedian) * 100;
           
           return (
@@ -106,7 +139,11 @@ export function CompanySizeView({ result }: CompanySizeViewProps) {
                   className="h-full rounded-full transition-all"
                   style={{ 
                     width: `${percentage}%`,
-                    backgroundColor: item.isCompanySize ? companySettings.primaryColor : "#34d399"
+                    backgroundColor: item.isCompanySize
+                      ? companySettings.primaryColor
+                      : item.isFallback
+                        ? "#94a3b8"
+                        : "#34d399"
                   }}
                 />
               </div>
@@ -120,7 +157,11 @@ export function CompanySizeView({ result }: CompanySizeViewProps) {
           );
         })}
       </div>
-      {companySizeData.length === 0 ? (
+      {fallbackRow ? (
+        <p className="mt-4 text-xs text-brand-500">
+          No company-size-specific cohort is available for this role yet. Showing the broader market benchmark instead.
+        </p>
+      ) : companySizeData.length === 0 ? (
         <p className="mt-4 text-xs text-brand-500">
           No company-size-specific cohort is available for this role yet. Qeemly is using the broader market row.
         </p>

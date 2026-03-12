@@ -8,12 +8,10 @@ import { Card } from "@/components/ui/card";
 import {
   StatCards,
   DataHealthCard,
-  KeyInsights,
   DepartmentTabs,
   HealthScore,
   PayrollTrend,
   BandDistributionChart,
-  RiskBreakdown,
   QuickActions,
   ShortcutsRow,
   AdvisoryPanel,
@@ -24,8 +22,6 @@ import {
   hydrateCompanyOverviewSnapshot,
   type CompanyOverviewSnapshot,
 } from "@/lib/dashboard/company-overview";
-import clsx from "clsx";
-
 export default function CompanyOverviewPage() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -103,12 +99,12 @@ export default function CompanyOverviewPage() {
           <p className="mt-1 text-sm text-accent-500">{error || "Try refreshing the page."}</p>
         </div>
         <Button
+          variant="secondary"
           size="sm"
           onClick={handleRefresh}
           disabled={isRefreshing}
-          className="h-9 rounded-full border-0 bg-accent-800 px-5 text-white hover:bg-accent-700"
         >
-          <RefreshCw className={clsx("mr-2 h-4 w-4", isRefreshing && "animate-spin")} />
+          <RefreshCw className={isRefreshing ? "mr-2 h-4 w-4 animate-spin" : "mr-2 h-4 w-4"} />
           Retry
         </Button>
       </Card>
@@ -122,17 +118,15 @@ export default function CompanyOverviewPage() {
     benchmarkTrust,
     advisoryCandidates,
     actions,
-    insights,
-    riskSummary,
     dataHealth,
   } = snapshot;
   const headlineCards = buildCompanyOverviewHeadlineCards(metrics, benchmarkCoverage);
   const headlineToneClasses = {
-    neutral: "border-accent-200 bg-white text-accent-900",
-    warning: "border-amber-200 bg-amber-50 text-amber-900",
-    positive: "border-emerald-200 bg-emerald-50 text-emerald-900",
-    market: "border-brand-200 bg-brand-50 text-brand-900",
-    overlay: "border-sky-200 bg-sky-50 text-sky-900",
+    neutral: "border-border bg-white",
+    warning: "border-amber-200 bg-[#FFF4E5]",
+    positive: "border-emerald-200 bg-[#E7F7F3]",
+    market: "border-brand-200 bg-brand-50",
+    overlay: "border-sky-200 bg-sky-50",
   } as const;
 
   return (
@@ -140,25 +134,22 @@ export default function CompanyOverviewPage() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="space-y-1">
           <h1 className="page-title">Company Overview</h1>
-          <p className="text-sm text-accent-500">
+          <p className="page-subtitle">
             Review {companyName || "your company"} pay health, actions, and benchmark coverage in one place.
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <Button
+            variant="secondary"
             size="sm"
             onClick={handleRefresh}
             disabled={isRefreshing}
-            className="h-9 rounded-full border-0 bg-accent-800 px-5 text-white hover:bg-accent-700"
           >
-            <RefreshCw className={clsx("mr-2 h-4 w-4", isRefreshing && "animate-spin")} />
+            <RefreshCw className={isRefreshing ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
             Refresh
           </Button>
           <Link href="/dashboard/settings">
-            <Button
-              size="sm"
-              className="h-9 rounded-full border-0 bg-accent-800 px-5 text-white hover:bg-accent-700"
-            >
+            <Button variant="secondary" size="sm">
               <Settings className="mr-2 h-4 w-4" />
               Settings
             </Button>
@@ -166,81 +157,47 @@ export default function CompanyOverviewPage() {
         </div>
       </div>
 
-      <Card className="dash-card border border-brand-100 bg-gradient-to-r from-brand-50 via-white to-accent-50 p-5">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h2 className="text-xl font-semibold text-accent-900">Executive summary</h2>
-            <p className="mt-1 max-w-2xl text-sm text-accent-600">
-              Keep this page focused on internal company performance. Use Market Overview for Qeemly dataset signals and Benchmarking for detailed market drill-downs.
-            </p>
-          </div>
-          <Link href="/dashboard/market">
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-9 rounded-full border-border bg-white px-4 text-accent-700 hover:bg-accent-50"
-            >
-              Open Market Overview
-              <ArrowRight className="ml-2 h-4 w-4" />
-            </Button>
-          </Link>
+      <section className="overview-section">
+        <div>
+          <h2 className="overview-section-title">Executive Summary</h2>
+          <p className="overview-supporting-text mt-1">
+            A clean snapshot of compensation health and market coverage for your current roster.
+          </p>
         </div>
-        <div className="mt-5 grid gap-4 md:grid-cols-2">
+        <div className="grid gap-6 md:grid-cols-2">
           {headlineCards.map((card) => (
-            <div
+            <Card
               key={card.label}
-              className={clsx("rounded-2xl border p-4", headlineToneClasses[card.tone])}
+              className={`${headlineToneClasses[card.tone]} p-6`}
             >
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-current/70">
-                {card.label}
-              </p>
-              <p className="mt-2 text-2xl font-bold text-current">{card.value}</p>
-              <p className="mt-1 text-sm text-current/75">{card.description}</p>
-            </div>
+              <div className="space-y-4">
+                <p className="overview-card-heading">{card.label}</p>
+                <p className="overview-primary-metric">{card.value}</p>
+                <p className="overview-supporting-text">{card.description}</p>
+              </div>
+            </Card>
           ))}
         </div>
-        {benchmarkTrust.benchmarkedEmployees > 0 && (
-          <div className="mt-4 flex flex-wrap gap-2">
-            <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-brand-700">
-              Primary source: {benchmarkTrust.primarySourceLabel}
-            </span>
-            <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-brand-700">
-              Market-backed: {benchmarkTrust.marketBacked}
-            </span>
-            <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-brand-700">
-              Exact matches: {benchmarkTrust.exactMatches}
-            </span>
-            {benchmarkTrust.freshestAt && (
-              <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-brand-700">
-                Latest refresh: {new Date(benchmarkTrust.freshestAt).toLocaleDateString("en-GB")}
-              </span>
-            )}
-          </div>
-        )}
-      </Card>
+      </section>
 
       {error && (
-        <Card className="dash-card border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+        <Card className="border-amber-200 bg-[#FFF4E5] p-6 text-sm text-amber-800">
           {error}
         </Card>
       )}
 
       {metrics.activeEmployees === 0 && (
-        <Card className="dash-card border-dashed border-brand-200 bg-brand-50/60 p-5">
+        <Card className="border-dashed border-brand-200 bg-brand-50 p-6">
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="max-w-2xl">
-              <h2 className="text-base font-semibold text-accent-900">Import company data to unlock this view</h2>
-              <p className="mt-1 text-sm text-accent-600">
+              <h2 className="overview-section-title">Import company data to unlock this view</h2>
+              <p className="overview-supporting-text mt-1">
                 Company Overview compares your employee roster against Qeemly market data. Import
                 your latest roster to start generating coverage, trust, and company-versus-market insights.
               </p>
             </div>
             <Link href="/dashboard/upload">
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-9 rounded-full border-border bg-white px-4 text-accent-700 hover:bg-accent-50"
-              >
+              <Button variant="secondary" size="sm">
                 Import Company Data
                 <ArrowRight className="ml-2 h-4 w-4" />
               </Button>
@@ -250,19 +207,19 @@ export default function CompanyOverviewPage() {
       )}
 
       {!isConfigured && (
-        <div className="rounded-xl border-2 border-dashed border-amber-300 bg-amber-50 p-4">
+        <div className="rounded-2xl border border-amber-200 bg-[#FFF4E5] p-6">
           <div className="flex items-center gap-3">
-            <div className="flex-shrink-0 rounded-lg bg-amber-100 p-2">
+            <div className="flex-shrink-0 rounded-xl bg-amber-100 p-3">
               <Settings className="h-5 w-5 text-amber-600" />
             </div>
             <div className="flex-1">
-              <h3 className="text-sm font-semibold text-amber-900">Complete your setup</h3>
-              <p className="text-sm text-amber-700">
+              <h3 className="overview-section-title text-amber-900">Complete your setup</h3>
+              <p className="overview-supporting-text text-amber-700">
                 Configure your company settings to get accurate market comparisons.
               </p>
             </div>
             <Link href="/dashboard/settings">
-              <Button size="sm" className="bg-amber-500 hover:bg-amber-600">
+              <Button size="sm">
                 Configure
               </Button>
             </Link>
@@ -272,52 +229,52 @@ export default function CompanyOverviewPage() {
 
       <ShortcutsRow />
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-1">
-          <HealthScore metrics={metrics} />
+      <section className="overview-section">
+        <div>
+          <h2 className="overview-section-title">Compensation Health Score + Metrics Grid</h2>
+          <p className="overview-supporting-text mt-1">
+            Health score, payroll, band alignment, and key compensation risk indicators.
+          </p>
         </div>
-        <div className="lg:col-span-2">
+        <div
+          className="grid grid-cols-1 items-stretch gap-6 lg:[grid-template-columns:2fr_1fr_1fr]"
+          data-testid="overview-metrics-grid"
+        >
+          <HealthScore metrics={metrics} />
           <StatCards metrics={metrics} benchmarkCoverage={benchmarkCoverage} />
         </div>
-      </div>
+      </section>
 
       <QuickActions actions={actions} />
 
-      <DataHealthCard
-        benchmarkCoverage={benchmarkCoverage}
-        benchmarkTrust={benchmarkTrust}
-        dataHealth={dataHealth}
-      />
-
-      <div className="grid gap-6 lg:grid-cols-2">
+      <section className="overview-section">
+        <div>
+          <h2 className="overview-section-title">Payroll Trend</h2>
+          <p className="overview-supporting-text mt-1">
+            Track how total compensation is moving over time.
+          </p>
+        </div>
         <PayrollTrend metrics={metrics} />
-        <BandDistributionChart metrics={metrics} benchmarkCoverage={benchmarkCoverage} />
-      </div>
+      </section>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <KeyInsights items={insights} benchmarkCoverage={benchmarkCoverage} />
-        <RiskBreakdown
-          metrics={metrics}
-          summary={riskSummary}
-          benchmarkCoverage={benchmarkCoverage}
-        />
+        <BandDistributionChart metrics={metrics} benchmarkCoverage={benchmarkCoverage} />
+        <DepartmentTabs summaries={departmentSummaries} />
       </div>
 
-      <DepartmentTabs summaries={departmentSummaries} />
-
-      <div className="space-y-4">
+      <section className="overview-section">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h2 className="text-lg font-semibold text-accent-900">Qeemly Advisory</h2>
-            <p className="text-sm text-accent-500">
+            <h2 className="overview-section-title">Qeemly Advisory</h2>
+            <p className="overview-supporting-text">
               Structured decision support ranked by highest compensation risk and impact.
             </p>
           </div>
           <Link
-            href="/dashboard/market"
+            href="/dashboard/benchmarks"
             className="inline-flex items-center gap-2 text-sm font-semibold text-brand-700 hover:text-brand-800"
           >
-            Open Market Overview
+            Open Benchmarking
             <ArrowRight className="h-4 w-4" />
           </Link>
         </div>
@@ -326,20 +283,24 @@ export default function CompanyOverviewPage() {
             <AdvisoryPanel key={employee.id} employee={employee} />
           ))}
           {advisoryCandidates.length === 0 && (
-            <Card className="dash-card p-5 text-sm text-accent-500">
+            <Card className="p-6 text-sm text-accent-500">
               Advisory recommendations will appear here once benchmarked employees are available.
             </Card>
           )}
         </div>
-      </div>
+      </section>
 
-      <div className="flex items-center gap-2 text-xs text-accent-500">
-        <div className="relative flex h-1.5 w-1.5">
-          <span className="absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75 animate-ping" />
-          <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
+      <section className="overview-section">
+        <div>
+          <h2 className="overview-section-title">Data Health</h2>
+          <p className="overview-supporting-text mt-1">{getRefreshText()}</p>
         </div>
-        <span>{getRefreshText()}</span>
-      </div>
+        <DataHealthCard
+          benchmarkCoverage={benchmarkCoverage}
+          benchmarkTrust={benchmarkTrust}
+          dataHealth={dataHealth}
+        />
+      </section>
     </div>
   );
 }

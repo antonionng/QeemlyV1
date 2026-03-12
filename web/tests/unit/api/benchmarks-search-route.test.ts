@@ -67,7 +67,7 @@ function createSessionSupabase(workspaceId = "workspace-1") {
 function createMarketSupabase() {
   return {
     from: vi.fn((table: string) => {
-      if (table !== "public_benchmark_snapshots") {
+      if (table !== "platform_market_benchmarks") {
         throw new Error(`Unexpected table: ${table}`);
       }
 
@@ -82,9 +82,16 @@ function createMarketSupabase() {
                     location_id: "dubai",
                     level_id: "ic2",
                     currency: "AED",
+                    p10: 12000,
                     p25: 14000,
                     p50: 16247,
                     p75: 19000,
+                    p90: 21500,
+                    sample_size: null,
+                    contributor_count: 6,
+                    provenance: "blended",
+                    freshness_at: "2026-03-11T00:00:00.000Z",
+                    source_breakdown: { employee: 2, uploaded: 2, admin: 2 },
                   },
                 ],
               }),
@@ -145,6 +152,22 @@ describe("GET /api/benchmarks/search", () => {
     expect(payload.benchmark.percentiles.p50).toBe(16247);
     expect(payload.diagnostics.market.error).toBeNull();
     expect(payload.diagnostics.market.readMode).toBe("service");
+  });
+
+  it("does not mark a market row with no sample size as high confidence", async () => {
+    createClientMock.mockResolvedValue(createSessionSupabase());
+    createServiceClientMock.mockReturnValue(createMarketSupabase());
+
+    const request = new Request(
+      "http://localhost/api/benchmarks/search?roleId=swe-devops&locationId=dubai&levelId=ic2",
+    ) as unknown as Parameters<typeof GET>[0];
+
+    const response = await GET(request);
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.benchmark.sampleSize).toBe(0);
+    expect(payload.benchmark.confidence).toBe("Low");
   });
 
   it("returns an exact segmented cohort when one exists", async () => {

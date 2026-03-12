@@ -18,6 +18,7 @@ export function IndustryView({ result }: IndustryViewProps) {
   const { salaryView } = useSalaryView();
   const companyIndustry = result.formData.industry || companySettings.industry;
   const [industryBenchmarks, setIndustryBenchmarks] = useState<Record<string, SalaryBenchmark>>({});
+  const [fallbackBenchmark, setFallbackBenchmark] = useState<SalaryBenchmark | null>(null);
 
   const targetCurrency = location.currency;
   const industriesToLoad = useMemo(() => {
@@ -33,18 +34,34 @@ export function IndustryView({ result }: IndustryViewProps) {
             industry,
             companySize: result.formData.companySize,
           });
-          if (!nextBenchmark?.benchmarkSegmentation?.matchedIndustry) return null;
-          if (nextBenchmark.benchmarkSegmentation.matchedIndustry !== industry) return null;
-          return { industry, benchmark: nextBenchmark };
+          if (!nextBenchmark) return null;
+          if (
+            nextBenchmark.benchmarkSegmentation?.matchedIndustry &&
+            nextBenchmark.benchmarkSegmentation.matchedIndustry === industry
+          ) {
+            return { industry, benchmark: nextBenchmark, fallback: false };
+          }
+
+          if (nextBenchmark.benchmarkSegmentation?.isFallback) {
+            return { industry, benchmark: nextBenchmark, fallback: true };
+          }
+
+          return null;
         }),
       );
 
       const next: Record<string, SalaryBenchmark> = {};
+      let nextFallback: SalaryBenchmark | null = null;
       for (const entry of entries) {
         if (!entry) continue;
+        if (entry.fallback) {
+          nextFallback ??= entry.benchmark;
+          continue;
+        }
         next[entry.industry] = entry.benchmark;
       }
       setIndustryBenchmarks(next);
+      setFallbackBenchmark(nextFallback);
     };
 
     void run();
@@ -70,8 +87,24 @@ export function IndustryView({ result }: IndustryViewProps) {
     median: number;
     isCompanyIndustry: boolean;
     sampleSize: number;
+    isFallback?: boolean;
   }>;
-  const maxMedian = Math.max(...industryData.map((item) => item.median), 1);
+  const fallbackRow =
+    industryData.length === 0 && fallbackBenchmark
+      ? {
+          industry: "Broader market",
+          median: toBenchmarkDisplayValue(fallbackBenchmark.percentiles.p50, {
+            salaryView,
+            sourceCurrency: fallbackBenchmark.currency,
+            targetCurrency,
+          }),
+          isCompanyIndustry: false,
+          sampleSize: fallbackBenchmark.sampleSize,
+          isFallback: true,
+        }
+      : null;
+  const displayedIndustryData = fallbackRow ? [fallbackRow] : industryData;
+  const maxMedian = Math.max(...displayedIndustryData.map((item) => item.median), 1);
 
   return (
     <div className="bench-section">
@@ -82,7 +115,7 @@ export function IndustryView({ result }: IndustryViewProps) {
         )}
       </div>
       <div className="space-y-3">
-        {industryData.map((item, index) => {
+        {displayedIndustryData.map((item, index) => {
           const percentage = (item.median / maxMedian) * 100;
           
           return (
@@ -106,7 +139,13 @@ export function IndustryView({ result }: IndustryViewProps) {
                   className="h-full rounded-full transition-all"
                   style={{ 
                     width: `${percentage}%`,
-                    backgroundColor: item.isCompanyIndustry ? companySettings.primaryColor : (index === 0 ? "#6366f1" : "#c4b5fd")
+                    backgroundColor: item.isCompanyIndustry
+                      ? companySettings.primaryColor
+                      : item.isFallback
+                        ? "#94a3b8"
+                        : index === 0
+                          ? "#6366f1"
+                          : "#c4b5fd"
                   }}
                 />
               </div>
@@ -120,7 +159,11 @@ export function IndustryView({ result }: IndustryViewProps) {
           );
         })}
       </div>
-      {industryData.length === 0 ? (
+      {fallbackRow ? (
+        <p className="mt-4 text-xs text-brand-500">
+          No industry-specific cohort is available for this role yet. Showing the broader market benchmark instead.
+        </p>
+      ) : industryData.length === 0 ? (
         <p className="mt-4 text-xs text-brand-500">
           No industry-specific cohort is available for this role yet. Qeemly is using the broader market row.
         </p>

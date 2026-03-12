@@ -78,7 +78,7 @@ export function AdvisoryPanel({ employee, proposedIncrease }: AdvisoryPanelProps
       ? "bg-emerald-100"
       : advisory.confidence_score >= 60
         ? "bg-amber-100"
-        : "bg-red-100";
+        : "bg-rose-100";
 
   const askQuestion = () => {
     const prompt = question.trim();
@@ -102,54 +102,54 @@ export function AdvisoryPanel({ employee, proposedIncrease }: AdvisoryPanelProps
   };
 
   return (
-    <Card className="overflow-hidden border-brand-200/50">
+    <Card className="overflow-hidden">
       {/* Collapsed header */}
       <button
         type="button"
         onClick={() => setIsExpanded(!isExpanded)}
-        className="w-full flex items-center justify-between px-5 py-4 hover:bg-brand-50/50 transition-colors"
+        className="flex w-full items-center justify-between px-6 py-5 transition-colors hover:bg-accent-50"
       >
-        <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-100 text-brand-600">
-            <Sparkles className="h-4 w-4" />
+        <div className="flex min-w-0 items-center gap-4">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-100 text-brand-600">
+            <Sparkles className="h-5 w-5" strokeWidth={1.5} />
           </div>
-          <div className="text-left">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-brand-900">
+          <div className="min-w-0 text-left">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-sm font-semibold text-accent-900">
                 {employee.firstName} {employee.lastName}
               </span>
-              <span className="text-[10px] font-medium uppercase tracking-wider text-brand-400 bg-brand-50 px-2 py-0.5 rounded-full">
+              <span className="rounded-full bg-[#EEF2FF] px-2 py-1 text-[11px] font-medium uppercase tracking-wide text-[#4338CA]">
                 Advisory
               </span>
             </div>
-            <p className="text-xs text-brand-500 mt-0.5 line-clamp-1 max-w-md">
+            <p className="mt-2 line-clamp-1 max-w-xl text-[13px] text-accent-600">
               {advisory.recommendation_summary}
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex shrink-0 items-center gap-3">
           {advisory.risks.length > 0 && (
             <span className="flex items-center gap-1 text-xs font-medium text-amber-600">
-              <AlertTriangle className="h-3 w-3" />
+              <AlertTriangle className="h-3.5 w-3.5" strokeWidth={1.5} />
               {advisory.risks.length} flag{advisory.risks.length !== 1 ? "s" : ""}
             </span>
           )}
-          <span className={clsx("flex items-center gap-1 text-xs font-bold rounded-full px-2 py-0.5", confidenceBg, confidenceColor)}>
+          <span className={clsx("flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold", confidenceBg, confidenceColor)}>
             {advisory.confidence_score}%
           </span>
           {isExpanded ? (
-            <ChevronUp className="h-4 w-4 text-brand-400" />
+            <ChevronUp className="h-4 w-4 text-accent-400" strokeWidth={1.5} />
           ) : (
-            <ChevronDown className="h-4 w-4 text-brand-400" />
+            <ChevronDown className="h-4 w-4 text-accent-400" strokeWidth={1.5} />
           )}
         </div>
       </button>
 
       {/* Expanded content */}
       {isExpanded && (
-        <div className="border-t border-border/50 px-5 py-5 space-y-5">
+        <div className="space-y-5 border-t border-border/50 px-6 py-6">
           {/* Recommendation Summary */}
-          <div className="rounded-xl bg-brand-50 p-4">
+          <div className="rounded-2xl bg-brand-50 p-4">
             <h4 className="text-xs font-semibold text-brand-600 uppercase tracking-wider mb-2">
               Recommendation
             </h4>
@@ -204,7 +204,7 @@ export function AdvisoryPanel({ employee, proposedIncrease }: AdvisoryPanelProps
                   const colors = RISK_COLORS[risk.severity];
                   return (
                     <div key={i} className={clsx("flex items-start gap-3 rounded-lg px-4 py-3", colors.bg)}>
-                      <Shield className={clsx("h-4 w-4 mt-0.5 shrink-0", colors.icon)} />
+                      <Shield className={clsx("mt-0.5 h-4 w-4 shrink-0", colors.icon)} strokeWidth={1.5} />
                       <div>
                         <div className={clsx("text-sm font-medium", colors.text)}>{risk.label}</div>
                         <div className="text-xs text-accent-600 mt-0.5">{risk.detail}</div>
@@ -229,7 +229,7 @@ export function AdvisoryPanel({ employee, proposedIncrease }: AdvisoryPanelProps
                 {advisory.confidence_score}/100
               </span>
             </div>
-            <div className="h-2 rounded-full bg-accent-100 overflow-hidden mb-2">
+            <div className="mb-2 h-2 overflow-hidden rounded-full bg-accent-100">
               <div
                 className={clsx(
                   "h-full rounded-full transition-all",
@@ -237,7 +237,7 @@ export function AdvisoryPanel({ employee, proposedIncrease }: AdvisoryPanelProps
                     ? "bg-emerald-500"
                     : advisory.confidence_score >= 60
                       ? "bg-amber-500"
-                      : "bg-red-500"
+                      : "bg-rose-500"
                 )}
                 style={{ width: `${advisory.confidence_score}%` }}
               />
@@ -265,7 +265,7 @@ export function AdvisoryPanel({ employee, proposedIncrease }: AdvisoryPanelProps
                         : "text-accent-600 hover:text-accent-800"
                     )}
                   >
-                    <Icon className="h-3.5 w-3.5" />
+                    <Icon className="h-3.5 w-3.5" strokeWidth={1.5} />
                     {track.label.split(" ")[0]}
                   </button>
                 );
@@ -306,9 +306,9 @@ export function AdvisoryPanel({ employee, proposedIncrease }: AdvisoryPanelProps
                 type="button"
                 onClick={askQuestion}
                 disabled={!question.trim()}
-                className="inline-flex h-10 items-center gap-1.5 rounded-lg bg-brand-500 px-3 text-xs font-semibold text-white hover:bg-brand-600 disabled:opacity-60"
+                className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-[linear-gradient(135deg,#6C5CE7,#5A4BE7)] px-4 text-xs font-semibold text-white disabled:opacity-60"
               >
-                <Send className="h-3.5 w-3.5" />
+                <Send className="h-3.5 w-3.5" strokeWidth={1.5} />
                 Ask
               </button>
             </div>
@@ -318,7 +318,7 @@ export function AdvisoryPanel({ employee, proposedIncrease }: AdvisoryPanelProps
           </div>
 
           {/* Disclaimer */}
-          <div className="text-[10px] text-accent-400 border-t border-border/50 pt-3">
+          <div className="border-t border-border/50 pt-3 text-[10px] text-accent-400">
             Qeemly Advisory provides structured guidance based on deterministic compensation data.
             All calculations remain rule-based. This is not a substitute for human judgment.
           </div>

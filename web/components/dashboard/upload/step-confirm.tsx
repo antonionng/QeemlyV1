@@ -251,10 +251,10 @@ export function StepConfirm({ onSuccess, onClose }: StepConfirmProps) {
                 </p>
               </div>
               <Link
-                href="/dashboard/people"
+                href="/dashboard/upload"
                 className="inline-flex items-center gap-2 text-sm font-semibold text-brand-700 hover:text-brand-800"
               >
-                Review in People
+                Continue in Upload Data
                 <ExternalLink className="h-4 w-4" />
               </Link>
             </div>
@@ -290,7 +290,7 @@ export function StepConfirm({ onSuccess, onClose }: StepConfirmProps) {
             </div>
             {uploadedEmployeeRows.length > 8 && (
               <p className="mt-3 text-xs text-brand-500">
-                Showing the first 8 uploaded employees here. Use People to review the full batch.
+                Showing the first 8 uploaded employees here. Use Upload Data to refine the full batch.
               </p>
             )}
           </div>

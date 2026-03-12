@@ -28,21 +28,21 @@ export function DataHealthCard({ benchmarkCoverage, benchmarkTrust, dataHealth }
     : null;
 
   return (
-    <Card className="dash-card p-4">
-      <div className="flex items-center justify-between mb-3">
+    <Card className="p-6">
+      <div className="mb-6 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Database className="h-5 w-5 text-accent-600" />
-          <h3 className="font-semibold text-accent-900">Data Health</h3>
+          <Database className="h-5 w-5 text-accent-600" strokeWidth={1.5} />
+          <h3 className="overview-card-heading">Data Health</h3>
         </div>
         <Link href="/dashboard/data/runs">
           <span className="text-sm text-accent-600 hover:underline">View runs</span>
         </Link>
       </div>
-      <div className="space-y-2 text-sm">
+      <div className="space-y-4 text-sm">
         {hasCoverage && (
-          <div className="rounded-lg border border-accent-200 bg-accent-50 p-3">
+          <div className="rounded-2xl border border-accent-200 bg-accent-50 p-4">
             <div className="mb-2 flex items-center justify-between">
-              <span className="font-medium text-accent-700">Benchmark coverage</span>
+              <span className="text-sm font-medium text-accent-700">Benchmark coverage</span>
               <span className="text-accent-700">
                 {benchmarkedEmployees}/{activeEmployees} ({coveragePct}%)
               </span>
@@ -61,7 +61,7 @@ export function DataHealthCard({ benchmarkCoverage, benchmarkTrust, dataHealth }
           </div>
         )}
         {benchmarkTrust && benchmarkTrust.benchmarkedEmployees > 0 && (
-          <div className="rounded-lg border border-brand-100 bg-brand-50/50 p-3">
+          <div className="rounded-2xl border border-brand-100 bg-brand-50 p-4">
             <div className="mb-2 flex items-center justify-between">
               <span className="font-medium text-brand-700">Primary benchmark source</span>
               <Badge variant="outline" className="border-brand-200 text-brand-700">
@@ -88,7 +88,7 @@ export function DataHealthCard({ benchmarkCoverage, benchmarkTrust, dataHealth }
           </div>
         )}
         {latestFresh && (
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between rounded-xl border border-border bg-white px-4 py-3">
             <span className="text-accent-700">Benchmark freshness</span>
             <div className="flex items-center gap-2">
               <span className="text-accent-500">
@@ -110,13 +110,13 @@ export function DataHealthCard({ benchmarkCoverage, benchmarkTrust, dataHealth }
           </div>
         )}
         {lastSync && (
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between rounded-xl border border-border bg-white px-4 py-3">
             <span className="text-accent-700">Last sync</span>
             <div className="flex items-center gap-2">
               {lastSync.status === "success" ? (
-                <CheckCircle className="h-4 w-4 text-emerald-500" />
+                <CheckCircle className="h-4 w-4 text-emerald-500" strokeWidth={1.5} />
               ) : (
-                <AlertCircle className="h-4 w-4 text-rose-500" />
+                <AlertCircle className="h-4 w-4 text-rose-500" strokeWidth={1.5} />
               )}
               <span className="text-accent-500">
                 {new Date(lastSync.startedAt).toLocaleDateString()}

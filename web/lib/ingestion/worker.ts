@@ -137,12 +137,14 @@ export async function runIngestionForJob(
         p90: row.p90,
         sample_size: row.sampleSize,
         source: "market",
+        market_source_slug: source.slug,
+        market_origin: "live_ingestion",
         confidence: row.mappingConfidence,
         valid_from: validFrom,
         valid_to: null,
       },
       {
-        onConflict: "workspace_id,role_id,location_id,level_id,industry_key,company_size_key,valid_from",
+        onConflict: "workspace_id,role_id,location_id,level_id,industry_key,company_size_key,source_key,valid_from",
       }
     );
     if (!error) {

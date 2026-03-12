@@ -162,20 +162,18 @@ export function buildOverviewMetrics(employees: Employee[]): OverviewMetrics {
   const aboveBandCount = benchmarkedEmployees.filter((employee) => employee.bandPosition === "above").length;
   const benchmarkedCount = benchmarkedEmployees.length;
   const outOfBandCount = belowBandCount + aboveBandCount;
+  const bandDistribution = roundDistributionPercentages({
+    inBand: inBandCount,
+    above: aboveBandCount,
+    below: belowBandCount,
+  });
   const avgMarketPosition =
     benchmarkedCount > 0
       ? benchmarkedEmployees.reduce((sum, employee) => sum + employee.marketComparison, 0) / benchmarkedCount
       : 0;
   const payrollRiskFlags = benchmarkedEmployees.filter((employee) => employee.marketComparison > 15).length;
-  const inBandPercentage =
-    benchmarkedCount > 0 ? Math.round((inBandCount / benchmarkedCount) * 100) : 0;
-  const outOfBandPercentage =
-    benchmarkedCount > 0 ? Math.round((outOfBandCount / benchmarkedCount) * 100) : 0;
-  const bandDistribution = {
-    below: benchmarkedCount > 0 ? Math.round((belowBandCount / benchmarkedCount) * 100) : 0,
-    inBand: inBandPercentage,
-    above: benchmarkedCount > 0 ? Math.round((aboveBandCount / benchmarkedCount) * 100) : 0,
-  };
+  const inBandPercentage = bandDistribution.inBand;
+  const outOfBandPercentage = bandDistribution.above + bandDistribution.below;
   const headcountTrend = calculateHeadcountTrend(activeEmployees);
   const payrollTrend = calculatePayrollTrend(activeEmployees);
   const riskBreakdown = calculateRiskBreakdown(benchmarkedEmployees);
@@ -232,6 +230,11 @@ export function buildOverviewDepartmentSummaries(employees: Employee[]): Overvie
       benchmarkedCount > 0
         ? benchmarkedEmployees.reduce((sum, employee) => sum + employee.marketComparison, 0) / benchmarkedCount
         : 0;
+    const distribution = roundDistributionPercentages({
+      inBand: inBandCount,
+      above: aboveBandCount,
+      below: belowBandCount,
+    });
 
     return {
       department,
@@ -247,9 +250,9 @@ export function buildOverviewDepartmentSummaries(employees: Employee[]): Overvie
         departmentEmployees.length > 0
           ? Math.round((benchmarkedCount / departmentEmployees.length) * 100)
           : 0,
-      inBandPct: benchmarkedCount > 0 ? Math.round((inBandCount / benchmarkedCount) * 100) : 0,
-      aboveBandPct: benchmarkedCount > 0 ? Math.round((aboveBandCount / benchmarkedCount) * 100) : 0,
-      belowBandPct: benchmarkedCount > 0 ? Math.round((belowBandCount / benchmarkedCount) * 100) : 0,
+      inBandPct: distribution.inBand,
+      aboveBandPct: distribution.above,
+      belowBandPct: distribution.below,
     };
   });
 }
@@ -308,8 +311,8 @@ function buildOverviewActions(
       id: "coverage-gap",
       title: `${benchmarkCoverage.unbenchmarkedEmployees} active employee${benchmarkCoverage.unbenchmarkedEmployees === 1 ? "" : "s"} missing benchmark coverage`,
       description: "Complete role, level, or location mapping to improve dashboard confidence.",
-      href: "/dashboard/people",
-      actionLabel: "Review data gaps",
+      href: "/dashboard/upload",
+      actionLabel: "Inspect upload data",
       countLabel: `${benchmarkCoverage.coveragePct}% coverage`,
       tone: benchmarkCoverage.coveragePct < 90 ? "warning" : "info",
       icon: "alert",
@@ -351,8 +354,8 @@ function buildOverviewActions(
       id: "healthy-overview",
       title: "No immediate compensation actions",
       description: "Benchmark coverage and pay alignment are currently within healthy ranges.",
-      href: "/dashboard/market",
-      actionLabel: "Open market overview",
+      href: "/dashboard/benchmarks",
+      actionLabel: "Open benchmarking",
       tone: "positive",
       icon: "shield",
     });
@@ -384,8 +387,8 @@ function buildOverviewInsights(
       id: "coverage-summary",
       title: `${benchmarkCoverage.coveragePct}% benchmark coverage across active employees`,
       description: "Some employee records still need matching role, location, or level data before they can influence market views.",
-      href: "/dashboard/people",
-      actionLabel: "Inspect people data",
+      href: "/dashboard/upload",
+      actionLabel: "Inspect upload data",
       tone: "warning",
     });
   }
@@ -550,6 +553,10 @@ function calculateHealthScore({
   payrollRiskFlags: number;
   benchmarkedEmployees: number;
 }): number {
+  if (benchmarkedEmployees === 0) {
+    return 0;
+  }
+
   const marketScore =
     avgMarketPosition >= 0 && avgMarketPosition <= 5
       ? 100
@@ -571,4 +578,54 @@ function percentChangeFromTrend(trend: { value: number }[]): number {
 
 function round1(value: number): number {
   return Math.round(value * 10) / 10;
+}
+
+export function roundDistributionPercentages(counts: {
+  inBand: number;
+  above: number;
+  below: number;
+}) {
+  const total = counts.inBand + counts.above + counts.below;
+  if (total <= 0) {
+    return {
+      inBand: 0,
+      above: 0,
+      below: 0,
+    };
+  }
+
+  const entries = [
+    { key: "inBand" as const, exact: (counts.inBand / total) * 100, index: 0 },
+    { key: "above" as const, exact: (counts.above / total) * 100, index: 1 },
+    { key: "below" as const, exact: (counts.below / total) * 100, index: 2 },
+  ].map((entry) => ({
+    ...entry,
+    floor: Math.floor(entry.exact),
+    remainder: entry.exact - Math.floor(entry.exact),
+  }));
+
+  const rounded = {
+    inBand: entries[0].floor,
+    above: entries[1].floor,
+    below: entries[2].floor,
+  };
+
+  let remaining = 100 - entries.reduce((sum, entry) => sum + entry.floor, 0);
+  const priority = [...entries].sort((left, right) => {
+    if (right.remainder !== left.remainder) {
+      return right.remainder - left.remainder;
+    }
+
+    return left.index - right.index;
+  });
+
+  let allocationIndex = 0;
+  while (remaining > 0) {
+    const target = priority[allocationIndex] ?? priority[0];
+    rounded[target.key] += 1;
+    allocationIndex += 1;
+    remaining -= 1;
+  }
+
+  return rounded;
 }

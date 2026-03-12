@@ -1,3 +1,5 @@
+import { LOCATIONS } from "@/lib/dashboard/dummy-data";
+
 type MinimalBenchmarkForm = {
   roleId: string | null;
   levelId: string | null;
@@ -5,6 +7,7 @@ type MinimalBenchmarkForm = {
 };
 
 type PersistableBenchmarkState = {
+  workspaceId: string | null;
   savedFilters: unknown[];
   recentResults: unknown[];
 };
@@ -15,6 +18,8 @@ type BenchmarkStateLike = PersistableBenchmarkState & {
 };
 
 export type RoleSelectionState = "empty" | "searching" | "selected";
+
+const SUPPORTED_BENCHMARK_LOCATION_IDS = new Set(LOCATIONS.map((location) => location.id));
 
 export function getRoleSelectionState(input: {
   roleId: string | null;
@@ -65,6 +70,10 @@ export function getPersistedBenchmarkStateSlice(
   state: BenchmarkStateLike,
 ): PersistableBenchmarkState {
   return {
+    workspaceId:
+      typeof (state as { workspaceId?: unknown }).workspaceId === "string"
+        ? ((state as { workspaceId?: string | null }).workspaceId ?? null)
+        : null,
     savedFilters: state.savedFilters,
     recentResults: state.recentResults,
   };
@@ -73,8 +82,24 @@ export function getPersistedBenchmarkStateSlice(
 export function migratePersistedBenchmarkState(
   persisted: Partial<BenchmarkStateLike> | undefined,
 ): PersistableBenchmarkState {
+  const savedFilters = Array.isArray(persisted?.savedFilters) ? persisted.savedFilters : [];
+  const recentResults = Array.isArray(persisted?.recentResults) ? persisted.recentResults : [];
+
   return {
-    savedFilters: Array.isArray(persisted?.savedFilters) ? persisted.savedFilters : [],
-    recentResults: Array.isArray(persisted?.recentResults) ? persisted.recentResults : [],
+    workspaceId: typeof (persisted as { workspaceId?: unknown })?.workspaceId === "string"
+      ? (((persisted as { workspaceId?: string | null }).workspaceId) ?? null)
+      : null,
+    savedFilters: savedFilters.filter(hasSupportedPersistedBenchmarkLocation),
+    recentResults: recentResults.filter(hasSupportedPersistedBenchmarkLocation),
   };
+}
+
+function hasSupportedPersistedBenchmarkLocation(value: unknown): boolean {
+  if (!value || typeof value !== "object") return false;
+
+  const formData = (value as { formData?: { locationId?: unknown } }).formData;
+  if (!formData || typeof formData !== "object") return true;
+
+  const locationId = formData.locationId;
+  return typeof locationId !== "string" || SUPPORTED_BENCHMARK_LOCATION_IDS.has(locationId);
 }

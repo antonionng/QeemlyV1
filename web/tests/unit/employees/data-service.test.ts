@@ -63,4 +63,52 @@ describe("mapRowsToEmployees", () => {
       sampleSize: 12,
     });
   });
+
+  it("adds a unique display name when multiple employees share the same full name", () => {
+    const employees = __internal.mapRowsToEmployees(
+      [
+        {
+          id: "e1",
+          first_name: "Ahmed",
+          last_name: "Al-Qasimi",
+          email: "ahmed.one@example.com",
+          department: "Engineering",
+          role_id: "swe",
+          level_id: "ic3",
+          location_id: "dubai",
+          base_salary: 120_000,
+          bonus: 0,
+          equity: 0,
+          status: "active",
+          employment_type: "national",
+          hire_date: "2020-01-01",
+          performance_rating: "meets",
+        },
+        {
+          id: "e2",
+          first_name: "Ahmed",
+          last_name: "Al-Qasimi",
+          email: "ahmed.two@example.com",
+          department: "Product",
+          role_id: "pm",
+          level_id: "ic3",
+          location_id: "riyadh",
+          base_salary: 130_000,
+          bonus: 0,
+          equity: 0,
+          status: "active",
+          employment_type: "national",
+          hire_date: "2020-01-01",
+          performance_rating: "meets",
+        },
+      ],
+      [],
+      [],
+    );
+
+    expect(employees.map((employee) => employee.displayName)).toEqual([
+      "Ahmed Al-Qasimi (Dubai)",
+      "Ahmed Al-Qasimi (Riyadh)",
+    ]);
+  });
 });

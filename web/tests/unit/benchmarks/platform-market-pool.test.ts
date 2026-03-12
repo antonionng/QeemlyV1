@@ -164,4 +164,111 @@ describe("aggregateMarketPoolObservations", () => {
       ]),
     );
   });
+
+  it("treats seeded admin observations from three platform contributor workspaces as trusted coverage", () => {
+    const observations: MarketPoolObservation[] = [
+      {
+        workspaceId: "qeemly-seed-a",
+        role_id: "swe",
+        location_id: "dubai",
+        level_id: "ic3",
+        currency: "AED",
+        value: 78_000,
+        sourceType: "admin",
+      },
+      {
+        workspaceId: "qeemly-seed-b",
+        role_id: "swe",
+        location_id: "dubai",
+        level_id: "ic3",
+        currency: "AED",
+        value: 80_000,
+        sourceType: "admin",
+      },
+      {
+        workspaceId: "qeemly-seed-c",
+        role_id: "swe",
+        location_id: "dubai",
+        level_id: "ic3",
+        currency: "AED",
+        value: 82_000,
+        sourceType: "admin",
+      },
+    ];
+
+    const [row] = aggregateMarketPoolObservations(observations, {
+      minimumContributors: 3,
+      effectiveDate: "2026-03-12",
+    });
+
+    expect(row).toMatchObject({
+      role_id: "swe",
+      location_id: "dubai",
+      level_id: "ic3",
+      contributor_count: 3,
+      sample_size: 3,
+      provenance: "admin",
+      source_breakdown: {
+        employee: 0,
+        uploaded: 0,
+        admin: 3,
+      },
+    });
+    expect(row.p50).toBe(80_000);
+  });
+
+  it("counts distinct admin market sources even when they share one platform workspace", () => {
+    const observations: MarketPoolObservation[] = [
+      {
+        workspaceId: "platform",
+        contributorKey: "admin:uae_fcsc_workforce_comp",
+        role_id: "swe",
+        location_id: "dubai",
+        level_id: "ic3",
+        currency: "AED",
+        value: 78_000,
+        sourceType: "admin",
+      },
+      {
+        workspaceId: "platform",
+        contributorKey: "admin:qatar_wages",
+        role_id: "swe",
+        location_id: "dubai",
+        level_id: "ic3",
+        currency: "AED",
+        value: 80_000,
+        sourceType: "admin",
+      },
+      {
+        workspaceId: "platform",
+        contributorKey: "admin:oman_ncsi_wages",
+        role_id: "swe",
+        location_id: "dubai",
+        level_id: "ic3",
+        currency: "AED",
+        value: 82_000,
+        sourceType: "admin",
+      },
+    ];
+
+    const [row] = aggregateMarketPoolObservations(observations, {
+      minimumContributors: 3,
+      effectiveDate: "2026-03-12",
+    });
+
+    expect(row).toMatchObject({
+      role_id: "swe",
+      location_id: "dubai",
+      level_id: "ic3",
+      contributor_count: 3,
+      sample_size: 3,
+      provenance: "admin",
+      source_breakdown: {
+        employee: 0,
+        uploaded: 0,
+        admin: 3,
+      },
+    });
+    expect(row.p50).toBe(80_000);
+  });
 });

@@ -7,8 +7,7 @@
  *
  * Data sources (in priority order):
  *  1. platform_market_benchmarks (canonical pooled market rows)
- *  2. public_benchmark_snapshots (public mirror of the pooled rows)
- *  3. salary_benchmarks where source = 'market' under PLATFORM_WORKSPACE_ID
+ *  2. salary_benchmarks where source = 'market' under PLATFORM_WORKSPACE_ID
  */
 
 export type MarketBenchmark = {
@@ -81,18 +80,11 @@ export async function fetchMarketBenchmarks(
     return filterMarketBenchmarks(cachedMarketBenchmarks, query);
   }
 
-  const benchmarks = await fetchFromCanonicalPoolSafe(supabase);
+  const benchmarks = await fetchFromCanonicalPool(supabase);
   if (benchmarks.length > 0) {
     cachedMarketBenchmarks = benchmarks;
     cacheTimestamp = Date.now();
     return filterMarketBenchmarks(benchmarks, query);
-  }
-
-  const snapshotBenchmarks = await fetchFromPublicSnapshots(supabase);
-  if (snapshotBenchmarks.length > 0) {
-    cachedMarketBenchmarks = snapshotBenchmarks;
-    cacheTimestamp = Date.now();
-    return filterMarketBenchmarks(snapshotBenchmarks, query);
   }
 
   const platformBenchmarks = await fetchFromPlatformWorkspace(supabase);
@@ -156,7 +148,7 @@ function filterMarketBenchmarks(
   return rows.filter(isBaseMarketBenchmark);
 }
 
-function selectBestMarketBenchmark(
+export function selectBestMarketBenchmark(
   rows: MarketBenchmark[],
   query: MarketBenchmarkQuery,
 ): MarketBenchmark | null {
@@ -209,33 +201,6 @@ function isSupabaseRangeQuery(value: unknown): value is SupabaseRangeQuery {
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-async function fetchFromPublicSnapshots(supabase: SupabaseLike): Promise<MarketBenchmark[]> {
-  const data = await fetchAllRows(supabase, "public_benchmark_snapshots", (query) =>
-    query
-      .select("role_id,location_id,level_id,currency,p25,p50,p75")
-      .eq("is_public", true)
-      .order("updated_at", { ascending: false })
-  );
-
-  if (!data || data.length === 0) return [];
-
-  return (data as Array<Record<string, unknown>>).map((row) => ({
-    role_id: String(row.role_id),
-    location_id: String(row.location_id),
-    level_id: String(row.level_id),
-    currency: String(row.currency),
-    industry: normalizeSegmentValue(row.industry),
-    company_size: normalizeSegmentValue(row.company_size),
-    p10: estimateP10(Number(row.p25)),
-    p25: Number(row.p25),
-    p50: Number(row.p50),
-    p75: Number(row.p75),
-    p90: estimateP90(Number(row.p75)),
-    sample_size: null,
-    source: "market" as const,
-  }));
-}
-
 async function fetchFromCanonicalPool(supabase: SupabaseLike): Promise<MarketBenchmark[]> {
   const data = await fetchAllRows(supabase, "platform_market_benchmarks", (query) =>
     query
@@ -278,14 +243,6 @@ async function fetchFromCanonicalPool(supabase: SupabaseLike): Promise<MarketBen
   }));
 }
 
-async function fetchFromCanonicalPoolSafe(supabase: SupabaseLike): Promise<MarketBenchmark[]> {
-  try {
-    return await fetchFromCanonicalPool(supabase);
-  } catch {
-    return [];
-  }
-}
-
 async function fetchFromPlatformWorkspace(supabase: SupabaseLike): Promise<MarketBenchmark[]> {
   const platformWsId = process.env.PLATFORM_WORKSPACE_ID;
   if (!platformWsId) return [];
@@ -323,18 +280,6 @@ async function fetchFromPlatformWorkspace(supabase: SupabaseLike): Promise<Marke
     });
   }
   return results;
-}
-
-/**
- * public_benchmark_snapshots only stores p25/p50/p75.
- * Estimate p10 and p90 using a symmetric spread from p25/p75.
- */
-function estimateP10(p25: number): number {
-  return Math.round(p25 * 0.88);
-}
-
-function estimateP90(p75: number): number {
-  return Math.round(p75 * 1.12);
 }
 
 async function fetchAllRows(

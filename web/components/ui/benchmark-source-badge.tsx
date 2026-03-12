@@ -10,7 +10,7 @@ type BenchmarkSourceBadgeProps = {
 };
 
 export function BenchmarkSourceBadge({ source, className }: BenchmarkSourceBadgeProps) {
-  if (!source || source === "dummy") return null;
+  if (!source) return null;
 
   const isMarket = source === "market";
 

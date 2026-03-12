@@ -13,23 +13,23 @@ type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
 };
 
 const baseStyles =
-  "relative inline-flex items-center justify-center gap-2 rounded-full font-medium transition-all duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus disabled:cursor-not-allowed disabled:opacity-60";
+  "relative inline-flex items-center justify-center gap-2 rounded-xl font-medium transition-all duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-border-focus disabled:cursor-not-allowed disabled:opacity-60";
 
 const sizeStyles: Record<Size, string> = {
-  sm: "h-9 px-4 text-sm",
-  md: "h-11 px-5 text-sm",
+  sm: "h-10 px-4 text-sm",
+  md: "h-12 px-5 text-sm",
   lg: "h-12 px-6 text-base",
 };
 
 const variants: Record<Variant, string> = {
   primary:
-    "bg-brand-500 text-white shadow-sm hover:bg-brand-600 hover:shadow-md active:bg-brand-700",
+    "bg-[linear-gradient(135deg,#6C5CE7,#5A4BE7)] text-white shadow-sm hover:brightness-[1.02] hover:shadow-md active:brightness-95",
   secondary:
-    "bg-surface-3 text-text-primary shadow-sm hover:bg-accent-200 active:bg-accent-300",
+    "border border-border bg-white text-text-primary shadow-sm hover:bg-accent-50 active:bg-accent-100",
   ghost:
     "bg-surface-1 text-text-secondary ring-1 ring-border hover:bg-surface-3 hover:text-text-primary",
   outline:
-    "bg-transparent text-text-secondary ring-1 ring-border hover:bg-brand-50 hover:text-brand-700 hover:ring-brand-200",
+    "bg-white text-text-secondary ring-1 ring-border hover:bg-brand-50 hover:text-brand-700 hover:ring-brand-200",
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(

@@ -5,6 +5,7 @@ import {
   getApprovalViewLevel,
   getPostSubmitReviewOutcome,
   getSalaryReviewWorkspaceVisibility,
+  shouldRedirectSalaryReviewTab,
   shouldShowEmployeeApprovalContext,
 } from "@/lib/salary-review/dashboard";
 import type { SalaryReviewProposalRecord } from "@/lib/salary-review/proposal-types";
@@ -40,6 +41,10 @@ describe("salary review dashboard model", () => {
   it("splits actionable approvals from historical cycles", () => {
     const dashboard = buildSalaryReviewDashboardModel({
       activeProposal: makeProposal({ id: "draft-1", status: "draft" }),
+      cycles: [
+        makeProposal({ id: "draft-1", status: "draft" }),
+        makeProposal({ id: "submitted-1", status: "submitted" }),
+      ],
       approvalQueue: [
         makeProposal({ id: "submitted-1", status: "submitted" }),
         makeProposal({ id: "review-1", status: "in_review" }),
@@ -52,19 +57,28 @@ describe("salary review dashboard model", () => {
     expect(dashboard.history).toHaveLength(2);
     expect(dashboard.tabs.approvals.badge).toBe(2);
     expect(dashboard.tabs.history.badge).toBe(2);
-    expect(dashboard.tabs.review.label).toBe("Build Review");
+    expect(dashboard.tabs.overview.label).toBe("Overview");
+    expect(dashboard.totalCycles).toBe(2);
     expect(dashboard.primaryAction).toBe("continue-draft");
   });
 
   it("promotes a new cycle action when there is no active draft", () => {
     const dashboard = buildSalaryReviewDashboardModel({
       activeProposal: null,
+      cycles: [makeProposal({ id: "approved-1", status: "approved" })],
       approvalQueue: [makeProposal({ id: "approved-1", status: "approved" })],
     });
 
     expect(dashboard.primaryAction).toBe("start-cycle");
     expect(dashboard.hasDraft).toBe(false);
     expect(dashboard.tabs.overview.label).toBe("Overview");
+  });
+});
+
+describe("salary review route compatibility", () => {
+  it("redirects the legacy review tab into the wizard route", () => {
+    expect(shouldRedirectSalaryReviewTab("review")).toBe(true);
+    expect(shouldRedirectSalaryReviewTab("overview")).toBe(false);
   });
 });
 

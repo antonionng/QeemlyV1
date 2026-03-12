@@ -2,25 +2,24 @@
 
 import clsx from "clsx";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
   BarChart3,
-  ChartLine,
+  ChartColumnIncreasing,
   ChevronLeft,
   ChevronRight,
-  Clock,
+  Clock3,
   Database,
   DollarSign,
   Globe2,
-  LayoutDashboard,
-  LogOut,
+  LayoutGrid,
+  type LucideIcon,
   Plug,
   Settings,
-  ShieldCheck,
+  Shield,
   Upload,
-  User,
-  Users,
+  UserRound,
   Wallet,
 } from "lucide-react";
 import { Logo } from "@/components/logo";
@@ -33,7 +32,7 @@ import { WorkspaceSwitcher } from "./workspace-switcher";
 type NavItem = {
   href: string;
   label: string;
-  icon: typeof LayoutDashboard;
+  icon: LucideIcon;
   featureKey?: FeatureKey;
 };
 
@@ -46,10 +45,8 @@ const adminNavSections: NavSection[] = [
   {
     label: null,
     items: [
-      { href: getDashboardOverviewRoutes()[0].href, label: getDashboardOverviewRoutes()[0].label, icon: LayoutDashboard },
-      { href: "/dashboard/people", label: "People", icon: Users },
-      { href: getDashboardOverviewRoutes()[1].href, label: getDashboardOverviewRoutes()[1].label, icon: Globe2 },
-      { href: getDashboardOverviewRoutes()[2].href, label: getDashboardOverviewRoutes()[2].label, icon: ChartLine },
+      { href: getDashboardOverviewRoutes()[0].href, label: getDashboardOverviewRoutes()[0].label, icon: LayoutGrid },
+      { href: getDashboardOverviewRoutes()[1].href, label: getDashboardOverviewRoutes()[1].label, icon: ChartColumnIncreasing },
       { href: "/dashboard/salary-review", label: "Salary Review", icon: DollarSign },
     ],
   },
@@ -57,7 +54,7 @@ const adminNavSections: NavSection[] = [
     label: "Analytics",
     items: [
       { href: "/dashboard/reports", label: "Reports", icon: BarChart3 },
-      { href: "/dashboard/compliance", label: "Workforce Compliance", icon: ShieldCheck },
+      { href: "/dashboard/compliance", label: "Workforce Compliance", icon: Shield },
     ],
   },
   {
@@ -76,8 +73,8 @@ const employeeNavSections: NavSection[] = [
     label: null,
     items: [
       { href: "/dashboard/me", label: "My Compensation", icon: Wallet },
-      { href: "/dashboard/me/history", label: "My History", icon: Clock },
-      { href: "/dashboard/me/profile", label: "My Profile", icon: User },
+      { href: "/dashboard/me/history", label: "My History", icon: Clock3 },
+      { href: "/dashboard/me/profile", label: "My Profile", icon: UserRound },
     ],
   },
 ];
@@ -115,13 +112,57 @@ type UserData = {
   role: string;
 };
 
+const EXPANDED_ACTIVE_STYLE = {
+  background: "linear-gradient(90deg,#6B5BFF,#4C5CE7)",
+  boxShadow: "0 6px 12px rgba(92,93,237,0.25)",
+};
+
+const COLLAPSED_ACTIVE_STYLE = {
+  background: "linear-gradient(90deg,#6B5BFF,#4C5CE7)",
+};
+
+type SidebarNavLinkProps = {
+  item: NavItem;
+  active: boolean;
+  collapsed: boolean;
+  onNavigate?: () => void;
+};
+
+function SidebarNavLink({
+  item,
+  active,
+  collapsed,
+  onNavigate,
+}: SidebarNavLinkProps) {
+  const Icon = item.icon;
+
+  return (
+    <Link
+      href={item.href}
+      onClick={onNavigate}
+      title={collapsed ? item.label : undefined}
+      aria-label={collapsed ? item.label : undefined}
+      style={active ? (collapsed ? COLLAPSED_ACTIVE_STYLE : EXPANDED_ACTIVE_STYLE) : undefined}
+      className={clsx(
+        "group flex items-center text-[15px] font-medium transition-[background,color,box-shadow] duration-200 ease-out",
+        collapsed
+          ? "h-11 w-11 justify-center rounded-[10px] text-[#374151] hover:bg-[#F5F6FA]"
+          : "h-11 gap-3 rounded-[12px] px-4 text-[#374151] hover:bg-[#F5F6FA]",
+        active && "text-white hover:bg-transparent",
+      )}
+    >
+      <Icon className={clsx("h-5 w-5 shrink-0", active ? "text-white" : "text-[#374151]")} strokeWidth={2} />
+      {!collapsed && <span className="truncate">{item.label}</span>}
+    </Link>
+  );
+}
+
 export function DashboardSidebar({
   collapsed = false,
   onNavigate,
   onToggleCollapse,
 }: DashboardSidebarProps) {
   const pathname = usePathname();
-  const router = useRouter();
   const [user, setUser] = useState<UserData | null>(null);
   const companySettings = useCompanySettings();
 
@@ -198,175 +239,115 @@ export function DashboardSidebar({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function handleSignOut() {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    router.push("/login");
-  }
-
-  // Get display name and initials
   const displayName = user?.fullName || user?.email?.split("@")[0] || "User";
   const initials = displayName.charAt(0).toUpperCase();
+  const profileTooltip = user?.email ? `${displayName} (${user.email})` : displayName;
 
   return (
-    <div className="flex h-full flex-col">
-      {/* Logo + collapse toggle (reference: Qeemly branding, expand/collapse affordance) */}
+    <div className="flex h-full min-h-0 flex-col bg-white">
       <div
         className={clsx(
-          "relative flex h-14 shrink-0 items-center border-b border-border/50",
-          collapsed ? "justify-center px-2" : "justify-between px-4"
+          "relative flex h-14 shrink-0 items-center px-5",
+          collapsed ? "justify-center px-4" : "justify-start"
         )}
       >
         {collapsed ? (
-          <Link href="/dashboard" className="flex items-center justify-center w-8 h-8">
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-white border border-border overflow-hidden">
+          <Link href="/dashboard" className="flex h-9 w-9 items-center justify-center">
+            <div className="flex h-9 w-9 items-center justify-center overflow-hidden rounded-xl border border-[#EEF1F6] bg-white">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/logo.png" alt="Qeemly" className="h-full w-full object-contain p-1" />
             </div>
           </Link>
         ) : (
-          <div className="flex flex-1 min-w-0 items-center justify-between gap-2">
-            <Link href="/dashboard" className="flex items-center gap-2.5 min-w-0">
+          <Link href="/dashboard" className="min-w-0">
+            <div className="flex items-center">
               <Logo compact href={null} />
-            </Link>
-            {onToggleCollapse && (
-              <button
-                type="button"
-                onClick={onToggleCollapse}
-                className="hidden h-8 w-8 shrink-0 items-center justify-center rounded-lg text-text-tertiary transition-colors hover:bg-surface-3 hover:text-text-secondary lg:flex"
-                aria-label="Collapse sidebar"
-              >
-                <ChevronLeft className="h-4 w-4" />
-              </button>
-            )}
-          </div>
+            </div>
+          </Link>
         )}
-        {onToggleCollapse && collapsed && (
+        {onToggleCollapse && (
           <button
             type="button"
             onClick={onToggleCollapse}
-            className="absolute -right-1 top-1/2 z-10 hidden h-8 w-8 shrink-0 -translate-y-1/2 items-center justify-center rounded-lg border border-border bg-surface-1 text-text-tertiary shadow-sm transition-colors hover:bg-surface-3 hover:text-text-secondary lg:flex"
-            aria-label="Expand sidebar"
+            className="absolute right-4 top-[18px] hidden h-5 w-5 items-center justify-center text-[#6B5BFF] lg:flex"
+            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
-            <ChevronRight className="h-4 w-4" />
+            {collapsed ? <ChevronRight className="h-5 w-5" strokeWidth={2} /> : <ChevronLeft className="h-5 w-5" strokeWidth={2} />}
           </button>
         )}
       </div>
 
-      {/* Workspace Switcher (Super Admins only) */}
-      <div className={clsx("shrink-0 px-3 py-2 border-b border-border/50", collapsed && "px-2")}>
-        <WorkspaceSwitcher collapsed={collapsed} />
-      </div>
-
-      {/* Main navigation */}
-      <nav className={clsx("flex-1 overflow-y-auto px-3 py-4", collapsed && "px-2")}>
-        <div className={clsx("flex flex-col gap-1", collapsed && "items-center")}>
-          {navSections.map((section, sectionIndex) => (
-            <div key={sectionIndex} className={clsx(sectionIndex > 0 && "mt-4")}>
-              {/* Section Label (reference: uppercase, light grey) */}
-              {section.label && !collapsed && (
-                <p className="mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-widest text-text-muted">
-                  {section.label}
-                </p>
-              )}
-              {section.label && collapsed && (
-                <div className="mx-auto mb-1.5 h-px w-5 bg-border" aria-hidden />
-              )}
-
-              <div className={clsx("flex flex-col gap-0.5", collapsed && "items-center")}>
-                {section.items.filter(isNavItemEnabled).map((item) => {
-                  const active = isActiveRoute(pathname, item.href);
-                  const Icon = item.icon;
-                  return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      onClick={onNavigate}
-                      title={collapsed ? item.label : undefined}
-                      aria-label={collapsed ? item.label : undefined}
-                      className={clsx(
-                        "group relative flex items-center gap-3 rounded-xl text-[13px] font-medium transition-all duration-150",
-                        collapsed ? "h-9 w-9 justify-center" : "px-3 py-2",
-                        active
-                          ? "bg-brand-500 text-white shadow-sm shadow-brand-500/25"
-                          : "text-text-secondary hover:bg-surface-3 hover:text-text-primary"
-                      )}
-                    >
-                      <Icon className={clsx("h-[18px] w-[18px] shrink-0", collapsed && "h-5 w-5")} />
-                      {!collapsed && <span className="truncate">{item.label}</span>}
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+      {!collapsed && (
+        <div className="shrink-0 px-3 pb-2 pt-1">
+          <WorkspaceSwitcher />
         </div>
-      </nav>
+      )}
 
-      {/* Bottom section */}
-      <div className={clsx("shrink-0 border-t border-border/50 px-3 py-3", collapsed && "px-2")}>
-        {/* Settings (reference: same nav item style) */}
-        <div className={clsx("flex flex-col gap-0.5", collapsed && "items-center")}>
-          {bottomItems.filter(isNavItemEnabled).map((item) => {
-            const active = isActiveRoute(pathname, item.href);
-            const Icon = item.icon;
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={onNavigate}
-                title={collapsed ? item.label : undefined}
-                aria-label={collapsed ? item.label : undefined}
-                className={clsx(
-                  "group flex items-center gap-3 rounded-xl text-[13px] font-medium transition-all duration-150",
-                  collapsed ? "h-9 w-9 justify-center" : "px-3 py-2",
-                  active
-                    ? "bg-brand-500 text-white shadow-sm shadow-brand-500/25"
-                    : "text-text-secondary hover:bg-surface-3 hover:text-text-primary"
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="min-h-0 flex-1 overflow-y-auto pt-1">
+          <nav className="flex flex-col gap-[18px]">
+            {navSections.map((section, sectionIndex) => (
+              <div key={`${section.label ?? "primary"}-${sectionIndex}`} className="flex flex-col">
+                {!collapsed && section.label && (
+                  <p className="mb-2 mt-6 px-4 text-[12px] font-semibold uppercase tracking-[0.08em] text-[#9CA3AF]">
+                    {section.label.toUpperCase()}
+                  </p>
                 )}
-              >
-                <Icon className={clsx("h-[18px] w-[18px] shrink-0", collapsed && "h-5 w-5")} />
-                {!collapsed && <span className="truncate">{item.label}</span>}
-              </Link>
-            );
-          })}
+                <div className={clsx("flex flex-col gap-1.5 px-3", collapsed && "items-center")}>
+                  {section.items.filter(isNavItemEnabled).map((item) => (
+                    <SidebarNavLink
+                      key={item.href}
+                      item={item}
+                      active={isActiveRoute(pathname, item.href)}
+                      collapsed={collapsed}
+                      onNavigate={onNavigate}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </nav>
         </div>
 
-        {/* User section (minimal so nav remains focus) */}
-        <div
-          className={clsx(
-            "mt-3 flex items-center gap-2.5 rounded-xl bg-surface-3 transition-colors hover:bg-accent-100",
-            collapsed ? "justify-center p-2" : "p-2.5"
-          )}
-        >
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-brand-800 text-white font-semibold text-xs overflow-hidden">
-            {user?.avatarUrl ? (
-              <img src={user.avatarUrl} alt={displayName} className="h-full w-full object-cover" />
-            ) : user ? (
-              initials
-            ) : (
-              <User className="h-4 w-4" />
+        <div className="shrink-0 px-3 pb-4 pt-3">
+          <div className={clsx("flex flex-col gap-1.5", collapsed && "items-center")}>
+            {bottomItems.filter(isNavItemEnabled).map((item) => (
+              <SidebarNavLink
+                key={item.href}
+                item={item}
+                active={isActiveRoute(pathname, item.href)}
+                collapsed={collapsed}
+                onNavigate={onNavigate}
+              />
+            ))}
+          </div>
+
+          <div
+            title={collapsed ? profileTooltip : undefined}
+            className={clsx(
+              "mt-3 flex items-center gap-2.5 rounded-[14px] bg-[#F5F6FA]",
+              collapsed ? "h-11 w-11 justify-center p-0" : "px-3 py-2.5"
+            )}
+          >
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-[#111827] text-sm font-semibold text-white">
+              {user?.avatarUrl ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img src={user.avatarUrl} alt={displayName} className="h-full w-full object-cover" />
+              ) : (
+                initials
+              )}
+            </div>
+            {!collapsed && (
+              <div className="min-w-0">
+                <div className="truncate text-[14px] font-semibold text-[#111827]">
+                  {displayName}
+                </div>
+                <div className="truncate text-[12px] text-[#6B7280]">
+                  {user?.email || "Loading..."}
+                </div>
+              </div>
             )}
           </div>
-          {!collapsed && (
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-[13px] font-semibold text-text-primary">
-                {displayName}
-              </div>
-              <div className="truncate text-[11px] text-text-tertiary">
-                {user?.email || "Loading..."}
-              </div>
-            </div>
-          )}
-          {!collapsed && (
-            <button
-              type="button"
-              onClick={handleSignOut}
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-text-muted transition-colors hover:bg-accent-200 hover:text-text-secondary"
-              aria-label="Sign out"
-            >
-              <LogOut className="h-3.5 w-3.5" />
-            </button>
-          )}
         </div>
       </div>
     </div>

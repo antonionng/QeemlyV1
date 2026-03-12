@@ -68,30 +68,33 @@ export function QuickActions({ actions }: QuickActionsProps) {
   };
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-3">
-        <h2 className="text-sm font-semibold text-accent-800">Quick Actions or Needs Attention</h2>
+    <section className="overview-section">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="overview-section-title">Quick Actions</h2>
+          <p className="overview-supporting-text mt-1">Prioritized actions and issues that need attention.</p>
+        </div>
         <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={() => scroll("left")}
-            className="h-7 w-7 rounded-lg border border-border bg-white flex items-center justify-center text-accent-500 hover:text-accent-700 hover:bg-accent-50 transition-colors"
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-white text-accent-500 transition-colors hover:bg-accent-50 hover:text-accent-700"
           >
-            <ChevronLeft className="h-4 w-4" />
+            <ChevronLeft className="h-4 w-4" strokeWidth={1.5} />
           </button>
           <button
             type="button"
             onClick={() => scroll("right")}
-            className="h-7 w-7 rounded-lg border border-border bg-white flex items-center justify-center text-accent-500 hover:text-accent-700 hover:bg-accent-50 transition-colors"
+            className="flex h-9 w-9 items-center justify-center rounded-xl border border-border bg-white text-accent-500 transition-colors hover:bg-accent-50 hover:text-accent-700"
           >
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight className="h-4 w-4" strokeWidth={1.5} />
           </button>
         </div>
       </div>
 
       <div
         ref={scrollRef}
-        className="flex gap-4 overflow-x-auto pb-1 scrollbar-none"
+        className="flex gap-6 overflow-x-auto pb-1 scrollbar-none"
         style={{ scrollbarWidth: "none" }}
       >
         {actions.map((action) => {
@@ -102,15 +105,15 @@ export function QuickActions({ actions }: QuickActionsProps) {
             <Link key={action.id} href={action.href} className="shrink-0 w-[260px]">
               <Card
                 className={clsx(
-                  "dash-card flex h-full flex-col border p-5 transition-shadow hover:shadow-md",
+                  "flex h-full flex-col border p-6 transition-shadow hover:shadow-md",
                   tone.card,
                 )}
               >
-                <div className={clsx("mb-3 flex h-10 w-10 items-center justify-center rounded-xl", tone.iconBg)}>
-                  <Icon className={clsx("h-5 w-5", tone.iconColor)} />
+                <div className={clsx("mb-4 flex h-10 w-10 items-center justify-center rounded-xl", tone.iconBg)}>
+                  <Icon className={clsx("h-5 w-5", tone.iconColor)} strokeWidth={1.5} />
                 </div>
                 <div className="mb-2 flex items-start justify-between gap-2">
-                  <p className="text-sm font-semibold text-accent-900 leading-snug">
+                  <p className="text-sm font-medium leading-snug text-accent-900">
                     {action.title}
                   </p>
                   {action.countLabel && (
@@ -119,18 +122,18 @@ export function QuickActions({ actions }: QuickActionsProps) {
                     </span>
                   )}
                 </div>
-                <p className="mb-4 flex-1 text-xs text-accent-600">
+                <p className="mb-6 flex-1 text-[13px] text-accent-600">
                   {action.description}
                 </p>
-                <div className="flex items-center gap-1 text-xs font-semibold text-accent-700 group">
+                <div className="group flex items-center gap-1 text-xs font-semibold text-accent-700">
                   {action.actionLabel}
-                  <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+                  <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" strokeWidth={1.5} />
                 </div>
               </Card>
             </Link>
           );
         })}
       </div>
-    </div>
+    </section>
   );
 }

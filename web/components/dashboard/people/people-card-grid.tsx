@@ -38,6 +38,7 @@ export function PeopleCardGrid({ employees, onOpenDetails, onDelete }: Props) {
       {employees.map((employee) => {
         const visa = visaBadge(employee);
         const benchmarkTrust = buildBenchmarkTrustLabels(employee.benchmarkContext);
+        const employeeLabel = employee.displayName || `${employee.firstName} ${employee.lastName}`.trim();
         return (
         <div
           key={employee.id}
@@ -53,7 +54,7 @@ export function PeopleCardGrid({ employees, onOpenDetails, onDelete }: Props) {
                 {employee.avatar ? (
                   <img
                     src={employee.avatar}
-                    alt={`${employee.firstName} ${employee.lastName}`}
+                    alt={employeeLabel}
                     className="h-11 w-11 rounded-xl object-cover"
                   />
                 ) : (
@@ -64,7 +65,7 @@ export function PeopleCardGrid({ employees, onOpenDetails, onDelete }: Props) {
                 )}
                 <div>
                   <p className="text-sm font-semibold text-brand-900">
-                    {employee.firstName} {employee.lastName}
+                    {employeeLabel}
                   </p>
                   <p className="text-xs text-accent-500">{employee.role.title}</p>
                 </div>

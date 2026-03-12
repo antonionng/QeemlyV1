@@ -1,5 +1,25 @@
 import type { OverviewMetrics, OverviewRiskSummary } from "@/lib/dashboard/company-overview";
 
+type HealthFactorTone = "positive" | "warning" | "critical";
+
+export const OVERVIEW_BAND_COLORS = {
+  inBand: "#33C997",
+  inBandBg: "#E7F7F3",
+  aboveBand: "#FEAE33",
+  aboveBandBg: "#FFF4E5",
+  belowBand: "#FF4D78",
+  belowBandBg: "#FFE9EF",
+} as const;
+
+type HealthScoreFactor = {
+  label: string;
+  value: number;
+  width: number;
+  target: number;
+  description: string;
+  tone: HealthFactorTone;
+};
+
 export function getHealthScorePresentation(metrics: Pick<
   OverviewMetrics,
   "healthScore" | "rolesOutsideBand" | "benchmarkedEmployees"
@@ -8,12 +28,12 @@ export function getHealthScorePresentation(metrics: Pick<
 
   if (metrics.healthScore >= 80) {
     return {
-      label: "Excellent",
+      label: "Good",
       tone: "positive" as const,
       icon: "check-circle" as const,
       accentClass: "text-emerald-600",
-      primaryValue: `${metrics.healthScore}/100`,
-      secondaryValue: "Excellent",
+      primaryValue: `${metrics.healthScore}`,
+      secondaryValue: `Health score ${metrics.healthScore}/100`,
       summary,
     };
   }
@@ -24,20 +44,20 @@ export function getHealthScorePresentation(metrics: Pick<
       tone: "positive" as const,
       icon: "check-circle" as const,
       accentClass: "text-emerald-600",
-      primaryValue: `${metrics.healthScore}/100`,
-      secondaryValue: "Good",
+      primaryValue: `${metrics.healthScore}`,
+      secondaryValue: `Health score ${metrics.healthScore}/100`,
       summary,
     };
   }
 
   if (metrics.healthScore >= 40) {
     return {
-      label: "Fair",
+      label: "Warning",
       tone: "warning" as const,
       icon: "alert-circle" as const,
       accentClass: "text-amber-600",
-      primaryValue: `${metrics.healthScore}/100`,
-      secondaryValue: "Fair",
+      primaryValue: `${metrics.healthScore}`,
+      secondaryValue: `Health score ${metrics.healthScore}/100`,
       summary,
     };
   }
@@ -47,10 +67,84 @@ export function getHealthScorePresentation(metrics: Pick<
     tone: "critical" as const,
     icon: "x-circle" as const,
     accentClass: "text-rose-600",
-    primaryValue: "Critical",
+    primaryValue: `${metrics.healthScore}`,
     secondaryValue: `Health score ${metrics.healthScore}/100`,
     summary,
   };
+}
+
+export function getHealthScoreFactors(
+  metrics: Pick<
+    OverviewMetrics,
+    "inBandPercentage" | "avgMarketPosition" | "payrollRiskFlags" | "activeEmployees" | "benchmarkedEmployees"
+  >,
+): HealthScoreFactor[] {
+  if (metrics.activeEmployees === 0 || metrics.benchmarkedEmployees === 0) {
+    return [
+      {
+        label: "Band Alignment",
+        value: 0,
+        target: 75,
+        description: "No benchmarked employees yet",
+        tone: "critical",
+        width: 0,
+      },
+      {
+        label: "Market Position",
+        value: 0,
+        target: 85,
+        description: "No benchmarked employees yet",
+        tone: "critical",
+        width: 0,
+      },
+      {
+        label: "Risk Management",
+        value: 0,
+        target: 90,
+        description: "No benchmarked employees yet",
+        tone: "critical",
+        width: 0,
+      },
+    ];
+  }
+
+  const factors = [
+    {
+      label: "Band Alignment",
+      value: clampPercent(metrics.inBandPercentage),
+      target: 75,
+      description: `${metrics.inBandPercentage}% of employees in band`,
+    },
+    {
+      label: "Market Position",
+      value: clampPercent(Math.max(0, 100 - Math.abs(metrics.avgMarketPosition - 2.5) * 8)),
+      target: 85,
+      description: `${metrics.avgMarketPosition >= 0 ? "+" : ""}${metrics.avgMarketPosition}% vs market`,
+    },
+    {
+      label: "Risk Management",
+      value: clampPercent(
+        Math.max(0, 100 - (metrics.payrollRiskFlags / Math.max(metrics.activeEmployees, 1)) * 500),
+      ),
+      target: 90,
+      description: `${metrics.payrollRiskFlags} risk flags`,
+    },
+  ] as const;
+
+  return factors.map((factor) => {
+    const tone =
+      factor.value >= factor.target
+        ? "positive"
+        : factor.value >= factor.target * 0.7
+          ? "warning"
+          : "critical";
+
+    return {
+      ...factor,
+      tone,
+      width: clampPercent(factor.value),
+    };
+  });
 }
 
 export function getRiskCardPresentation(
@@ -124,4 +218,7 @@ function buildHealthSummary(
   }
 
   return `${metrics.rolesOutsideBand} of ${metrics.benchmarkedEmployees} benchmarked employees are outside the target band.`;
+}
+function clampPercent(value: number): number {
+  return Math.min(100, Math.max(0, Math.round(value * 10) / 10));
 }

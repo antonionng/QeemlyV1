@@ -90,6 +90,7 @@ export function PeopleTable({
             {employees.map((employee) => {
               const visa = visaBadge(employee);
               const benchmarkTrust = buildBenchmarkTrustLabels(employee.benchmarkContext);
+              const employeeLabel = employee.displayName || `${employee.firstName} ${employee.lastName}`.trim();
               return (
               <tr
                 key={employee.id}
@@ -101,7 +102,7 @@ export function PeopleTable({
                     type="checkbox"
                     checked={selectedIds.includes(employee.id)}
                     onChange={() => onToggleSelect(employee.id)}
-                    aria-label={`Select ${employee.firstName} ${employee.lastName}`}
+                    aria-label={`Select ${employeeLabel}`}
                   />
                 </td>
                 <td className="px-4 py-3">
@@ -109,7 +110,7 @@ export function PeopleTable({
                     {employee.avatar ? (
                       <img
                         src={employee.avatar}
-                        alt={`${employee.firstName} ${employee.lastName}`}
+                        alt={employeeLabel}
                         className="h-9 w-9 rounded-full object-cover"
                       />
                     ) : (
@@ -120,7 +121,7 @@ export function PeopleTable({
                     )}
                     <div>
                       <p className="text-sm font-semibold text-brand-900">
-                        {employee.firstName} {employee.lastName}
+                        {employeeLabel}
                       </p>
                       <p className="text-xs text-accent-500">{employee.email || "No email"}</p>
                       {visa && (

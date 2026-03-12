@@ -7,7 +7,7 @@ describe("validateRuntimeEnv", () => {
       {
         NEXT_PUBLIC_SUPABASE_URL: "https://example.supabase.co",
       },
-      { requireCronSecret: true, requireAI: true }
+      { requireCronSecret: true, requireAI: true, requirePlatformWorkspace: true }
     );
 
     expect(result.ok).toBe(false);
@@ -15,6 +15,7 @@ describe("validateRuntimeEnv", () => {
       expect(result.missing).toContain("SUPABASE_SERVICE_ROLE_KEY");
       expect(result.missing).toContain("CRON_SECRET");
       expect(result.missing).toContain("OPENAI_API_KEY");
+      expect(result.missing).toContain("PLATFORM_WORKSPACE_ID");
     }
   });
 
@@ -25,8 +26,9 @@ describe("validateRuntimeEnv", () => {
         SUPABASE_SERVICE_ROLE_KEY: "service-role",
         CRON_SECRET: "cron-secret",
         OPENAI_API_KEY: "openai-key",
+        PLATFORM_WORKSPACE_ID: "platform-workspace",
       },
-      { requireCronSecret: true, requireAI: true }
+      { requireCronSecret: true, requireAI: true, requirePlatformWorkspace: true }
     );
 
     expect(result.ok).toBe(true);

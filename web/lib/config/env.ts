@@ -3,6 +3,7 @@ type EnvLike = Record<string, string | undefined>;
 type EnvValidationOptions = {
   requireCronSecret?: boolean;
   requireAI?: boolean;
+  requirePlatformWorkspace?: boolean;
 };
 
 type EnvValidationResult =
@@ -24,6 +25,9 @@ export function validateRuntimeEnv(
   }
   if (options.requireAI) {
     required.push("OPENAI_API_KEY");
+  }
+  if (options.requirePlatformWorkspace) {
+    required.push("PLATFORM_WORKSPACE_ID");
   }
 
   const missing = required.filter((key) => !env[key]);

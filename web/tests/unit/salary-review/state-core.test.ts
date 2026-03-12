@@ -1,5 +1,10 @@
-import { beforeEach, describe, expect, it } from "vitest";
-import { DEFAULT_VISIBLE_COLUMNS, useSalaryReview, type ReviewEmployee } from "@/lib/salary-review";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  DEFAULT_VISIBLE_COLUMNS,
+  SALARY_REVIEW_VISIBLE_COLUMNS_STORAGE_KEY,
+  useSalaryReview,
+  type ReviewEmployee,
+} from "@/lib/salary-review";
 import { parseSalaryReviewSearchParams } from "@/lib/salary-review/url-state";
 
 function makeEmployee(overrides: Partial<ReviewEmployee> = {}): ReviewEmployee {
@@ -51,6 +56,7 @@ function makeEmployee(overrides: Partial<ReviewEmployee> = {}): ReviewEmployee {
 
 describe("salary review core state", () => {
   beforeEach(() => {
+    vi.unstubAllGlobals();
     useSalaryReview.setState({
       settings: {
         cycle: "annual",
@@ -70,6 +76,18 @@ describe("salary review core state", () => {
       visibleColumns: useSalaryReview.getState().visibleColumns,
       isLoading: false,
       isUsingMockData: false,
+      cycles: [],
+      filters: {
+        department: "all",
+        location: "all",
+        pool: "all",
+        benchmarkStatus: "all",
+        workflowStatus: "all",
+        bandFilter: "all",
+        performance: "all",
+        search: "",
+      },
+      draftChanges: {},
     });
   });
 
@@ -220,6 +238,24 @@ describe("salary review core state", () => {
     expect(state.employees[0].newSalary).toBe(132_000);
     expect(state.totalIncrease).toBe(12_000);
   });
+
+  it("stores visible columns under the dedicated localStorage key", () => {
+    const storage = new Map<string, string>();
+    vi.stubGlobal("localStorage", {
+      getItem: vi.fn((key: string) => storage.get(key) ?? null),
+      setItem: vi.fn((key: string, value: string) => {
+        storage.set(key, value);
+      }),
+      removeItem: vi.fn((key: string) => {
+        storage.delete(key);
+      }),
+    });
+
+    useSalaryReview.getState().toggleColumnVisibility("basic");
+
+    expect(storage.get(SALARY_REVIEW_VISIBLE_COLUMNS_STORAGE_KEY)).toBeTruthy();
+    expect(JSON.parse(storage.get(SALARY_REVIEW_VISIBLE_COLUMNS_STORAGE_KEY) || "[]")).toContain("basic");
+  });
 });
 
 describe("salary review URL state", () => {
@@ -275,6 +311,7 @@ describe("salary review URL state", () => {
       "name",
       "role",
       "department",
+      "location",
       "current",
       "proposed",
       "increase",

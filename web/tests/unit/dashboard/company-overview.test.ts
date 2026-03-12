@@ -159,7 +159,7 @@ describe("buildCompanyOverviewSnapshot", () => {
         expect.objectContaining({
           id: "coverage-gap",
           tone: "warning",
-          href: "/dashboard/people",
+          href: "/dashboard/upload",
         }),
       ]),
     );
@@ -169,6 +169,11 @@ describe("buildCompanyOverviewSnapshot", () => {
         expect.objectContaining({
           id: "outside-band-summary",
           tone: "danger",
+        }),
+        expect.objectContaining({
+          id: "coverage-summary",
+          href: "/dashboard/upload",
+          actionLabel: "Inspect upload data",
         }),
       ]),
     );
@@ -270,6 +275,7 @@ describe("buildCompanyOverviewSnapshot", () => {
         }),
       ]),
     );
+    expect(snapshot.metrics.healthScore).toBe(0);
   });
 
   it("adds an import action when benchmark coverage is still below target", () => {
@@ -298,6 +304,87 @@ describe("buildCompanyOverviewSnapshot", () => {
           href: "/dashboard/upload",
         }),
       ]),
+    );
+  });
+
+  it("falls back to benchmarking when no immediate compensation actions are needed", () => {
+    const snapshot = buildCompanyOverviewSnapshot({
+      employees: [
+        createEmployee({
+          id: "healthy-1",
+          benchmarkContext: { source: "market", matchQuality: "exact" },
+        }),
+        createEmployee({
+          id: "healthy-2",
+          email: "healthy-2@example.com",
+          benchmarkContext: { source: "market", matchQuality: "exact" },
+        }),
+      ],
+      freshness: [],
+      syncLogs: [],
+    });
+
+    expect(snapshot.actions).toEqual([
+      expect.objectContaining({
+        id: "healthy-overview",
+        href: "/dashboard/benchmarks",
+        actionLabel: "Open benchmarking",
+      }),
+    ]);
+  });
+
+  it("normalizes band percentages so overview and department cards add up to 100", () => {
+    const employees: Employee[] = [
+      ...Array.from({ length: 13 }, (_, index) =>
+        createEmployee({
+          id: `eng-in-${index}`,
+          department: "Engineering",
+          bandPosition: "in-band",
+          benchmarkContext: { source: "market", matchQuality: "exact" },
+        }),
+      ),
+      ...Array.from({ length: 70 }, (_, index) =>
+        createEmployee({
+          id: `eng-above-${index}`,
+          department: "Engineering",
+          email: `eng-above-${index}@example.com`,
+          bandPosition: "above",
+          benchmarkContext: { source: "market", matchQuality: "exact" },
+        }),
+      ),
+      ...Array.from({ length: 12 }, (_, index) =>
+        createEmployee({
+          id: `eng-below-${index}`,
+          department: "Engineering",
+          email: `eng-below-${index}@example.com`,
+          bandPosition: "below",
+          benchmarkContext: { source: "market", matchQuality: "exact" },
+        }),
+      ),
+    ];
+
+    const snapshot = buildCompanyOverviewSnapshot({
+      employees,
+      freshness: [],
+      syncLogs: [],
+    });
+
+    expect(snapshot.metrics.bandDistribution).toEqual({
+      inBand: 14,
+      above: 74,
+      below: 12,
+    });
+    expect(
+      snapshot.metrics.bandDistribution.inBand +
+        snapshot.metrics.bandDistribution.above +
+        snapshot.metrics.bandDistribution.below,
+    ).toBe(100);
+    expect(snapshot.departmentSummaries[0]).toEqual(
+      expect.objectContaining({
+        inBandPct: 14,
+        aboveBandPct: 74,
+        belowBandPct: 12,
+      }),
     );
   });
 });

@@ -13,6 +13,8 @@ const insights: ExecutiveInsightsResponse = {
       uniqueLocations: 6,
       uniqueLevels: 5,
       contributorQualifiedRows: 250,
+      lowConfidenceRows: 18,
+      coverageStrength: "strong",
       staleRows: 18,
     },
     topRoles: [],

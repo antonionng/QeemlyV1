@@ -260,6 +260,8 @@ describe("GET /api/admin/executive-insights", () => {
       uniqueLevels: 2,
       contributorQualifiedRows: 2,
       staleRows: 1,
+      lowConfidenceRows: 1,
+      coverageStrength: "developing",
     });
     expect(payload.market.topRoles[0]).toEqual({
       roleId: "swe-devops",

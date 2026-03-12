@@ -1,145 +1,120 @@
 "use client";
 
 import { Card } from "@/components/ui/card";
-import { CheckCircle, AlertCircle, XCircle } from "lucide-react";
-import clsx from "clsx";
 import type { OverviewMetrics } from "@/lib/dashboard/company-overview";
-import { getHealthScorePresentation } from "@/lib/dashboard/overview-card-helpers";
+import { getHealthScoreFactors, getHealthScorePresentation } from "@/lib/dashboard/overview-card-helpers";
 
 interface HealthScoreProps {
   metrics: OverviewMetrics;
 }
 
-function getStrokeColor(score: number): string {
-  if (score >= 60) return "var(--success)";
-  if (score >= 40) return "var(--warning)";
-  return "var(--danger)";
+const FACTOR_COLORS = ["#5A67FF", "#F59E0B", "#FF3B5C"] as const;
+
+function getBadgeStyle(tone: "positive" | "warning" | "critical") {
+  if (tone === "critical") {
+    return {
+      background: "#FFE4EA",
+      color: "#D92D20",
+    };
+  }
+
+  if (tone === "warning") {
+    return {
+      background: "#FEF3C7",
+      color: "#B45309",
+    };
+  }
+
+  return {
+    background: "#DFF7F1",
+    color: "#1C8C6C",
+  };
 }
 
 export function HealthScore({ metrics }: HealthScoreProps) {
   const presentation = getHealthScorePresentation(metrics);
-  const strokeColor = getStrokeColor(metrics.healthScore);
-  const riskDenominator = Math.max(metrics.benchmarkedEmployees, 1);
-  const StatusIcon =
-    presentation.icon === "check-circle"
-      ? CheckCircle
-      : presentation.icon === "alert-circle"
-        ? AlertCircle
-        : XCircle;
-
-  const factors = [
-    {
-      label: "Band Alignment",
-      value: metrics.inBandPercentage,
-      target: 75,
-      description: `${metrics.inBandPercentage}% of employees in band`,
-    },
-    {
-      label: "Market Position",
-      value: Math.max(0, 100 - Math.abs(metrics.avgMarketPosition - 2.5) * 8),
-      target: 85,
-      description: `${metrics.avgMarketPosition >= 0 ? "+" : ""}${metrics.avgMarketPosition}% vs market`,
-    },
-    {
-      label: "Risk Management",
-      value: Math.max(0, 100 - (metrics.payrollRiskFlags / riskDenominator) * 500),
-      target: 90,
-      description: `${metrics.payrollRiskFlags} risk flags`,
-    },
-  ];
-
-  const radius = 58;
-  const stroke = 12;
-  const circumference = 2 * Math.PI * radius;
-  const progress = (metrics.healthScore / 100) * circumference;
+  const factors = getHealthScoreFactors(metrics);
+  const gaugePath = "M 20 160 A 140 140 0 0 1 300 160";
+  const badgeStyle = getBadgeStyle(presentation.tone);
+  const needleAngle = Math.PI - (Math.max(0, Math.min(metrics.healthScore, 100)) / 100) * Math.PI;
+  const needleStartX = 160;
+  const needleStartY = 160;
+  const needleLength = 112;
+  const needleEndX = Number((needleStartX + needleLength * Math.cos(needleAngle)).toFixed(2));
+  const needleEndY = Number((needleStartY - needleLength * Math.sin(needleAngle)).toFixed(2));
 
   return (
-    <Card className="dash-card p-6 h-full flex flex-col">
-      <div className="mb-4">
-        <h3 className="text-sm font-semibold text-accent-900">Compensation Health Score</h3>
-        <p className="text-xs text-accent-500 mt-0.5">Overall assessment of your compensation strategy</p>
-      </div>
+    <Card className="overview-metric-card h-full lg:row-span-2" data-testid="health-score-card">
+      <div>
+        <div className="space-y-1">
+          <h3 className="overview-metric-card-title">Compensation Health Score</h3>
+          <p className="overview-metric-card-description">
+            Overall assessment of your compensation strategy
+          </p>
+        </div>
 
-      <div className="flex flex-col items-center flex-1 justify-center">
-        {/* Gauge */}
-        <div className="relative mb-5">
-          <svg width={144} height={144} viewBox="0 0 144 144">
-            <circle
-              cx="72"
-              cy="72"
-              r={radius}
-              fill="none"
-              stroke="var(--color-accent-200)"
-              strokeWidth={stroke}
-            />
-            <circle
-              cx="72"
-              cy="72"
-              r={radius}
-              fill="none"
-              stroke={strokeColor}
-              strokeWidth={stroke}
-              strokeDasharray={`${progress} ${circumference - progress}`}
-              strokeDashoffset={circumference * 0.25}
-              strokeLinecap="round"
-              className="transition-all duration-500"
-            />
-          </svg>
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className={clsx("text-3xl font-bold", presentation.accentClass)}>
-              {presentation.primaryValue}
-            </span>
-            <span className="mt-0.5 flex items-center gap-1">
-              <StatusIcon className={clsx("h-3.5 w-3.5", presentation.accentClass)} />
-              <span className={clsx("text-xs font-semibold", presentation.accentClass)}>
-                {presentation.secondaryValue}
+        <div className="mt-5">
+          <div className="relative mx-auto w-full max-w-[320px]" data-testid="health-score-gauge">
+            <svg className="w-full" viewBox="0 0 320 200" fill="none" aria-hidden="true">
+              <path
+                d={gaugePath}
+                style={{ stroke: "#E6E7EB" }}
+                strokeWidth={36}
+                strokeLinecap="round"
+                pathLength={100}
+              />
+              <path
+                d={gaugePath}
+                style={{ stroke: "#2EC4A7" }}
+                strokeWidth={36}
+                strokeLinecap="round"
+                pathLength={100}
+                strokeDasharray={`${metrics.healthScore} 100`}
+              />
+              <line
+                x1={needleStartX}
+                y1={needleStartY}
+                x2={needleEndX}
+                y2={needleEndY}
+                style={{ stroke: "#2EC4A7" }}
+                strokeWidth={6}
+                strokeLinecap="round"
+              />
+              <circle cx={needleStartX} cy={needleStartY} r={8} fill="#2EC4A7" />
+            </svg>
+            <div className="absolute inset-x-0 top-[92px] flex flex-col items-center text-center">
+              <span className="text-[56px] font-bold leading-none text-[#0F172A]">
+                {presentation.primaryValue}%
               </span>
-            </span>
+              <span
+                className="mt-5 inline-flex items-center rounded-full px-[14px] py-[6px] text-sm font-semibold"
+                style={badgeStyle}
+              >
+                {presentation.label}
+              </span>
+            </div>
           </div>
         </div>
+      </div>
 
-        <div
-          className={clsx(
-            "mb-5 w-full rounded-xl border px-3 py-2 text-center text-xs font-medium",
-            presentation.tone === "critical"
-              ? "border-rose-200 bg-rose-50 text-rose-700"
-              : presentation.tone === "warning"
-                ? "border-amber-200 bg-amber-50 text-amber-700"
-                : "border-emerald-200 bg-emerald-50 text-emerald-700",
-          )}
-        >
-          {presentation.summary}
-        </div>
-
-        {/* Contributing factors */}
-        <div className="w-full space-y-3">
-          {factors.map((factor) => (
-            <div key={factor.label}>
-              <div className="flex items-center justify-between text-xs mb-1">
-                <span className="font-semibold text-accent-800">{factor.label}</span>
-                <span className="text-accent-500">{factor.description}</span>
-              </div>
-              <div className="h-1.5 bg-accent-100 rounded-full overflow-hidden">
-                <div
-                  className={clsx(
-                    "h-full rounded-full transition-all duration-500",
-                    factor.value >= factor.target
-                      ? "bg-emerald-400"
-                      : factor.value >= factor.target * 0.7
-                      ? "bg-amber-400"
-                      : "bg-rose-400"
-                  )}
-                  style={{ width: `${Math.min(100, factor.value)}%` }}
-                />
-              </div>
+      <div className="mt-8 space-y-5">
+        {factors.map((factor, index) => (
+          <div key={factor.label} className="space-y-2">
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-[16px] font-semibold text-[#0F172A]">{factor.label}</span>
+              <span className="text-[13px] text-[#6B7280]">{factor.description}</span>
             </div>
-          ))}
-        </div>
-        {metrics.benchmarkedEmployees < metrics.activeEmployees && (
-          <p className="mt-4 text-center text-[11px] text-accent-500">
-            Score factors are based on {metrics.benchmarkedEmployees} benchmarked employees.
-          </p>
-        )}
+            <div className="h-2 rounded-full bg-[#E5E7EB]">
+              <div
+                className="h-2 rounded-full transition-all duration-500"
+                style={{
+                  width: `${factor.width}%`,
+                  background: FACTOR_COLORS[index] ?? FACTOR_COLORS[FACTOR_COLORS.length - 1],
+                }}
+              />
+            </div>
+          </div>
+        ))}
       </div>
     </Card>
   );

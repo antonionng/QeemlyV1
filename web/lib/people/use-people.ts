@@ -57,6 +57,10 @@ const DEFAULT_FILTERS: Filters = {
   performance: "all",
 };
 
+function getEmployeeLabel(employee: Employee): string {
+  return employee.displayName || `${employee.firstName} ${employee.lastName}`.trim();
+}
+
 export function usePeople() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
@@ -296,7 +300,7 @@ export function usePeople() {
     const list = employees.filter((employee) => {
       const matchesSearch =
         q.length === 0 ||
-        `${employee.firstName} ${employee.lastName}`.toLowerCase().includes(q) ||
+        getEmployeeLabel(employee).toLowerCase().includes(q) ||
         employee.email.toLowerCase().includes(q) ||
         employee.role.title.toLowerCase().includes(q);
       const matchesDepartment =
@@ -317,7 +321,7 @@ export function usePeople() {
 
     const sorted = [...list];
     sorted.sort((a, b) => {
-      if (sortBy === "name") return `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`);
+      if (sortBy === "name") return getEmployeeLabel(a).localeCompare(getEmployeeLabel(b));
       if (sortBy === "department") return a.department.localeCompare(b.department);
       if (sortBy === "totalComp") return b.totalComp - a.totalComp;
       if (sortBy === "marketComparison") return b.marketComparison - a.marketComparison;

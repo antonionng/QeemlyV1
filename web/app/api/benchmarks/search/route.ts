@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { findMarketBenchmark } from "@/lib/benchmarks/platform-market";
-import type { DbBenchmark } from "@/lib/benchmarks/data-service";
+import { getConfidenceFromSampleSize, type DbBenchmark } from "@/lib/benchmarks/data-service";
 import type { Currency, SalaryBenchmark } from "@/lib/dashboard/dummy-data";
 import { LOCATIONS } from "@/lib/dashboard/dummy-data";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -116,6 +116,7 @@ function transformMarketBenchmark(marketBenchmark: {
   const requestedCompanySize = normalizeFilterValue(filters.companySize);
   const matchedIndustry = normalizeFilterValue(marketBenchmark.industry);
   const matchedCompanySize = normalizeFilterValue(marketBenchmark.company_size);
+  const sampleSize = marketBenchmark.sample_size || 0;
 
   return {
     roleId: marketBenchmark.role_id,
@@ -129,8 +130,8 @@ function transformMarketBenchmark(marketBenchmark: {
       p75: marketBenchmark.p75,
       p90: marketBenchmark.p90,
     },
-    sampleSize: marketBenchmark.sample_size || 0,
-    confidence: "High",
+    sampleSize,
+    confidence: getConfidenceFromSampleSize(sampleSize),
     lastUpdated: new Date().toISOString(),
     momChange: 0,
     yoyChange: 0,

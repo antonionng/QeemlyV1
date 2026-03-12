@@ -92,15 +92,11 @@ const criticalMetrics: CompanyMetrics = {
 };
 
 describe("company vs market helpers", () => {
-  it("defines separate overview routes for company, market, and benchmark drill-down", () => {
+  it("defines overview routes for company and benchmark drill-down only", () => {
     expect(getDashboardOverviewRoutes()).toEqual([
       {
         href: "/dashboard/overview",
         label: "Company Overview",
-      },
-      {
-        href: "/dashboard/market",
-        label: "Market Overview",
       },
       {
         href: "/dashboard/benchmarks",

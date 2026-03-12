@@ -15,11 +15,16 @@ import {
   createSalaryReviewProposal,
   fetchApprovalQueueSalaryReviewProposals,
   fetchLatestSalaryReviewProposal,
+  fetchSalaryReviewCycles,
   fetchSalaryReviewProposalDetail,
   reviewSalaryReviewProposal,
   submitSalaryReviewProposal,
   updateSalaryReviewProposal,
 } from "./proposal-api";
+import {
+  DEFAULT_SALARY_REVIEW_QUERY_STATE,
+  type SalaryReviewQueryState,
+} from "./url-state";
 import type {
   SalaryReviewApprovalStepRecord,
   SalaryReviewAuditEventRecord,
@@ -95,6 +100,7 @@ export const DEFAULT_VISIBLE_COLUMNS: ColumnKey[] = [
   "name",
   "role",
   "department",
+  "location",
   "current",
   "proposed",
   "increase",
@@ -102,18 +108,35 @@ export const DEFAULT_VISIBLE_COLUMNS: ColumnKey[] = [
   "performance",
 ];
 
+export const SALARY_REVIEW_VISIBLE_COLUMNS_STORAGE_KEY = "salaryReviewVisibleColumns";
+
+export type SalaryReviewFilters = Omit<SalaryReviewQueryState, "tab" | "proposalId">;
+
+export const DEFAULT_SALARY_REVIEW_FILTERS: SalaryReviewFilters = {
+  department: DEFAULT_SALARY_REVIEW_QUERY_STATE.department,
+  location: DEFAULT_SALARY_REVIEW_QUERY_STATE.location,
+  pool: DEFAULT_SALARY_REVIEW_QUERY_STATE.pool,
+  benchmarkStatus: DEFAULT_SALARY_REVIEW_QUERY_STATE.benchmarkStatus,
+  workflowStatus: DEFAULT_SALARY_REVIEW_QUERY_STATE.workflowStatus,
+  bandFilter: DEFAULT_SALARY_REVIEW_QUERY_STATE.bandFilter,
+  performance: DEFAULT_SALARY_REVIEW_QUERY_STATE.performance,
+  search: DEFAULT_SALARY_REVIEW_QUERY_STATE.search,
+};
+
 export interface SalaryReviewState {
   // Settings
   settings: ReviewSettings;
   
   // Column visibility
   visibleColumns: ColumnKey[];
+  filters: SalaryReviewFilters;
   
   // Employees
   employees: ReviewEmployee[];
   workflowByEmployee: Record<string, EmployeeWorkflowState>;
   isLoading: boolean;
   isUsingMockData: boolean;
+  cycles: SalaryReviewProposalRecord[];
   activeProposal: SalaryReviewProposalRecord | null;
   proposalItemsByEmployee: Record<string, SalaryReviewProposalItemRecord>;
   approvalSteps: SalaryReviewApprovalStepRecord[];
@@ -129,6 +152,7 @@ export interface SalaryReviewState {
   selectedApprovalAuditEvents: SalaryReviewAuditEventRecord[];
   isApprovalQueueLoading: boolean;
   isApprovalDetailLoading: boolean;
+  draftChanges: Record<string, number>;
   
   // Computed
   totalCurrentPayroll: number;
@@ -140,6 +164,8 @@ export interface SalaryReviewState {
   // Actions
   updateSettings: (settings: Partial<ReviewSettings>) => void;
   updateEmployeeIncrease: (employeeId: string, increase: number) => void;
+  updateFilters: (filters: Partial<SalaryReviewFilters>) => void;
+  resetFilters: () => void;
   toggleEmployeeSelection: (employeeId: string) => void;
   toggleColumnVisibility: (column: ColumnKey) => void;
   resetColumns: () => void;
@@ -154,6 +180,8 @@ export interface SalaryReviewState {
   ) => void;
   applySuggestedIncrease: (employeeId: string) => void;
   applyAiProposal: (plan: SalaryReviewAiPlanResponse, selectedEmployeeIds?: string[]) => void;
+  loadCycles: () => Promise<void>;
+  selectCycle: (proposalId: string) => Promise<void>;
   loadLatestProposal: () => Promise<void>;
   loadApprovalProposalList: () => Promise<void>;
   loadApprovalProposalDetail: (proposalId: string) => Promise<void>;
@@ -259,6 +287,61 @@ function sortProposalQueue(proposals: SalaryReviewProposalRecord[]) {
     const leftTime = new Date(left.updated_at || left.created_at || 0).getTime();
     return rightTime - leftTime;
   });
+}
+
+function sortCycleList(proposals: SalaryReviewProposalRecord[]) {
+  return [...proposals].sort((left, right) => {
+    const rightTime = new Date(right.updated_at || right.created_at || 0).getTime();
+    const leftTime = new Date(left.updated_at || left.created_at || 0).getTime();
+    return rightTime - leftTime;
+  });
+}
+
+function upsertCycleInList(
+  proposals: SalaryReviewProposalRecord[],
+  proposal: SalaryReviewProposalRecord | null
+) {
+  if (!proposal) {
+    return proposals;
+  }
+
+  const withoutCurrent = proposals.filter((existing) => existing.id !== proposal.id);
+  return sortCycleList([proposal, ...withoutCurrent]);
+}
+
+function readStoredVisibleColumnsPreference() {
+  if (typeof globalThis.localStorage === "undefined") {
+    return DEFAULT_VISIBLE_COLUMNS;
+  }
+
+  try {
+    const raw = globalThis.localStorage.getItem(SALARY_REVIEW_VISIBLE_COLUMNS_STORAGE_KEY);
+    if (!raw) {
+      return DEFAULT_VISIBLE_COLUMNS;
+    }
+    const parsed = JSON.parse(raw) as string[];
+    const validated = parsed.filter((value): value is ColumnKey =>
+      ALL_COLUMNS.some((column) => column.key === value)
+    );
+    return validated.length > 0 ? validated : DEFAULT_VISIBLE_COLUMNS;
+  } catch {
+    return DEFAULT_VISIBLE_COLUMNS;
+  }
+}
+
+function persistVisibleColumnsPreference(columns: ColumnKey[]) {
+  if (typeof globalThis.localStorage === "undefined") {
+    return;
+  }
+
+  try {
+    globalThis.localStorage.setItem(
+      SALARY_REVIEW_VISIBLE_COLUMNS_STORAGE_KEY,
+      JSON.stringify(columns)
+    );
+  } catch {
+    // Ignore storage failures and keep the in-memory selection.
+  }
 }
 
 function upsertProposalInQueue(
@@ -504,11 +587,13 @@ export const useSalaryReview = create<SalaryReviewState>()(
       
       return {
         settings: DEFAULT_SETTINGS,
-        visibleColumns: DEFAULT_VISIBLE_COLUMNS,
+        visibleColumns: readStoredVisibleColumnsPreference(),
+        filters: DEFAULT_SALARY_REVIEW_FILTERS,
         employees: initialEmployees,
         workflowByEmployee: initialWorkflowByEmployee,
         isLoading: false,
         isUsingMockData: false,
+        cycles: [],
         activeProposal: null,
         proposalItemsByEmployee: {},
         approvalSteps: [],
@@ -524,6 +609,7 @@ export const useSalaryReview = create<SalaryReviewState>()(
         selectedApprovalAuditEvents: [],
         isApprovalQueueLoading: false,
         isApprovalDetailLoading: false,
+        draftChanges: {},
         totalCurrentPayroll,
         totalProposedPayroll: totalCurrentPayroll,
         totalIncrease: 0,
@@ -533,14 +619,25 @@ export const useSalaryReview = create<SalaryReviewState>()(
         toggleColumnVisibility: (column) => set((state) => {
           const isVisible = state.visibleColumns.includes(column);
           if (column === "name") return state;
+          const nextColumns = isVisible
+            ? state.visibleColumns.filter((c) => c !== column)
+            : [...state.visibleColumns, column];
+          persistVisibleColumnsPreference(nextColumns);
           return {
-            visibleColumns: isVisible
-              ? state.visibleColumns.filter((c) => c !== column)
-              : [...state.visibleColumns, column],
+            visibleColumns: nextColumns,
           };
         }),
 
-        resetColumns: () => set({ visibleColumns: DEFAULT_VISIBLE_COLUMNS }),
+        resetColumns: () => {
+          persistVisibleColumnsPreference(DEFAULT_VISIBLE_COLUMNS);
+          set({ visibleColumns: DEFAULT_VISIBLE_COLUMNS });
+        },
+
+        updateFilters: (filters) => set((state) => ({
+          filters: { ...state.filters, ...filters },
+        })),
+
+        resetFilters: () => set({ filters: DEFAULT_SALARY_REVIEW_FILTERS }),
 
         updateSettings: (newSettings) => set((state) => {
           const updatedSettings = { ...state.settings, ...newSettings };
@@ -570,6 +667,10 @@ export const useSalaryReview = create<SalaryReviewState>()(
           
           return {
             employees,
+            draftChanges: {
+              ...state.draftChanges,
+              [employeeId]: increase,
+            },
             ...computeReviewTotals(employees, state.totalCurrentPayroll, state.settings),
           };
         }),
@@ -580,6 +681,7 @@ export const useSalaryReview = create<SalaryReviewState>()(
           );
           return {
             employees,
+            draftChanges: {},
             ...computeReviewTotals(employees, state.totalCurrentPayroll, state.settings),
           };
         }),
@@ -629,6 +731,7 @@ export const useSalaryReview = create<SalaryReviewState>()(
           const employees = clearReviewEmployees(state.employees);
           return {
             settings,
+            filters: DEFAULT_SALARY_REVIEW_FILTERS,
             employees,
             workflowByEmployee: buildWorkflowMap(employees),
             activeProposal: null,
@@ -643,6 +746,7 @@ export const useSalaryReview = create<SalaryReviewState>()(
             selectedApprovalSteps: [],
             selectedApprovalNotes: [],
             selectedApprovalAuditEvents: [],
+            draftChanges: {},
             ...computeReviewTotals(employees, state.totalCurrentPayroll, settings),
           };
         }),
@@ -752,9 +856,59 @@ export const useSalaryReview = create<SalaryReviewState>()(
 
           return {
             employees,
+            draftChanges: Object.fromEntries(
+              employees
+                .filter((employee) => employee.proposedIncrease > 0)
+                .map((employee) => [employee.id, employee.proposedIncrease])
+            ),
             ...computeReviewTotals(employees, state.totalCurrentPayroll, state.settings),
           };
         }),
+
+        loadCycles: async () => {
+          set({ isProposalLoading: true });
+          try {
+            const response = await fetchSalaryReviewCycles();
+            set({
+              cycles: sortCycleList(response.proposals),
+              isProposalLoading: false,
+            });
+          } catch (error) {
+            set({ isProposalLoading: false });
+            throw error;
+          }
+        },
+
+        selectCycle: async (proposalId) => {
+          set({ isProposalLoading: true });
+          try {
+            const detail = await fetchSalaryReviewProposalDetail(proposalId);
+            set((state) => {
+              const employees = applyProposalItemsToEmployees(state.employees, detail.items);
+              const settings = buildSettingsFromProposal(detail.proposal, state.settings);
+              return {
+                cycles: upsertCycleInList(state.cycles, detail.proposal),
+                activeProposal: detail.proposal,
+                proposalItemsByEmployee: buildProposalItemMap(detail.items),
+                approvalSteps: detail.approvalSteps,
+                proposalNotes: detail.notes,
+                proposalAuditEvents: detail.auditEvents,
+                settings,
+                employees,
+                draftChanges: Object.fromEntries(
+                  employees
+                    .filter((employee) => employee.proposedIncrease > 0)
+                    .map((employee) => [employee.id, employee.proposedIncrease])
+                ),
+                ...computeReviewTotals(employees, state.totalCurrentPayroll, settings),
+                isProposalLoading: false,
+              };
+            });
+          } catch (error) {
+            set({ isProposalLoading: false });
+            throw error;
+          }
+        },
 
         loadLatestProposal: async () => {
           set({ isProposalLoading: true });
@@ -767,6 +921,7 @@ export const useSalaryReview = create<SalaryReviewState>()(
                 approvalSteps: [],
                 proposalNotes: [],
                 proposalAuditEvents: [],
+                draftChanges: {},
                 isProposalLoading: false,
               });
               return;
@@ -776,6 +931,7 @@ export const useSalaryReview = create<SalaryReviewState>()(
               const employees = applyProposalItemsToEmployees(state.employees, detail.items);
               const settings = buildSettingsFromProposal(detail.proposal, state.settings);
               return {
+                cycles: upsertCycleInList(state.cycles, detail.proposal),
                 activeProposal: detail.proposal,
                 proposalItemsByEmployee: buildProposalItemMap(detail.items),
                 approvalSteps: detail.approvalSteps,
@@ -783,6 +939,11 @@ export const useSalaryReview = create<SalaryReviewState>()(
                 proposalAuditEvents: detail.auditEvents,
                 settings,
                 employees,
+                draftChanges: Object.fromEntries(
+                  employees
+                    .filter((employee) => employee.proposedIncrease > 0)
+                    .map((employee) => [employee.id, employee.proposedIncrease])
+                ),
                 ...computeReviewTotals(employees, state.totalCurrentPayroll, settings),
                 isProposalLoading: false,
               };
@@ -932,6 +1093,7 @@ export const useSalaryReview = create<SalaryReviewState>()(
               : await createSalaryReviewProposal(draftBody);
 
             set((current) => ({
+              cycles: upsertCycleInList(current.cycles, detail.proposal),
               activeProposal: detail.proposal,
               proposalItemsByEmployee: buildProposalItemMap(detail.items),
               approvalSteps: detail.approvalSteps,
@@ -948,6 +1110,11 @@ export const useSalaryReview = create<SalaryReviewState>()(
                   }
                 : current.settings,
               employees: applyProposalItemsToEmployees(current.employees, detail.items),
+              draftChanges: Object.fromEntries(
+                applyProposalItemsToEmployees(current.employees, detail.items)
+                  .filter((employee) => employee.proposedIncrease > 0)
+                  .map((employee) => [employee.id, employee.proposedIncrease])
+              ),
               ...computeReviewTotals(
                 applyProposalItemsToEmployees(current.employees, detail.items),
                 current.totalCurrentPayroll,
@@ -977,6 +1144,7 @@ export const useSalaryReview = create<SalaryReviewState>()(
           try {
             const detail = await submitSalaryReviewProposal(proposalId);
             set((state) => ({
+              cycles: upsertCycleInList(state.cycles, detail.proposal),
               activeProposal: detail.proposal,
               proposalItemsByEmployee: buildProposalItemMap(detail.items),
               approvalSteps: detail.approvalSteps,
@@ -990,6 +1158,11 @@ export const useSalaryReview = create<SalaryReviewState>()(
               selectedApprovalNotes: detail.notes,
               selectedApprovalAuditEvents: detail.auditEvents,
               employees: applyProposalItemsToEmployees(state.employees, detail.items),
+              draftChanges: Object.fromEntries(
+                applyProposalItemsToEmployees(state.employees, detail.items)
+                  .filter((employee) => employee.proposedIncrease > 0)
+                  .map((employee) => [employee.id, employee.proposedIncrease])
+              ),
               ...computeReviewTotals(
                 applyProposalItemsToEmployees(state.employees, detail.items),
                 state.totalCurrentPayroll,
@@ -1010,6 +1183,7 @@ export const useSalaryReview = create<SalaryReviewState>()(
           try {
             const detail = await reviewSalaryReviewProposal(proposalId, { action, note });
             set((state) => ({
+              cycles: upsertCycleInList(state.cycles, detail.proposal),
               activeProposal: detail.proposal,
               proposalItemsByEmployee: buildProposalItemMap(detail.items),
               approvalSteps: detail.approvalSteps,
@@ -1041,6 +1215,11 @@ export const useSalaryReview = create<SalaryReviewState>()(
                   ? detail.auditEvents
                   : state.selectedApprovalAuditEvents,
               employees: applyProposalItemsToEmployees(state.employees, detail.items),
+              draftChanges: Object.fromEntries(
+                applyProposalItemsToEmployees(state.employees, detail.items)
+                  .filter((employee) => employee.proposedIncrease > 0)
+                  .map((employee) => [employee.id, employee.proposedIncrease])
+              ),
               ...computeReviewTotals(
                 applyProposalItemsToEmployees(state.employees, detail.items),
                 state.totalCurrentPayroll,
@@ -1066,12 +1245,18 @@ export const useSalaryReview = create<SalaryReviewState>()(
             const detail = await fetchLatestSalaryReviewProposal();
             if (!detail.proposal) return;
             set((state) => ({
+              cycles: upsertCycleInList(state.cycles, detail.proposal),
               activeProposal: detail.proposal,
               proposalItemsByEmployee: buildProposalItemMap(detail.items),
               approvalSteps: detail.approvalSteps,
               proposalNotes: detail.notes,
               proposalAuditEvents: detail.auditEvents,
               employees: applyProposalItemsToEmployees(state.employees, detail.items),
+              draftChanges: Object.fromEntries(
+                applyProposalItemsToEmployees(state.employees, detail.items)
+                  .filter((employee) => employee.proposedIncrease > 0)
+                  .map((employee) => [employee.id, employee.proposedIncrease])
+              ),
               ...computeReviewTotals(
                 applyProposalItemsToEmployees(state.employees, detail.items),
                 state.totalCurrentPayroll,
@@ -1088,6 +1273,7 @@ export const useSalaryReview = create<SalaryReviewState>()(
       name: "qeemly:salary-review",
       partialize: (state) => ({
         settings: state.settings,
+        filters: state.filters,
         visibleColumns: state.visibleColumns,
         workflowByEmployee: state.workflowByEmployee,
       }),

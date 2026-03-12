@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  fetchSalaryReviewCycles,
   fetchApprovalQueueSalaryReviewProposals,
   fetchLatestSalaryReviewProposal,
   fetchSalaryReviewProposalDetail,
@@ -46,6 +47,25 @@ describe("salary review proposal api", () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/salary-review/proposals?approvalQueue=1",
+      { cache: "no-store" }
+    );
+  });
+
+  it("fetches the salary review cycle list for the overview workspace", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          proposals: [],
+        }),
+        { status: 200 }
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await fetchSalaryReviewCycles();
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/salary-review/proposals?view=cycles",
       { cache: "no-store" }
     );
   });

@@ -37,6 +37,10 @@ describe("fetchUploadVerificationSummary", () => {
     expect(summary?.details).toContain(
       "2 still need role, level, or location mapping before they can influence company insights.",
     );
+    expect(summary?.links).toEqual([
+      { href: "/dashboard/overview", label: "Open Company Overview" },
+      { href: "/dashboard/salary-review", label: "Open Salary Review" },
+    ]);
   });
 
   it("summarizes benchmark uploads using market insights overlay data", async () => {
@@ -67,6 +71,10 @@ describe("fetchUploadVerificationSummary", () => {
     expect(summary?.details).toContain(
       "28 contributor-qualified rows belong to the shared Qeemly market pool, not your uploaded company overlay.",
     );
+    expect(summary?.links).toEqual([
+      { href: "/dashboard/benchmarks", label: "Open Benchmarking" },
+      { href: "/dashboard/salary-review", label: "Open Salary Review" },
+    ]);
   });
 
   it("falls back to the uploaded batch count when aggregate overlay refresh has not caught up yet", async () => {
@@ -96,5 +104,9 @@ describe("fetchUploadVerificationSummary", () => {
     expect(summary?.details).toContain(
       "0 contributor-qualified rows belong to the shared Qeemly market pool, not your uploaded company overlay.",
     );
+    expect(summary?.links).toEqual([
+      { href: "/dashboard/benchmarks", label: "Open Benchmarking" },
+      { href: "/dashboard/salary-review", label: "Open Salary Review" },
+    ]);
   });
 });

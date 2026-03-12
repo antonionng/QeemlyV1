@@ -26,6 +26,7 @@ export interface Employee {
   id: string;
   firstName: string;
   lastName: string;
+  displayName?: string;
   email: string;
   avatar?: string;
   visaExpiryDate?: Date;

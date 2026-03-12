@@ -42,7 +42,7 @@ function buildBenchmarkSegmentation(
   };
 }
 
-function getConfidenceFromSampleSize(sampleSize: number): "High" | "Medium" | "Low" {
+export function getConfidenceFromSampleSize(sampleSize: number): "High" | "Medium" | "Low" {
   if (sampleSize >= 20) return "High";
   if (sampleSize >= 8) return "Medium";
   return "Low";

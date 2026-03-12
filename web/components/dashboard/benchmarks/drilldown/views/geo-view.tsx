@@ -12,12 +12,7 @@ interface GeoViewProps {
   result: BenchmarkResult;
 }
 
-// Extended locations including UK
-const ALL_LOCATIONS = [
-  { id: "london", city: "London", country: "United Kingdom", countryCode: "GB", currency: "GBP" as const, flag: "GB" },
-  { id: "manchester", city: "Manchester", country: "United Kingdom", countryCode: "GB", currency: "GBP" as const, flag: "GB" },
-  ...LOCATIONS,
-];
+const ALL_LOCATIONS = LOCATIONS;
 
 export function GeoView({ result }: GeoViewProps) {
   const { role, level, location } = result;
@@ -33,8 +28,7 @@ export function GeoView({ result }: GeoViewProps) {
     const run = async () => {
       const entries = await Promise.all(
         ALL_LOCATIONS.map(async (loc) => {
-          const sourceLocationId = loc.id === "london" || loc.id === "manchester" ? "dubai" : loc.id;
-          const benchmark = await getBenchmark(role.id, sourceLocationId, level.id, {
+          const benchmark = await getBenchmark(role.id, loc.id, level.id, {
             industry: result.formData.industry,
             companySize: result.formData.companySize,
           });
@@ -59,9 +53,6 @@ export function GeoView({ result }: GeoViewProps) {
     const targetCurrency = loc.currency;
     let sourceMedian = bench.percentiles.p50;
     
-    // Apply location adjustments
-    if (loc.id === "london") sourceMedian = Math.round(sourceMedian * 1.1);
-    if (loc.id === "manchester") sourceMedian = Math.round(sourceMedian * 0.85);
     const median = toBenchmarkDisplayValue(sourceMedian, {
       salaryView,
       sourceCurrency,
@@ -134,8 +125,7 @@ export function GeoView({ result }: GeoViewProps) {
               }`}
             >
               <div className="w-6 text-center text-lg">
-                {item.location.countryCode === "GB" ? "🇬🇧" : 
-                 item.location.countryCode === "AE" ? "🇦🇪" :
+                {item.location.countryCode === "AE" ? "🇦🇪" :
                  item.location.countryCode === "SA" ? "🇸🇦" :
                  item.location.countryCode === "QA" ? "🇶🇦" :
                  item.location.countryCode === "BH" ? "🇧🇭" :

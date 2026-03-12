@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { ArrowRight, FileDown, Upload, Users } from "lucide-react";
+import { ArrowRight, FileDown, Upload } from "lucide-react";
 import Link from "next/link";
 
 type ReviewActionCardsProps = {
@@ -32,15 +32,15 @@ export function ReviewActionCards({
         cta="Open Benchmarking"
       />
       <ActionCard
-        title="Review People Data"
+        title="Refresh Employee Inputs"
         body={
           selectedEmployees === 0
-            ? "Select the employee population you want to review, then come back here to build a proposal."
-            : `${selectedEmployees} employees are currently selected. Use People to fix role, level, or location gaps.`
+            ? "Upload the employee population you want to review, then come back here to build a proposal."
+            : `${selectedEmployees} employees are currently selected. Use Upload Data to fix role, level, or location gaps.`
         }
-        href="/dashboard/people"
-        cta="Open People"
-        icon={<Users className="h-4 w-4" />}
+        href="/dashboard/upload"
+        cta="Open Upload Data"
+        icon={<Upload className="h-4 w-4" />}
       />
       <ActionCard
         title={proposedEmployees > 0 ? "Export Current Selection" : "Strengthen Coverage"}

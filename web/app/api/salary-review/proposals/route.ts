@@ -17,12 +17,13 @@ export async function GET(request: NextRequest) {
 
   const latestOnly = request.nextUrl.searchParams.get("latest") === "1";
   const approvalQueueOnly = request.nextUrl.searchParams.get("approvalQueue") === "1";
+  const view = request.nextUrl.searchParams.get("view");
   let baseQuery = supabase
     .from("salary_review_cycles")
     .select("*")
     .eq("workspace_id", wsContext.context.workspace_id);
 
-  if (approvalQueueOnly) {
+  if (approvalQueueOnly && view !== "cycles") {
     baseQuery = baseQuery.neq("status", "draft");
   }
 

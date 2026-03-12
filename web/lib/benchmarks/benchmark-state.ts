@@ -2,9 +2,9 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { 
-  type Role, 
-  type Level, 
+import {
+  type Role,
+  type Level,
   type Location,
   type SalaryBenchmark,
   ROLES,
@@ -75,17 +75,18 @@ function generateId(): string {
 function generateFilterName(formData: BenchmarkFormData): string {
   const role = ROLES.find(r => r.id === formData.roleId);
   const level = LEVELS.find(l => l.id === formData.levelId);
-  const location = EXTENDED_LOCATIONS.find(l => l.id === formData.locationId);
-  
+  const location = BENCHMARK_LOCATIONS.find(l => l.id === formData.locationId);
+
   const parts = [];
   if (role) parts.push(role.title);
   if (location) parts.push(location.city);
   if (level) parts.push(level.name);
-  
+
   return parts.join(", ") || "Unnamed Filter";
 }
 
 export interface BenchmarkState {
+  workspaceId: string | null;
   // Form state
   formData: BenchmarkFormData;
   isFormComplete: boolean;
@@ -102,6 +103,7 @@ export interface BenchmarkState {
   detailTab: BenchmarkDetailTabId;
   
   // Form actions
+  reconcileWorkspace: (workspaceId: string | null) => void;
   updateFormField: <K extends keyof BenchmarkFormData>(field: K, value: BenchmarkFormData[K]) => void;
   resetForm: () => void;
   runBenchmark: () => Promise<void>;
@@ -146,6 +148,7 @@ function isFormComplete(form: BenchmarkFormData): boolean {
 export const useBenchmarkState = create<BenchmarkState>()(
   persist(
     (set, get) => ({
+      workspaceId: null,
       formData: { ...DEFAULT_FORM_DATA },
       isFormComplete: false,
       currentResult: null,
@@ -153,6 +156,27 @@ export const useBenchmarkState = create<BenchmarkState>()(
       savedFilters: [],
       step: "form",
       detailTab: getDefaultBenchmarkDetailTab(),
+
+      reconcileWorkspace: (workspaceId) => {
+        if (!workspaceId) return;
+
+        set((state) => {
+          if (state.workspaceId === workspaceId) {
+            return state;
+          }
+
+          return {
+            workspaceId,
+            formData: { ...DEFAULT_FORM_DATA },
+            isFormComplete: false,
+            currentResult: null,
+            recentResults: [],
+            savedFilters: [],
+            step: "form",
+            detailTab: getDefaultBenchmarkDetailTab(),
+          };
+        });
+      },
       
       updateFormField: (field, value) => {
         set((state) => {
@@ -190,14 +214,10 @@ export const useBenchmarkState = create<BenchmarkState>()(
         
         const role = ROLES.find(r => r.id === resolvedFormData.roleId)!;
         const level = LEVELS.find(l => l.id === resolvedFormData.levelId)!;
-        const location = LOCATIONS.find(l => l.id === resolvedFormData.locationId) || {
-          id: "london",
-          city: "London",
-          country: "United Kingdom",
-          countryCode: "GB",
-          currency: "GBP" as const,
-          flag: "GB",
-        };
+        const location = BENCHMARK_LOCATIONS.find(l => l.id === resolvedFormData.locationId);
+        if (!location) {
+          return;
+        }
         
         const benchmark = await getBenchmark(
           resolvedFormData.roleId!,
@@ -335,17 +355,8 @@ export const useBenchmarkState = create<BenchmarkState>()(
   )
 );
 
-// Extended locations for UK focus
-export const EXTENDED_LOCATIONS: Location[] = [
-  { id: "london", city: "London", country: "United Kingdom", countryCode: "GB", currency: "GBP", flag: "GB" },
-  { id: "manchester", city: "Manchester", country: "United Kingdom", countryCode: "GB", currency: "GBP", flag: "GB" },
-  { id: "birmingham", city: "Birmingham", country: "United Kingdom", countryCode: "GB", currency: "GBP", flag: "GB" },
-  { id: "edinburgh", city: "Edinburgh", country: "United Kingdom", countryCode: "GB", currency: "GBP", flag: "GB" },
-  { id: "bristol", city: "Bristol", country: "United Kingdom", countryCode: "GB", currency: "GBP", flag: "GB" },
-  ...LOCATIONS,
-];
+export const BENCHMARK_LOCATIONS: Location[] = LOCATIONS;
 
-// Get location by ID
-export function getExtendedLocation(id: string): Location | undefined {
-  return EXTENDED_LOCATIONS.find(l => l.id === id);
+export function getBenchmarkLocation(id: string): Location | undefined {
+  return BENCHMARK_LOCATIONS.find((location) => location.id === id);
 }

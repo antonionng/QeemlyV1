@@ -1,7 +1,7 @@
 export type BenchmarkMatchQuality = "exact" | "role_level_fallback";
 
 export type BenchmarkTrustMetadata = {
-  source: "market" | "uploaded" | "dummy";
+  source: "market" | "uploaded";
   provenance?: string | null;
   matchQuality?: BenchmarkMatchQuality | null;
   sampleSize?: number | null;
@@ -29,7 +29,6 @@ type BenchmarkAwareEmployee = {
 export function getBenchmarkSourceLabel(metadata: BenchmarkTrustMetadata | null | undefined): string {
   if (!metadata) return "No benchmark coverage";
   if (metadata.source === "uploaded") return "Company Overlay";
-  if (metadata.source === "dummy") return "Synthetic Benchmark";
   return "Qeemly Market Dataset";
 }
 

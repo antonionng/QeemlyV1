@@ -290,7 +290,7 @@ describe("GET /api/dashboard/company-overview", () => {
     expect(payload.actions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: "outside-band" }),
-        expect.objectContaining({ id: "coverage-gap" }),
+        expect.objectContaining({ id: "coverage-gap", href: "/dashboard/upload" }),
       ]),
     );
     expect(payload.dataHealth.latestBenchmarkFreshness).toEqual({
@@ -299,7 +299,7 @@ describe("GET /api/dashboard/company-overview", () => {
       confidence: "medium",
       recordCount: 85,
     });
-    expect(payload.benchmarkTrust.primarySourceLabel).toBe("Blended market pool");
+    expect(payload.benchmarkTrust.primarySourceLabel).toBe("Qeemly Market Dataset");
     expect(payload.benchmarkTrust.marketBacked).toBeGreaterThan(0);
   });
 

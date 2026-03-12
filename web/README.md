@@ -7,7 +7,6 @@ Frontend-only implementation of the Qeemly marketing site and dashboard shell. S
 ```bash
 # from the repo root
 npm run db:start
-npm run db:reset
 
 # then start the web app
 npm install
@@ -23,8 +22,9 @@ The admin panel does not use mock data. It reads live data from the shared Supab
 - `SUPABASE_SERVICE_ROLE_KEY` is required for most admin routes. If it is missing, the admin API will fail and the dashboard will now show an explicit configuration error instead of empty data.
 - `QEEMLY_SUPERADMINS` must include the email address you use to sign in to `/admin/login`.
 - `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are required for auth/session handling.
-- `PLATFORM_WORKSPACE_ID` is recommended for platform benchmark ingestion and benchmark fallback reads.
-- `npm run db:reset` is the supported way to apply migrations and seed local admin data. The in-app admin seed endpoint is intentionally disabled.
+- `PLATFORM_WORKSPACE_ID` is required for shared market ingestion, shared market seeding, and platform benchmark fallback reads.
+- `npm run db:reset` is only safe against an isolated local database. Automatic demo seeding is disabled by default because `seed_user.sql` clears tenant runtime data.
+- Use `POST /api/admin/market-seed` as the shared-market operator flow after migrations are applied and runtime env is configured.
 - `/admin/freshness`, `/admin/snapshots`, and parts of `/admin` remain empty until ingestion has run at least once.
 
 ## Structure
@@ -60,7 +60,7 @@ Use this after reseeding and when validating superadmin tenant override behavior
 1. Sign in as a superadmin and select tenant A in workspace switcher.
 2. Call `GET /api/compliance` and verify `diagnostics.workspace_id` matches selected tenant (in dev mode).
 3. Call `POST /api/compliance/refresh` and verify the same `workspace_id` is returned.
-4. Go to `/dashboard/people` and confirm headcount differs when switching to tenant B.
+4. Go to `/dashboard/overview` and confirm headcount differs when switching to tenant B.
 5. Run these SQL checks in Supabase SQL editor for the selected tenant id:
 
 ```sql

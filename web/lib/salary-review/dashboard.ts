@@ -14,6 +14,7 @@ type SalaryReviewDashboardModel = {
   history: SalaryReviewProposalRecord[];
   hasDraft: boolean;
   primaryAction: "start-cycle" | "continue-draft";
+  totalCycles: number;
 };
 
 type SalaryReviewWorkspaceVisibility = {
@@ -39,6 +40,7 @@ type BuildReviewFlowModel = {
 
 export function buildSalaryReviewDashboardModel(args: {
   activeProposal: SalaryReviewProposalRecord | null;
+  cycles?: SalaryReviewProposalRecord[];
   approvalQueue: SalaryReviewProposalRecord[];
 }): SalaryReviewDashboardModel {
   const awaitingReview = args.approvalQueue.filter(
@@ -63,7 +65,12 @@ export function buildSalaryReviewDashboardModel(args: {
     history,
     hasDraft,
     primaryAction: hasDraft ? "continue-draft" : "start-cycle",
+    totalCycles: args.cycles?.length ?? 0,
   };
+}
+
+export function shouldRedirectSalaryReviewTab(tab: string | null | undefined) {
+  return tab === "review";
 }
 
 export function getSalaryReviewWorkspaceVisibility(args: {

@@ -4,7 +4,7 @@ export type EmploymentType = "national" | "expat";
 
 export interface OfferBenchmarkSnapshot {
   benchmark_percentiles: Record<string, number>;
-  benchmark_source: "market" | "uploaded" | "dummy";
+  benchmark_source: "market" | "uploaded";
   sample_size?: number;
   confidence?: string;
   last_updated?: string | null;

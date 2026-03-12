@@ -40,7 +40,6 @@ export type LensSummaryCard = {
 export function getDashboardOverviewRoutes(): Array<{ href: string; label: string }> {
   return [
     { href: "/dashboard/overview", label: "Company Overview" },
-    { href: "/dashboard/market", label: "Market Overview" },
     { href: "/dashboard/benchmarks", label: "Benchmarking" },
   ];
 }

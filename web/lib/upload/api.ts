@@ -768,7 +768,7 @@ export async function fetchUploadVerificationSummary(
       ],
       links: [
         { href: "/dashboard/overview", label: "Open Company Overview" },
-        { href: "/dashboard/market", label: "Open Market Overview" },
+        { href: "/dashboard/salary-review", label: "Open Salary Review" },
       ],
     };
   }
@@ -796,7 +796,7 @@ export async function fetchUploadVerificationSummary(
       ],
       links: [
         { href: "/dashboard/benchmarks", label: "Open Benchmarking" },
-        { href: "/dashboard/market", label: "Open Market Overview" },
+        { href: "/dashboard/salary-review", label: "Open Salary Review" },
       ],
     };
   }

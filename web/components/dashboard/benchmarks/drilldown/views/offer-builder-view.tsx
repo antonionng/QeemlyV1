@@ -196,7 +196,7 @@ export function OfferBuilderView({ result }: OfferBuilderViewProps) {
       salary_breakdown: breakdownSnapshot,
       benchmark_snapshot: {
         benchmark_percentiles: benchmark.percentiles,
-        benchmark_source: benchmark.benchmarkSource || "dummy",
+        benchmark_source: benchmark.benchmarkSource || "market",
         sample_size: benchmark.sampleSize,
         confidence: benchmark.confidence,
         last_updated: benchmark.lastUpdated,

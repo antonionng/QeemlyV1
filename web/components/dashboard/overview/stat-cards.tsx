@@ -1,10 +1,7 @@
 "use client";
 
-import { Users, Banknote, Target, AlertTriangle, TrendingUp, TrendingDown } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { formatAEDCompact, type CompanyMetrics } from "@/lib/employees";
-import { useSalaryView, applyViewMode } from "@/lib/salary-view-store";
-import clsx from "clsx";
+import { formatAEDCompact, type CompanyMetrics, type TrendDataPoint } from "@/lib/employees";
 
 interface StatCardsProps {
   metrics: CompanyMetrics;
@@ -14,192 +11,221 @@ interface StatCardsProps {
   };
 }
 
-function MiniBarChart({ data, colors }: { data: number[]; colors: string[] }) {
-  const max = Math.max(...data);
+function buildChartPoints(values: number[], width: number, height: number) {
+  const safeValues = values.length > 1 ? values : [0, ...values];
+  const max = Math.max(...safeValues, 1);
+  const min = Math.min(...safeValues, 0);
+  const range = Math.max(max - min, 1);
+  const stepX = safeValues.length > 1 ? width / (safeValues.length - 1) : width;
+
+  return safeValues.map((value, index) => {
+    const x = Number((index * stepX).toFixed(2));
+    const y = Number((height - ((value - min) / range) * height).toFixed(2));
+
+    return { x, y };
+  });
+}
+
+function buildLinePath(points: Array<{ x: number; y: number }>) {
+  return points
+    .map((point, index) => `${index === 0 ? "M" : "L"} ${point.x} ${point.y}`)
+    .join(" ");
+}
+
+function buildAreaPath(points: Array<{ x: number; y: number }>, width: number, height: number) {
+  const linePath = buildLinePath(points);
+  const lastPoint = points[points.length - 1];
+
+  return `${linePath} L ${lastPoint?.x ?? width} ${height} L 0 ${height} Z`;
+}
+
+function getTrendValues(trend: TrendDataPoint[], fallback: number) {
+  if (trend.length > 0) {
+    return trend.map((point) => point.value);
+  }
+
+  return [fallback * 0.72, fallback * 0.7, fallback * 0.74, fallback * 0.82, fallback * 0.86, fallback];
+}
+
+function buildPayrollBarSeries(trend: TrendDataPoint[], fallback: number) {
+  const labels = ["2023", "2024", "2025", "2026"];
+  const trendValues =
+    trend.length >= 4
+      ? trend.slice(-4).map((point) => point.value)
+      : [fallback * 0.64, fallback * 0.76, fallback * 0.72, fallback];
+
+  return labels.map((label, index) => ({
+    label,
+    value: trendValues[index] ?? fallback,
+    active: index === labels.length - 1,
+  }));
+}
+
+function MetricDelta({ value }: { value: number }) {
+  const isPositive = value >= 0;
+
   return (
-    <div className="flex items-end gap-[3px] h-10">
-      {data.map((v, i) => (
-        <div
-          key={i}
-          className="flex-1 rounded-sm min-w-[4px]"
-          style={{
-            height: `${Math.max(12, (v / max) * 100)}%`,
-            backgroundColor: colors[i % colors.length],
-          }}
+    <div
+      className="mt-2 text-sm font-medium"
+      style={{ color: isPositive ? "#16A34A" : "#DC2626" }}
+    >
+      {isPositive ? "+" : ""}
+      {value}% <span className="font-normal text-[#6B7280]">vs last year</span>
+    </div>
+  );
+}
+
+function ActiveEmployeesSparkline({ trend }: { trend: TrendDataPoint[] }) {
+  const width = 220;
+  const height = 96;
+  const points = buildChartPoints(getTrendValues(trend, 1), width, height - 4);
+  const linePath = buildLinePath(points);
+  const areaPath = buildAreaPath(points, width, height);
+
+  return (
+    <div className="mt-5" data-testid="active-employees-sparkline">
+      <svg className="h-[96px] w-full" viewBox={`0 0 ${width} ${height}`} fill="none" aria-hidden="true">
+        <defs>
+          <linearGradient id="activeEmployeesSparklineFill" x1="0" y1="0" x2="0" y2={height}>
+            <stop offset="0%" stopColor="rgba(124,127,240,0.25)" />
+            <stop offset="100%" stopColor="rgba(124,127,240,0)" />
+          </linearGradient>
+        </defs>
+        <path d={areaPath} style={{ fill: "url(#activeEmployeesSparklineFill)" }} />
+        <path
+          d={linePath}
+          style={{ stroke: "#7C7FF0" }}
+          strokeWidth={3}
+          strokeLinecap="round"
+          strokeLinejoin="round"
         />
+      </svg>
+    </div>
+  );
+}
+
+function TotalPayrollBars({ trend }: { trend: TrendDataPoint[] }) {
+  const series = buildPayrollBarSeries(trend, 1);
+  const max = Math.max(...series.map((item) => item.value), 1);
+
+  return (
+    <div className="mt-5 flex items-end gap-[14px]">
+      {series.map((item) => (
+        <div key={item.label} className="flex flex-col items-center gap-2">
+          <div
+            className="w-7 rounded-[8px]"
+            style={{
+              height: `${Math.max(56, (item.value / max) * 120)}px`,
+              background: item.active ? "#7C7FF0" : "#E5E7EB",
+            }}
+          />
+          <span className="text-[11px] font-medium text-[#6B7280]">{item.label}</span>
+        </div>
       ))}
     </div>
   );
 }
 
-function StackedBar({ segments }: { segments: { pct: number; color: string }[] }) {
+function InBandDistribution({
+  inBandPercentage,
+  segments,
+}: {
+  inBandPercentage: number;
+  segments: { inBand: number; above: number; below: number };
+}) {
   return (
-    <div className="flex h-4 w-full rounded-full overflow-hidden">
-      {segments.map((s, i) => (
-        <div
-          key={i}
-          style={{ width: `${s.pct}%`, backgroundColor: s.color }}
-          className="transition-all duration-500"
-        />
-      ))}
-    </div>
+    <>
+      <div
+        className="mt-5 flex h-7 overflow-hidden rounded-[10px]"
+        data-testid="in-band-distribution"
+      >
+        <div style={{ width: `${segments.inBand}%`, background: "#7BC8AE" }} />
+        <div style={{ width: `${segments.above}%`, background: "#F2C98A" }} />
+        <div style={{ width: `${segments.below}%`, background: "#E88FA1" }} />
+      </div>
+      <div className="mt-4">
+        <span className="overview-metric-card-value">{inBandPercentage}%</span>
+      </div>
+    </>
   );
 }
 
-export function StatCards({ metrics, benchmarkCoverage }: StatCardsProps) {
-  const { salaryView } = useSalaryView();
-  const coveragePct =
-    benchmarkCoverage && benchmarkCoverage.activeEmployees > 0
-      ? Math.round((benchmarkCoverage.benchmarkedEmployees / benchmarkCoverage.activeEmployees) * 100)
-      : null;
-  const coverageBadgeClass =
-    typeof coveragePct !== "number"
-      ? ""
-      : coveragePct >= 90
-        ? "bg-emerald-100 text-emerald-700"
-        : coveragePct >= 60
-          ? "bg-amber-100 text-amber-700"
-          : "bg-rose-100 text-rose-700";
-
-  const headcountBars = metrics.headcountTrend.slice(-6).map(d => d.value);
-  const payrollBars = metrics.payrollTrend.slice(-6).map(d => d.value);
-
-  const headcountColors = [
-    "var(--color-brand-200)",
-    "var(--color-brand-300)",
-    "var(--color-brand-400)",
-    "var(--color-brand-100)",
-    "var(--color-brand-200)",
-    "var(--color-brand-500)",
-  ];
-  const payrollColors = [
-    "var(--color-brand-200)",
-    "var(--color-brand-300)",
-    "var(--color-brand-500)",
-    "var(--color-brand-200)",
-    "var(--color-brand-400)",
-    "var(--color-brand-600)",
-  ];
-
-  const stats = [
-    {
-      label: "Active Employees",
-      value: metrics.activeEmployees.toString(),
-      subtext: `${metrics.totalEmployees} total`,
-      icon: Users,
-      color: "text-brand-600",
-      bgColor: "bg-brand-50",
-      change: metrics.headcountChange,
-      changeLabel: "vs last year",
-      chart: <MiniBarChart data={headcountBars} colors={headcountColors} />,
-    },
-    {
-      label: "Total Payroll",
-      value: formatAEDCompact(applyViewMode(metrics.totalPayroll, salaryView)),
-      subtext: salaryView === "monthly" ? "Monthly compensation" : "Annual compensation",
-      icon: Banknote,
-      color: "text-emerald-600",
-      bgColor: "bg-emerald-50",
-      change: metrics.payrollChange,
-      changeLabel: "vs last year",
-      chart: <MiniBarChart data={payrollBars} colors={payrollColors} />,
-    },
-    {
-      label: "In Band",
-      value: `${metrics.inBandPercentage}%`,
-      subtext: `${metrics.outOfBandPercentage}% outside band`,
-      coverageBadge: coveragePct,
-      icon: Target,
-      color: "text-emerald-600",
-      bgColor: "bg-emerald-50",
-      change: metrics.inBandChange,
-      changeLabel: "vs last year",
-      chart: (
-        <StackedBar
-          segments={[
-            { pct: metrics.bandDistribution.inBand, color: "var(--success)" },
-            { pct: metrics.bandDistribution.above, color: "var(--warning)" },
-            { pct: metrics.bandDistribution.below, color: "var(--danger)" },
-          ]}
-        />
-      ),
-    },
-    {
-      label: "Risk Flags",
-      value: metrics.payrollRiskFlags.toString(),
-      subtext: "Above market employees",
-      coverageBadge: coveragePct,
-      icon: AlertTriangle,
-      color: metrics.payrollRiskFlags > 5 ? "text-red-600" : "text-amber-600",
-      bgColor: metrics.payrollRiskFlags > 5 ? "bg-red-50" : "bg-amber-50",
-      change: null,
-      changeLabel: "",
-      chart: null,
-    },
-  ];
+function RiskFlagsIndicator({
+  riskFlags,
+  benchmarkedEmployees,
+}: {
+  riskFlags: number;
+  benchmarkedEmployees: number;
+}) {
+  const width = Math.min(100, Math.max(0, (riskFlags / Math.max(benchmarkedEmployees, 1)) * 100));
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 h-full">
-      {stats.map((stat) => (
-        <Card key={stat.label} className="dash-card p-5 overflow-hidden flex flex-col" glow>
-          <div className="flex items-start justify-between">
-            <div className="flex flex-col gap-0.5 flex-1 min-w-0">
-              <span className="text-sm font-medium text-accent-600">
-                {stat.label}
-              </span>
-              {typeof stat.coverageBadge === "number" && (
-                <span
-                  className={clsx(
-                    "mt-1 inline-flex w-fit rounded-full px-2 py-0.5 text-[10px] font-semibold",
-                    coverageBadgeClass
-                  )}
-                >
-                  Coverage {stat.coverageBadge}%
-                </span>
-              )}
-              <span className="text-xs text-accent-400">
-                {stat.subtext}
-              </span>
-            </div>
-            <div className={`rounded-xl p-2 ${stat.bgColor} flex-shrink-0`}>
-              <stat.icon className={`h-4 w-4 ${stat.color}`} />
-            </div>
-          </div>
+    <>
+      <div className="mt-5 h-7 rounded-[10px] bg-[#E5E7EB]">
+        <div
+          className="h-7 rounded-[10px]"
+          data-testid="risk-flags-indicator"
+          style={{ width: `${width}%`, background: "#FF3B5C" }}
+        />
+      </div>
+      <div className="mt-4">
+        <span className="overview-metric-card-value">{riskFlags}</span>
+      </div>
+    </>
+  );
+}
 
-          <div className="mt-3 flex items-end justify-between gap-3 flex-1">
-            <div>
-              <span className="text-2xl font-bold text-accent-900">
-                {stat.value}
-              </span>
-              {stat.change !== null && (
-                <div className="flex items-center gap-1 mt-1">
-                  {stat.change >= 0 ? (
-                    <TrendingUp className="h-3 w-3 text-emerald-500" />
-                  ) : (
-                    <TrendingDown className="h-3 w-3 text-rose-500" />
-                  )}
-                  <span
-                    className={clsx(
-                      "text-xs font-medium",
-                      stat.change >= 0 ? "text-emerald-600" : "text-rose-600"
-                    )}
-                  >
-                    {stat.change >= 0 ? "+" : ""}{stat.change}%
-                  </span>
-                  <span className="text-[10px] text-accent-400">
-                    {stat.changeLabel}
-                  </span>
-                </div>
-              )}
-            </div>
-            {stat.chart && (
-              <div className="w-24 shrink-0">
-                {stat.chart}
-              </div>
+export function StatCards({ metrics }: StatCardsProps) {
+  return (
+    <>
+      <Card className="overview-metric-card h-full" data-testid="active-employees-card">
+        <div>
+          <h3 className="overview-metric-card-title">Active Employees</h3>
+          <p className="overview-metric-card-description">{metrics.totalEmployees} total</p>
+          <ActiveEmployeesSparkline trend={metrics.headcountTrend} />
+        </div>
+        <div className="mt-4">
+          <span className="overview-metric-card-value">{metrics.activeEmployees}</span>
+          <MetricDelta value={metrics.headcountChange} />
+        </div>
+      </Card>
+
+      <Card className="overview-metric-card h-full" data-testid="total-payroll-card">
+        <div>
+          <h3 className="overview-metric-card-title">Total Payroll</h3>
+          <p className="overview-metric-card-description">Annual compensation</p>
+          <TotalPayrollBars trend={metrics.payrollTrend} />
+        </div>
+        <div className="mt-4">
+          <span className="overview-metric-card-value">{formatAEDCompact(metrics.totalPayroll)}</span>
+          <MetricDelta value={metrics.payrollChange} />
+        </div>
+      </Card>
+
+      <Card className="overview-metric-card h-full" data-testid="in-band-card">
+        <div>
+          <h3 className="overview-metric-card-title">In Band</h3>
+          <p className="overview-metric-card-description">{metrics.outOfBandPercentage}% outside band</p>
+          <InBandDistribution
+            inBandPercentage={metrics.inBandPercentage}
+            segments={metrics.bandDistribution}
+          />
+        </div>
+        <MetricDelta value={metrics.inBandChange} />
+      </Card>
+
+      <Card className="overview-metric-card h-full" data-testid="risk-flags-card">
+        <div>
+          <h3 className="overview-metric-card-title">Risk Flags</h3>
+          <p className="overview-metric-card-description">Above market employees</p>
+          <RiskFlagsIndicator
+            riskFlags={metrics.payrollRiskFlags}
+            benchmarkedEmployees={Number(
+              ("benchmarkedEmployees" in metrics ? metrics.benchmarkedEmployees : metrics.activeEmployees) ?? 0,
             )}
-          </div>
-        </Card>
-      ))}
-    </div>
+          />
+        </div>
+      </Card>
+    </>
   );
 }

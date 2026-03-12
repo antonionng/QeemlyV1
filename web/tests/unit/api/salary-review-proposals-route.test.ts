@@ -259,4 +259,55 @@ describe("GET /api/salary-review/proposals", () => {
     expect(neqMock).toHaveBeenCalledWith("status", "draft");
     expect(payload.proposals).toEqual([submittedProposal]);
   });
+
+  it("returns the cycle list view including drafts for the overview workspace", async () => {
+    const proposals = [
+      {
+        id: "cycle-draft",
+        status: "draft",
+        workspace_id: "ws-1",
+        updated_at: "2026-03-12T12:00:00.000Z",
+      },
+      {
+        id: "cycle-approved",
+        status: "approved",
+        workspace_id: "ws-1",
+        updated_at: "2026-03-11T09:00:00.000Z",
+      },
+    ];
+
+    const neqMock = vi.fn();
+    const fromMock = vi.fn(() => ({
+      select: vi.fn(() => ({
+        eq: vi.fn(() => ({
+          neq: neqMock,
+          order: vi.fn(() => ({
+            limit: vi.fn().mockResolvedValue({ data: proposals, error: null }),
+          })),
+        })),
+      })),
+    }));
+
+    createClientMock.mockResolvedValue({ from: fromMock });
+    getWorkspaceContextMock.mockResolvedValue({
+      context: {
+        workspace_id: "ws-1",
+        is_override: false,
+        override_workspace_id: null,
+        profile_workspace_id: "ws-1",
+        is_super_admin: false,
+        user_id: "user-1",
+        user_email: "user@example.com",
+      },
+    });
+
+    const response = await GET({
+      nextUrl: new URL("http://localhost/api/salary-review/proposals?view=cycles"),
+    } as never);
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(neqMock).not.toHaveBeenCalled();
+    expect(payload.proposals).toEqual(proposals);
+  });
 });

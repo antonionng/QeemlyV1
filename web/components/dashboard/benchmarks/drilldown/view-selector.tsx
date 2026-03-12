@@ -4,15 +4,23 @@ import { Check, RotateCcw } from "lucide-react";
 import clsx from "clsx";
 import {
   DRILLDOWN_VIEWS,
+  filterDrilldownViewsForCompanyData,
+  type DrilldownViewId,
   useDrilldownPreferences,
 } from "@/lib/benchmarks/drilldown-views";
 import { useSalaryView } from "@/lib/salary-view-store";
 
 interface ViewSelectorProps {
   className?: string;
+  hasCompanyData?: boolean;
+  availableViewIds?: DrilldownViewId[];
 }
 
-export function ViewSelector({ className }: ViewSelectorProps) {
+export function ViewSelector({
+  className,
+  hasCompanyData = true,
+  availableViewIds,
+}: ViewSelectorProps) {
   const {
     enabledViews,
     toggleView,
@@ -20,6 +28,10 @@ export function ViewSelector({ className }: ViewSelectorProps) {
     resetToDefault,
   } = useDrilldownPreferences();
   const { salaryView, setSalaryView } = useSalaryView();
+  const visibleViews = filterDrilldownViewsForCompanyData(
+    DRILLDOWN_VIEWS.filter((view) => !availableViewIds || availableViewIds.includes(view.id)),
+    hasCompanyData,
+  );
 
   return (
     <div className={clsx("lg:sticky lg:top-6", className)}>
@@ -28,7 +40,7 @@ export function ViewSelector({ className }: ViewSelectorProps) {
         <div>
           <h3 className="bench-section-header">Views</h3>
           <div className="space-y-1">
-            {DRILLDOWN_VIEWS.map((view) => {
+            {visibleViews.map((view) => {
               const isEnabled = enabledViews.includes(view.id);
               const Icon = view.icon;
               return (

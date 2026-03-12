@@ -114,6 +114,11 @@ export const DRILLDOWN_VIEWS: DrilldownView[] = [
   },
 ];
 
+const COMPANY_DATA_REQUIRED_VIEW_IDS: DrilldownViewId[] = [
+  "ai-insights",
+  "offer-builder",
+];
+
 // Get default enabled view IDs
 export const DEFAULT_ENABLED_VIEWS: DrilldownViewId[] = DRILLDOWN_VIEWS
   .filter((v) => v.defaultEnabled)
@@ -127,6 +132,21 @@ export function getView(id: DrilldownViewId): DrilldownView | undefined {
 // Get views by category
 export function getViewsByCategory(category: DrilldownView["category"]): DrilldownView[] {
   return DRILLDOWN_VIEWS.filter((v) => v.category === category);
+}
+
+export function viewRequiresCompanyData(id: DrilldownViewId): boolean {
+  return COMPANY_DATA_REQUIRED_VIEW_IDS.includes(id);
+}
+
+export function filterDrilldownViewsForCompanyData<T extends Pick<DrilldownView, "id">>(
+  views: T[],
+  hasCompanyData: boolean,
+): T[] {
+  if (hasCompanyData) {
+    return views;
+  }
+
+  return views.filter((view) => !viewRequiresCompanyData(view.id));
 }
 
 // Drilldown preferences state

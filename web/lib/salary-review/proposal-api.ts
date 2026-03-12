@@ -37,6 +37,11 @@ export async function fetchApprovalQueueSalaryReviewProposals(): Promise<SalaryR
   return parseJson<SalaryReviewProposalListResponse>(response);
 }
 
+export async function fetchSalaryReviewCycles(): Promise<SalaryReviewProposalListResponse> {
+  const response = await fetch("/api/salary-review/proposals?view=cycles", { cache: "no-store" });
+  return parseJson<SalaryReviewProposalListResponse>(response);
+}
+
 export async function fetchSalaryReviewProposalDetail(
   proposalId: string
 ): Promise<SalaryReviewProposalDetail> {

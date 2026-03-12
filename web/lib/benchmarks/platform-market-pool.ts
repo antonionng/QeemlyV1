@@ -5,6 +5,7 @@ export type MarketPoolSourceType = "employee" | "uploaded" | "admin";
 
 export type MarketPoolObservation = {
   workspaceId: string;
+  contributorKey?: string;
   role_id: string;
   location_id: string;
   level_id: string;
@@ -63,6 +64,7 @@ type SalaryBenchmarkRow = {
   p50: number | null;
   currency: string | null;
   source: string | null;
+  market_source_slug?: string | null;
 };
 
 type WorkspaceSettingsRow = {
@@ -145,7 +147,9 @@ export function aggregateMarketPoolObservations(
   return [...grouped.entries()]
     .map(([key, cohort]) => {
       const values = cohort.map((row) => row.value).sort((a, b) => a - b);
-      const contributors = new Set(cohort.map((row) => row.workspaceId));
+      const contributors = new Set(
+        cohort.map((row) => row.contributorKey || `${row.sourceType}:${row.workspaceId}`),
+      );
       if (contributors.size < minimumContributors) return null;
 
       const [role_id, location_id, level_id, currency, industry, company_size] = key.split("::");
@@ -192,6 +196,7 @@ function toEmployeeObservation(
   const workspaceSettings = workspaceSettingsById.get(row.workspace_id);
   return {
     workspaceId: row.workspace_id,
+    contributorKey: `employee:${row.workspace_id}`,
     role_id: row.role_id,
     location_id: row.location_id,
     level_id: row.level_id,
@@ -214,6 +219,7 @@ function toUploadedObservation(
   const workspaceSettings = workspaceSettingsById.get(row.workspace_id);
   return {
     workspaceId: row.workspace_id,
+    contributorKey: `uploaded:${row.workspace_id}`,
     role_id: row.role_id,
     location_id: row.location_id,
     level_id: row.level_id,
@@ -232,6 +238,9 @@ function toAdminObservation(row: SalaryBenchmarkRow): MarketPoolObservation | nu
   if (!Number.isFinite(midpoint) || midpoint <= 0) return null;
   return {
     workspaceId: row.workspace_id,
+    contributorKey: row.market_source_slug
+      ? `admin:${row.market_source_slug}`
+      : `admin:${row.workspace_id}`,
     role_id: row.role_id,
     location_id: row.location_id,
     level_id: row.level_id,
@@ -270,7 +279,9 @@ export async function refreshPlatformMarketPool(): Promise<{ rowCount: number }>
       .select("workspace_id, role_id, location_id, level_id, base_salary, bonus, equity, currency, status"),
     supabase
       .from("salary_benchmarks")
-      .select("workspace_id, role_id, location_id, level_id, industry, company_size, p50, currency, source"),
+      .select(
+        "workspace_id, role_id, location_id, level_id, industry, company_size, p50, currency, source, market_source_slug",
+      ),
     supabase
       .from("workspace_settings")
       .select("workspace_id, industry, company_size"),

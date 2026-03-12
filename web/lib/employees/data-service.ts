@@ -152,6 +152,30 @@ function buildBenchmarkContext(match: BenchmarkMatch | null): BenchmarkTrustMeta
   };
 }
 
+function getBaseEmployeeName(employee: Pick<Employee, "firstName" | "lastName">): string {
+  return `${employee.firstName} ${employee.lastName}`.trim();
+}
+
+function withUniqueDisplayNames(employees: Employee[]): Employee[] {
+  const counts = new Map<string, number>();
+  for (const employee of employees) {
+    const baseName = getBaseEmployeeName(employee).toLowerCase();
+    counts.set(baseName, (counts.get(baseName) || 0) + 1);
+  }
+
+  return employees.map((employee) => {
+    const baseName = getBaseEmployeeName(employee);
+    if ((counts.get(baseName.toLowerCase()) || 0) <= 1) {
+      return { ...employee, displayName: baseName };
+    }
+
+    return {
+      ...employee,
+      displayName: `${baseName} (${employee.location.city})`,
+    };
+  });
+}
+
 function mapRowsToEmployees(
   dbEmployees: Record<string, unknown>[],
   dbBenchmarks: Record<string, unknown>[],
@@ -178,7 +202,7 @@ function mapRowsToEmployees(
     return 75 + ((comp - p75) / Math.max(1, p90 - p75)) * 15;
   };
 
-  return dbEmployees.map((emp) => {
+  const employees = dbEmployees.map((emp) => {
     const location = LOCATIONS.find((l) => l.id === emp.location_id) || LOCATIONS[0];
     const level = LEVELS.find((l) => l.id === emp.level_id) || LEVELS[2];
     const role = ROLES.find((r) => r.id === emp.role_id) || ROLES[0];
@@ -240,6 +264,8 @@ function mapRowsToEmployees(
       performanceRating: (emp.performance_rating as PerformanceRating | null) ?? undefined,
     };
   });
+
+  return withUniqueDisplayNames(employees);
 }
 
 /**
