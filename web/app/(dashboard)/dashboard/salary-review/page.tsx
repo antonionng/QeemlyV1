@@ -1,18 +1,40 @@
 "use client";
 
-import { useState, useEffect, type FormEvent } from "react";
+import { useState, useEffect, useMemo, type FormEvent } from "react";
 import { Calendar, RefreshCw, Download, Upload, Loader2, Sparkles, UserPlus, X } from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { AiDistributionModal, ReviewTable } from "@/components/dashboard/salary-review";
+import { AiDistributionModal, ApprovalProposalDetail, ApprovalProposalList, ReviewTable, ReviewTabs } from "@/components/dashboard/salary-review";
 import { UploadModal } from "@/components/dashboard/upload";
 import { useSalaryReview, type SalaryReviewAiPlanRequest } from "@/lib/salary-review";
 import { REVIEW_CYCLES, type ReviewCycle } from "@/lib/company";
-import { formatAED, formatAEDCompact, type Department } from "@/lib/employees";
+import { formatAEDCompact, type Department } from "@/lib/employees";
 import { useSalaryView, applyViewMode } from "@/lib/salary-view-store";
 import { LOCATIONS, LEVELS, ROLES } from "@/lib/dashboard/dummy-data";
 import { summarizeBenchmarkTrust } from "@/lib/benchmarks/trust";
+import { buildSalaryReviewCsv } from "@/lib/salary-review/export";
+import { buildSalaryReviewInsightModel } from "@/lib/salary-review/insights";
+import { parseSalaryReviewSearchParams } from "@/lib/salary-review/url-state";
+import { buildSalaryReviewBudgetModel } from "@/lib/salary-review/workspace-budget";
+import { ReviewActionCards } from "@/components/dashboard/salary-review/review-action-cards";
+import { ReviewDataHealth } from "@/components/dashboard/salary-review/review-data-health";
+import { ReviewSummaryHero } from "@/components/dashboard/salary-review/review-summary-hero";
+import { ReviewWatchouts } from "@/components/dashboard/salary-review/review-watchouts";
+import {
+  canAddApprovalNote,
+  canTakeApprovalAction,
+} from "@/lib/salary-review/approval-center";
+import {
+  type BuildReviewStep,
+  buildSalaryReviewDashboardModel,
+  getApprovalViewLevel,
+  getBuildReviewFlowModel,
+  getPostSubmitReviewOutcome,
+  getSalaryReviewWorkspaceVisibility,
+} from "@/lib/salary-review/dashboard";
+import type { SalaryReviewTab } from "@/lib/salary-review/url-state";
 import { createEmployee } from "./actions";
 
 const PERCENTAGE_BUDGET_SUGGESTIONS = [2, 3, 5, 8, 10];
@@ -54,6 +76,9 @@ const DEFAULT_ADD_EMPLOYEE_FORM: AddEmployeeForm = {
 };
 
 export default function SalaryReviewPage() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showAiModal, setShowAiModal] = useState(false);
   const [showAddEmployeeModal, setShowAddEmployeeModal] = useState(false);
@@ -61,13 +86,12 @@ export default function SalaryReviewPage() {
   const [addAnotherOnSave, setAddAnotherOnSave] = useState(false);
   const [addEmployeeForm, setAddEmployeeForm] = useState<AddEmployeeForm>(DEFAULT_ADD_EMPLOYEE_FORM);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [requestedBuildReviewStep, setRequestedBuildReviewStep] = useState<BuildReviewStep | null>(null);
   const {
     settings,
     employees,
     isLoading,
     totalCurrentPayroll,
-    totalProposedPayroll,
-    totalIncrease,
     budgetUsed,
     budgetRemaining,
     updateSettings,
@@ -75,27 +99,58 @@ export default function SalaryReviewPage() {
     applyAiProposal,
     resetReview,
     loadEmployeesFromDb,
+    activeProposal,
+    isProposalLoading,
+    loadLatestProposal,
+    loadApprovalProposalList,
+    selectApprovalProposal,
+    reviewSelectedApprovalProposal,
+    addApprovalProposalNote,
+    saveDraftProposal,
+    submitActiveProposal,
+    approvalQueue,
+    selectedApprovalProposalId,
+    selectedApprovalProposal,
+    selectedApprovalItemsByEmployee,
+    selectedApprovalSteps,
+    selectedApprovalNotes,
+    selectedApprovalAuditEvents,
+    isApprovalQueueLoading,
+    isApprovalDetailLoading,
   } = useSalaryReview();
+  const { salaryView, setSalaryView } = useSalaryView();
 
   // Load employees from database on mount
   useEffect(() => {
-    loadEmployeesFromDb();
-  }, [loadEmployeesFromDb]);
+    void (async () => {
+      try {
+        await loadEmployeesFromDb();
+        await loadLatestProposal();
+        await loadApprovalProposalList();
+      } catch (error) {
+        setFeedback({
+          type: "error",
+          message: error instanceof Error ? error.message : "Could not load the latest salary review draft.",
+        });
+      }
+    })();
+  }, [loadEmployeesFromDb, loadLatestProposal, loadApprovalProposalList]);
 
-  const { salaryView } = useSalaryView();
+  useEffect(() => {
+    if (activeProposal?.cycle) {
+      setSalaryView(activeProposal.cycle);
+    }
+  }, [activeProposal?.cycle, setSalaryView]);
+
   const [showSettings, setShowSettings] = useState(true);
-  const [budgetInput, setBudgetInput] = useState(
+  const budgetInput =
     settings.budgetType === "percentage"
       ? (settings.budgetPercentage === 0 ? "" : String(settings.budgetPercentage))
-      : (settings.budgetAbsolute === 0 ? "" : String(settings.budgetAbsolute))
-  );
+      : (settings.budgetAbsolute === 0 ? "" : String(settings.budgetAbsolute));
 
   const budget = settings.budgetType === "percentage"
     ? totalCurrentPayroll * (settings.budgetPercentage / 100)
     : settings.budgetAbsolute;
-
-  const budgetUsedPercentage = budget > 0 ? (budgetUsed / budget) * 100 : 0;
-  const isOverBudget = budgetUsed > budget;
 
   const selectedCount = employees.filter(e => e.isSelected).length;
   const selectedEmployeeIds = employees.filter((employee) => employee.isSelected).map((employee) => employee.id);
@@ -114,12 +169,220 @@ export default function SalaryReviewPage() {
     selectedEmployeeIds,
   };
   const benchmarkTrust = summarizeBenchmarkTrust(employees);
+  const initialQueryState = useMemo(
+    () => parseSalaryReviewSearchParams(new URLSearchParams(searchParams.toString())),
+    [searchParams]
+  );
+  const activeTab = initialQueryState.tab;
+  const dashboardModel = useMemo(
+    () => buildSalaryReviewDashboardModel({ activeProposal, approvalQueue }),
+    [activeProposal, approvalQueue]
+  );
+  const detailProposals = activeTab === "history" ? dashboardModel.history : dashboardModel.awaitingReview;
+  const requestedApprovalProposalId = initialQueryState.proposalId;
+  const activeApprovalProposalId = useMemo(
+    () =>
+      requestedApprovalProposalId &&
+      detailProposals.some((proposal) => proposal.id === requestedApprovalProposalId)
+        ? requestedApprovalProposalId
+        : null,
+    [detailProposals, requestedApprovalProposalId]
+  );
+  const approvalViewLevel = getApprovalViewLevel(activeApprovalProposalId);
+
+  useEffect(() => {
+    if (activeTab !== "approvals" && activeTab !== "history") {
+      return;
+    }
+
+    if (!activeApprovalProposalId) {
+      return;
+    }
+
+    if (activeApprovalProposalId !== selectedApprovalProposalId) {
+      void selectApprovalProposal(activeApprovalProposalId);
+    }
+  }, [
+    activeTab,
+    activeApprovalProposalId,
+    selectedApprovalProposalId,
+    selectApprovalProposal,
+  ]);
+
+  const insightModel = buildSalaryReviewInsightModel({
+    employees,
+    budget,
+    budgetUsed,
+    budgetRemaining,
+  });
+  const budgetModel = buildSalaryReviewBudgetModel({
+    budgetType: settings.budgetType,
+    budgetPercentage: settings.budgetPercentage,
+    budgetAbsolute: settings.budgetAbsolute,
+    totalCurrentPayroll,
+    budgetUsed,
+    selectedEmployees: selectedCount,
+    proposedEmployees: withIncreaseCount,
+  });
+  const workspaceVisibility = getSalaryReviewWorkspaceVisibility({
+    employeesCount: employees.length,
+    proposedEmployees: withIncreaseCount,
+    hasActiveProposal: Boolean(activeProposal),
+  });
+  const reviewTabs = [
+    dashboardModel.tabs.overview,
+    dashboardModel.tabs.review,
+    dashboardModel.tabs.approvals,
+    dashboardModel.tabs.history,
+  ];
+  const buildReviewFlow = useMemo(
+    () =>
+      getBuildReviewFlowModel({
+        requestedStep: requestedBuildReviewStep,
+        employeesCount: employees.length,
+        proposedEmployees: withIncreaseCount,
+      }),
+    [requestedBuildReviewStep, employees.length, withIncreaseCount]
+  );
+
+  const handleExport = () => {
+    const csv = buildSalaryReviewCsv(employees);
+    if (!csv.trim() || csv.split("\n").length <= 1) {
+      setFeedback({ type: "error", message: "Select at least one employee before exporting." });
+      return;
+    }
+
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const date = new Date().toISOString().slice(0, 10);
+    link.href = url;
+    link.download = `salary-review-${date}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+    setFeedback({ type: "success", message: "Salary review export downloaded." });
+  };
+
+  const handleTabChange = (tab: SalaryReviewTab, proposalId?: string | null) => {
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.set("tab", tab);
+    if (tab === "overview" || tab === "review") {
+      nextParams.delete("proposalId");
+    } else if (proposalId) {
+      nextParams.set("proposalId", proposalId);
+    } else {
+      nextParams.delete("proposalId");
+    }
+    router.replace(`${pathname}?${nextParams.toString()}`, { scroll: false });
+  };
+
+  const handleProposalSelect = (tab: "approvals" | "history", proposalId: string) => {
+    handleTabChange(tab, proposalId);
+  };
+
+  const handleBackToQueue = (tab: "approvals" | "history") => {
+    handleTabChange(tab, null);
+  };
+
+  const handleStartNewCycle = async () => {
+    resetReview();
+    setRequestedBuildReviewStep("setup");
+    await loadApprovalProposalList();
+    handleTabChange("review");
+  };
+
+  const handleContinueDraft = () => {
+    setRequestedBuildReviewStep("draft");
+    handleTabChange("review");
+  };
+
+  const handleStartWithAiDraft = async () => {
+    if (!activeProposal) {
+      resetReview();
+      setRequestedBuildReviewStep("setup");
+      await loadApprovalProposalList();
+    }
+    setRequestedBuildReviewStep("draft");
+    handleTabChange("review");
+    setShowAiModal(true);
+  };
+
+  const handleBuildManually = () => {
+    setRequestedBuildReviewStep("draft");
+  };
+
+  const handleOpenFinalReview = () => {
+    setRequestedBuildReviewStep("review");
+  };
+
+  const handleBackToSetup = () => {
+    setRequestedBuildReviewStep("setup");
+  };
+
+  const handleBackToDraft = () => {
+    setRequestedBuildReviewStep("draft");
+  };
+
+  const handleSaveDraft = async (source: "manual" | "ai" = "manual") => {
+    try {
+      await saveDraftProposal(source);
+      setFeedback({ type: "success", message: "Salary review draft saved." });
+    } catch (error) {
+      setFeedback({
+        type: "error",
+        message: error instanceof Error ? error.message : "Could not save the salary review draft.",
+      });
+    }
+  };
+
+  const handleSubmitProposal = async () => {
+    try {
+      await submitActiveProposal();
+      const submittedProposalId = useSalaryReview.getState().activeProposal?.id ?? null;
+      const outcome = getPostSubmitReviewOutcome(submittedProposalId);
+      setFeedback({ type: "success", message: outcome.feedbackMessage });
+      handleTabChange(outcome.nextTab, outcome.proposalId);
+    } catch (error) {
+      setFeedback({
+        type: "error",
+        message: error instanceof Error ? error.message : "Could not submit the salary review proposal.",
+      });
+    }
+  };
+
+  const handleReviewDecision = async (action: "approve" | "return" | "reject", note: string) => {
+    try {
+      await reviewSelectedApprovalProposal(action, note);
+      const message =
+        action === "approve"
+          ? "Proposal approved."
+          : action === "reject"
+            ? "Proposal rejected."
+            : "Proposal returned for revision.";
+      setFeedback({ type: "success", message });
+    } catch (error) {
+      setFeedback({
+        type: "error",
+        message: error instanceof Error ? error.message : "Could not update proposal review status.",
+      });
+    }
+  };
+
+  const handleApprovalNote = async (note: string, employeeId?: string | null) => {
+    try {
+      await addApprovalProposalNote(note, employeeId);
+      setFeedback({ type: "success", message: "Approval note added." });
+    } catch (error) {
+      setFeedback({
+        type: "error",
+        message: error instanceof Error ? error.message : "Could not add a note to the selected proposal.",
+      });
+    }
+  };
 
   const handleBudgetInputChange = (value: string) => {
     const normalizedValue = value.replace(/,/g, "").trim();
     if (!/^\d*\.?\d*$/.test(normalizedValue)) return;
-
-    setBudgetInput(normalizedValue);
 
     if (normalizedValue === "") {
       if (settings.budgetType === "percentage") {
@@ -206,325 +469,672 @@ export default function SalaryReviewPage() {
         </div>
       )}
 
-      {/* Page Header (reference: title + pill buttons inline) */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-bold tracking-tight text-accent-800 sm:text-3xl">
-          Salary Review
-        </h1>
-        <div className="flex items-center gap-2 shrink-0">
-          <Button
-            size="sm"
-            onClick={() => setShowAddEmployeeModal(true)}
-            className="h-9 rounded-full bg-brand-500 px-5 text-white hover:bg-brand-600"
-          >
-            <UserPlus className="mr-2 h-4 w-4" />
-            Add Employee
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowUploadModal(true)}
-            className="h-9 rounded-full border-border bg-white px-5 text-accent-700 hover:bg-accent-50"
-          >
-            <Upload className="mr-2 h-4 w-4" />
-            Bulk Import
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-9 rounded-full border-border bg-white px-5 text-accent-700 hover:bg-accent-50"
-          >
-            <Download className="mr-2 h-4 w-4" />
-            Export
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={resetReview}
-            className="h-9 rounded-full border-border bg-white px-5 text-accent-700 hover:bg-accent-50"
-          >
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Reset
-          </Button>
-        </div>
-      </div>
-
-      {/* Salary Cadence Toggle - Prominent */}
-      <div className="flex items-center justify-between rounded-2xl border-2 border-brand-200 bg-gradient-to-r from-brand-50 to-white p-4">
+      <div id="review-controls" className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h3 className="text-sm font-semibold text-accent-900">Salary View</h3>
-          <p className="text-xs text-accent-500 mt-0.5">Switch between monthly and annual salary figures</p>
+          <h1 className="text-2xl font-bold tracking-tight text-accent-800 sm:text-3xl">
+            Salary Review
+          </h1>
+          <p className="mt-1 text-sm text-accent-600">
+            {activeTab === "overview"
+              ? "Start a new cycle, continue an active draft, or review alerts and past cycles."
+              : activeTab === "review"
+                ? buildReviewFlow.activeStep === "setup"
+                  ? "Step 1 of 3. Set up the cycle, choose the employee scope, and decide whether to draft manually or with AI."
+                  : buildReviewFlow.activeStep === "draft"
+                    ? "Step 2 of 3. Adjust salary recommendations manually or refine the AI draft before final review."
+                    : "Step 3 of 3. Review the final budget, watchouts, and data health before submitting for approval."
+                : activeTab === "approvals"
+                  ? "Review proposals that are actively awaiting approval."
+                  : "Browse completed review cycles and inspect their history."}
+          </p>
         </div>
-        <div className="flex rounded-xl border-2 border-brand-200 overflow-hidden">
-          <button
-            onClick={() => updateSettings({ cycle: "monthly" as ReviewCycle })}
-            className={`px-6 py-2.5 text-sm font-semibold transition-all ${
-              settings.cycle === "monthly"
-                ? "bg-brand-500 text-white shadow-inner"
-                : "bg-white text-accent-600 hover:bg-brand-50"
-            }`}
-          >
-            Monthly
-          </button>
-          <button
-            onClick={() => updateSettings({ cycle: "annual" as ReviewCycle })}
-            className={`px-6 py-2.5 text-sm font-semibold transition-all ${
-              settings.cycle === "annual"
-                ? "bg-brand-500 text-white shadow-inner"
-                : "bg-white text-accent-600 hover:bg-brand-50"
-            }`}
-          >
-            Annual
-          </button>
-        </div>
+        {activeTab === "review" ? (
+          <div className="flex items-center gap-2 shrink-0">
+            {buildReviewFlow.activeStep === "setup" ? (
+              <>
+                <Button
+                  size="sm"
+                  onClick={() => setShowAddEmployeeModal(true)}
+                  className="h-9 rounded-full bg-brand-500 px-5 text-white hover:bg-brand-600"
+                >
+                  <UserPlus className="mr-2 h-4 w-4" />
+                  Add Employee
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowUploadModal(true)}
+                  className="h-9 rounded-full border-border bg-white px-5 text-accent-700 hover:bg-accent-50"
+                >
+                  <Upload className="mr-2 h-4 w-4" />
+                  Bulk Import
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleBuildManually}
+                  disabled={employees.length === 0}
+                  className="h-9 rounded-full border-border bg-white px-5 text-accent-700 hover:bg-accent-50"
+                >
+                  Build Manually
+                </Button>
+              </>
+            ) : buildReviewFlow.activeStep === "draft" ? (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void handleSaveDraft()}
+                  disabled={isProposalLoading || employees.length === 0}
+                  className="h-9 rounded-full border-border bg-white px-5 text-accent-700 hover:bg-accent-50"
+                >
+                  Save Draft
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleOpenFinalReview}
+                  disabled={!buildReviewFlow.canContinueToReview}
+                  className="h-9 rounded-full bg-brand-500 px-5 text-white hover:bg-brand-600"
+                >
+                  Continue To Final Review
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleBackToDraft}
+                  className="h-9 rounded-full border-border bg-white px-5 text-accent-700 hover:bg-accent-50"
+                >
+                  Back To Adjustments
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleExport}
+                  className="h-9 rounded-full border-border bg-white px-5 text-accent-700 hover:bg-accent-50"
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Export
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => void handleSubmitProposal()}
+                  disabled={isProposalLoading || !activeProposal}
+                  className="h-9 rounded-full bg-brand-500 px-5 text-white hover:bg-brand-600"
+                >
+                  Submit For Approval
+                </Button>
+              </>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void handleStartNewCycle()}
+              className="h-9 rounded-full border-border bg-white px-5 text-accent-700 hover:bg-accent-50"
+            >
+              <RefreshCw className="mr-2 h-4 w-4" />
+              New Cycle
+            </Button>
+          </div>
+        ) : null}
       </div>
 
-      {/* Review Settings */}
-      <Card className="dash-card p-6">
-        <div className="flex items-center justify-between mb-5">
-          <h2 className="text-base font-semibold text-accent-900">Review Settings</h2>
-          <div className="flex items-center gap-2">
-            <Button
-              size="sm"
-              onClick={() => setShowAiModal(true)}
-              className="h-8 rounded-full bg-brand-500 text-white px-4 text-xs hover:bg-brand-600"
-            >
-              <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-              Review AI Proposal
-            </Button>
+      <ReviewTabs activeTab={activeTab} items={reviewTabs} onChange={handleTabChange} />
+
+      {activeTab === "review" ? (
+        <div className="flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-brand-100 bg-gradient-to-r from-brand-50/70 via-white to-accent-50/60 p-4">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brand-700">Display</p>
+            <h3 className="mt-1 text-sm font-semibold text-accent-900">Salary View</h3>
+            <p className="mt-0.5 text-xs text-accent-500">Switch between monthly and annual salary figures without changing saved proposal values.</p>
+          </div>
+          <div className="flex overflow-hidden rounded-2xl border border-brand-200 bg-white p-1 shadow-sm">
             <button
-              onClick={() => setShowSettings(!showSettings)}
-              className="text-xs font-medium text-accent-500 hover:text-accent-700 transition-colors"
+              onClick={() => {
+                setSalaryView("monthly");
+              }}
+              className={`px-6 py-2.5 text-sm font-semibold transition-all ${
+                salaryView === "monthly"
+                  ? "rounded-xl bg-brand-500 text-white shadow-sm"
+                  : "rounded-xl bg-white text-accent-600 hover:bg-brand-50"
+              }`}
             >
-              {showSettings ? "Hide" : "Show"}
+              Monthly
+            </button>
+            <button
+              onClick={() => {
+                setSalaryView("annual");
+              }}
+              className={`px-6 py-2.5 text-sm font-semibold transition-all ${
+                salaryView === "annual"
+                  ? "rounded-xl bg-brand-500 text-white shadow-sm"
+                  : "rounded-xl bg-white text-accent-600 hover:bg-brand-50"
+              }`}
+            >
+              Annual
             </button>
           </div>
         </div>
+      ) : null}
 
-        {showSettings && (
-          <div className="grid items-start gap-4 md:grid-cols-4">
-            {/* Cycle */}
-            <div>
-              <select
-                value={settings.cycle}
-                onChange={(e) => updateSettings({ cycle: e.target.value as ReviewCycle })}
-                className="w-full h-11 rounded-xl border border-border bg-white px-4 text-sm text-accent-900 focus:border-brand-300 focus:outline-none"
-              >
-                {REVIEW_CYCLES.map((cycle) => (
-                  <option key={cycle.value} value={cycle.value}>
-                    {cycle.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* Budget Amount */}
-            <div>
-              <Input
-                type="text"
-                inputMode="decimal"
-                value={budgetInput}
-                onFocus={() => {
-                  if (budgetInput === "0") setBudgetInput("");
-                }}
-                onChange={(e) => handleBudgetInputChange(e.target.value)}
-                placeholder={settings.budgetType === "percentage" ? "Enter budget %" : "Enter budget in AED"}
-                className="rounded-xl"
-                fullWidth
-              />
-              <div className="mt-2 flex items-center gap-1.5 overflow-x-auto pb-1">
-                {currentBudgetSuggestions.map((value) => (
-                  <button
-                    key={`${settings.budgetType}-${value}`}
-                    type="button"
-                    onClick={() => {
-                      const nextValue = String(value);
-                      setBudgetInput(nextValue);
-                      if (settings.budgetType === "percentage") {
-                        updateSettings({ budgetPercentage: value });
-                      } else {
-                        updateSettings({ budgetAbsolute: value });
-                      }
-                    }}
-                    className="shrink-0 rounded-full border border-border bg-white px-2.5 py-1 text-xs font-medium text-accent-600 transition-colors hover:bg-accent-50"
+      {activeTab === "overview" && (
+        <>
+          <Card className="dash-card border border-brand-100 bg-gradient-to-r from-brand-50 via-white to-accent-50 p-6">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="max-w-3xl">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brand-700">Overview</p>
+                <h2 className="mt-2 text-xl font-semibold text-accent-950">Start a new cycle or continue where the team left off</h2>
+                <p className="mt-2 text-sm text-accent-700">
+                  Use this overview to understand what needs attention, review recent cycles, and choose whether to build the next proposal manually or start with AI.
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={() => void handleStartNewCycle()} className="h-9 rounded-full bg-brand-500 px-5 text-white hover:bg-brand-600">
+                  Start New Review Cycle
+                </Button>
+                {dashboardModel.hasDraft ? (
+                  <Button
+                    variant="outline"
+                    onClick={handleContinueDraft}
+                    className="h-9 rounded-full border-border bg-white px-5 text-accent-700 hover:bg-accent-50"
                   >
-                    {settings.budgetType === "percentage" ? `${value}%` : formatAEDCompact(value)}
-                  </button>
-                ))}
+                    Continue Latest Draft
+                  </Button>
+                ) : null}
+                <Button
+                  variant="outline"
+                  onClick={() => void handleStartWithAiDraft()}
+                  className="h-9 rounded-full border-border bg-white px-5 text-accent-700 hover:bg-accent-50"
+                >
+                  <Sparkles className="mr-2 h-4 w-4" />
+                  Start With AI Draft
+                </Button>
               </div>
             </div>
 
-            {/* Budget Type Toggle */}
-            <div className="self-start flex rounded-xl border border-border overflow-hidden">
-              <button
-                onClick={() => {
-                  setBudgetInput(settings.budgetPercentage === 0 ? "" : String(settings.budgetPercentage));
-                  updateSettings({ budgetType: "percentage" });
-                }}
-                className={`flex-1 h-11 text-sm font-medium transition-colors ${
-                  settings.budgetType === "percentage"
-                    ? "bg-brand-500 text-white"
-                    : "bg-white text-accent-600 hover:bg-accent-50"
-                }`}
-              >
-                %
-              </button>
-              <button
-                onClick={() => {
-                  setBudgetInput(settings.budgetAbsolute === 0 ? "" : String(settings.budgetAbsolute));
-                  updateSettings({ budgetType: "absolute" });
-                }}
-                className={`flex-1 h-11 text-sm font-medium transition-colors ${
-                  settings.budgetType === "absolute"
-                    ? "bg-brand-500 text-white"
-                    : "bg-white text-accent-600 hover:bg-accent-50"
-                }`}
-              >
-                AED
-              </button>
+            <div className="mt-5 grid gap-3 md:grid-cols-4">
+              <OverviewMetric label="Active draft" value={dashboardModel.hasDraft ? "Ready" : "None"} body={dashboardModel.hasDraft ? "Continue your latest proposal workspace." : "Start a new review cycle to create a draft."} />
+              <OverviewMetric label="Pending approvals" value={`${dashboardModel.awaitingReview.length}`} body="Cycles currently waiting on reviewer action." />
+              <OverviewMetric label="Past cycles" value={`${dashboardModel.history.length}`} body="Completed review records available to inspect." />
+              <OverviewMetric label="Selected employees" value={`${selectedCount}`} body={withIncreaseCount > 0 ? `${withIncreaseCount} currently have a proposal value.` : "No proposal values applied yet."} />
             </div>
+          </Card>
 
-            {/* Effective Date */}
-            <div className="relative">
-              <Input
-                type="date"
-                value={settings.effectiveDate}
-                onChange={(e) => updateSettings({ effectiveDate: e.target.value })}
-                className="rounded-xl pl-3"
-                fullWidth
-              />
-              <Calendar className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-accent-400 pointer-events-none" />
-            </div>
+          <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+            <ReviewWatchouts items={insightModel.watchouts} />
+            <ReviewDataHealth benchmarkTrust={benchmarkTrust} activeEmployees={employees.length} />
           </div>
-        )}
-      </Card>
 
-      {/* Budget Impact KPI Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card className="dash-card p-5">
-          <div className="text-sm font-semibold text-accent-900 mb-0.5">Current Payroll</div>
-          <div className="text-xs text-accent-500 mb-3">{employees.length} Employees total</div>
-          <div className="text-2xl font-bold text-accent-900">{formatAEDCompact(applyViewMode(totalCurrentPayroll, salaryView))}</div>
-        </Card>
-        
-        <Card className="dash-card p-5">
-          <div className="text-sm font-semibold text-accent-900 mb-0.5">Proposed Payroll</div>
-          <div className="text-xs text-accent-500 mb-3">
-            {totalIncrease > 0 ? `+${formatAEDCompact(applyViewMode(totalIncrease, salaryView))} increase` : "0 AED Increase"}
-          </div>
-          <div className="text-2xl font-bold text-accent-900">{formatAEDCompact(applyViewMode(totalProposedPayroll, salaryView))}</div>
-        </Card>
-        
-        <Card className="dash-card p-5">
-          <div className="text-sm font-semibold text-accent-900 mb-0.5">Budget Allocation</div>
-          <div className="text-xs text-accent-500 mb-3">
-            {settings.budgetType === "percentage" ? `${settings.budgetPercentage}%` : "Fixed"}
-          </div>
-          <div className="text-2xl font-bold text-accent-900">{formatAEDCompact(applyViewMode(budget, salaryView))}</div>
-        </Card>
-        
-        <Card className={`dash-card p-5 ${isOverBudget ? "ring-2 ring-red-400" : ""}`}>
-          <div className="text-sm font-semibold text-accent-900 mb-0.5">Budget Status</div>
-          <div className={`text-xs mb-3 ${isOverBudget ? "text-red-600" : "text-emerald-600"}`}>
-            {isOverBudget ? "Over Budget" : "Within Budget"}
-          </div>
-          <div className={`text-2xl font-bold ${isOverBudget ? "text-red-600" : "text-emerald-600"}`}>
-            {isOverBudget ? "-" : ""}{formatAEDCompact(applyViewMode(Math.abs(budgetRemaining), salaryView))}
-          </div>
-        </Card>
-      </div>
-
-      {/* Budget Progress Bar */}
-      <Card className="dash-card p-5">
-        <div className="flex items-center justify-between mb-1">
-          <div>
-            <span className="text-sm font-semibold text-accent-900">Budget Usage</span>
-            <span className="text-xs text-accent-500 ml-2">{selectedCount} employees selected</span>
-          </div>
-          <span className="text-xs text-accent-500">{withIncreaseCount} proposed increase{withIncreaseCount !== 1 ? "s" : ""}</span>
-        </div>
-        <div className="flex items-center gap-3 mt-3">
-          <span className="text-lg font-bold text-accent-900 whitespace-nowrap">
-            {formatAED(applyViewMode(budgetUsed, salaryView))} / {formatAED(applyViewMode(budget, salaryView))}
-          </span>
-          <span className={`text-sm font-semibold ${isOverBudget ? "text-red-600" : "text-emerald-600"}`}>
-            {budgetUsedPercentage.toFixed(1)}%
-          </span>
-          <div className="flex-1 h-3.5 bg-accent-100 rounded-full overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-all duration-500 ${
-                isOverBudget 
-                  ? "bg-red-500" 
-                  : budgetUsedPercentage > 90 
-                  ? "bg-amber-500" 
-                  : "bg-emerald-500"
-              }`}
-              style={{ width: `${Math.min(budgetUsedPercentage, 100)}%` }}
+          <div className="grid items-start gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+            <ApprovalProposalList
+              proposals={dashboardModel.awaitingReview}
+              isLoading={isApprovalQueueLoading}
+              onSelect={(proposalId) => handleProposalSelect("approvals", proposalId)}
+              eyebrow="Alerts"
+              title="Needs Review Now"
+              description="Cycles that are submitted or in review appear here so managers know what is waiting on action."
+              emptyMessage="No review cycles are awaiting action right now."
+              countLabel={`${dashboardModel.awaitingReview.length} awaiting`}
+            />
+            <ApprovalProposalList
+              proposals={dashboardModel.history.slice(0, 4)}
+              isLoading={isApprovalQueueLoading}
+              onSelect={(proposalId) => handleProposalSelect("history", proposalId)}
+              eyebrow="History"
+              title="Past Review Cycles"
+              description="Browse recent completed cycles to understand decisions, status, and prior salary review outcomes."
+              emptyMessage="No completed review cycles yet."
+              countLabel={`${dashboardModel.history.length} cycle${dashboardModel.history.length === 1 ? "" : "s"}`}
             />
           </div>
-        </div>
-      </Card>
-
-      {benchmarkTrust.benchmarkedEmployees > 0 && (
-        <Card className="dash-card p-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <div className="text-sm font-semibold text-accent-900">Benchmark Trust</div>
-              <div className="text-xs text-accent-500 mt-1">
-                Salary Review now resolves against the shared market pool first, then workspace overlays.
-              </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700">
-                Primary: {benchmarkTrust.primarySourceLabel}
-              </span>
-              <span className="rounded-full bg-accent-100 px-3 py-1 text-xs font-medium text-accent-700">
-                Exact: {benchmarkTrust.exactMatches}
-              </span>
-              <span className="rounded-full bg-accent-100 px-3 py-1 text-xs font-medium text-accent-700">
-                Fallback: {benchmarkTrust.fallbackMatches}
-              </span>
-              {benchmarkTrust.freshestAt && (
-                <span className="rounded-full bg-accent-100 px-3 py-1 text-xs font-medium text-accent-700">
-                  Refreshed: {new Date(benchmarkTrust.freshestAt).toLocaleDateString("en-GB")}
-                </span>
-              )}
-            </div>
-          </div>
-        </Card>
+        </>
       )}
 
-      {/* Review Table */}
-      {employees.length === 0 ? (
-        <Card className="dash-card p-8 text-center">
-          <div className="mx-auto max-w-xl space-y-3">
-            <h3 className="text-lg font-semibold text-accent-900">No employees yet</h3>
-            <p className="text-sm text-accent-600">
-              Add one employee in seconds, or import a file when you are ready for bulk updates.
-            </p>
-            <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
-              <Button
-                size="sm"
-                onClick={() => setShowAddEmployeeModal(true)}
-                className="h-9 rounded-full bg-brand-500 px-5 text-white hover:bg-brand-600"
-              >
-                <UserPlus className="mr-2 h-4 w-4" />
-                Add Employee
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setShowUploadModal(true)}
-                className="h-9 rounded-full border-border bg-white px-5 text-accent-700 hover:bg-accent-50"
-              >
-                <Upload className="mr-2 h-4 w-4" />
-                Bulk Import
-              </Button>
+      {activeTab === "review" && (
+        <>
+          <Card className="dash-card p-4">
+            <div className="flex flex-wrap items-center gap-3">
+              {buildReviewFlow.steps.map((step, index) => (
+                <button
+                  key={step.id}
+                  type="button"
+                  onClick={() => {
+                    if (step.enabled) setRequestedBuildReviewStep(step.id);
+                  }}
+                  disabled={!step.enabled}
+                  className={`flex items-center gap-3 rounded-2xl border px-4 py-3 text-left transition-colors ${
+                    buildReviewFlow.activeStep === step.id
+                      ? "border-brand-300 bg-brand-50 text-brand-800"
+                      : step.enabled
+                        ? "border-accent-200 bg-white text-accent-700 hover:bg-accent-50"
+                        : "border-accent-100 bg-accent-50/60 text-accent-400"
+                  }`}
+                >
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-semibold text-accent-700">
+                    {index + 1}
+                  </span>
+                  <div>
+                    <p className="text-sm font-semibold">{step.label}</p>
+                    <p className="text-xs">
+                      {step.id === "setup"
+                        ? "Set policy and decide how to draft"
+                        : step.id === "draft"
+                          ? "Adjust employee recommendations"
+                          : "Review before submission"}
+                    </p>
+                  </div>
+                </button>
+              ))}
             </div>
-          </div>
-        </Card>
-      ) : (
-        <ReviewTable />
+          </Card>
+
+          {buildReviewFlow.activeStep === "setup" ? (
+            <Card id="review-settings" className="dash-card p-6">
+              <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-500">Step 1</p>
+                  <h2 className="mt-1 text-base font-semibold text-accent-900">Set up this review cycle</h2>
+                  <p className="mt-1 text-sm text-accent-600">
+                    Confirm the cycle, budget policy, and effective date. Then choose whether to draft manually in the employee table or start with AI recommendations.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    onClick={() => setShowAiModal(true)}
+                    className="h-8 rounded-full bg-brand-500 px-4 text-xs text-white hover:bg-brand-600"
+                  >
+                    <Sparkles className="mr-1.5 h-3.5 w-3.5" />
+                    Start With AI Draft
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleBuildManually}
+                    disabled={employees.length === 0}
+                    className="h-8 rounded-full border-border bg-white px-4 text-xs text-accent-700 hover:bg-accent-50"
+                  >
+                    Build Manually
+                  </Button>
+                  <button
+                    onClick={() => setShowSettings(!showSettings)}
+                    className="text-xs font-medium text-accent-500 transition-colors hover:text-accent-700"
+                  >
+                    {showSettings ? "Hide" : "Show"}
+                  </button>
+                </div>
+              </div>
+
+              {showSettings && (
+                <>
+                  <div className="grid items-start gap-4 md:grid-cols-4">
+                    <div>
+                      <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-accent-500">
+                        Review cycle
+                      </label>
+                      <select
+                        value={settings.cycle}
+                        onChange={(e) => updateSettings({ cycle: e.target.value as ReviewCycle })}
+                        className="h-11 w-full rounded-xl border border-border bg-white px-4 text-sm text-accent-900 focus:border-brand-300 focus:outline-none"
+                      >
+                        {REVIEW_CYCLES.map((cycle) => (
+                          <option key={cycle.value} value={cycle.value}>
+                            {cycle.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-accent-500">
+                        Budget policy
+                      </label>
+                      <Input
+                        type="text"
+                        inputMode="decimal"
+                        value={budgetInput}
+                        onChange={(e) => handleBudgetInputChange(e.target.value)}
+                        placeholder={settings.budgetType === "percentage" ? "Enter budget %" : "Enter budget in AED"}
+                        className="rounded-xl"
+                        fullWidth
+                      />
+                      <p className="mt-2 text-xs text-accent-500">
+                        {settings.budgetType === "percentage"
+                          ? "Percentage is calculated from current payroll."
+                          : "Fixed amount is used as the full review budget."}
+                      </p>
+                      <p className="mt-1 text-xs text-accent-500">{budgetModel.usageLabel}</p>
+                      <div className="mt-2 flex items-center gap-1.5 overflow-x-auto pb-1">
+                        {currentBudgetSuggestions.map((value) => (
+                          <button
+                            key={`${settings.budgetType}-${value}`}
+                            type="button"
+                            onClick={() => {
+                              if (settings.budgetType === "percentage") {
+                                updateSettings({ budgetPercentage: value });
+                              } else {
+                                updateSettings({ budgetAbsolute: value });
+                              }
+                            }}
+                            className="shrink-0 rounded-full border border-border bg-white px-2.5 py-1 text-xs font-medium text-accent-600 transition-colors hover:bg-accent-50"
+                          >
+                            {settings.budgetType === "percentage" ? `${value}%` : formatAEDCompact(value)}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-accent-500">
+                        Budget type
+                      </label>
+                      <div className="flex self-start overflow-hidden rounded-xl border border-border">
+                        <button
+                          onClick={() => {
+                            updateSettings({ budgetType: "percentage" });
+                          }}
+                          className={`h-11 flex-1 text-sm font-medium transition-colors ${
+                            settings.budgetType === "percentage"
+                              ? "bg-brand-500 text-white"
+                              : "bg-white text-accent-600 hover:bg-accent-50"
+                          }`}
+                        >
+                          %
+                        </button>
+                        <button
+                          onClick={() => {
+                            updateSettings({ budgetType: "absolute" });
+                          }}
+                          className={`h-11 flex-1 text-sm font-medium transition-colors ${
+                            settings.budgetType === "absolute"
+                              ? "bg-brand-500 text-white"
+                              : "bg-white text-accent-600 hover:bg-accent-50"
+                          }`}
+                        >
+                          AED
+                        </button>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-accent-500">
+                        Effective date
+                      </label>
+                      <div className="relative">
+                        <Input
+                          type="date"
+                          value={settings.effectiveDate}
+                          onChange={(e) => updateSettings({ effectiveDate: e.target.value })}
+                          className="rounded-xl pl-3 pr-10"
+                          fullWidth
+                        />
+                        <Calendar className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-accent-400" />
+                      </div>
+                      <p className="mt-2 text-xs text-accent-500">{budgetModel.effectiveDateLabel}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 lg:grid-cols-3">
+                    <div className="rounded-2xl border border-accent-100 bg-accent-50/60 px-4 py-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-500">
+                        Budget scope
+                      </p>
+                      <p className="mt-1 text-sm text-accent-700">{budgetModel.usageLabel}</p>
+                    </div>
+                    <div className="rounded-2xl border border-accent-100 bg-accent-50/60 px-4 py-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-500">
+                        Build the proposal
+                      </p>
+                      <p className="mt-1 text-sm text-accent-700">{budgetModel.applicationLabel}</p>
+                    </div>
+                    <div className="rounded-2xl border border-accent-100 bg-accent-50/60 px-4 py-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-500">
+                        Effective date
+                      </p>
+                      <p className="mt-1 text-sm text-accent-700">{budgetModel.effectiveDateLabel}</p>
+                    </div>
+                  </div>
+                </>
+              )}
+            </Card>
+          ) : null}
+
+          {buildReviewFlow.activeStep === "draft" ? (
+            <>
+              <Card className="dash-card border border-brand-100 bg-gradient-to-r from-brand-50 via-white to-accent-50 p-5">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="max-w-3xl">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brand-700">Step 2</p>
+                    <h2 className="mt-2 text-xl font-semibold text-accent-950">Adjust the draft</h2>
+                    <p className="mt-2 text-sm text-accent-700">
+                      Review the employee-level recommendations, make manual changes where needed, save the draft, and continue only when the proposal is ready for final review.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={handleBackToSetup}
+                      className="h-9 rounded-full border-border bg-white px-5 text-accent-700 hover:bg-accent-50"
+                    >
+                      Back To Setup
+                    </Button>
+                    <Button
+                      onClick={handleOpenFinalReview}
+                      disabled={!buildReviewFlow.canContinueToReview}
+                      className="h-9 rounded-full bg-brand-500 px-5 text-white hover:bg-brand-600"
+                    >
+                      Continue To Final Review
+                    </Button>
+                  </div>
+                </div>
+                <div className="mt-4 grid gap-3 md:grid-cols-3">
+                  <OverviewMetric label="Selected employees" value={`${selectedCount}`} body="These employees are currently in scope for the draft." />
+                  <OverviewMetric label="Proposed changes" value={`${withIncreaseCount}`} body="Employees with a proposed increase already applied." />
+                  <OverviewMetric label="Remaining budget" value={formatAEDCompact(applyViewMode(budgetRemaining, salaryView))} body={withIncreaseCount > 0 ? "Once changes look right, move to final review." : "Apply AI or manual changes to unlock final review."} />
+                </div>
+              </Card>
+
+              {employees.length === 0 ? (
+                <Card className="dash-card p-8 text-center">
+                  <div className="mx-auto max-w-xl space-y-3">
+                    <h3 className="text-lg font-semibold text-accent-900">No employees yet</h3>
+                    <p className="text-sm text-accent-600">
+                      Add one employee in seconds, or import a file when you are ready for bulk updates.
+                    </p>
+                    <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+                      <Button
+                        size="sm"
+                        onClick={() => setShowAddEmployeeModal(true)}
+                        className="h-9 rounded-full bg-brand-500 px-5 text-white hover:bg-brand-600"
+                      >
+                        <UserPlus className="mr-2 h-4 w-4" />
+                        Add Employee
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setShowUploadModal(true)}
+                        className="h-9 rounded-full border-border bg-white px-5 text-accent-700 hover:bg-accent-50"
+                      >
+                        <Upload className="mr-2 h-4 w-4" />
+                        Bulk Import
+                      </Button>
+                    </div>
+                  </div>
+                </Card>
+              ) : (
+                <ReviewTable initialQueryState={initialQueryState} />
+              )}
+            </>
+          ) : null}
+
+          {buildReviewFlow.activeStep === "review" ? (
+            <>
+              <Card className="dash-card border border-brand-100 bg-gradient-to-r from-brand-50 via-white to-accent-50 p-5">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="max-w-3xl">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brand-700">Step 3</p>
+                    <h2 className="mt-2 text-xl font-semibold text-accent-950">Final review before approval</h2>
+                    <p className="mt-2 text-sm text-accent-700">
+                      Check the budget, diagnostics, and review watchouts here. If anything needs changing, go back to adjustments before you submit this cycle for approval.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={handleBackToDraft}
+                      className="h-9 rounded-full border-border bg-white px-5 text-accent-700 hover:bg-accent-50"
+                    >
+                      Back To Adjustments
+                    </Button>
+                    <Button
+                      onClick={() => void handleSubmitProposal()}
+                      disabled={isProposalLoading || !activeProposal}
+                      className="h-9 rounded-full bg-brand-500 px-5 text-white hover:bg-brand-600"
+                    >
+                      Submit For Approval
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+
+              {workspaceVisibility.showWorkspaceSummary ? (
+                <ReviewSummaryHero
+                  budget={applyViewMode(budget, salaryView)}
+                  budgetUsed={applyViewMode(budgetUsed, salaryView)}
+                  budgetRemaining={applyViewMode(budgetRemaining, salaryView)}
+                  budgetPolicyLabel={budgetModel.policyLabel}
+                  budgetAllocationLabel={budgetModel.allocationLabel}
+                  budgetRemainingLabel={budgetModel.remainingLabel}
+                  selectedEmployees={insightModel.summary.selectedEmployees}
+                  coveredEmployees={insightModel.summary.coveredEmployees}
+                  totalEmployees={employees.length}
+                  belowBandEmployees={insightModel.summary.belowBandEmployees}
+                  proposedEmployees={insightModel.summary.proposedEmployees}
+                  benchmarkTrustLabel={insightModel.summary.benchmarkTrustLabel}
+                />
+              ) : null}
+
+              {workspaceVisibility.showDiagnostics ? (
+                <>
+                  <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+                    <ReviewWatchouts items={insightModel.watchouts} />
+                    <ReviewDataHealth benchmarkTrust={benchmarkTrust} activeEmployees={employees.length} />
+                  </div>
+
+                  <div id="review-export">
+                    <ReviewActionCards
+                      selectedEmployees={selectedCount}
+                      coveredEmployees={benchmarkTrust.benchmarkedEmployees}
+                      totalEmployees={employees.length}
+                      proposedEmployees={withIncreaseCount}
+                    />
+                  </div>
+                </>
+              ) : null}
+            </>
+          ) : null}
+        </>
+      )}
+
+      {activeTab === "approvals" && (
+        <>
+          <Card className="dash-card border border-brand-100 bg-gradient-to-r from-brand-50 via-white to-accent-50 p-5">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="max-w-3xl">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brand-700">Approvals</p>
+                <h2 className="mt-2 text-xl font-semibold text-accent-950">Approval Center</h2>
+                <p className="mt-2 text-sm text-accent-700">
+                  Review submitted proposal batches from a single queue, then click into one batch to work through employee rows, comments, routing, and actions in one place.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-accent-200 bg-white px-4 py-3 text-sm font-medium text-accent-700 shadow-sm">
+                {dashboardModel.awaitingReview.length > 0
+                  ? `${dashboardModel.awaitingReview.length} awaiting review`
+                  : "Submit a review from Review Workspace to start approvals."}
+              </div>
+            </div>
+          </Card>
+
+          {approvalViewLevel === "queue" ? (
+            <ApprovalProposalList
+              proposals={dashboardModel.awaitingReview}
+              isLoading={isApprovalQueueLoading}
+              onSelect={(proposalId) => handleProposalSelect("approvals", proposalId)}
+            />
+          ) : (
+            <ApprovalProposalDetail
+              key={activeApprovalProposalId ?? "approvals-empty"}
+              proposal={selectedApprovalProposal}
+              proposalItems={Object.values(selectedApprovalItemsByEmployee)}
+              approvalSteps={selectedApprovalSteps}
+              proposalNotes={selectedApprovalNotes}
+              proposalAuditEvents={selectedApprovalAuditEvents}
+              isLoading={isApprovalDetailLoading}
+              canTakeAction={
+                canTakeApprovalAction(selectedApprovalProposal?.status) &&
+                selectedApprovalSteps.some((step) => step.status === "pending") &&
+                !isApprovalDetailLoading
+              }
+              canAddNote={canAddApprovalNote(selectedApprovalProposal?.status) && !isApprovalDetailLoading}
+              onBack={() => handleBackToQueue("approvals")}
+              onAction={(action, note) => void handleReviewDecision(action, note)}
+              onAddNote={(note, employeeId) => void handleApprovalNote(note, employeeId)}
+            />
+          )}
+        </>
+      )}
+
+      {activeTab === "history" && (
+        <>
+          <Card className="dash-card border border-brand-100 bg-gradient-to-r from-brand-50 via-white to-accent-50 p-5">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="max-w-3xl">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brand-700">History</p>
+                <h2 className="mt-2 text-xl font-semibold text-accent-950">Past Review Cycles</h2>
+                <p className="mt-2 text-sm text-accent-700">
+                  Browse completed review batches, then click into one batch to inspect its employee rows, comments, routing, and audit trail.
+                </p>
+              </div>
+              <div className="rounded-2xl border border-accent-200 bg-white px-4 py-3 text-sm font-medium text-accent-700 shadow-sm">
+                {dashboardModel.history.length > 0
+                  ? `${dashboardModel.history.length} completed cycle${dashboardModel.history.length === 1 ? "" : "s"}`
+                  : "Completed review cycles will appear here once approvals finish."}
+              </div>
+            </div>
+          </Card>
+
+          {approvalViewLevel === "queue" ? (
+            <ApprovalProposalList
+              proposals={dashboardModel.history}
+              isLoading={isApprovalQueueLoading}
+              onSelect={(proposalId) => handleProposalSelect("history", proposalId)}
+              eyebrow="History"
+              title="Completed Cycles"
+              description="Open a completed batch to inspect its employee list, notes, routing, and audit trail."
+              emptyMessage="No completed review cycles yet."
+              countLabel={`${dashboardModel.history.length} cycle${dashboardModel.history.length === 1 ? "" : "s"}`}
+            />
+          ) : (
+            <ApprovalProposalDetail
+              key={activeApprovalProposalId ?? "history-empty"}
+              proposal={selectedApprovalProposal}
+              proposalItems={Object.values(selectedApprovalItemsByEmployee)}
+              approvalSteps={selectedApprovalSteps}
+              proposalNotes={selectedApprovalNotes}
+              proposalAuditEvents={selectedApprovalAuditEvents}
+              isLoading={isApprovalDetailLoading}
+              canTakeAction={false}
+              canAddNote={false}
+              onBack={() => handleBackToQueue("history")}
+              onAction={(action, note) => void handleReviewDecision(action, note)}
+              onAddNote={(note, employeeId) => void handleApprovalNote(note, employeeId)}
+              mode="history"
+            />
+          )}
+        </>
       )}
 
       {/* Add Employee Modal */}
@@ -692,12 +1302,24 @@ export default function SalaryReviewPage() {
         isOpen={showAiModal}
         onClose={() => setShowAiModal(false)}
         request={aiPlanRequest}
-        onApprove={({ plan, selectedEmployeeIds: approvedIds }) => {
+        onApprove={async ({ plan, selectedEmployeeIds: approvedIds }) => {
           if (plan.items.length === 0) {
             applyDefaultIncreases();
+            await handleSaveDraft("ai");
+            setRequestedBuildReviewStep("draft");
+            setFeedback({
+              type: "success",
+              message: "AI draft applied. Review the employee-level changes, then continue to final review.",
+            });
             return;
           }
           applyAiProposal(plan, approvedIds);
+          await handleSaveDraft("ai");
+          setRequestedBuildReviewStep("draft");
+          setFeedback({
+            type: "success",
+            message: "AI draft applied. Review the employee-level changes, then continue to final review.",
+          });
         }}
       />
 
@@ -711,6 +1333,24 @@ export default function SalaryReviewPage() {
           setShowUploadModal(false);
         }}
       />
+    </div>
+  );
+}
+
+function OverviewMetric({
+  label,
+  value,
+  body,
+}: {
+  label: string;
+  value: string;
+  body: string;
+}) {
+  return (
+    <div className="rounded-2xl border border-accent-100 bg-white/85 p-4">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-500">{label}</p>
+      <p className="mt-2 text-2xl font-bold text-accent-950">{value}</p>
+      <p className="mt-1 text-xs text-accent-600">{body}</p>
     </div>
   );
 }

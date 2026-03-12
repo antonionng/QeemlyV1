@@ -13,11 +13,14 @@ import {
 import Link from "next/link";
 import clsx from "clsx";
 import { Button } from "@/components/ui/button";
+import { AiExplainTooltip } from "@/components/ui/ai-explain-tooltip";
 import { Card } from "@/components/ui/card";
 import {
   buildMarketOverviewCards,
   filterMarketDrilldownRows,
   formatMarketEntityLabel,
+  getMarketTrustExplainer,
+  getMarketTrustState,
   type MarketOverviewFilters,
   type MarketOverviewTone,
 } from "@/lib/benchmarks/market-overview";
@@ -150,6 +153,7 @@ export default function MarketOverviewPage() {
   }, [loadInsights]);
 
   const marketCards = insights ? buildMarketOverviewCards(insights) : [];
+  const trustState = insights ? getMarketTrustState(insights) : "untrusted";
   const filterOptions = useMemo(() => {
     if (!insights) {
       return {
@@ -186,11 +190,11 @@ export default function MarketOverviewPage() {
     ? new Date(insights.freshness.latest).toLocaleDateString("en-GB")
     : "Awaiting refresh";
   const coverageStrengthLabel =
-    insights.summary.coverageStrength === "strong"
-      ? "Strong coverage"
-      : insights.summary.coverageStrength === "developing"
-        ? "Developing coverage"
-        : "Thin coverage";
+    trustState === "healthy"
+      ? "Trusted coverage is strong"
+      : trustState === "limited"
+        ? "Trusted coverage is mixed"
+        : "Trusted coverage is still building";
   const freshnessStatusLabel =
     insights.freshness.freshnessStatus === "fresh"
       ? "Fresh dataset"
@@ -200,15 +204,43 @@ export default function MarketOverviewPage() {
   const marketDiagnostics = insights.diagnostics.market;
   const marketDiagnosticMessage =
     marketDiagnostics.error || marketDiagnostics.warning || marketDiagnostics.clientWarning;
+  const trustExplainer = getMarketTrustExplainer(insights);
+  const latestRefreshSummary =
+    trustState === "untrusted"
+      ? "Qeemly market data is available, but no visible cohorts currently clear the contributor threshold for trusted benchmarking."
+      : `${insights.summary.contributorQualifiedRows.toLocaleString()} trusted cohorts currently meet Qeemly's minimum contributor requirement.`;
+  const openBenchmarkLabel =
+    trustState === "untrusted" ? "Open Benchmarking Carefully" : "Open Benchmarking";
+  const strongestCoverageTitle =
+    trustState === "untrusted" ? "Best Available Coverage In This View" : "Where The Dataset Is Strongest";
+  const strongestCoverageSummary =
+    trustState === "untrusted"
+      ? "Qeemly market coverage is available here. Use these slices as directional starting points while you broaden the view and look for stronger contributor depth."
+      : "Use these coverage slices as the strongest starting points for pricing work in the current market view.";
+  const watchoutsSummary =
+    trustState === "untrusted"
+      ? "These cohorts are visible in the Qeemly market dataset, but they are still below the contributor threshold for higher-confidence benchmarking."
+      : "Use this watchlist to spot thinner or aging cohorts before relying on them in compensation discussions.";
+  const cohortExplorerSummary =
+    trustState === "untrusted"
+      ? "Filter live market cohorts by role, location, and level, then prioritize areas with stronger contributor depth before using them for higher-confidence compensation decisions."
+      : "Filter live market cohorts by role, location, and level without leaving the overview.";
 
   return (
     <div className="space-y-8">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="space-y-1">
           <h1 className="page-title">Market Overview</h1>
-          <p className="text-sm text-accent-500">
-            Review the health, breadth, and trustworthiness of the Qeemly market dataset before pricing individual roles.
-          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm text-accent-500">
+              Review how much reliable market coverage is available before using benchmarks in compensation decisions.
+            </p>
+            <AiExplainTooltip
+              label="How trust works"
+              message={trustExplainer}
+              className="shrink-0"
+            />
+          </div>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           <Button
@@ -233,9 +265,15 @@ export default function MarketOverviewPage() {
           <Link href="/dashboard/benchmarks">
             <Button
               size="sm"
-              className="h-9 rounded-full border-0 bg-brand-500 px-5 text-white hover:bg-brand-600"
+              variant={trustState === "untrusted" ? "outline" : undefined}
+              className={clsx(
+                "h-9 rounded-full px-5",
+                trustState === "untrusted"
+                  ? "border-amber-200 bg-amber-50 text-amber-900 hover:bg-amber-100"
+                  : "border-0 bg-brand-500 text-white hover:bg-brand-600",
+              )}
             >
-              Open Benchmarking
+              {openBenchmarkLabel}
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </Link>
@@ -273,9 +311,7 @@ export default function MarketOverviewPage() {
               Latest Refresh
             </p>
             <p className="mt-2 text-2xl font-bold text-accent-950">{latestRefresh}</p>
-            <p className="mt-1 text-sm text-accent-600">
-              {insights.summary.contributorQualifiedRows.toLocaleString()} trusted cohorts currently meet the contributor threshold.
-            </p>
+            <p className="mt-1 text-sm text-accent-600">{latestRefreshSummary}</p>
           </div>
         </div>
 
@@ -352,11 +388,9 @@ export default function MarketOverviewPage() {
             <Card className="dash-card p-6">
               <div className="flex items-center gap-2">
                 <ShieldCheck className="h-5 w-5 text-brand-500" />
-                <h3 className="text-lg font-semibold text-accent-950">Where The Dataset Is Strongest</h3>
+                <h3 className="text-lg font-semibold text-accent-950">{strongestCoverageTitle}</h3>
               </div>
-              <p className="mt-2 text-sm text-accent-600">
-                These coverage slices show where the market dataset is broadest and most reusable for pricing work.
-              </p>
+              <p className="mt-2 text-sm text-accent-600">{strongestCoverageSummary}</p>
 
               <div className="mt-5 grid gap-4 md:grid-cols-3">
                 <CoverageList
@@ -394,9 +428,7 @@ export default function MarketOverviewPage() {
                 <AlertTriangle className="h-5 w-5 text-amber-500" />
                 <h3 className="text-lg font-semibold text-accent-950">Coverage Watchouts</h3>
               </div>
-              <p className="mt-2 text-sm text-accent-600">
-                Use this watchlist to spot thin or aging cohorts before relying on them in pricing discussions.
-              </p>
+              <p className="mt-2 text-sm text-accent-600">{watchoutsSummary}</p>
 
               <div className="mt-5 space-y-3">
                 {insights.coverage.lowDensityRows.length > 0 ? (
@@ -439,15 +471,13 @@ export default function MarketOverviewPage() {
               <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
                   <h3 className="text-lg font-semibold text-accent-950">Cohort Explorer</h3>
-                  <p className="mt-2 text-sm text-accent-600">
-                    Filter live market cohorts by role, location, and level without leaving the overview.
-                  </p>
+                  <p className="mt-2 text-sm text-accent-600">{cohortExplorerSummary}</p>
                 </div>
                 <Link
                   href="/dashboard/benchmarks"
                   className="inline-flex items-center gap-2 text-sm font-semibold text-brand-700 hover:text-brand-800"
                 >
-                  Open Full Benchmarking
+                  {trustState === "untrusted" ? "Open Benchmarking Carefully" : "Open Full Benchmarking"}
                   <ArrowRight className="h-4 w-4" />
                 </Link>
               </div>

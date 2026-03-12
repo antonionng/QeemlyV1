@@ -1,32 +1,21 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Check, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { buildBenchmarkTrustLabels } from "@/lib/benchmarks/trust";
-import type { Department, Employee } from "@/lib/employees";
+import type { Employee } from "@/lib/employees";
 import { formatAEDCompact } from "@/lib/employees";
 import { DropdownItem, DropdownMenu } from "@/components/ui/dropdown-menu";
-import { LOCATIONS, LEVELS } from "@/lib/dashboard/dummy-data";
 import { Button } from "@/components/ui/button";
 
 type Props = {
   employees: Employee[];
   onOpenDetails: (employee: Employee) => void;
+  onEditEmployee: (employee: Employee) => void;
   onDelete: (employee: Employee) => void;
   selectedIds: string[];
   onToggleSelect: (employeeId: string) => void;
   onToggleSelectAll: (checked: boolean) => void;
   onBulkArchive: () => void;
-  onInlineSave: (
-    employeeId: string,
-    updates: Partial<{
-      department: Department;
-      levelId: string;
-      locationId: string;
-      baseSalary: number;
-      status: "active" | "inactive";
-    }>
-  ) => Promise<void>;
   mutating: boolean;
 };
 
@@ -48,55 +37,20 @@ function visaBadge(employee: Employee) {
 export function PeopleTable({
   employees,
   onOpenDetails,
+  onEditEmployee,
   onDelete,
   selectedIds,
   onToggleSelect,
   onToggleSelectAll,
   onBulkArchive,
-  onInlineSave,
   mutating,
 }: Props) {
-  const [edits, setEdits] = useState<
-    Record<string, { department: Department; levelId: string; locationId: string; baseSalary: number; status: "active" | "inactive" }>
-  >({});
-
-  const departments: Department[] = useMemo(
-    () => ["Engineering", "Product", "Design", "Data", "Sales", "Marketing", "Operations", "Finance", "HR"],
-    []
-  );
   const allSelected = employees.length > 0 && employees.every((employee) => selectedIds.includes(employee.id));
 
-  const readDraft = (employee: Employee) =>
-    edits[employee.id] || {
-      department: employee.department,
-      levelId: employee.level.id,
-      locationId: employee.location.id,
-      baseSalary: employee.baseSalary,
-      status: employee.status,
-    };
-
-  const updateDraft = (
-    employee: Employee,
-    employeeId: string,
-    patch: Partial<{ department: Department; levelId: string; locationId: string; baseSalary: number; status: "active" | "inactive" }>
-  ) => {
-    const current = readDraft(employee);
-    setEdits((prev) => ({
-      ...prev,
-      [employeeId]: {
-        department: patch.department || current.department,
-        levelId: patch.levelId || current.levelId,
-        locationId: patch.locationId || current.locationId,
-        baseSalary: patch.baseSalary ?? current.baseSalary,
-        status: patch.status || current.status,
-      },
-    }));
-  };
-
   return (
-    <div className="overflow-hidden rounded-2xl border border-border bg-white shadow-sm">
-      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-accent-50 px-4 py-3">
-        <p className="text-xs font-semibold uppercase tracking-wider text-accent-600">
+    <div className="overflow-hidden rounded-3xl border border-border/70 bg-white shadow-sm shadow-brand-100/20">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/80 bg-accent-50/80 px-5 py-4">
+        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent-600">
           {selectedIds.length} selected
         </p>
         <Button
@@ -104,15 +58,15 @@ export function PeopleTable({
           variant="outline"
           disabled={selectedIds.length === 0 || mutating}
           onClick={onBulkArchive}
-          className="h-8 px-3 text-xs"
+          className="h-9 rounded-full px-4 text-xs"
         >
           Archive Selected
         </Button>
       </div>
       <div className="overflow-x-auto">
-        <table className="min-w-[1250px] w-full">
-          <thead className="bg-accent-50">
-            <tr className="text-left text-xs uppercase tracking-wider text-accent-500">
+        <table className="min-w-[1180px] w-full">
+          <thead className="bg-accent-50/60">
+            <tr className="text-left text-xs uppercase tracking-[0.18em] text-accent-500">
               <th className="px-4 py-3 font-semibold">
                 <input
                   type="checkbox"
@@ -181,43 +135,17 @@ export function PeopleTable({
                   <p className="font-medium">{employee.role.title}</p>
                   <p className="text-xs text-accent-500">{employee.level.name}</p>
                 </td>
-                <td className="px-4 py-3 text-sm text-brand-800" onClick={(event) => event.stopPropagation()}>
-                  <select
-                    value={readDraft(employee).department}
-                    onChange={(event) =>
-                      updateDraft(employee, employee.id, { department: event.target.value as Department })
-                    }
-                    className="h-8 rounded-lg border border-border px-2 text-xs"
-                  >
-                    {departments.map((dept) => (
-                      <option key={dept} value={dept}>
-                        {dept}
-                      </option>
-                    ))}
-                  </select>
+                <td className="px-4 py-3 text-sm text-brand-800">
+                  <span className="inline-flex rounded-full bg-accent-50 px-2.5 py-1 text-xs font-medium text-accent-700">
+                    {employee.department}
+                  </span>
                 </td>
-                <td className="px-4 py-3 text-sm text-brand-800" onClick={(event) => event.stopPropagation()}>
-                  <select
-                    value={readDraft(employee).locationId}
-                    onChange={(event) => updateDraft(employee, employee.id, { locationId: event.target.value })}
-                    className="h-8 rounded-lg border border-border px-2 text-xs"
-                  >
-                    {LOCATIONS.map((location) => (
-                      <option key={location.id} value={location.id}>
-                        {location.city}
-                      </option>
-                    ))}
-                  </select>
+                <td className="px-4 py-3 text-sm text-brand-800">
+                  <p className="font-medium">{employee.location.city}</p>
+                  <p className="text-xs text-accent-500">{employee.location.country}</p>
                 </td>
-                <td className="px-4 py-3 text-sm font-semibold text-brand-900" onClick={(event) => event.stopPropagation()}>
-                  <input
-                    type="number"
-                    value={readDraft(employee).baseSalary}
-                    onChange={(event) =>
-                      updateDraft(employee, employee.id, { baseSalary: Number(event.target.value || 0) })
-                    }
-                    className="h-8 w-28 rounded-lg border border-border px-2 text-xs"
-                  />
+                <td className="px-4 py-3 text-sm font-semibold text-brand-900">
+                  <p>{formatAEDCompact(employee.baseSalary)}</p>
                   <p className="mt-1 text-[10px] text-accent-500">{formatAEDCompact(employee.totalComp)} total</p>
                 </td>
                 <td className="px-4 py-3">
@@ -254,70 +182,39 @@ export function PeopleTable({
                     )}
                   </div>
                 </td>
-                <td className="px-4 py-3 text-sm text-brand-800 capitalize" onClick={(event) => event.stopPropagation()}>
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={readDraft(employee).status}
-                      onChange={(event) =>
-                        updateDraft(employee, employee.id, {
-                          status: event.target.value as "active" | "inactive",
-                        })
-                      }
-                      className="h-8 rounded-lg border border-border px-2 text-xs"
-                    >
-                      <option value="active">active</option>
-                      <option value="inactive">inactive</option>
-                    </select>
-                    <select
-                      value={readDraft(employee).levelId}
-                      onChange={(event) => updateDraft(employee, employee.id, { levelId: event.target.value })}
-                      className="h-8 rounded-lg border border-border px-2 text-xs"
-                    >
-                      {LEVELS.map((level) => (
-                        <option key={level.id} value={level.id}>
-                          {level.name}
-                        </option>
-                      ))}
-                    </select>
+                <td className="px-4 py-3 text-sm text-brand-800 capitalize">
+                  <div className="space-y-1">
+                    <span className="inline-flex rounded-full bg-accent-50 px-2.5 py-1 text-xs font-medium text-accent-700">
+                      {employee.status}
+                    </span>
+                    <p className="text-xs text-accent-500">{employee.level.name}</p>
                   </div>
                 </td>
                 <td className="px-4 py-3 text-right" onClick={(event) => event.stopPropagation()}>
                   <div className="flex items-center justify-end gap-2">
-                  <button
-                    type="button"
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-brand-200 text-brand-600 hover:bg-brand-50 disabled:opacity-60"
-                    onClick={async () => {
-                      const draft = readDraft(employee);
-                      await onInlineSave(employee.id, draft);
-                      setEdits((prev) => {
-                        const next = { ...prev };
-                        delete next[employee.id];
-                        return next;
-                      });
-                    }}
-                    title="Save inline edits"
-                    disabled={mutating}
-                  >
-                    <Check className="h-4 w-4" />
-                  </button>
-                  <DropdownMenu
-                    trigger={
-                      <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-border text-accent-500 hover:bg-accent-50">
-                        <MoreHorizontal className="h-4 w-4" />
-                      </span>
-                    }
-                  >
-                    <DropdownItem icon={<Pencil className="h-4 w-4" />} onClick={() => onOpenDetails(employee)}>
-                      Edit Employee
-                    </DropdownItem>
-                    <DropdownItem
-                      icon={<Trash2 className="h-4 w-4" />}
-                      variant="danger"
-                      onClick={() => onDelete(employee)}
+                    <button
+                      type="button"
+                      className="inline-flex h-9 items-center gap-2 rounded-full border border-brand-200 px-4 text-sm font-medium text-brand-700 hover:bg-brand-50"
+                      onClick={() => onEditEmployee(employee)}
                     >
-                      Delete Employee
-                    </DropdownItem>
-                  </DropdownMenu>
+                      <Pencil className="h-4 w-4" />
+                      Edit
+                    </button>
+                    <DropdownMenu
+                      trigger={
+                        <span className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-border text-accent-500 hover:bg-accent-50">
+                          <MoreHorizontal className="h-4 w-4" />
+                        </span>
+                      }
+                    >
+                      <DropdownItem
+                        icon={<Trash2 className="h-4 w-4" />}
+                        variant="danger"
+                        onClick={() => onDelete(employee)}
+                      >
+                        Delete Employee
+                      </DropdownItem>
+                    </DropdownMenu>
                   </div>
                 </td>
               </tr>

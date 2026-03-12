@@ -31,48 +31,61 @@ export function PeopleStatsBar({ employees }: Props) {
   const belowPct = Math.round((below / denom) * 100);
   const inBandPct = Math.round((inBand / denom) * 100);
   const abovePct = Math.max(0, 100 - belowPct - inBandPct);
+  const cards = [
+    {
+      label: "Headcount",
+      value: totalEmployees.toString(),
+      meta: "active employees",
+    },
+    {
+      label: "Departments",
+      value: departments.toString(),
+      meta: "with employee data",
+    },
+    {
+      label: "Avg vs Market",
+      value: formatPct(avgMarket),
+      meta: "across all employees",
+    },
+  ];
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-      <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-wider text-accent-500">Headcount</p>
-        <p className="mt-2 text-2xl font-bold text-brand-900">{totalEmployees}</p>
-        <p className="mt-1 text-xs text-accent-500">active employees</p>
-      </div>
+    <div
+      data-testid="people-stats-grid"
+      className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-5"
+    >
+      {cards.map((card) => (
+        <div
+          key={card.label}
+          className="min-h-[132px] rounded-3xl border border-border/70 bg-white p-5 shadow-sm shadow-brand-100/20"
+        >
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent-500">{card.label}</p>
+          <p className="mt-3 text-2xl font-bold tracking-tight text-brand-900">{card.value}</p>
+          <p className="mt-2 text-sm text-accent-500">{card.meta}</p>
+        </div>
+      ))}
 
-      <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-wider text-accent-500">Departments</p>
-        <p className="mt-2 text-2xl font-bold text-brand-900">{departments}</p>
-        <p className="mt-1 text-xs text-accent-500">with employee data</p>
-      </div>
-
-      <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
-        <p className="text-xs font-semibold uppercase tracking-wider text-accent-500">Avg vs Market</p>
-        <p className="mt-2 text-2xl font-bold text-brand-900">{formatPct(avgMarket)}</p>
-        <p className="mt-1 text-xs text-accent-500">across all employees</p>
-      </div>
-
-      <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
+      <div className="min-h-[132px] rounded-3xl border border-border/70 bg-white p-5 shadow-sm shadow-brand-100/20">
         <p className="text-xs font-semibold uppercase tracking-wider text-accent-500">Band Split</p>
-        <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-accent-100">
+        <div className="mt-3 h-2.5 overflow-hidden rounded-full bg-accent-100">
           <div className="flex h-full w-full">
             <div className="bg-red-500" style={{ width: `${belowPct}%` }} />
             <div className="bg-emerald-500" style={{ width: `${inBandPct}%` }} />
             <div className="bg-amber-500" style={{ width: `${abovePct}%` }} />
           </div>
         </div>
-        <p className="mt-2 text-xs text-accent-500">
+        <p className="mt-3 text-sm text-accent-500">
           {below} below • {inBand} in-band • {above} above
         </p>
       </div>
 
-      <div className="rounded-2xl border border-border bg-white p-5 shadow-sm">
+      <div className="min-h-[132px] rounded-3xl border border-border/70 bg-white p-5 shadow-sm shadow-brand-100/20">
         <p className="text-xs font-semibold uppercase tracking-wider text-accent-500">Benchmark Trust</p>
-        <p className="mt-2 text-lg font-bold text-brand-900">{benchmarkTrust.primarySourceLabel}</p>
-        <p className="mt-1 text-xs text-accent-500">
+        <p className="mt-3 text-lg font-bold leading-tight text-brand-900">{benchmarkTrust.primarySourceLabel}</p>
+        <p className="mt-2 text-sm text-accent-500">
           {benchmarkTrust.exactMatches} exact • {benchmarkTrust.fallbackMatches} fallback
         </p>
-        <p className="mt-1 text-xs text-accent-500">Freshness: {trustFreshness}</p>
+        <p className="mt-1 text-sm text-accent-500">Freshness: {trustFreshness}</p>
       </div>
     </div>
   );

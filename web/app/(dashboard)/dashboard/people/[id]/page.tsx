@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, ReactNode } from "react";
+import { useSearchParams } from "next/navigation";
 import { ArrowLeft, BadgeDollarSign, CalendarClock, CircleUserRound, Landmark, Loader2, Pencil, Save, ShieldCheck, Sparkles, TrendingUp, Upload, X, FileClock, FilePlus2, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -122,6 +123,7 @@ function sectionTitle(
 
 export default function EmployeeProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const supabase = createClient();
+  const searchParams = useSearchParams();
   const [employeeId, setEmployeeId] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -167,6 +169,12 @@ export default function EmployeeProfilePage({ params }: { params: Promise<{ id: 
   useEffect(() => {
     params.then((resolved) => setEmployeeId(resolved.id));
   }, [params]);
+
+  useEffect(() => {
+    if (searchParams.get("mode") === "edit") {
+      setIsEditMode(true);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (!employeeId) return;

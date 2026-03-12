@@ -3,6 +3,8 @@ import {
   buildMarketOverviewCards,
   filterMarketDrilldownRows,
   formatMarketEntityLabel,
+  getMarketTrustExplainer,
+  getMarketTrustState,
   type MarketOverviewFilters,
 } from "@/lib/benchmarks/market-overview";
 import type { MarketInsightsResponse } from "@/lib/benchmarks/market-insights";
@@ -88,18 +90,19 @@ const insights: MarketInsightsResponse = {
 };
 
 describe("market overview helpers", () => {
-  it("builds premium headline cards instead of raw operational labels", () => {
+  it("builds customer-facing trust cards for healthy coverage", () => {
     expect(buildMarketOverviewCards(insights)).toEqual([
       {
-        label: "Coverage Quality",
+        label: "Trusted Benchmark Coverage",
         value: "80%",
-        description: "960 of 1,200 visible market cohorts meet the contributor threshold.",
+        description:
+          "960 of 1,200 visible market cohorts currently meet Qeemly's minimum contributor requirement for trusted benchmarking.",
         tone: "positive",
       },
       {
         label: "Roles Covered",
         value: "15",
-        description: "Active market coverage across the visible Qeemly dataset.",
+        description: "Visible market role coverage in the current benchmarking view.",
         tone: "market",
       },
       {
@@ -115,6 +118,89 @@ describe("market overview helpers", () => {
         tone: "overlay",
       },
     ]);
+  });
+
+  it("surfaces a safer warning state when no trusted cohorts are visible", () => {
+    expect(
+      buildMarketOverviewCards({
+        ...insights,
+        summary: {
+          ...insights.summary,
+          benchmarkCount: 1200,
+          contributorQualifiedRows: 0,
+          lowConfidenceRows: 1200,
+          coverageStrength: "thin",
+        },
+      }),
+    ).toEqual([
+      {
+        label: "Trusted Benchmark Coverage",
+        value: "No trusted cohorts in view",
+        description:
+          "Visible market cohorts are below Qeemly's contributor threshold for higher-confidence benchmarking in this view.",
+        tone: "warning",
+      },
+      {
+        label: "Roles Covered",
+        value: "15",
+        description: "Visible market role coverage in the current benchmarking view.",
+        tone: "market",
+      },
+      {
+        label: "Freshness Watch",
+        value: "48",
+        description: "Cohorts are older than the 30-day freshness target.",
+        tone: "warning",
+      },
+      {
+        label: "Company Overlay",
+        value: "12",
+        description: "Company pay bands are available as a secondary policy overlay.",
+        tone: "overlay",
+      },
+    ]);
+  });
+
+  it("classifies the current view by trusted benchmark state", () => {
+    expect(getMarketTrustState(insights)).toBe("healthy");
+    expect(
+      getMarketTrustState({
+        ...insights,
+        summary: {
+          ...insights.summary,
+          contributorQualifiedRows: 2,
+          coverageStrength: "developing",
+        },
+      }),
+    ).toBe("limited");
+    expect(
+      getMarketTrustState({
+        ...insights,
+        summary: {
+          ...insights.summary,
+          contributorQualifiedRows: 0,
+          coverageStrength: "thin",
+        },
+      }),
+    ).toBe("untrusted");
+  });
+
+  it("explains trusted benchmarks in plain language", () => {
+    expect(getMarketTrustExplainer(insights)).toContain(
+      "A trusted benchmark is a visible market cohort that meets Qeemly's minimum contributor requirement.",
+    );
+    expect(
+      getMarketTrustExplainer({
+        ...insights,
+        summary: {
+          ...insights.summary,
+          contributorQualifiedRows: 0,
+          coverageStrength: "thin",
+        },
+      }),
+    ).toContain(
+      "Qeemly market coverage is visible in the current view, but none of the cohorts currently clear the contributor threshold for trusted benchmarking.",
+    );
   });
 
   it("humanizes market entities into premium labels", () => {

@@ -12,6 +12,9 @@ const employees = [
     location_id: "dubai",
     base_salary: 120_000,
     status: "active",
+    hire_date: "2021-01-01",
+    last_review_date: "2024-12-01",
+    performance_rating: "exceptional" as const,
   },
   {
     id: "emp-2",
@@ -23,6 +26,9 @@ const employees = [
     location_id: "dubai",
     base_salary: 100_000,
     status: "active",
+    hire_date: "2024-01-01",
+    last_review_date: "2025-10-01",
+    performance_rating: "meets" as const,
   },
   {
     id: "emp-3",
@@ -34,6 +40,9 @@ const employees = [
     location_id: "riyadh",
     base_salary: 95_000,
     status: "active",
+    hire_date: "2023-06-01",
+    last_review_date: "2024-05-01",
+    performance_rating: "exceeds" as const,
   },
   {
     id: "emp-4",
@@ -45,6 +54,9 @@ const employees = [
     location_id: "dubai",
     base_salary: 90_000,
     status: "active",
+    hire_date: "2025-01-15",
+    last_review_date: null,
+    performance_rating: null,
   },
 ];
 
@@ -135,5 +147,55 @@ describe("general helper", () => {
     );
 
     expect(result.handled).toBe(false);
+  });
+
+  it("returns the highest retention risk employee for supported prompts", () => {
+    const result = __internal.resolveSupportedQuestion(
+      "Who is my highest retention risk employee?",
+      employees,
+      marketBenchmarks,
+    );
+
+    expect(result.handled).toBe(true);
+    if (!result.handled) {
+      throw new Error("Expected helper question to be handled");
+    }
+
+    expect(result.payload.answer).toContain("highest retention risk employee is Antonio Giugno");
+    expect(result.payload.answer).toContain("exceptional performer");
+    expect(result.payload.answer).toContain("below the Qeemly market median");
+  });
+
+  it("returns the department furthest below market", () => {
+    const result = __internal.resolveSupportedQuestion(
+      "Which department is furthest below market?",
+      employees,
+      marketBenchmarks,
+    );
+
+    expect(result.handled).toBe(true);
+    if (!result.handled) {
+      throw new Error("Expected helper question to be handled");
+    }
+
+    expect(result.payload.answer).toContain("Data is the department furthest below market");
+    expect(result.payload.answer).toContain("Antonio Giugno");
+  });
+
+  it("returns benchmark coverage gaps", () => {
+    const result = __internal.resolveSupportedQuestion(
+      "Where do we have weak benchmark coverage?",
+      employees,
+      marketBenchmarks,
+    );
+
+    expect(result.handled).toBe(true);
+    if (!result.handled) {
+      throw new Error("Expected helper question to be handled");
+    }
+
+    expect(result.payload.answer).toContain("1 active employee could not be matched");
+    expect(result.payload.answer).toContain("Lina Khan");
+    expect(result.payload.answer).toContain("unknown-role");
   });
 });

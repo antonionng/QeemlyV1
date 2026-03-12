@@ -174,10 +174,11 @@ describe("GET /api/benchmarks/market-insights", () => {
       freshnessStatus: "mixed",
     });
     expect(payload.hero).toEqual({
-      title: "Market coverage is developing, and the dataset is broad, but freshness needs attention.",
+      title: "Trusted benchmark coverage is available, but mixed in this view.",
       summary:
-        "The visible Qeemly market dataset covers 2 roles across 2 locations, with 2 cohorts meeting the contributor threshold.",
-      recommendedAction: "Review stale cohorts, then drill into pricing for your priority roles.",
+        "The visible Qeemly market dataset covers 2 roles across 2 locations, with 2 cohorts currently meeting Qeemly's minimum contributor requirement for trusted benchmarking.",
+      recommendedAction:
+        "Start with the strongest coverage areas below, review aging cohorts, and use caution when pricing against thinner segments.",
     });
     expect(payload.coverage.topRoles[0]).toEqual({
       roleId: "swe-devops",
@@ -296,5 +297,60 @@ describe("GET /api/benchmarks/market-insights", () => {
     expect(payload.diagnostics.market.warning).toBe(
       "No market benchmark rows were returned from the platform market dataset.",
     );
+  });
+
+  it("returns a customer-safe warning summary when visible cohorts do not meet the trust bar", async () => {
+    createClientMock.mockResolvedValue(createSessionSupabase({ workspaceId: null }));
+    createServiceClientMock.mockReturnValue({ from: vi.fn() });
+    fetchMarketBenchmarksMock.mockResolvedValue([
+      {
+        role_id: "data-analyst",
+        location_id: "dubai",
+        level_id: "ic1",
+        currency: "AED",
+        p10: 8000,
+        p25: 9000,
+        p50: 10000,
+        p75: 11000,
+        p90: 12000,
+        sample_size: 3,
+        contributor_count: 0,
+        provenance: "employee",
+        freshness_at: "2026-03-10T00:00:00.000Z",
+        source_breakdown: { employee: 1 },
+        source: "market",
+      },
+      {
+        role_id: "data-analyst",
+        location_id: "abu-dhabi",
+        level_id: "ic2",
+        currency: "AED",
+        p10: 9000,
+        p25: 10000,
+        p50: 11000,
+        p75: 12000,
+        p90: 13000,
+        sample_size: 6,
+        contributor_count: 2,
+        provenance: "admin",
+        freshness_at: "2026-03-09T00:00:00.000Z",
+        source_breakdown: { admin: 2 },
+        source: "market",
+      },
+    ]);
+
+    const response = await GET();
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.status).toBe("ready");
+    expect(payload.summary.contributorQualifiedRows).toBe(0);
+    expect(payload.hero).toEqual({
+      title: "Qeemly market coverage is available, but confidence is limited in this view.",
+      summary:
+        "We found Qeemly market coverage across 1 role and 2 locations, but the currently visible cohorts are below Qeemly's contributor threshold for trusted benchmarking.",
+      recommendedAction:
+        "Broaden your view, start with the strongest coverage areas below, and use extra caution before making compensation decisions from low-density cohorts.",
+    });
   });
 });

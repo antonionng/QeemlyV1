@@ -31,6 +31,8 @@ import {
 import { useSalaryView, applyViewMode } from "@/lib/salary-view-store";
 import { generateAdvisory } from "@/lib/advisory/generator";
 import { buildBenchmarkTrustLabels } from "@/lib/benchmarks/trust";
+import { shouldShowEmployeeApprovalContext } from "@/lib/salary-review/dashboard";
+import { ApprovalChainView } from "./approval-chain-view";
 
 interface EmployeeDetailPanelProps {
   employee: ReviewEmployee;
@@ -122,7 +124,14 @@ function estimateSuggestedIncrease(employee: ReviewEmployee): number {
 export function EmployeeDetailPanel({ employee, onClose }: EmployeeDetailPanelProps) {
   const panelRef = useRef<HTMLDivElement>(null);
   const { salaryView } = useSalaryView();
-  const { workflowByEmployee, updateEmployeeWorkflow, applySuggestedIncrease } = useSalaryReview();
+  const {
+    workflowByEmployee,
+    updateEmployeeWorkflow,
+    applySuggestedIncrease,
+    activeProposal,
+    approvalSteps,
+    proposalNotes,
+  } = useSalaryReview();
   const [sections, setSections] = useState<Record<SectionKey, boolean>>({
     history: true,
     actions: true,
@@ -198,7 +207,7 @@ export function EmployeeDetailPanel({ employee, onClose }: EmployeeDetailPanelPr
         }
       } catch {
         if (isMounted) {
-          setHistoryError("Using generated history");
+          setHistoryError("Live history unavailable. Showing generated timeline instead.");
           setLiveHistory([]);
         }
       } finally {
@@ -250,6 +259,15 @@ export function EmployeeDetailPanel({ employee, onClose }: EmployeeDetailPanelPr
     (h) => h.changeReason !== "hire" && h.changePercentage > 0
   );
   const benchmarkTrust = buildBenchmarkTrustLabels(employee.benchmarkContext);
+  const proposedOrSuggestedIncrease =
+    employee.proposedIncrease > 0 ? employee.proposedIncrease : suggestedIncrease;
+  const proposedOrSuggestedSalary =
+    employee.proposedIncrease > 0 ? employee.newSalary : employee.baseSalary + suggestedIncrease;
+  const historySourceLabel =
+    loadingHistory ? "Loading live history" : historyError ? "Generated timeline" : "Live timeline";
+  const employeeNotes = proposalNotes.filter(
+    (note) => !note.employee_id || note.employee_id === employee.id
+  );
 
   const riskCfg = RISK_CONFIG[risk.overall];
   const RiskIcon = riskCfg.icon;
@@ -379,6 +397,90 @@ export function EmployeeDetailPanel({ employee, onClose }: EmployeeDetailPanelPr
             </section>
           )}
 
+          <section className="rounded-xl border border-accent-200 bg-accent-50/40 px-4 py-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-[11px] font-semibold uppercase tracking-widest text-accent-500">
+                  Recommendation Snapshot
+                </h3>
+                <p className="mt-1 text-sm text-accent-700">
+                  {employee.proposedIncrease > 0
+                    ? "This employee already has a proposal in the current review."
+                    : "No proposal has been applied yet. Suggested value shown below."}
+                </p>
+              </div>
+              <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-accent-700">
+                {employee.bandPosition === "below"
+                  ? "Market adjustment candidate"
+                  : employee.bandPosition === "above"
+                    ? "Watch above-market pay"
+                    : "Within market band"}
+              </span>
+            </div>
+
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-xl bg-white px-3 py-3">
+                <p className="text-xs text-accent-500">Current salary</p>
+                <p className="mt-1 text-lg font-semibold text-accent-950">
+                  {formatAED(applyViewMode(employee.baseSalary, salaryView))}
+                </p>
+              </div>
+              <div className="rounded-xl bg-white px-3 py-3">
+                <p className="text-xs text-accent-500">
+                  {employee.proposedIncrease > 0 ? "Current proposal" : "Suggested increase"}
+                </p>
+                <p className="mt-1 text-lg font-semibold text-emerald-700">
+                  +{formatAED(applyViewMode(proposedOrSuggestedIncrease, salaryView))}
+                </p>
+              </div>
+              <div className="rounded-xl bg-white px-3 py-3">
+                <p className="text-xs text-accent-500">
+                  {employee.proposedIncrease > 0 ? "Proposed salary" : "Suggested salary"}
+                </p>
+                <p className="mt-1 text-lg font-semibold text-accent-950">
+                  {formatAED(applyViewMode(proposedOrSuggestedSalary, salaryView))}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-3 rounded-xl border border-white bg-white/80 px-3 py-3 text-sm text-accent-700">
+              {employee.bandPosition === "below"
+                ? "This employee sits below the market range and should be reviewed early."
+                : employee.bandPosition === "above"
+                  ? "This employee is already above the market range, so salary changes need stronger justification."
+                  : "This employee sits inside the market range. Use performance and retention context to decide the final outcome."}
+            </div>
+          </section>
+
+          {shouldShowEmployeeApprovalContext(Boolean(activeProposal)) ? (
+            <section className="rounded-xl border border-border/50 bg-white px-4 py-4">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-[11px] font-semibold uppercase tracking-widest text-accent-400">
+                    Approval Workflow
+                  </h3>
+                  <p className="mt-1 text-xs text-accent-500">Current saved proposal chain</p>
+                </div>
+                <span className="rounded-full bg-accent-100 px-2.5 py-1 text-xs font-semibold text-accent-700">
+                  {activeProposal?.status?.replaceAll("_", " ") || "draft only"}
+                </span>
+              </div>
+              <div className="mt-3">
+                <ApprovalChainView steps={approvalSteps} />
+              </div>
+              <div className="mt-3 space-y-2">
+                {employeeNotes.slice(0, 2).map((note) => (
+                  <div key={note.id} className="rounded-xl border border-accent-100 bg-accent-50/40 px-3 py-3">
+                    <p className="text-sm text-accent-700">{note.note}</p>
+                    <p className="mt-1 text-[11px] text-accent-500">
+                      {new Date(note.created_at).toLocaleDateString("en-GB")}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : null}
+
           <section className="rounded-xl border border-border/50 bg-white">
             <button
               type="button"
@@ -402,6 +504,14 @@ export function EmployeeDetailPanel({ employee, onClose }: EmployeeDetailPanelPr
 
             {sections.history && (
               <div className="border-t border-border/40 px-4 py-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="rounded-full bg-accent-100 px-2.5 py-1 text-[11px] font-semibold text-accent-600">
+                    {historySourceLabel}
+                  </span>
+                  {historyError && (
+                    <span className="text-[11px] text-amber-700">{historyError}</span>
+                  )}
+                </div>
                 <div className="mb-3 rounded-lg border border-border/50 bg-accent-50/50 p-3">
                   <p className="text-[11px] font-semibold uppercase tracking-wider text-accent-500">
                     Last Salary Increase
@@ -435,10 +545,6 @@ export function EmployeeDetailPanel({ employee, onClose }: EmployeeDetailPanelPr
                     <p className="mt-2 text-sm text-accent-400">No salary increases on record</p>
                   )}
                 </div>
-
-                {historyError && (
-                  <p className="mb-3 text-xs text-amber-600">{historyError}</p>
-                )}
 
                 <div className="relative">
                   <div className="absolute left-[9px] top-2 bottom-2 w-px bg-border/60" />

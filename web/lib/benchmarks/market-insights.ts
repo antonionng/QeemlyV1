@@ -433,20 +433,29 @@ function buildHeroSummary({
     };
   }
 
-  const freshnessPhrase =
-    freshnessStatus === "fresh"
-      ? "fresh"
-      : freshnessStatus === "mixed"
-        ? "broad, but freshness needs attention"
-        : "available, but freshness is now a risk";
+  if (contributorQualifiedRows === 0) {
+    return {
+      title: "Qeemly market coverage is available, but confidence is limited in this view.",
+      summary: `We found Qeemly market coverage across ${formatCount(uniqueRoles, "role")} and ${formatCount(uniqueLocations, "location")}, but the currently visible cohorts are below Qeemly's contributor threshold for trusted benchmarking.`,
+      recommendedAction:
+        "Broaden your view, start with the strongest coverage areas below, and use extra caution before making compensation decisions from low-density cohorts.",
+    };
+  }
+
+  const title =
+    coverageStrength === "strong"
+      ? "Trusted benchmark coverage is strong in this view."
+      : coverageStrength === "developing"
+        ? "Trusted benchmark coverage is available, but mixed in this view."
+        : "Trusted benchmark coverage is limited in this view.";
 
   return {
-    title: `Market coverage is ${coverageStrength}, and the dataset is ${freshnessPhrase}.`,
-    summary: `The visible Qeemly market dataset covers ${formatCount(uniqueRoles, "role")} across ${formatCount(uniqueLocations, "location")}, with ${formatCount(contributorQualifiedRows, "cohort")} meeting the contributor threshold.`,
+    title,
+    summary: `The visible Qeemly market dataset covers ${formatCount(uniqueRoles, "role")} across ${formatCount(uniqueLocations, "location")}, with ${formatCount(contributorQualifiedRows, "cohort")} currently meeting Qeemly's minimum contributor requirement for trusted benchmarking.`,
     recommendedAction:
       staleRows > 0
-        ? "Review stale cohorts, then drill into pricing for your priority roles."
-        : "Open Benchmarking to price priority roles against the strongest market cohorts.",
+        ? "Start with the strongest coverage areas below, review aging cohorts, and use caution when pricing against thinner segments."
+        : "Start with the strongest coverage areas below, then open benchmarking for the roles and locations with trusted coverage.",
   };
 }
 

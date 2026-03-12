@@ -7,6 +7,7 @@ import clsx from "clsx";
 import { Button } from "@/components/ui/button";
 import { type SalaryReviewAiPlanRequest, type SalaryReviewAiPlanResponse } from "@/lib/salary-review";
 import { formatAED } from "@/lib/employees";
+import { buildSalaryReviewBudgetModel } from "@/lib/salary-review/workspace-budget";
 
 type AiDistributionModalProps = {
   isOpen: boolean;
@@ -101,6 +102,18 @@ export function AiDistributionModal({ isOpen, onClose, request, onApprove }: AiD
     () => Object.entries(selected).filter(([, value]) => value).map(([employeeId]) => employeeId),
     [selected]
   );
+  const budgetModel =
+    state.status === "ready"
+      ? buildSalaryReviewBudgetModel({
+          budgetType: request.budgetType,
+          budgetPercentage: request.budgetPercentage ?? 0,
+          budgetAbsolute: request.budgetAbsolute ?? 0,
+          totalCurrentPayroll: state.plan.summary.totalCurrentPayroll,
+          budgetUsed: state.plan.summary.budgetUsed,
+          selectedEmployees: state.plan.summary.employeesConsidered,
+          proposedEmployees: state.plan.items.filter((item) => item.proposedIncrease > 0).length,
+        })
+      : null;
 
   if (!isOpen) return null;
 
@@ -139,7 +152,7 @@ export function AiDistributionModal({ isOpen, onClose, request, onApprove }: AiD
               <div>
                 <h2 className="text-xl font-bold text-accent-900">AI Distribution Review</h2>
                 <p className="text-sm text-accent-600">
-                  Benchmark-grounded recommendations. Approval is required before any changes are applied.
+                  Benchmark-grounded recommendations. Use this draft as a starting point, then continue in the review flow to adjust and submit it.
                 </p>
               </div>
             </div>
@@ -178,23 +191,50 @@ export function AiDistributionModal({ isOpen, onClose, request, onApprove }: AiD
 
           {state.status === "ready" && (
             <div className="space-y-5">
+              <div className="rounded-3xl border border-brand-100 bg-gradient-to-r from-brand-50/70 via-white to-accent-50/50 p-5">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="max-w-3xl">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brand-700">
+                      AI review summary
+                    </p>
+                    <h3 className="mt-2 text-lg font-semibold text-accent-900">
+                      Review the policy, budget impact, and benchmark rationale before applying any proposal.
+                    </h3>
+                    <p className="mt-2 text-sm leading-relaxed text-accent-700">
+                      {budgetModel?.policyLabel} {budgetModel?.allocationLabel}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-accent-200 bg-white px-4 py-3 shadow-sm">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-500">
+                      Current policy
+                    </p>
+                    <p className="mt-1 text-base font-semibold text-accent-950">
+                      {request.budgetType === "percentage"
+                        ? `${request.budgetPercentage ?? 0}% of payroll`
+                        : formatAED(request.budgetAbsolute ?? 0)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="rounded-2xl border border-border bg-accent-50/40 p-4">
-                  <div className="text-xs text-accent-500">Current Payroll</div>
+                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-accent-500">Current payroll</div>
                   <div className="mt-1 text-lg font-bold text-accent-900">{formatAED(state.plan.summary.totalCurrentPayroll)}</div>
                 </div>
                 <div className="rounded-2xl border border-border bg-accent-50/40 p-4">
-                  <div className="text-xs text-accent-500">Proposed Payroll</div>
+                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-accent-500">Proposed payroll</div>
                   <div className="mt-1 text-lg font-bold text-accent-900">{formatAED(state.plan.summary.totalProposedPayroll)}</div>
                 </div>
                 <div className="rounded-2xl border border-border bg-accent-50/40 p-4">
-                  <div className="text-xs text-accent-500">Budget Used</div>
+                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-accent-500">Allocated</div>
                   <div className="mt-1 text-lg font-bold text-accent-900">
                     {formatAED(state.plan.summary.budgetUsed)} ({state.plan.summary.budgetUsedPercentage.toFixed(1)}%)
                   </div>
+                  <div className="mt-1 text-xs text-accent-500">{budgetModel?.allocationLabel}</div>
                 </div>
                 <div className="rounded-2xl border border-border bg-accent-50/40 p-4">
-                  <div className="text-xs text-accent-500">Budget Status</div>
+                  <div className="text-xs font-semibold uppercase tracking-[0.14em] text-accent-500">Remaining</div>
                   <div
                     className={clsx(
                       "mt-1 text-lg font-bold",
@@ -204,6 +244,7 @@ export function AiDistributionModal({ isOpen, onClose, request, onApprove }: AiD
                     {state.plan.summary.budgetRemaining < 0 ? "-" : ""}
                     {formatAED(Math.abs(state.plan.summary.budgetRemaining))}
                   </div>
+                  <div className="mt-1 text-xs text-accent-500">{budgetModel?.remainingLabel}</div>
                 </div>
               </div>
 
@@ -221,7 +262,7 @@ export function AiDistributionModal({ isOpen, onClose, request, onApprove }: AiD
                 </div>
               )}
 
-              <div className="overflow-hidden rounded-2xl border border-border">
+              <div className="overflow-hidden rounded-2xl border border-border shadow-sm">
                 <table className="w-full">
                   <thead className="bg-accent-50">
                     <tr>
@@ -262,9 +303,9 @@ export function AiDistributionModal({ isOpen, onClose, request, onApprove }: AiD
                         </td>
                         <td className="px-3 py-3 align-top">
                           <div className="text-sm font-semibold text-accent-900">{item.employeeName}</div>
-                          <details className="mt-2 rounded-lg border border-accent-100 bg-accent-50/50 px-2 py-1.5">
+                          <details className="mt-2 rounded-xl border border-accent-100 bg-accent-50/60 px-3 py-2">
                             <summary className="cursor-pointer text-xs font-semibold text-accent-600">
-                              AI reasoning trace
+                              Why AI suggested this
                             </summary>
                             <div className="mt-2 space-y-2 text-xs text-accent-600">
                               {item.rationale.map((reason) => (
@@ -324,7 +365,9 @@ export function AiDistributionModal({ isOpen, onClose, request, onApprove }: AiD
 
         <div className="flex items-center justify-between border-t border-border/50 bg-white px-6 py-4">
           <div className="text-sm text-accent-500">
-            {state.status === "ready" ? `${selectedIds.length} selected for apply` : "Review AI recommendation details before applying"}
+            {state.status === "ready"
+              ? `${selectedIds.length} selected for draft apply. Changes still need review and submission after this step.`
+              : "Review AI recommendation details before using this draft"}
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" onClick={onClose}>Reject</Button>
@@ -333,11 +376,11 @@ export function AiDistributionModal({ isOpen, onClose, request, onApprove }: AiD
               onClick={applySelected}
               disabled={state.status !== "ready" || selectedIds.length === 0}
             >
-              Apply Selected
+              Use Selected Recommendations
             </Button>
             <Button onClick={applyAll} disabled={state.status !== "ready"}>
               <CheckCircle2 className="mr-1.5 h-4 w-4" />
-              Approve & Apply
+              Use AI Draft
             </Button>
           </div>
         </div>

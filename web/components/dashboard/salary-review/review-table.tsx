@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Search,
   ChevronUp,
@@ -11,13 +11,18 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { buildBenchmarkTrustLabels } from "@/lib/benchmarks/trust";
 import { useSalaryReview, type ReviewEmployee, type ColumnKey } from "@/lib/salary-review";
 import { formatAED, computeTenure, type Department } from "@/lib/employees";
 import { useSalaryView, applyViewMode } from "@/lib/salary-view-store";
+import { applySalaryReviewFilters } from "@/lib/salary-review/filters";
+import {
+  DEFAULT_SALARY_REVIEW_QUERY_STATE,
+  type SalaryReviewQueryState,
+} from "@/lib/salary-review/url-state";
 import { EmployeeDetailPanel } from "./employee-detail-panel";
 import { ColumnSettings } from "./column-settings";
+import { ReviewToolbar } from "./review-toolbar";
 
 type SortField =
   | "name"
@@ -29,7 +34,6 @@ type SortField =
   | "band"
   | "performance";
 type SortDirection = "asc" | "desc";
-type PoolFilter = "all" | "leadership" | "general";
 
 function SortIcon({
   field,
@@ -67,46 +71,71 @@ const PERF_BADGE: Record<
   low: { bg: "bg-red-100", text: "text-red-700", label: "Low" },
 };
 
-export function ReviewTable() {
-  const { employees, updateEmployeeIncrease, toggleEmployeeSelection, visibleColumns } = useSalaryReview();
+function getWorkflowStatus(employee: ReviewEmployee, workflow?: {
+  managerFollowUpDone: boolean;
+  calibrationNeeded: boolean;
+  recommendationReady: boolean;
+}, proposalStatus?: string, hasPersistedItem?: boolean) {
+  if (proposalStatus && hasPersistedItem) return proposalStatus;
+  if (workflow?.recommendationReady) return "approved";
+  if (employee.proposedIncrease <= 0) return "draft";
+  if (workflow?.managerFollowUpDone && !workflow.calibrationNeeded) return "submitted";
+  if (workflow?.calibrationNeeded || workflow?.managerFollowUpDone) return "in_review";
+  return "draft";
+}
+
+function getWorkflowBadge(status: ReturnType<typeof getWorkflowStatus>) {
+  switch (status) {
+    case "approved":
+      return "bg-emerald-100 text-emerald-700";
+    case "submitted":
+      return "bg-sky-100 text-sky-700";
+    case "in_review":
+      return "bg-amber-100 text-amber-700";
+    default:
+      return "bg-accent-100 text-accent-600";
+  }
+}
+
+export function ReviewTable({
+  initialQueryState = DEFAULT_SALARY_REVIEW_QUERY_STATE,
+}: {
+  initialQueryState?: SalaryReviewQueryState;
+}) {
+  const {
+    employees,
+    workflowByEmployee,
+    activeProposal,
+    proposalItemsByEmployee,
+    updateEmployeeIncrease,
+    toggleEmployeeSelection,
+    visibleColumns,
+  } = useSalaryReview();
   const { salaryView } = useSalaryView();
   const show = (col: ColumnKey) => visibleColumns.includes(col);
-  const [search, setSearch] = useState("");
-  const [departmentFilter, setDepartmentFilter] = useState<Department | "all">("all");
-  const [locationFilter, setLocationFilter] = useState<string>("all");
-  const [poolFilter, setPoolFilter] = useState<PoolFilter>("all");
-  const [startDateFilter, setStartDateFilter] = useState<string>("");
+  const [queryState, setQueryState] = useState<SalaryReviewQueryState>(initialQueryState);
   const [sortField, setSortField] = useState<SortField>("name");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setQueryState(initialQueryState);
+  }, [initialQueryState]);
 
   // Get unique departments and locations
   const departments = [...new Set(employees.map((e) => e.department))];
   const locations = [...new Set(employees.map((e) => e.location.city))].sort();
 
-  // Determine if an employee is in the leadership pool
-  const isLeadership = (emp: ReviewEmployee) =>
-    LEADERSHIP_LEVELS.some(
-      (lvl) =>
-        emp.level.name.includes(lvl) ||
-        emp.role.title.includes(lvl) ||
-        emp.level.category === "Executive"
+  const filteredEmployees = applySalaryReviewFilters(employees, queryState).filter((employee) => {
+    if (queryState.workflowStatus === "all") return true;
+    return (
+      getWorkflowStatus(
+        employee,
+        workflowByEmployee[employee.id],
+        activeProposal?.status,
+        Boolean(proposalItemsByEmployee[employee.id])
+      ) === queryState.workflowStatus
     );
-
-  // Filter employees
-  const filteredEmployees = employees.filter((emp) => {
-    const matchesSearch =
-      `${emp.firstName} ${emp.lastName}`.toLowerCase().includes(search.toLowerCase()) ||
-      emp.role.title.toLowerCase().includes(search.toLowerCase());
-    const matchesDepartment = departmentFilter === "all" || emp.department === departmentFilter;
-    const matchesLocation = locationFilter === "all" || emp.location.city === locationFilter;
-    const matchesPool =
-      poolFilter === "all" ||
-      (poolFilter === "leadership" && isLeadership(emp)) ||
-      (poolFilter === "general" && !isLeadership(emp));
-    const matchesStartDate =
-      !startDateFilter || emp.hireDate >= new Date(startDateFilter);
-    return matchesSearch && matchesDepartment && matchesLocation && matchesPool && matchesStartDate;
   });
 
   // Sort employees
@@ -200,82 +229,16 @@ export function ReviewTable() {
   return (
     <>
       <Card className="dash-card p-0 overflow-hidden">
-        {/* Filters */}
-        <div className="flex flex-wrap items-center gap-3 p-4 border-b border-border/50">
-          <div className="relative flex-1 min-w-56">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-accent-400" />
-            <Input
-              type="text"
-              placeholder="Search employees..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="pl-10 h-10 rounded-xl bg-accent-50"
-              fullWidth
-            />
-          </div>
-          <select
-            value={departmentFilter}
-            onChange={(e) => setDepartmentFilter(e.target.value as Department | "all")}
-            className="h-10 rounded-xl border border-border bg-white px-3 text-sm text-accent-700 focus:border-brand-300 focus:outline-none"
-          >
-            <option value="all">All Departments</option>
-            {departments.map((dept) => (
-              <option key={dept} value={dept}>
-                {dept}
-              </option>
-            ))}
-          </select>
-          <select
-            value={locationFilter}
-            onChange={(e) => setLocationFilter(e.target.value)}
-            className="h-10 rounded-xl border border-border bg-white px-3 text-sm text-accent-700 focus:border-brand-300 focus:outline-none"
-          >
-            <option value="all">All Locations</option>
-            {locations.map((loc) => (
-              <option key={loc} value={loc}>
-                {loc}
-              </option>
-            ))}
-          </select>
-          <select
-            value={poolFilter}
-            onChange={(e) => setPoolFilter(e.target.value as PoolFilter)}
-            className="h-10 rounded-xl border border-border bg-white px-3 text-sm text-accent-700 focus:border-brand-300 focus:outline-none"
-          >
-            <option value="all">All Pools</option>
-            <option value="leadership">Leadership</option>
-            <option value="general">General</option>
-          </select>
-          <input
-            type="date"
-            value={startDateFilter}
-            onChange={(e) => setStartDateFilter(e.target.value)}
-            className="h-10 rounded-xl border border-border bg-white px-3 text-sm text-accent-700 focus:border-brand-300 focus:outline-none"
-          />
-          <ColumnSettings />
-        </div>
-        <div className="flex items-center justify-between px-4 py-2 border-b border-border/30 bg-accent-50/50">
-          <span className="text-xs text-accent-500">
-            {sortedEmployees.length} of {employees.length} employees
-          </span>
-          {(departmentFilter !== "all" ||
-            locationFilter !== "all" ||
-            poolFilter !== "all" ||
-            startDateFilter) && (
-            <button
-              type="button"
-              onClick={() => {
-                setDepartmentFilter("all");
-                setLocationFilter("all");
-                setPoolFilter("all");
-                setStartDateFilter("");
-              }}
-              className="text-xs font-medium text-brand-500 hover:text-brand-700"
-            >
-              Clear filters
-            </button>
-          )}
-        </div>
+        <ReviewToolbar
+          query={queryState}
+          departments={departments}
+          locations={locations}
+          resultCount={sortedEmployees.length}
+          totalCount={employees.length}
+          onChange={(updates) => setQueryState((current) => ({ ...current, ...updates }))}
+          onClear={() => setQueryState(DEFAULT_SALARY_REVIEW_QUERY_STATE)}
+          actions={<ColumnSettings />}
+        />
 
         {/* Table */}
         <div className="overflow-x-auto">
@@ -369,6 +332,12 @@ export function ReviewTable() {
                 const tenure = computeTenure(employee.hireDate);
                 const isNew = tenure.totalMonths < 12;
                 const benchmarkTrust = buildBenchmarkTrustLabels(employee.benchmarkContext);
+                const workflowStatus = getWorkflowStatus(
+                  employee,
+                  workflowByEmployee[employee.id],
+                  activeProposal?.status,
+                  Boolean(proposalItemsByEmployee[employee.id])
+                );
 
                 return (
                   <tr
@@ -407,7 +376,24 @@ export function ReviewTable() {
                                 </span>
                               )}
                             </div>
-                            <div className="text-xs text-accent-500">{employee.level.name}</div>
+                            <div className="mt-1 flex flex-wrap gap-1.5">
+                              <span className="text-xs text-accent-500">{employee.level.name}</span>
+                              {!employee.isSelected && (
+                                <span className="rounded-full bg-accent-100 px-2 py-0.5 text-[10px] font-medium text-accent-600">
+                                  Excluded
+                                </span>
+                              )}
+                              {employee.proposedIncrease > 0 && (
+                                <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
+                                  Proposed
+                                </span>
+                              )}
+                              <span
+                                className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${getWorkflowBadge(workflowStatus)}`}
+                              >
+                                {workflowStatus.replaceAll("_", " ")}
+                              </span>
+                            </div>
                           </div>
                         </div>
                       </td>
@@ -503,6 +489,9 @@ export function ReviewTable() {
                               <span className="rounded-full bg-accent-100 px-2 py-0.5 text-[10px] font-medium text-accent-600">
                                 {benchmarkTrust.matchLabel}
                               </span>
+                              {benchmarkTrust.confidenceLabel && (
+                                <span className="text-[10px] text-accent-500">{benchmarkTrust.confidenceLabel}</span>
+                              )}
                             </div>
                           )}
                         </div>

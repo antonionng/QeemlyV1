@@ -23,7 +23,6 @@ export default function PeoplePage() {
     sortBy,
     setSortBy,
     createEmployee,
-    updateEmployee,
     queueDeleteEmployee,
     undoDeleteEmployee,
     pendingDeletes,
@@ -40,13 +39,15 @@ export default function PeoplePage() {
   const latestPendingDelete = pendingDeletes[pendingDeletes.length - 1] || null;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between gap-3">
-        <div>
+    <div className="space-y-5 xl:space-y-6">
+      <div className="rounded-3xl border border-border/70 bg-white px-5 py-5 shadow-sm shadow-brand-100/20 sm:px-6">
+        <div className="flex items-center justify-between gap-3">
+          <div className="max-w-2xl">
           <h1 className="text-2xl font-bold tracking-tight text-accent-800 sm:text-3xl">People</h1>
-          <p className="mt-1 text-sm text-accent-500">
+            <p className="mt-2 text-sm leading-6 text-accent-500">
             Central place to manage employee records, compensation context, and lifecycle data.
-          </p>
+            </p>
+          </div>
         </div>
       </div>
 
@@ -64,7 +65,7 @@ export default function PeoplePage() {
       />
 
       {warnings.length > 0 && (
-        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3">
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
           <div className="mb-2 flex items-center justify-between">
             <p className="flex items-center gap-2 text-sm font-semibold text-amber-800">
               <AlertTriangle className="h-4 w-4" />
@@ -83,7 +84,7 @@ export default function PeoplePage() {
       )}
 
       {empty ? (
-        <div className="rounded-2xl border border-border bg-white p-10 text-center shadow-sm">
+        <div className="rounded-3xl border border-border/70 bg-white p-10 text-center shadow-sm shadow-brand-100/20">
           <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-brand-100 text-brand-600">
             <Users className="h-6 w-6" />
           </div>
@@ -102,11 +103,9 @@ export default function PeoplePage() {
             await bulkArchiveEmployees(selectedIds);
             setSelectedIds([]);
           }}
-          onInlineSave={async (employeeId, updates) => {
-            await updateEmployee(employeeId, updates as Parameters<typeof updateEmployee>[1]);
-          }}
           mutating={mutating}
           onOpenDetails={(employee) => router.push(`/dashboard/people/${employee.id}`)}
+          onEditEmployee={(employee) => router.push(`/dashboard/people/${employee.id}?mode=edit`)}
           onDelete={async (employee) => {
             queueDeleteEmployee(employee);
           }}
@@ -131,7 +130,7 @@ export default function PeoplePage() {
       />
 
       {latestPendingDelete && (
-        <div className="fixed bottom-4 right-4 z-50 rounded-xl border border-brand-200 bg-white p-3 shadow-lg">
+        <div className="fixed bottom-4 right-4 z-50 rounded-2xl border border-brand-200 bg-white p-4 shadow-lg">
           <p className="text-sm text-brand-900">
             {latestPendingDelete.firstName} {latestPendingDelete.lastName} queued for deletion.
           </p>
