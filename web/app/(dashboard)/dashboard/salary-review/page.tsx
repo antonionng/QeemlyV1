@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, type FormEvent } from "react";
+import { Suspense, useState, useEffect, useMemo, type FormEvent } from "react";
 import { Calendar, RefreshCw, Download, Upload, Loader2, Sparkles, UserPlus, X } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/card";
@@ -75,7 +75,7 @@ const DEFAULT_ADD_EMPLOYEE_FORM: AddEmployeeForm = {
   hireDate: "",
 };
 
-export default function SalaryReviewPage() {
+function SalaryReviewPageContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -1352,5 +1352,20 @@ function OverviewMetric({
       <p className="mt-2 text-2xl font-bold text-accent-950">{value}</p>
       <p className="mt-1 text-xs text-accent-600">{body}</p>
     </div>
+  );
+}
+
+export default function SalaryReviewPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin text-brand-500 mx-auto" />
+          <p className="mt-3 text-brand-600">Loading salary review...</p>
+        </div>
+      </div>
+    }>
+      <SalaryReviewPageContent />
+    </Suspense>
   );
 }
