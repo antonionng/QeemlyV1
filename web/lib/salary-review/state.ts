@@ -1241,13 +1241,15 @@ export const useSalaryReview = create<SalaryReviewState>()(
           const state = get();
           set({ isProposalLoading: true });
           try {
+            const cycle: "monthly" | "annual" =
+              state.settings.cycle === "monthly" ? "monthly" : "annual";
             const draftBody =
               state.settings.reviewMode === "department_split"
                 ? {
                     source,
                     reviewMode: state.settings.reviewMode,
                     allocationMethod: state.settings.allocationMethod,
-                    cycle: state.settings.cycle === "monthly" ? "monthly" : "annual",
+                    cycle,
                     budgetType: state.settings.budgetType,
                     budgetPercentage: state.settings.budgetPercentage,
                     budgetAbsolute: state.settings.budgetAbsolute,
@@ -1269,7 +1271,7 @@ export const useSalaryReview = create<SalaryReviewState>()(
                     source,
                     reviewMode: state.settings.reviewMode,
                     allocationMethod: state.settings.allocationMethod,
-                    cycle: state.settings.cycle === "monthly" ? "monthly" : "annual",
+                    cycle,
                     budgetType: state.settings.budgetType,
                     budgetPercentage: state.settings.budgetPercentage,
                     budgetAbsolute: state.settings.budgetAbsolute,

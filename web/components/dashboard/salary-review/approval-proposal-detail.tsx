@@ -12,6 +12,11 @@ import type {
   SalaryReviewProposalItemRecord,
   SalaryReviewProposalRecord,
 } from "@/lib/salary-review/proposal-types";
+import type { DepartmentAllocationDraft } from "@/lib/salary-review/state";
+
+type DepartmentAllocationDisplay =
+  | SalaryReviewDepartmentAllocationRecord
+  | (DepartmentAllocationDraft & { id?: string });
 import { ApprovalStatusCard } from "./approval-status-card";
 import { ApprovalTimeline } from "./approval-timeline";
 import { ReviewerActionPanel } from "./reviewer-action-panel";
@@ -34,7 +39,7 @@ export function ApprovalProposalDetail({
 }: {
   proposal: SalaryReviewProposalRecord | null;
   proposalItems: SalaryReviewProposalItemRecord[];
-  departmentAllocations?: SalaryReviewDepartmentAllocationRecord[];
+  departmentAllocations?: DepartmentAllocationDisplay[];
   childCycles?: SalaryReviewProposalRecord[];
   approvalSteps: SalaryReviewApprovalStepRecord[];
   proposalNotes: SalaryReviewNoteRecord[];
@@ -185,10 +190,22 @@ export function ApprovalProposalDetail({
         <div className="mt-5 space-y-3">
           {isSplitMasterReview ? (
             departmentAllocations.map((allocation) => {
-              const childCycle = childCycles.find((cycle) => cycle.id === allocation.child_cycle_id);
+              const childCycleId =
+                "child_cycle_id" in allocation
+                  ? allocation.child_cycle_id
+                  : allocation.childCycleId;
+              const childCycle = childCycles.find((cycle) => cycle.id === childCycleId);
+              const budget =
+                "allocated_budget" in allocation
+                  ? allocation.allocated_budget
+                  : allocation.allocatedBudget ?? 0;
+              const status =
+                "allocation_status" in allocation
+                  ? allocation.allocation_status
+                  : allocation.allocationStatus ?? "pending";
               return (
                 <div
-                  key={allocation.id}
+                  key={"id" in allocation && allocation.id ? allocation.id : allocation.department}
                   className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-accent-100 bg-white px-4 py-4"
                 >
                   <div>
@@ -199,10 +216,10 @@ export function ApprovalProposalDetail({
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="rounded-full border border-accent-200 bg-accent-50 px-2.5 py-1 text-xs font-semibold text-accent-700">
-                      {formatAEDCompact(Number(allocation.allocated_budget || 0))}
+                      {formatAEDCompact(Number(budget))}
                     </span>
                     <span className="rounded-full border border-accent-200 bg-white px-2.5 py-1 text-xs font-semibold text-accent-700">
-                      {allocation.allocation_status.replaceAll("_", " ")}
+                      {String(status).replaceAll("_", " ")}
                     </span>
                     {childCycle ? (
                       <span className="rounded-full border border-accent-200 bg-white px-2.5 py-1 text-xs font-semibold text-accent-700">
