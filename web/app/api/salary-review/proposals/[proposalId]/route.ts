@@ -145,6 +145,76 @@ export async function PATCH(
   }
 
   if (body.action) {
+    if (
+      existing.review_mode === "department_split" &&
+      existing.review_scope === "master" &&
+      existing.allocation_method === "finance_approval" &&
+      existing.allocation_status === "pending"
+    ) {
+      const nextAllocationStatus = body.action === "approve" ? "approved" : "returned";
+      const nextCycleStatus =
+        body.action === "approve"
+          ? "approved"
+          : body.action === "reject"
+            ? "rejected"
+            : "draft";
+
+      const { error: cycleUpdateError } = await supabase
+        .from("salary_review_cycles")
+        .update({
+          allocation_status: nextAllocationStatus,
+          status: nextCycleStatus,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", proposalId);
+      if (cycleUpdateError) {
+        return NextResponse.json({ error: cycleUpdateError.message }, { status: 500 });
+      }
+
+      const { error: allocationUpdateError } = await supabase
+        .from("salary_review_department_allocations")
+        .update({
+          allocation_status: nextAllocationStatus,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("master_cycle_id", proposalId);
+      if (allocationUpdateError) {
+        return NextResponse.json({ error: allocationUpdateError.message }, { status: 500 });
+      }
+
+      const { error: childCycleUpdateError } = await supabase
+        .from("salary_review_cycles")
+        .update({
+          allocation_status: nextAllocationStatus,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("parent_cycle_id", proposalId);
+      if (childCycleUpdateError) {
+        return NextResponse.json({ error: childCycleUpdateError.message }, { status: 500 });
+      }
+
+      const { error: auditError } = await supabase.from("salary_review_audit_events").insert({
+        cycle_id: proposalId,
+        workspace_id: wsContext.context.workspace_id,
+        actor_user_id: wsContext.context.user_id,
+        event_type:
+          body.action === "approve"
+            ? "allocation_approved"
+            : body.action === "reject"
+              ? "allocation_rejected"
+              : "allocation_returned",
+        payload: {
+          note: body.note ?? null,
+        },
+      });
+      if (auditError) {
+        return NextResponse.json({ error: auditError.message }, { status: 500 });
+      }
+
+      const detail = await loadSalaryReviewProposalDetail(supabase, proposalId);
+      return NextResponse.json(detail);
+    }
+
     if (existing.status !== "submitted" && existing.status !== "in_review") {
       return NextResponse.json({ error: "Proposal is not awaiting review." }, { status: 400 });
     }

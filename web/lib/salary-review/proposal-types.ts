@@ -3,6 +3,12 @@ export type SalaryReviewProposalRecord = {
   workspace_id: string;
   created_by: string | null;
   source: "manual" | "ai";
+  review_mode: "company_wide" | "department_split";
+  review_scope: "company_wide" | "master" | "department";
+  parent_cycle_id: string | null;
+  department: string | null;
+  allocation_method: "direct" | "finance_approval" | null;
+  allocation_status: "pending" | "approved" | "returned" | null;
   cycle: "monthly" | "annual";
   budget_type: "percentage" | "absolute";
   budget_percentage: number;
@@ -33,6 +39,17 @@ export type SalaryReviewProposalItemRecord = {
   proposed_percentage: number;
   reason_summary: string | null;
   benchmark_snapshot: Record<string, unknown>;
+};
+
+export type SalaryReviewDepartmentAllocationRecord = {
+  id: string;
+  master_cycle_id: string;
+  department: string;
+  allocated_budget: number;
+  allocation_method: "direct" | "finance_approval";
+  allocation_status: "pending" | "approved" | "returned";
+  child_cycle_id: string | null;
+  selected_employee_ids?: string[];
 };
 
 export type SalaryReviewApprovalStepRecord = {

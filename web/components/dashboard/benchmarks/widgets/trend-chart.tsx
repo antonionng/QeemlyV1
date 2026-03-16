@@ -4,7 +4,6 @@ import { useState } from "react";
 import { AreaChart } from "@tremor/react";
 import clsx from "clsx";
 import { useBenchmarksContext } from "@/lib/benchmarks/context";
-// SalaryViewToggle is now in the global topbar
 import { formatCurrency, formatPercentage } from "@/lib/dashboard/dummy-data";
 
 type TimeRange = "3m" | "6m" | "12m";

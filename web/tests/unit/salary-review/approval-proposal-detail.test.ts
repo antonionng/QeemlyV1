@@ -5,6 +5,7 @@ import { ApprovalProposalDetail } from "@/components/dashboard/salary-review/app
 import type {
   SalaryReviewApprovalStepRecord,
   SalaryReviewAuditEventRecord,
+  SalaryReviewDepartmentAllocationRecord,
   SalaryReviewNoteRecord,
   SalaryReviewProposalItemRecord,
   SalaryReviewProposalRecord,
@@ -107,6 +108,42 @@ const proposalAuditEvents: SalaryReviewAuditEventRecord[] = [
   },
 ];
 
+const masterProposal: SalaryReviewProposalRecord = {
+  ...proposal,
+  id: "master-1",
+  review_mode: "department_split",
+  review_scope: "master",
+  allocation_method: "finance_approval",
+  allocation_status: "pending",
+  status: "submitted",
+  summary: {
+    ...proposal.summary,
+    selectedEmployees: 10,
+    proposedEmployees: 10,
+  },
+};
+
+const departmentAllocations: SalaryReviewDepartmentAllocationRecord[] = [
+  {
+    id: "alloc-1",
+    master_cycle_id: "master-1",
+    department: "Engineering",
+    allocated_budget: 20_000,
+    allocation_method: "finance_approval",
+    allocation_status: "pending",
+    child_cycle_id: "child-1",
+  },
+  {
+    id: "alloc-2",
+    master_cycle_id: "master-1",
+    department: "Design",
+    allocated_budget: 10_000,
+    allocation_method: "finance_approval",
+    allocation_status: "pending",
+    child_cycle_id: "child-2",
+  },
+];
+
 describe("ApprovalProposalDetail", () => {
   it("renders one inline employee review list with expanded employee context", () => {
     const html = renderToStaticMarkup(
@@ -134,5 +171,42 @@ describe("ApprovalProposalDetail", () => {
     expect(html).toContain("Focus the discussion on market catch-up.");
     expect(html).toContain("Employee Activity");
     expect(html).not.toContain("Selected Employee");
+  });
+
+  it("renders a department allocation summary for split master reviews", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(ApprovalProposalDetail as never, {
+        proposal: masterProposal,
+        proposalItems: [],
+        approvalSteps,
+        proposalNotes: [],
+        proposalAuditEvents: [],
+        departmentAllocations,
+        childCycles: [
+          {
+            ...proposal,
+            id: "child-1",
+            review_mode: "department_split",
+            review_scope: "department",
+            parent_cycle_id: "master-1",
+            department: "Engineering",
+            allocation_method: "finance_approval",
+            allocation_status: "pending",
+            status: "draft",
+          },
+        ],
+        isLoading: false,
+        canTakeAction: true,
+        canAddNote: true,
+        onAction: () => undefined,
+        onAddNote: () => undefined,
+        onBack: () => undefined,
+      })
+    );
+
+    expect(html).toContain("Department Budget Allocation");
+    expect(html).toContain("Engineering");
+    expect(html).toContain("Design");
+    expect(html).toContain("Finance approval");
   });
 });

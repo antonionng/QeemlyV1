@@ -62,7 +62,7 @@ export function SalaryOverviewWidget() {
         </div>
       </div>
 
-      {/* Salary view is controlled by the global toggle in the topbar */}
+      {/* Salary view is controlled by the local benchmark controls */}
 
       {/* Filter dropdowns */}
       <div className="flex gap-2">

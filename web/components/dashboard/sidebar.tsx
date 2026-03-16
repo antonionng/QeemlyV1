@@ -19,6 +19,7 @@ import {
   Settings,
   Shield,
   Upload,
+  Users,
   UserRound,
   Wallet,
 } from "lucide-react";
@@ -47,6 +48,7 @@ const adminNavSections: NavSection[] = [
     items: [
       { href: getDashboardOverviewRoutes()[0].href, label: getDashboardOverviewRoutes()[0].label, icon: LayoutGrid },
       { href: getDashboardOverviewRoutes()[1].href, label: getDashboardOverviewRoutes()[1].label, icon: ChartColumnIncreasing },
+      { href: "/dashboard/people", label: "People", icon: Users },
       { href: "/dashboard/salary-review", label: "Salary Review", icon: DollarSign },
     ],
   },

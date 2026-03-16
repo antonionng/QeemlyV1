@@ -133,4 +133,30 @@ describe("People layout surfaces", () => {
     expect(html).not.toContain("<select");
     expect(html).toContain("Edit");
   });
+
+  it("shows benchmark pending state instead of neutral market numbers when coverage is missing", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PeopleTable, {
+        employees: [
+          createEmployee({
+            hasBenchmark: false,
+            benchmarkContext: undefined,
+            bandPosition: "in-band",
+            marketComparison: 0,
+          }),
+        ],
+        selectedIds: [],
+        onToggleSelect: () => undefined,
+        onToggleSelectAll: () => undefined,
+        onBulkArchive: () => undefined,
+        onOpenDetails: () => undefined,
+        onDelete: () => undefined,
+        onEditEmployee: () => undefined,
+        mutating: false,
+      })
+    );
+
+    expect(html).toContain("Benchmark pending");
+    expect(html).toContain("Not mapped");
+  });
 });

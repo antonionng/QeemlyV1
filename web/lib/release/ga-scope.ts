@@ -23,12 +23,11 @@ export const RELEASE_SCOPE = {
     team: true,
     settings: true,
     billing: false,
-    integrations: false,
+    integrations: true,
     adminExtras: false,
   } satisfies Record<FeatureKey, boolean>,
   deferredFeatures: [
     "billing",
-    "integrations",
     "admin extras",
     "advanced report builder",
   ],

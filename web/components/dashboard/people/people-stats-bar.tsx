@@ -15,19 +15,21 @@ function formatPct(value: number) {
 export function PeopleStatsBar({ employees }: Props) {
   const totalEmployees = employees.length;
   const departments = new Set(employees.map((employee) => employee.department)).size;
+  const benchmarkedEmployees = employees.filter((employee) => employee.hasBenchmark);
   const avgMarket =
-    employees.length > 0
-      ? employees.reduce((sum, employee) => sum + employee.marketComparison, 0) / employees.length
+    benchmarkedEmployees.length > 0
+      ? benchmarkedEmployees.reduce((sum, employee) => sum + employee.marketComparison, 0) /
+        benchmarkedEmployees.length
       : 0;
-  const below = employees.filter((employee) => employee.bandPosition === "below").length;
-  const inBand = employees.filter((employee) => employee.bandPosition === "in-band").length;
-  const above = employees.filter((employee) => employee.bandPosition === "above").length;
+  const below = benchmarkedEmployees.filter((employee) => employee.bandPosition === "below").length;
+  const inBand = benchmarkedEmployees.filter((employee) => employee.bandPosition === "in-band").length;
+  const above = benchmarkedEmployees.filter((employee) => employee.bandPosition === "above").length;
   const benchmarkTrust = summarizeBenchmarkTrust(employees);
   const trustFreshness = benchmarkTrust.freshestAt
     ? new Date(benchmarkTrust.freshestAt).toLocaleDateString("en-GB")
     : "Unknown";
 
-  const denom = Math.max(1, totalEmployees);
+  const denom = Math.max(1, benchmarkedEmployees.length);
   const belowPct = Math.round((below / denom) * 100);
   const inBandPct = Math.round((inBand / denom) * 100);
   const abovePct = Math.max(0, 100 - belowPct - inBandPct);
@@ -45,7 +47,7 @@ export function PeopleStatsBar({ employees }: Props) {
     {
       label: "Avg vs Market",
       value: formatPct(avgMarket),
-      meta: "across all employees",
+      meta: benchmarkedEmployees.length > 0 ? "across benchmarked employees" : "awaiting benchmark matches",
     },
   ];
 
@@ -77,6 +79,7 @@ export function PeopleStatsBar({ employees }: Props) {
         <p className="mt-3 text-sm text-accent-500">
           {below} below • {inBand} in-band • {above} above
         </p>
+        <p className="mt-1 text-xs text-accent-400">{benchmarkedEmployees.length} benchmarked employees</p>
       </div>
 
       <div className="min-h-[132px] rounded-3xl border border-border/70 bg-white p-5 shadow-sm shadow-brand-100/20">

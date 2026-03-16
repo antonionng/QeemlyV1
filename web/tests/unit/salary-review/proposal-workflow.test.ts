@@ -142,4 +142,111 @@ describe("salary review proposal workflow", () => {
       "hr",
     ]);
   });
+
+  it("builds a master cycle with department allocations for split reviews", () => {
+    const records = buildProposalDraftRecords({
+      workspaceId: "ws-1",
+      userId: "user-1",
+      body: {
+        source: "manual",
+        reviewMode: "department_split",
+        allocationMethod: "direct",
+        cycle: "annual",
+        budgetType: "absolute",
+        budgetAbsolute: 30_000,
+        budgetPercentage: 0,
+        effectiveDate: "2026-04-01",
+        departmentAllocations: [
+          {
+            department: "Engineering",
+            allocatedBudget: 20_000,
+            selectedEmployeeIds: ["emp-1"],
+            items: [
+              {
+                ...baseItems[0],
+                bandPosition: "below",
+              },
+            ],
+          },
+          {
+            department: "Design",
+            allocatedBudget: 10_000,
+            selectedEmployeeIds: ["emp-2"],
+            items: [],
+          },
+        ],
+      },
+    });
+
+    expect(records.cycleInsert.review_mode).toBe("department_split");
+    expect(records.cycleInsert.review_scope).toBe("master");
+    expect(records.cycleInsert.allocation_method).toBe("direct");
+    expect(records.cycleInsert.allocation_status).toBe("approved");
+    expect(records.itemInserts("master-1")).toEqual([]);
+    expect(records.departmentAllocationInserts("master-1")).toEqual([
+      expect.objectContaining({
+        master_cycle_id: "master-1",
+        department: "Engineering",
+        allocated_budget: 20_000,
+        allocation_method: "direct",
+        allocation_status: "approved",
+      }),
+      expect.objectContaining({
+        master_cycle_id: "master-1",
+        department: "Design",
+        allocated_budget: 10_000,
+        allocation_method: "direct",
+        allocation_status: "approved",
+      }),
+    ]);
+    expect(records.childCycleInserts("master-1")).toEqual([
+      expect.objectContaining({
+        parent_cycle_id: "master-1",
+        review_mode: "department_split",
+        review_scope: "department",
+        department: "Engineering",
+        budget_absolute: 20_000,
+      }),
+      expect.objectContaining({
+        parent_cycle_id: "master-1",
+        review_mode: "department_split",
+        review_scope: "department",
+        department: "Design",
+        budget_absolute: 10_000,
+      }),
+    ]);
+  });
+
+  it("marks finance-routed split reviews as pending until Finance approves them", () => {
+    const records = buildProposalDraftRecords({
+      workspaceId: "ws-1",
+      userId: "user-1",
+      body: {
+        source: "manual",
+        reviewMode: "department_split",
+        allocationMethod: "finance_approval",
+        cycle: "annual",
+        budgetType: "absolute",
+        budgetAbsolute: 20_000,
+        budgetPercentage: 0,
+        effectiveDate: "2026-04-01",
+        departmentAllocations: [
+          {
+            department: "Engineering",
+            allocatedBudget: 20_000,
+            selectedEmployeeIds: ["emp-1"],
+            items: [],
+          },
+        ],
+      },
+    });
+
+    expect(records.cycleInsert.status).toBe("submitted");
+    expect(records.cycleInsert.allocation_status).toBe("pending");
+    expect(records.childCycleInserts("master-1")[0]).toEqual(
+      expect.objectContaining({
+        allocation_status: "pending",
+      })
+    );
+  });
 });

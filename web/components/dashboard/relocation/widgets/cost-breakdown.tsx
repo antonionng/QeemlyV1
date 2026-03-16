@@ -29,10 +29,10 @@ function BreakdownBar({
 
   return (
     <div>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <span className="text-2xl">{flag}</span>
         <span className="text-sm font-bold text-brand-900">{label}</span>
-        <span className="ml-auto text-sm font-bold text-brand-900">
+        <span className="ml-auto text-sm font-bold text-brand-900 sm:pl-3">
           {formatCurrency(total)}/mo
         </span>
       </div>
@@ -70,7 +70,7 @@ export function CostBreakdownWidget({ result }: CostBreakdownWidgetProps) {
 
   return (
     <div className="flex flex-col p-1">
-      <div className="grid gap-10 lg:grid-cols-2">
+      <div className="grid gap-8 xl:grid-cols-[minmax(0,1.35fr)_minmax(18rem,0.85fr)]">
         <div className="space-y-8">
           <BreakdownBar
             breakdown={result.costBreakdown.home}
@@ -86,7 +86,7 @@ export function CostBreakdownWidget({ result }: CostBreakdownWidgetProps) {
 
         <div className="flex flex-col justify-center">
           {/* Legend */}
-          <div className="flex flex-wrap gap-4 mb-8">
+          <div className="mb-6 flex flex-wrap gap-4">
             {COST_CATEGORIES.map(({ key, label, color }) => (
               <div key={key} className="flex items-center gap-2">
                 <div className={clsx("h-4 w-4 rounded shadow-sm", color)} />
@@ -97,11 +97,11 @@ export function CostBreakdownWidget({ result }: CostBreakdownWidgetProps) {
 
           {/* Summary */}
           <div className="rounded-2xl border border-border bg-white p-6 shadow-sm">
-            <div className="flex items-center justify-between border-b border-border pb-4">
+            <div className="grid gap-1 border-b border-border pb-4">
               <span className="text-[10px] font-semibold uppercase tracking-wider text-accent-500">Monthly difference</span>
               <span
                 className={clsx(
-                  "text-xl font-semibold",
+                  "break-words text-lg font-semibold leading-tight sm:text-xl",
                   difference > 0 ? "text-rose-600" : difference < 0 ? "text-emerald-600" : "text-accent-700"
                 )}
               >
@@ -109,11 +109,11 @@ export function CostBreakdownWidget({ result }: CostBreakdownWidgetProps) {
                 {formatCurrency(difference)}
               </span>
             </div>
-            <div className="mt-4 flex items-center justify-between">
+            <div className="mt-4 grid gap-1">
               <span className="text-[10px] font-semibold uppercase tracking-wider text-accent-500">Annual difference</span>
               <span
                 className={clsx(
-                  "text-2xl font-bold",
+                  "break-words text-xl font-bold leading-tight sm:text-2xl",
                   difference > 0 ? "text-rose-600" : difference < 0 ? "text-emerald-600" : "text-accent-700"
                 )}
               >

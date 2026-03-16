@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 
 const redirectMock = vi.fn((href: string) => {
   throw new Error(`redirect:${href}`);
@@ -6,6 +8,10 @@ const redirectMock = vi.fn((href: string) => {
 
 vi.mock("next/navigation", () => ({
   redirect: redirectMock,
+}));
+
+vi.mock("@/app/(dashboard)/dashboard/people/client", () => ({
+  PeoplePageClient: () => React.createElement("div", { "data-testid": "people-page-client" }, "People"),
 }));
 
 describe("retired dashboard routes", () => {
@@ -20,17 +26,21 @@ describe("retired dashboard routes", () => {
     expect(redirectMock).toHaveBeenCalledWith("/dashboard/benchmarks");
   });
 
-  it("redirects the people list to upload data", async () => {
+  it("renders the people list route again", async () => {
     const { default: PeoplePage } = await import("@/app/(dashboard)/dashboard/people/page");
 
-    expect(() => PeoplePage()).toThrowError("redirect:/dashboard/upload");
-    expect(redirectMock).toHaveBeenCalledWith("/dashboard/upload");
+    const html = renderToStaticMarkup(React.createElement(PeoplePage));
+
+    expect(html).toContain('data-testid="people-page-client"');
+    expect(redirectMock).not.toHaveBeenCalled();
   });
 
-  it("redirects retired people detail routes to upload data", async () => {
+  it("redirects people detail routes into the drawer-friendly people page", async () => {
     const { default: PersonDetailPage } = await import("@/app/(dashboard)/dashboard/people/[id]/page");
 
-    expect(() => PersonDetailPage()).toThrowError("redirect:/dashboard/upload");
-    expect(redirectMock).toHaveBeenCalledWith("/dashboard/upload");
+    await expect(() => PersonDetailPage({ params: Promise.resolve({ id: "emp-42" }) })).rejects.toThrowError(
+      "redirect:/dashboard/people?employeeId=emp-42"
+    );
+    expect(redirectMock).toHaveBeenCalledWith("/dashboard/people?employeeId=emp-42");
   });
 });

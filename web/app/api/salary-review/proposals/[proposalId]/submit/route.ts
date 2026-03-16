@@ -23,6 +23,18 @@ export async function POST(
     return NextResponse.json({ error: "Proposal not found" }, { status: 404 });
   }
 
+  if (
+    detail.proposal.review_mode === "department_split" &&
+    detail.proposal.review_scope === "department" &&
+    detail.proposal.allocation_method === "finance_approval" &&
+    detail.proposal.allocation_status !== "approved"
+  ) {
+    return NextResponse.json(
+      { error: "Department review is locked until Finance approves the department budget." },
+      { status: 400 }
+    );
+  }
+
   const rebuilt = rebuildApprovalStepsForItems({
     items: buildDraftItemsFromRecords(detail.items),
     hasAboveBandIncreases: detail.items.some(

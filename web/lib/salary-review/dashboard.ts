@@ -12,6 +12,8 @@ type SalaryReviewDashboardModel = {
   tabs: Record<SalaryReviewDashboardTabId, SalaryReviewDashboardTab>;
   awaitingReview: SalaryReviewProposalRecord[];
   history: SalaryReviewProposalRecord[];
+  masterCycles: SalaryReviewProposalRecord[];
+  departmentCyclesByMaster: Record<string, SalaryReviewProposalRecord[]>;
   hasDraft: boolean;
   primaryAction: "start-cycle" | "continue-draft";
   totalCycles: number;
@@ -53,6 +55,21 @@ export function buildSalaryReviewDashboardModel(args: {
       proposal.status === "applied"
   );
   const hasDraft = args.activeProposal?.status === "draft";
+  const masterCycles = (args.cycles ?? []).filter(
+    (proposal) => proposal.review_mode === "department_split" && proposal.review_scope === "master"
+  );
+  const departmentCyclesByMaster = (args.cycles ?? []).reduce<Record<string, SalaryReviewProposalRecord[]>>(
+    (groups, proposal) => {
+      if (proposal.review_scope !== "department" || !proposal.parent_cycle_id) {
+        return groups;
+      }
+      groups[proposal.parent_cycle_id] = [...(groups[proposal.parent_cycle_id] ?? []), proposal].sort((left, right) =>
+        String(left.department ?? "").localeCompare(String(right.department ?? ""))
+      );
+      return groups;
+    },
+    {}
+  );
 
   return {
     tabs: {
@@ -63,6 +80,8 @@ export function buildSalaryReviewDashboardModel(args: {
     },
     awaitingReview,
     history,
+    masterCycles,
+    departmentCyclesByMaster,
     hasDraft,
     primaryAction: hasDraft ? "continue-draft" : "start-cycle",
     totalCycles: args.cycles?.length ?? 0,

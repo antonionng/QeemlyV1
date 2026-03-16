@@ -12,6 +12,12 @@ function makeProposal(
     workspace_id: overrides.workspace_id ?? "workspace-1",
     created_by: overrides.created_by ?? "user-1",
     source: overrides.source ?? "manual",
+    review_mode: overrides.review_mode ?? "company_wide",
+    review_scope: overrides.review_scope ?? "company_wide",
+    parent_cycle_id: overrides.parent_cycle_id ?? null,
+    department: overrides.department ?? null,
+    allocation_method: overrides.allocation_method ?? null,
+    allocation_status: overrides.allocation_status ?? null,
     cycle: overrides.cycle ?? "annual",
     budget_type: overrides.budget_type ?? "percentage",
     budget_percentage: overrides.budget_percentage ?? 5,
@@ -48,5 +54,25 @@ describe("ApprovalProposalList", () => {
     expect(html).toContain("Open the employee list, comments, routing, and actions for this batch.");
     expect(html).toContain("AI proposal");
     expect(html).toContain("Manual proposal");
+  });
+
+  it("labels split master reviews as finance allocation reviews", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(ApprovalProposalList, {
+        proposals: [
+          makeProposal({
+            id: "master-1",
+            review_mode: "department_split",
+            review_scope: "master",
+            allocation_method: "finance_approval",
+            status: "submitted",
+          }),
+        ],
+        isLoading: false,
+        onSelect: () => undefined,
+      })
+    );
+
+    expect(html).toContain("Finance allocation review");
   });
 });

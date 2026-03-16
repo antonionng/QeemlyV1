@@ -9,6 +9,20 @@ import {
 
 type GenericSupabaseClient = SupabaseClient<any, "public", any>;
 
+function isMissingDepartmentAllocationsTableError(error: { code?: string | null; message?: string | null } | null) {
+  const message = error?.message ?? "";
+  return (
+    error?.code === "PGRST205" &&
+    message.includes("salary_review_department_allocations") &&
+    message.includes("schema cache")
+  );
+}
+
+function isMissingParentCycleColumnError(error: { code?: string | null; message?: string | null } | null) {
+  const message = error?.message ?? "";
+  return error?.code === "42703" && message.includes("salary_review_cycles.parent_cycle_id");
+}
+
 export async function loadSalaryReviewProposalDetail(
   supabase: GenericSupabaseClient,
   cycleId: string
@@ -19,6 +33,8 @@ export async function loadSalaryReviewProposalDetail(
     { data: approvalSteps, error: approvalStepsError },
     { data: notes, error: notesError },
     { data: auditEvents, error: auditEventsError },
+    { data: departmentAllocations, error: departmentAllocationsError },
+    { data: childCycles, error: childCyclesError },
   ] = await Promise.all([
     supabase.from("salary_review_cycles").select("*").eq("id", cycleId).single(),
     supabase
@@ -41,6 +57,16 @@ export async function loadSalaryReviewProposalDetail(
       .select("*")
       .eq("cycle_id", cycleId)
       .order("created_at", { ascending: false }),
+    supabase
+      .from("salary_review_department_allocations")
+      .select("*")
+      .eq("master_cycle_id", cycleId)
+      .order("department", { ascending: true }),
+    supabase
+      .from("salary_review_cycles")
+      .select("*")
+      .eq("parent_cycle_id", cycleId)
+      .order("department", { ascending: true }),
   ]);
 
   if (proposalError) throw new Error(proposalError.message);
@@ -48,6 +74,12 @@ export async function loadSalaryReviewProposalDetail(
   if (approvalStepsError) throw new Error(approvalStepsError.message);
   if (notesError) throw new Error(notesError.message);
   if (auditEventsError) throw new Error(auditEventsError.message);
+  if (departmentAllocationsError && !isMissingDepartmentAllocationsTableError(departmentAllocationsError)) {
+    throw new Error(departmentAllocationsError.message);
+  }
+  if (childCyclesError && !isMissingParentCycleColumnError(childCyclesError)) {
+    throw new Error(childCyclesError.message);
+  }
 
   return {
     proposal,
@@ -55,6 +87,8 @@ export async function loadSalaryReviewProposalDetail(
     approvalSteps: approvalSteps || [],
     notes: notes || [],
     auditEvents: auditEvents || [],
+    departmentAllocations: departmentAllocationsError ? [] : departmentAllocations || [],
+    childCycles: childCyclesError ? [] : childCycles || [],
   };
 }
 

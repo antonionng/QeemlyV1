@@ -12,11 +12,11 @@ This file defines the feature freeze boundary for the current launch.
 - Benchmarking (`/dashboard/benchmarks`)
 - Salary review (`/dashboard/salary-review`)
 - Reports and compliance (`/dashboard/reports`, `/dashboard/compliance`)
+- Integrations (`/dashboard/integrations`)
 
 ## Deferred From GA
 
 - Billing and subscriptions (`/dashboard/billing`)
-- Integrations connection center (`/dashboard/integrations`)
 - Non-essential admin extras
 
 ## Feature Freeze Rule

@@ -1,5 +1,10 @@
 import { redirect } from "next/navigation";
 
-export default function PersonDetailPage() {
-  redirect("/dashboard/upload");
+type PersonDetailPageProps = {
+  params: Promise<{ id: string }>;
+};
+
+export default async function PersonDetailPage({ params }: PersonDetailPageProps) {
+  const { id } = await params;
+  redirect(`/dashboard/people?employeeId=${encodeURIComponent(id)}`);
 }

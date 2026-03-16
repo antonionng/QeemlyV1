@@ -248,4 +248,83 @@ describe("BenchmarkResults", () => {
     root.unmount();
     vi.unstubAllGlobals();
   });
+
+  it("renders the summary after the table and boxplot rows", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          benchmarkSource: "market",
+          bandLow: 120000,
+          bandHigh: 180000,
+          matchingEmployeeCount: 0,
+          inBandCount: 0,
+        }),
+      })),
+    );
+
+    const container = document.createElement("div");
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        React.createElement(BenchmarkResults, {
+          result: {
+            formData: {
+              context: "existing",
+              roleId: "pm",
+              levelId: "ic3",
+              locationId: "riyadh",
+              employmentType: "national",
+              currentSalaryLow: null,
+              currentSalaryHigh: null,
+              industry: "Fintech",
+              companySize: "1-50",
+              fundingStage: null,
+              targetPercentile: 50,
+            },
+            benchmark: baseBenchmark,
+            role: {
+              id: "pm",
+              title: "Product Manager",
+              family: "Product",
+              icon: "PM",
+            },
+            level: {
+              id: "ic3",
+              name: "Senior (IC3)",
+              category: "IC",
+            },
+            location: {
+              id: "riyadh",
+              city: "Riyadh",
+              country: "Saudi Arabia",
+              countryCode: "SA",
+              currency: "AED",
+              flag: "SA",
+            },
+            isOverridden: false,
+            createdAt: new Date("2026-03-12T00:00:00.000Z"),
+          },
+        }),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const summarySection = container.querySelector('[data-testid="benchmark-results-summary"]');
+    const graphSection = container.querySelector('[data-testid="benchmark-results-boxplot-section"]');
+    const tableSection = container.querySelector('[data-testid="benchmark-results-level-table"]');
+
+    expect(tableSection).not.toBeNull();
+    expect(graphSection).not.toBeNull();
+    expect(summarySection).not.toBeNull();
+    expect(tableSection?.compareDocumentPosition(summarySection as Node) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(graphSection?.compareDocumentPosition(summarySection as Node) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+    root.unmount();
+    vi.unstubAllGlobals();
+  });
 });

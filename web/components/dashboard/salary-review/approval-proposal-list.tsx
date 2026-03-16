@@ -17,6 +17,18 @@ function formatProposalDate(proposal: SalaryReviewProposalRecord) {
   });
 }
 
+function getProposalLabel(proposal: SalaryReviewProposalRecord) {
+  if (proposal.review_mode === "department_split" && proposal.review_scope === "master") {
+    return proposal.allocation_method === "finance_approval"
+      ? "Finance allocation review"
+      : "Department split master review";
+  }
+  if (proposal.review_mode === "department_split" && proposal.review_scope === "department") {
+    return `${proposal.department ?? "Department"} review`;
+  }
+  return proposal.source === "ai" ? "AI proposal" : "Manual proposal";
+}
+
 export function ApprovalProposalList({
   proposals,
   isLoading,
@@ -76,7 +88,7 @@ export function ApprovalProposalList({
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="text-sm font-semibold text-accent-950">
-                      {proposal.source === "ai" ? "AI proposal" : "Manual proposal"}
+                      {getProposalLabel(proposal)}
                     </p>
                     <p className="mt-1 text-xs text-accent-600">
                       Updated {formatProposalDate(proposal)}

@@ -85,14 +85,20 @@ export function PeopleCardGrid({ employees, onOpenDetails, onDelete }: Props) {
             <p>
               Salary: <span className="font-semibold text-brand-900">{formatAEDCompact(employee.totalComp)}</span>
             </p>
-            <p>
-              Market:{" "}
-              <span className={`font-semibold ${employee.marketComparison > 0 ? "text-red-600" : "text-emerald-600"}`}>
-                {employee.marketComparison > 0 ? "+" : ""}
-                {employee.marketComparison}%
-              </span>
-            </p>
-            {benchmarkTrust && (
+            {employee.hasBenchmark ? (
+              <p>
+                Market:{" "}
+                <span className={`font-semibold ${employee.marketComparison > 0 ? "text-red-600" : "text-emerald-600"}`}>
+                  {employee.marketComparison > 0 ? "+" : ""}
+                  {employee.marketComparison}%
+                </span>
+              </p>
+            ) : (
+              <p>
+                Market: <span className="font-semibold text-accent-500">Benchmark pending</span>
+              </p>
+            )}
+            {employee.hasBenchmark && benchmarkTrust && (
               <div className="flex flex-wrap gap-1">
                 <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-medium text-brand-700">
                   {benchmarkTrust.sourceLabel}

@@ -7,11 +7,11 @@ describe("ga scope", () => {
     expect(isFeatureEnabled("benchmarks")).toBe(true);
     expect(isFeatureEnabled("salaryReview")).toBe(true);
     expect(isFeatureEnabled("team")).toBe(true);
+    expect(isFeatureEnabled("integrations")).toBe(true);
   });
 
   it("keeps known non-GA surfaces disabled", () => {
     expect(isFeatureEnabled("billing")).toBe(false);
-    expect(isFeatureEnabled("integrations")).toBe(false);
   });
 
   it("includes explicit deferred feature metadata", () => {

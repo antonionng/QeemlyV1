@@ -8,5 +8,6 @@ describe("critical workflow smoke checks", () => {
     expect(isFeatureEnabled("salaryReview")).toBe(true);
     expect(isFeatureEnabled("team")).toBe(true);
     expect(isFeatureEnabled("upload")).toBe(true);
+    expect(isFeatureEnabled("integrations")).toBe(true);
   });
 });

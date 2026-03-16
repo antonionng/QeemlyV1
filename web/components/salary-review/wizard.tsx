@@ -48,13 +48,13 @@ const STEP_COPY: Record<WizardStep, { label: string; title: string; body: string
 
 function WizardStepBar({
   activeStep,
+  steps = ["setup", "draft", "final"],
   onStepChange,
 }: {
   activeStep: WizardStep;
+  steps?: WizardStep[];
   onStepChange: (step: WizardStep) => void;
 }) {
-  const steps: WizardStep[] = ["setup", "draft", "final"];
-
   return (
     <div className="flex flex-wrap gap-3">
       {steps.map((step, index) => {
@@ -93,15 +93,20 @@ export function SalaryReviewWizard({
     approvalSteps,
     totalCurrentPayroll,
     budgetUsed,
+    departmentAllocations,
     saveDraftProposal,
     submitActiveProposal,
     applyAiProposal,
     applyDefaultIncreases,
+    updateSettings,
+    syncDepartmentAllocations,
+    updateDepartmentAllocation,
   } = useSalaryReview();
   const [activeStep, setActiveStep] = useState<WizardStep>("setup");
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [showAiModal, setShowAiModal] = useState(false);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
+  const isSplitReview = settings.reviewMode === "department_split";
 
   const aiPlanRequest: SalaryReviewAiPlanRequest = useMemo(
     () => ({
@@ -135,6 +140,30 @@ export function SalaryReviewWizard({
     return true;
   };
 
+  const handleCreateSplitReview = async () => {
+    if (employees.length === 0) {
+      setFeedback({ type: "error", message: "Import employees before starting a split review." });
+      return;
+    }
+
+    syncDepartmentAllocations();
+
+    try {
+      await saveDraftProposal("manual");
+      const proposalId = useSalaryReview.getState().activeProposal?.id ?? null;
+      if (settings.allocationMethod === "finance_approval") {
+        onSubmitSuccess(proposalId);
+        return;
+      }
+      onBack();
+    } catch (error) {
+      setFeedback({
+        type: "error",
+        message: error instanceof Error ? error.message : "Could not create department reviews.",
+      });
+    }
+  };
+
   return (
     <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 px-8 py-8">
       <SalaryReviewHeader
@@ -157,7 +186,11 @@ export function SalaryReviewWizard({
         </div>
       ) : null}
 
-      <WizardStepBar activeStep={activeStep} onStepChange={setActiveStep} />
+      <WizardStepBar
+        activeStep={activeStep}
+        steps={isSplitReview ? ["setup"] : ["setup", "draft", "final"]}
+        onStepChange={setActiveStep}
+      />
 
       <Card className="rounded-2xl border-[#E6E8F0] bg-white p-6 shadow-none">
         <p className="text-xs font-medium uppercase tracking-[0.06em] text-[#7B8190]">
@@ -173,7 +206,132 @@ export function SalaryReviewWizard({
             title="Review Cycle Setup"
             body="Set the budget policy and effective date before building the draft."
           />
-          <div className="flex flex-wrap gap-3">
+          <Card className="rounded-2xl border-[#E6E8F0] bg-white p-6 shadow-none">
+            <p className="text-xs font-medium uppercase tracking-[0.06em] text-[#7B8190]">Workflow Option</p>
+            <h3 className="mt-2 text-lg font-semibold text-[#1F2430]">Choose how this salary review should run</h3>
+            <p className="mt-1 text-sm text-[#8A90A0]">
+              Keep the current company-wide review flow, or split the budget into department reviews that managers work independently.
+            </p>
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
+              <button
+                type="button"
+                onClick={() =>
+                  updateSettings({
+                    reviewMode: "company_wide",
+                    allocationMethod: "direct",
+                  })
+                }
+                className={`rounded-2xl border p-4 text-left ${
+                  !isSplitReview ? "border-[#6E56CF] bg-[#F7F5FF]" : "border-[#E6E8F0] bg-white"
+                }`}
+              >
+                <p className="text-sm font-semibold text-[#1F2430]">Run Full Company Review</p>
+                <p className="mt-1 text-sm text-[#8A90A0]">
+                  Use the existing single-cycle workflow with one company-wide budget.
+                </p>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  updateSettings({ reviewMode: "department_split" });
+                  syncDepartmentAllocations();
+                }}
+                className={`rounded-2xl border p-4 text-left ${
+                  isSplitReview ? "border-[#6E56CF] bg-[#F7F5FF]" : "border-[#E6E8F0] bg-white"
+                }`}
+              >
+                <p className="text-sm font-semibold text-[#1F2430]">Split By Department</p>
+                <p className="mt-1 text-sm text-[#8A90A0]">
+                  Create a master review, allocate budget per department, and let each department run its own workflow.
+                </p>
+              </button>
+            </div>
+          </Card>
+          {isSplitReview ? (
+            <Card className="rounded-2xl border-[#E6E8F0] bg-white p-6 shadow-none">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-medium uppercase tracking-[0.06em] text-[#7B8190]">Department Split</p>
+                  <h3 className="mt-2 text-lg font-semibold text-[#1F2430]">Allocate the master budget by department</h3>
+                  <p className="mt-1 text-sm text-[#8A90A0]">
+                    Choose whether budgets are assigned now or routed to Finance for approval, then confirm the amount for each department.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => syncDepartmentAllocations()}
+                  className="h-10 rounded-[10px] border-[#E6E8F0] bg-[#F4F5FB] px-4 text-[#2E3440]"
+                >
+                  Auto-Split Budget
+                </Button>
+              </div>
+              <div className="mt-5 flex rounded-[10px] bg-[#F4F5FB] p-1">
+                <button
+                  type="button"
+                  onClick={() => updateSettings({ allocationMethod: "direct" })}
+                  className={`flex-1 rounded-[8px] px-4 py-2 text-sm font-medium ${
+                    settings.allocationMethod === "direct" ? "bg-[#6E56CF] text-white" : "text-[#2E3440]"
+                  }`}
+                >
+                  Assigned Directly
+                </button>
+                <button
+                  type="button"
+                  onClick={() => updateSettings({ allocationMethod: "finance_approval" })}
+                  className={`flex-1 rounded-[8px] px-4 py-2 text-sm font-medium ${
+                    settings.allocationMethod === "finance_approval"
+                      ? "bg-[#6E56CF] text-white"
+                      : "text-[#2E3440]"
+                  }`}
+                >
+                  Finance Approval
+                </button>
+              </div>
+              <div className="mt-5 space-y-3">
+                {departmentAllocations.map((allocation) => (
+                  <div
+                    key={allocation.department}
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#E6E8F0] bg-[#F7F8FC] px-4 py-4"
+                  >
+                    <div>
+                      <p className="text-sm font-semibold text-[#1F2430]">{allocation.department}</p>
+                      <p className="mt-1 text-xs text-[#8A90A0]">
+                        {allocation.selectedEmployeeIds.length} employee
+                        {allocation.selectedEmployeeIds.length === 1 ? "" : "s"} in scope
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-medium uppercase tracking-[0.06em] text-[#7B8190]">Budget</span>
+                      <input
+                        type="number"
+                        min={0}
+                        step={100}
+                        value={Math.round(allocation.allocatedBudget)}
+                        onChange={(event) =>
+                          updateDepartmentAllocation(allocation.department, Number(event.target.value))
+                        }
+                        className="h-10 w-[140px] rounded-[10px] border border-[#DADFF0] bg-white px-3 text-right text-sm text-[#1F2430] outline-none"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-6 flex flex-wrap justify-end gap-3">
+                <Button
+                  type="button"
+                  onClick={() => void handleCreateSplitReview()}
+                  className="h-10 rounded-[10px] bg-[linear-gradient(135deg,#6E56CF,#7C6AF2)] px-4 text-white"
+                >
+                  {settings.allocationMethod === "finance_approval"
+                    ? "Submit Budget Split For Finance Approval"
+                    : "Create Department Reviews"}
+                </Button>
+              </div>
+            </Card>
+          ) : null}
+          {!isSplitReview ? (
+            <div className="flex flex-wrap gap-3">
             <Button
               type="button"
               onClick={async () => {
@@ -202,11 +360,12 @@ export function SalaryReviewWizard({
               <Sparkles className="h-4 w-4" />
               Start With AI Draft
             </Button>
-          </div>
+            </div>
+          ) : null}
         </>
       ) : null}
 
-      {activeStep === "draft" ? (
+      {!isSplitReview && activeStep === "draft" ? (
         <>
           <PayrollSummaryCards />
           <Card className="rounded-2xl border-[#E6E8F0] bg-white p-6 shadow-none">
@@ -284,7 +443,7 @@ export function SalaryReviewWizard({
         </>
       ) : null}
 
-      {activeStep === "final" ? (
+      {!isSplitReview && activeStep === "final" ? (
         <>
           <PayrollSummaryCards />
           <BudgetUsageBar />

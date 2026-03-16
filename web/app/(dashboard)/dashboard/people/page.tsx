@@ -1,5 +1,5 @@
-import { redirect } from "next/navigation";
+import { PeoplePageClient } from "./client";
 
 export default function PeoplePage() {
-  redirect("/dashboard/upload");
+  return <PeoplePageClient />;
 }

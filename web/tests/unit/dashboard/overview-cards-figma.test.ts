@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { HealthScore } from "@/components/dashboard/overview/health-score";
 import { StatCards } from "@/components/dashboard/overview/stat-cards";
 import type { OverviewBenchmarkCoverage, OverviewMetrics } from "@/lib/dashboard/company-overview";
+import { buildOverviewInteractionMap } from "@/lib/dashboard/overview-interactions";
 
 const metrics: OverviewMetrics = {
   totalEmployees: 150,
@@ -57,6 +58,36 @@ const benchmarkCoverage: OverviewBenchmarkCoverage = {
   coveragePct: 85,
 };
 
+const interactions = buildOverviewInteractionMap({
+  metrics,
+  departmentSummaries: [],
+  benchmarkCoverage,
+  benchmarkTrust: {
+    coveragePercent: 85,
+    matchRatePercent: 92,
+    benchmarkedEmployees: 120,
+    totalEmployees: 141,
+    confidenceLabel: "High confidence",
+    confidenceScore: 85,
+    coverageLabel: "85% covered",
+    methodologyLabel: "Uses matched market benchmarks for covered roles.",
+    benchmarkSourceLabel: "Market",
+  },
+  advisoryCandidates: [],
+  actions: [],
+  insights: [],
+  riskSummary: {
+    totalAtRisk: 14,
+    methodologyLabel: "Tracks benchmarked employees whose pay sits above market thresholds.",
+    coverageNote: "Counts are based on benchmarked employees only.",
+    departmentRows: [],
+  },
+  dataHealth: {
+    latestBenchmarkFreshness: null,
+    lastSync: null,
+  },
+});
+
 describe("Compensation health score grid", () => {
   it("uses a single responsive 3-column metrics grid in the overview page", () => {
     const source = fs.readFileSync(
@@ -65,29 +96,39 @@ describe("Compensation health score grid", () => {
     );
 
     expect(source).toContain('data-testid="overview-metrics-grid"');
-    expect(source).toContain("lg:[grid-template-columns:2fr_1fr_1fr]");
-    expect(source).not.toContain("<div className=\"lg:col-span-2\">");
+    expect(source).not.toContain("lg:[grid-template-columns:2fr_1fr_1fr]");
+    expect(source).toContain("lg:grid-cols-[minmax(0,1.75fr)_minmax(22rem,1fr)]");
+    expect(source).toContain("<HealthScore");
+    expect(source).toContain("interactions={interactionMap}");
+    expect(source).toContain("onInteract={handleOverviewInteraction}");
+    expect(source).toContain("<StatCards");
   });
 
   it("renders the health score card with the large semicircle gauge, status pill, and unified factor bars", () => {
     const html = renderToStaticMarkup(
       React.createElement(HealthScore, {
         metrics,
+        interactions,
       }),
     );
 
     expect(html).toContain('data-testid="health-score-card"');
     expect(html).toContain('data-testid="health-score-gauge"');
-    expect(html).toContain('viewBox="0 0 320 200"');
+    expect(html).toContain('data-testid="health-score-gauge-shell"');
+    expect(html).toContain('data-testid="health-score-center-stack"');
+    expect(html).toContain('data-testid="health-score-status-pill"');
+    expect(html).toContain('viewBox="0 0 360 220"');
     expect(html).toContain("stroke:#E6E7EB");
     expect(html).toContain("stroke:#2EC4A7");
     expect(html).toContain(">70%</");
     expect(html).toContain(">Good<");
     expect(html).toContain("background:#DFF7F1");
     expect(html).toContain("color:#1C8C6C");
-    expect(html).toContain("Band Alignment");
-    expect(html).toContain("Market Position");
-    expect(html).toContain("Risk Management");
+    expect(html).toContain('data-testid="health-score-factor-band-alignment"');
+    expect(html).toContain('data-testid="health-score-factor-market-position"');
+    expect(html).toContain('data-testid="health-score-factor-risk-management"');
+    expect(html).toContain('data-testid="health-score-gauge-action"');
+    expect(html).toContain('data-testid="health-score-gauge-tooltip"');
     expect(html).toContain("background:#5A67FF");
     expect(html).toContain("background:#F59E0B");
     expect(html).toContain("background:#FF3B5C");
@@ -98,11 +139,16 @@ describe("Compensation health score grid", () => {
       React.createElement(StatCards, {
         metrics,
         benchmarkCoverage,
+        interactions,
       }),
     );
 
+    expect(html).toContain('data-testid="overview-stat-card-grid"');
     expect(html).toContain('data-testid="active-employees-card"');
+    expect(html).toContain('data-testid="active-employees-card-action"');
+    expect(html).toContain('data-testid="active-employees-card-tooltip"');
     expect(html).toContain('data-testid="active-employees-sparkline"');
+    expect(html).toContain('data-testid="active-employees-card-chart"');
     expect(html).toContain("linearGradient");
     expect(html).toContain("stroke:#7C7FF0");
     expect(html).toContain(">141<");
@@ -110,6 +156,9 @@ describe("Compensation health score grid", () => {
     expect(html).toContain("vs last year");
 
     expect(html).toContain('data-testid="total-payroll-card"');
+    expect(html).toContain('data-testid="total-payroll-card-action"');
+    expect(html).toContain('data-testid="total-payroll-card-tooltip"');
+    expect(html).toContain('data-testid="total-payroll-card-chart"');
     expect(html).toContain(">AED 68.6M<");
     expect(html).toContain(">Annual compensation<");
     expect(html).not.toContain("Monthly compensation");
@@ -119,14 +168,20 @@ describe("Compensation health score grid", () => {
     expect(html).toContain(">2026<");
 
     expect(html).toContain('data-testid="in-band-card"');
+    expect(html).toContain('data-testid="in-band-card-action"');
+    expect(html).toContain('data-testid="in-band-card-tooltip"');
     expect(html).toContain('data-testid="in-band-distribution"');
+    expect(html).toContain('data-testid="in-band-card-chart"');
     expect(html).toContain("background:#7BC8AE");
     expect(html).toContain("background:#F2C98A");
     expect(html).toContain("background:#E88FA1");
     expect(html).toContain(">65%<");
 
     expect(html).toContain('data-testid="risk-flags-card"');
+    expect(html).toContain('data-testid="risk-flags-card-action"');
+    expect(html).toContain('data-testid="risk-flags-card-tooltip"');
     expect(html).toContain('data-testid="risk-flags-indicator"');
+    expect(html).toContain('data-testid="risk-flags-card-chart"');
     expect(html).toContain("background:#FF3B5C");
     expect(html).toContain(">14<");
 

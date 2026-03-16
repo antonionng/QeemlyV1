@@ -7,6 +7,7 @@ import { formatAEDCompact } from "@/lib/employees";
 import type {
   SalaryReviewApprovalStepRecord,
   SalaryReviewAuditEventRecord,
+  SalaryReviewDepartmentAllocationRecord,
   SalaryReviewNoteRecord,
   SalaryReviewProposalItemRecord,
   SalaryReviewProposalRecord,
@@ -18,6 +19,8 @@ import { ReviewerActionPanel } from "./reviewer-action-panel";
 export function ApprovalProposalDetail({
   proposal,
   proposalItems,
+  departmentAllocations = [],
+  childCycles = [],
   approvalSteps,
   proposalNotes,
   proposalAuditEvents,
@@ -31,6 +34,8 @@ export function ApprovalProposalDetail({
 }: {
   proposal: SalaryReviewProposalRecord | null;
   proposalItems: SalaryReviewProposalItemRecord[];
+  departmentAllocations?: SalaryReviewDepartmentAllocationRecord[];
+  childCycles?: SalaryReviewProposalRecord[];
   approvalSteps: SalaryReviewApprovalStepRecord[];
   proposalNotes: SalaryReviewNoteRecord[];
   proposalAuditEvents: SalaryReviewAuditEventRecord[];
@@ -45,6 +50,8 @@ export function ApprovalProposalDetail({
   const [noteDraft, setNoteDraft] = useState("");
   const isHistoryMode = mode === "history";
   const detailLabel = isHistoryMode ? "Cycle Detail" : "Approval Detail";
+  const isSplitMasterReview =
+    proposal?.review_mode === "department_split" && proposal.review_scope === "master";
   const reviewEmployees = proposalItems
     .filter((item) => item.selected && item.employee_id)
     .map((item) => {
@@ -134,7 +141,11 @@ export function ApprovalProposalDetail({
               {isHistoryMode ? "Selected Cycle" : "Selected Proposal"}
             </p>
             <h3 className="mt-2 text-base font-semibold text-accent-900">
-              {proposal.source === "ai" ? "AI proposal" : "Manual proposal"}
+              {isSplitMasterReview
+                ? "Department budget allocation"
+                : proposal.source === "ai"
+                  ? "AI proposal"
+                  : "Manual proposal"}
             </h3>
             <p className="mt-1 text-sm text-accent-600">
               Effective {new Date(proposal.effective_date).toLocaleDateString("en-GB")}
@@ -154,19 +165,55 @@ export function ApprovalProposalDetail({
       <Card className="dash-card p-5">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-500">Employees</p>
-            <h3 className="mt-2 text-base font-semibold text-accent-900">Employee Review List</h3>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-500">
+              {isSplitMasterReview ? "Department Budget Allocation" : "Employees"}
+            </p>
+            <h3 className="mt-2 text-base font-semibold text-accent-900">
+              {isSplitMasterReview ? "Department allocation summary" : "Employee Review List"}
+            </h3>
             <p className="mt-1 max-w-2xl text-sm text-accent-600">
-              Review one employee at a time in a single list. Open a row to inspect compensation detail, comments, and activity inline.
+              {isSplitMasterReview
+                ? "Review the budget split and department workflow status before departments begin their individual review cycles."
+                : "Review one employee at a time in a single list. Open a row to inspect compensation detail, comments, and activity inline."}
             </p>
           </div>
           <span className="rounded-full border border-accent-200 bg-accent-50 px-3 py-1 text-xs font-semibold text-accent-700">
-            {reviewEmployees.length} in scope
+            {isSplitMasterReview ? `${departmentAllocations.length} department${departmentAllocations.length === 1 ? "" : "s"}` : `${reviewEmployees.length} in scope`}
           </span>
         </div>
 
         <div className="mt-5 space-y-3">
-          {reviewEmployees.length > 0 ? (
+          {isSplitMasterReview ? (
+            departmentAllocations.map((allocation) => {
+              const childCycle = childCycles.find((cycle) => cycle.id === allocation.child_cycle_id);
+              return (
+                <div
+                  key={allocation.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-accent-100 bg-white px-4 py-4"
+                >
+                  <div>
+                    <p className="text-sm font-semibold text-accent-950">{allocation.department}</p>
+                    <p className="mt-1 text-xs text-accent-600">
+                      {proposal.allocation_method === "finance_approval" ? "Finance approval" : "Direct allocation"}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full border border-accent-200 bg-accent-50 px-2.5 py-1 text-xs font-semibold text-accent-700">
+                      {formatAEDCompact(Number(allocation.allocated_budget || 0))}
+                    </span>
+                    <span className="rounded-full border border-accent-200 bg-white px-2.5 py-1 text-xs font-semibold text-accent-700">
+                      {allocation.allocation_status.replaceAll("_", " ")}
+                    </span>
+                    {childCycle ? (
+                      <span className="rounded-full border border-accent-200 bg-white px-2.5 py-1 text-xs font-semibold text-accent-700">
+                        {childCycle.department ?? "Department"} {childCycle.status.replaceAll("_", " ")}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })
+          ) : reviewEmployees.length > 0 ? (
             reviewEmployees.map((employee) => {
               const isExpanded = employee.employeeId === selectedEmployee?.employeeId;
               const rowNotes = proposalNotes.filter((note) => note.employee_id === employee.employeeId);

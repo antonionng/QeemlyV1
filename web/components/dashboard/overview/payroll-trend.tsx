@@ -5,7 +5,7 @@ import { TrendingUp, TrendingDown } from "lucide-react";
 import clsx from "clsx";
 import type { OverviewMetrics } from "@/lib/dashboard/company-overview";
 import { useSalaryView, applyViewMode } from "@/lib/salary-view-store";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { buildPayrollTrendViewModel, type PayrollTrendRange } from "@/lib/dashboard/payroll-trend";
 import {
   Area,
@@ -65,6 +65,8 @@ function PayrollTrendTooltip({ active, payload, label }: PayrollTrendTooltipProp
 export function PayrollTrend({ metrics }: PayrollTrendProps) {
   const { salaryView } = useSalaryView();
   const [timeRange, setTimeRange] = useState<PayrollTrendRange>("12m");
+  const [isChartReady, setIsChartReady] = useState(false);
+  const chartContainerRef = useRef<HTMLDivElement | null>(null);
   const viewModel = buildPayrollTrendViewModel({ metrics, salaryView, timeRange });
   const changePresentation = getPayrollTrendChangePresentation(viewModel.periodChange);
 
@@ -102,6 +104,38 @@ export function PayrollTrend({ metrics }: PayrollTrendProps) {
     if (Math.abs(value) < 1_000_000) return `AED ${Math.round(value).toLocaleString("en-AE")}`;
     return `AED ${(value / 1_000_000).toFixed(1)}M`;
   };
+
+  useEffect(() => {
+    const node = chartContainerRef.current;
+    if (!node) {
+      return;
+    }
+
+    const updateChartReadiness = (width: number, height: number) => {
+      setIsChartReady(width > 0 && height > 0);
+    };
+
+    const measureNode = () => {
+      const rect = node.getBoundingClientRect();
+      updateChartReadiness(rect.width, rect.height);
+    };
+
+    measureNode();
+
+    if (typeof ResizeObserver === "undefined") {
+      return;
+    }
+
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      const width = entry?.contentRect.width ?? node.getBoundingClientRect().width;
+      const height = entry?.contentRect.height ?? node.getBoundingClientRect().height;
+      updateChartReadiness(width, height);
+    });
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, []);
 
   return (
     <Card className="p-8">
@@ -171,57 +205,68 @@ export function PayrollTrend({ metrics }: PayrollTrendProps) {
       <p className="mb-4 mt-4 text-[13px] text-[#6B7280]">{viewModel.driverSummary}</p>
 
       {/* Area Chart */}
-      <div className="overview-payroll-chart mt-4" style={{ height: PAYROLL_TREND_CHART_STYLE.height }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={chartData} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
-            <CartesianGrid
-              stroke={PAYROLL_TREND_CHART_STYLE.gridColor}
-              strokeWidth={1}
-              vertical={false}
-            />
-            <XAxis
-              dataKey="month"
-              axisLine={false}
-              tickLine={false}
-              tickMargin={12}
-              tick={{ fill: PAYROLL_TREND_CHART_STYLE.axisColor, fontSize: 12 }}
-            />
-            <YAxis
-              axisLine={false}
-              tickLine={false}
-              tickMargin={12}
-              width={72}
-              domain={[0, yAxisMax]}
-              ticks={yAxisTicks}
-              tick={{ fill: PAYROLL_TREND_CHART_STYLE.axisColor, fontSize: 12 }}
-              tickFormatter={formatAxisValue}
-            />
-            <Tooltip
-              cursor={{ stroke: "#D1D5DB", strokeDasharray: "4 4", strokeWidth: 1 }}
-              content={<PayrollTrendTooltip />}
-            />
-            <Area
-              type="monotone"
-              dataKey="Payroll"
-              stroke={PAYROLL_TREND_CHART_STYLE.lineColor}
-              strokeWidth={PAYROLL_TREND_CHART_STYLE.lineWidth}
-              fill={PAYROLL_TREND_CHART_STYLE.lineColor}
-              fillOpacity={PAYROLL_TREND_CHART_STYLE.fillOpacity}
-              dot={{
-                r: PAYROLL_TREND_CHART_STYLE.dotRadius,
-                fill: PAYROLL_TREND_CHART_STYLE.lineColor,
-                stroke: PAYROLL_TREND_CHART_STYLE.lineColor,
-                strokeWidth: 0,
-              }}
-              activeDot={{
-                r: PAYROLL_TREND_CHART_STYLE.activeDotRadius,
-                fill: PAYROLL_TREND_CHART_STYLE.lineColor,
-                stroke: PAYROLL_TREND_CHART_STYLE.activeDotStroke,
-                strokeWidth: PAYROLL_TREND_CHART_STYLE.activeDotStrokeWidth,
-              }}
-            />
-          </AreaChart>
-        </ResponsiveContainer>
+      <div
+        ref={chartContainerRef}
+        className="overview-payroll-chart mt-4 min-w-0"
+        style={{ height: PAYROLL_TREND_CHART_STYLE.height }}
+      >
+        {isChartReady ? (
+          <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+            <AreaChart data={chartData} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+              <CartesianGrid
+                stroke={PAYROLL_TREND_CHART_STYLE.gridColor}
+                strokeWidth={1}
+                vertical={false}
+              />
+              <XAxis
+                dataKey="month"
+                axisLine={false}
+                tickLine={false}
+                tickMargin={12}
+                tick={{ fill: PAYROLL_TREND_CHART_STYLE.axisColor, fontSize: 12 }}
+              />
+              <YAxis
+                axisLine={false}
+                tickLine={false}
+                tickMargin={12}
+                width={72}
+                domain={[0, yAxisMax]}
+                ticks={yAxisTicks}
+                tick={{ fill: PAYROLL_TREND_CHART_STYLE.axisColor, fontSize: 12 }}
+                tickFormatter={formatAxisValue}
+              />
+              <Tooltip
+                cursor={{ stroke: "#D1D5DB", strokeDasharray: "4 4", strokeWidth: 1 }}
+                content={<PayrollTrendTooltip />}
+              />
+              <Area
+                type="monotone"
+                dataKey="Payroll"
+                stroke={PAYROLL_TREND_CHART_STYLE.lineColor}
+                strokeWidth={PAYROLL_TREND_CHART_STYLE.lineWidth}
+                fill={PAYROLL_TREND_CHART_STYLE.lineColor}
+                fillOpacity={PAYROLL_TREND_CHART_STYLE.fillOpacity}
+                dot={{
+                  r: PAYROLL_TREND_CHART_STYLE.dotRadius,
+                  fill: PAYROLL_TREND_CHART_STYLE.lineColor,
+                  stroke: PAYROLL_TREND_CHART_STYLE.lineColor,
+                  strokeWidth: 0,
+                }}
+                activeDot={{
+                  r: PAYROLL_TREND_CHART_STYLE.activeDotRadius,
+                  fill: PAYROLL_TREND_CHART_STYLE.lineColor,
+                  stroke: PAYROLL_TREND_CHART_STYLE.activeDotStroke,
+                  strokeWidth: PAYROLL_TREND_CHART_STYLE.activeDotStrokeWidth,
+                }}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        ) : (
+          <div
+            data-testid="payroll-trend-chart-placeholder"
+            className="h-full w-full rounded-2xl bg-[#F8F8FB]"
+          />
+        )}
       </div>
     </Card>
   );

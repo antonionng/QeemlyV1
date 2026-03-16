@@ -73,5 +73,8 @@ describe("EmployeeDrawer", () => {
     expect(html).toContain("Ahmed Al-Qasimi (Dubai)");
     expect(html).toContain("Qeemly Advisory");
     expect(html).toContain("Ask about compensation, fairness, or retention risks for this employee.");
+    expect(html).toContain("Market Position");
+    expect(html).toContain("Visa &amp; Mobility");
+    expect(html).toContain("Benchmark positioning updates automatically from role, level, location, and pay inputs.");
   });
 });

@@ -150,38 +150,51 @@ export function PeopleTable({
                   <p className="mt-1 text-[10px] text-accent-500">{formatAEDCompact(employee.totalComp)} total</p>
                 </td>
                 <td className="px-4 py-3">
-                  <span className={`rounded-full border px-2 py-1 text-[10px] font-semibold uppercase ${bandBadgeClass(employee.bandPosition)}`}>
-                    {employee.bandPosition}
-                  </span>
+                  {employee.hasBenchmark ? (
+                    <span className={`rounded-full border px-2 py-1 text-[10px] font-semibold uppercase ${bandBadgeClass(employee.bandPosition)}`}>
+                      {employee.bandPosition}
+                    </span>
+                  ) : (
+                    <span className="rounded-full border border-accent-200 px-2 py-1 text-[10px] font-semibold uppercase text-accent-500">
+                      Benchmark pending
+                    </span>
+                  )}
                 </td>
                 <td className="px-4 py-3">
-                  <div className="space-y-1">
-                    <p className={`text-sm font-semibold ${employee.marketComparison > 0 ? "text-red-600" : "text-emerald-600"}`}>
-                      {employee.marketComparison > 0 ? "+" : ""}
-                      {employee.marketComparison}%
-                    </p>
-                    <div className="h-1.5 w-20 rounded-full bg-accent-100">
-                      <div
-                        className={`h-full rounded-full ${employee.marketComparison > 8 ? "bg-red-500" : employee.marketComparison < -3 ? "bg-emerald-500" : "bg-brand-500"}`}
-                        style={{ width: `${Math.min(100, Math.max(10, Math.abs(employee.marketComparison) * 3))}%` }}
-                      />
-                    </div>
-                    {benchmarkTrust && (
-                      <div className="flex flex-wrap gap-1 pt-1">
-                        <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-medium text-brand-700">
-                          {benchmarkTrust.sourceLabel}
-                        </span>
-                        <span className="rounded-full bg-accent-100 px-2 py-0.5 text-[10px] font-medium text-accent-600">
-                          {benchmarkTrust.matchLabel}
-                        </span>
-                        {benchmarkTrust.freshnessLabel && (
-                          <span className="rounded-full bg-accent-100 px-2 py-0.5 text-[10px] font-medium text-accent-600">
-                            {benchmarkTrust.freshnessLabel}
-                          </span>
-                        )}
+                  {employee.hasBenchmark ? (
+                    <div className="space-y-1">
+                      <p className={`text-sm font-semibold ${employee.marketComparison > 0 ? "text-red-600" : "text-emerald-600"}`}>
+                        {employee.marketComparison > 0 ? "+" : ""}
+                        {employee.marketComparison}%
+                      </p>
+                      <div className="h-1.5 w-20 rounded-full bg-accent-100">
+                        <div
+                          className={`h-full rounded-full ${employee.marketComparison > 8 ? "bg-red-500" : employee.marketComparison < -3 ? "bg-emerald-500" : "bg-brand-500"}`}
+                          style={{ width: `${Math.min(100, Math.max(10, Math.abs(employee.marketComparison) * 3))}%` }}
+                        />
                       </div>
-                    )}
-                  </div>
+                      {benchmarkTrust && (
+                        <div className="flex flex-wrap gap-1 pt-1">
+                          <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-medium text-brand-700">
+                            {benchmarkTrust.sourceLabel}
+                          </span>
+                          <span className="rounded-full bg-accent-100 px-2 py-0.5 text-[10px] font-medium text-accent-600">
+                            {benchmarkTrust.matchLabel}
+                          </span>
+                          {benchmarkTrust.freshnessLabel && (
+                            <span className="rounded-full bg-accent-100 px-2 py-0.5 text-[10px] font-medium text-accent-600">
+                              {benchmarkTrust.freshnessLabel}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      <p className="text-sm font-semibold text-accent-500">Not mapped</p>
+                      <p className="text-[10px] text-accent-400">Awaiting benchmark coverage</p>
+                    </div>
+                  )}
                 </td>
                 <td className="px-4 py-3 text-sm text-brand-800 capitalize">
                   <div className="space-y-1">

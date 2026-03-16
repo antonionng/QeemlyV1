@@ -87,6 +87,7 @@ describe("DashboardSidebar", () => {
     expect(html).toContain('data-testid="workspace-switcher"');
     expect(html).toContain("Company Overview");
     expect(html).toContain("Benchmarking");
+    expect(html).toContain("People");
     expect(html).toContain("Salary Review");
     expect(html).toContain("ANALYTICS");
     expect(html).toContain("Reports");
@@ -106,12 +107,14 @@ describe("DashboardSidebar", () => {
 
     expect(html).not.toContain("Company Overview</span>");
     expect(html).not.toContain("Benchmarking</span>");
+    expect(html).not.toContain("People</span>");
     expect(html).not.toContain("Salary Review</span>");
     expect(html).not.toContain("ANALYTICS");
     expect(html).not.toContain("TOOLS");
     expect(html).not.toContain('data-testid="workspace-switcher"');
     expect(html).toContain('title="Company Overview"');
     expect(html).toContain('title="Benchmarking"');
+    expect(html).toContain('title="People"');
     expect(html).toContain('title="Salary Review"');
     expect(html).toContain('title="Reports"');
     expect(html).toContain('title="Workforce Compliance"');

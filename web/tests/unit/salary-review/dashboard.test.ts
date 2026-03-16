@@ -18,6 +18,12 @@ function makeProposal(
     workspace_id: overrides.workspace_id ?? "workspace-1",
     created_by: overrides.created_by ?? "user-1",
     source: overrides.source ?? "manual",
+    review_mode: overrides.review_mode ?? "company_wide",
+    review_scope: overrides.review_scope ?? "company_wide",
+    parent_cycle_id: overrides.parent_cycle_id ?? null,
+    department: overrides.department ?? null,
+    allocation_method: overrides.allocation_method ?? null,
+    allocation_status: overrides.allocation_status ?? null,
     cycle: overrides.cycle ?? "annual",
     budget_type: overrides.budget_type ?? "percentage",
     budget_percentage: overrides.budget_percentage ?? 5,
@@ -72,6 +78,34 @@ describe("salary review dashboard model", () => {
     expect(dashboard.primaryAction).toBe("start-cycle");
     expect(dashboard.hasDraft).toBe(false);
     expect(dashboard.tabs.overview.label).toBe("Overview");
+  });
+
+  it("separates split-review masters from their department child cycles", () => {
+    const dashboard = buildSalaryReviewDashboardModel({
+      activeProposal: null,
+      cycles: [
+        makeProposal({
+          id: "master-1",
+          review_mode: "department_split",
+          review_scope: "master",
+          status: "approved",
+        }),
+        makeProposal({
+          id: "child-1",
+          review_mode: "department_split",
+          review_scope: "department",
+          parent_cycle_id: "master-1",
+          department: "Engineering",
+          status: "draft",
+        }),
+      ],
+      approvalQueue: [],
+    });
+
+    expect(dashboard.masterCycles.map((proposal) => proposal.id)).toEqual(["master-1"]);
+    expect(dashboard.departmentCyclesByMaster["master-1"]?.map((proposal) => proposal.id)).toEqual([
+      "child-1",
+    ]);
   });
 });
 

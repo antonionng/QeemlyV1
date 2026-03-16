@@ -28,6 +28,7 @@ import {
 import type {
   SalaryReviewApprovalStepRecord,
   SalaryReviewAuditEventRecord,
+  SalaryReviewDepartmentAllocationRecord,
   SalaryReviewNoteRecord,
   SalaryReviewProposalItemRecord,
   SalaryReviewProposalRecord,
@@ -38,11 +39,21 @@ export type BudgetType = "percentage" | "absolute";
 
 export interface ReviewSettings {
   cycle: ReviewCycle;
+  reviewMode: "company_wide" | "department_split";
+  allocationMethod: "direct" | "finance_approval";
   budgetType: BudgetType;
   budgetPercentage: number;
   budgetAbsolute: number;
   effectiveDate: string;
   includeBonus: boolean;
+}
+
+export interface DepartmentAllocationDraft {
+  department: string;
+  allocatedBudget: number;
+  selectedEmployeeIds: string[];
+  allocationStatus?: "pending" | "approved" | "returned";
+  childCycleId?: string | null;
 }
 
 export interface ReviewEmployee extends Employee {
@@ -138,6 +149,8 @@ export interface SalaryReviewState {
   isUsingMockData: boolean;
   cycles: SalaryReviewProposalRecord[];
   activeProposal: SalaryReviewProposalRecord | null;
+  departmentAllocations: DepartmentAllocationDraft[];
+  childCycles: SalaryReviewProposalRecord[];
   proposalItemsByEmployee: Record<string, SalaryReviewProposalItemRecord>;
   approvalSteps: SalaryReviewApprovalStepRecord[];
   proposalNotes: SalaryReviewNoteRecord[];
@@ -146,6 +159,8 @@ export interface SalaryReviewState {
   approvalQueue: SalaryReviewProposalRecord[];
   selectedApprovalProposalId: string | null;
   selectedApprovalProposal: SalaryReviewProposalRecord | null;
+  selectedApprovalDepartmentAllocations: DepartmentAllocationDraft[];
+  selectedApprovalChildCycles: SalaryReviewProposalRecord[];
   selectedApprovalItemsByEmployee: Record<string, SalaryReviewProposalItemRecord>;
   selectedApprovalSteps: SalaryReviewApprovalStepRecord[];
   selectedApprovalNotes: SalaryReviewNoteRecord[];
@@ -163,6 +178,8 @@ export interface SalaryReviewState {
   
   // Actions
   updateSettings: (settings: Partial<ReviewSettings>) => void;
+  syncDepartmentAllocations: () => void;
+  updateDepartmentAllocation: (department: string, allocatedBudget: number) => void;
   updateEmployeeIncrease: (employeeId: string, increase: number) => void;
   updateFilters: (filters: Partial<SalaryReviewFilters>) => void;
   resetFilters: () => void;
@@ -225,6 +242,67 @@ function computeReviewTotals(
   };
 }
 
+function buildDepartmentAllocations(args: {
+  employees: ReviewEmployee[];
+  totalCurrentPayroll: number;
+  settings: ReviewSettings;
+  existingAllocations?: DepartmentAllocationDraft[];
+}) {
+  const selectedEmployees = args.employees.filter((employee) => employee.isSelected);
+  const departments = Array.from(
+    new Set(selectedEmployees.map((employee) => employee.department).filter(Boolean))
+  ).sort((left, right) => left.localeCompare(right));
+  const totalBudget = Math.round(getBudgetAmount(args.settings, args.totalCurrentPayroll));
+  const payrollByDepartment = new Map(
+    departments.map((department) => [
+      department,
+      selectedEmployees
+        .filter((employee) => employee.department === department)
+        .reduce((sum, employee) => sum + employee.baseSalary, 0),
+    ])
+  );
+  const totalSelectedPayroll = Array.from(payrollByDepartment.values()).reduce(
+    (sum, payroll) => sum + payroll,
+    0
+  );
+  const preservedByDepartment = new Map(
+    (args.existingAllocations ?? []).map((allocation) => [allocation.department, allocation])
+  );
+
+  const baseAllocations = departments.map((department) => {
+    const selectedEmployeeIds = selectedEmployees
+      .filter((employee) => employee.department === department)
+      .map((employee) => employee.id);
+    const preserved = preservedByDepartment.get(department);
+    const proportionalBudget =
+      totalBudget > 0 && totalSelectedPayroll > 0
+        ? Math.floor((totalBudget * (payrollByDepartment.get(department) ?? 0)) / totalSelectedPayroll)
+        : 0;
+
+    return {
+      department,
+      selectedEmployeeIds,
+      allocatedBudget:
+        preserved && preserved.selectedEmployeeIds.join(",") === selectedEmployeeIds.join(",")
+          ? preserved.allocatedBudget
+          : proportionalBudget,
+      allocationStatus: preserved?.allocationStatus,
+      childCycleId: preserved?.childCycleId ?? null,
+    };
+  });
+
+  const allocatedSoFar = baseAllocations.reduce((sum, allocation) => sum + allocation.allocatedBudget, 0);
+  let remaining = totalBudget - allocatedSoFar;
+  let index = 0;
+  while (remaining > 0 && baseAllocations.length > 0) {
+    baseAllocations[index % baseAllocations.length].allocatedBudget += 1;
+    remaining -= 1;
+    index += 1;
+  }
+
+  return baseAllocations;
+}
+
 function clearReviewEmployees(employees: ReviewEmployee[]): ReviewEmployee[] {
   return employees.map((employee) => ({
     ...employee,
@@ -274,11 +352,29 @@ function buildSettingsFromProposal(
   return {
     ...currentSettings,
     cycle: proposal.cycle,
+    reviewMode: proposal.review_mode,
+    allocationMethod: proposal.allocation_method ?? currentSettings.allocationMethod,
     budgetType: proposal.budget_type,
     budgetPercentage: Number(proposal.budget_percentage || 0),
     budgetAbsolute: Number(proposal.budget_absolute || 0),
     effectiveDate: proposal.effective_date,
   };
+}
+
+function buildDepartmentAllocationDraftsFromRecords(
+  allocations: SalaryReviewDepartmentAllocationRecord[] = []
+): DepartmentAllocationDraft[] {
+  return allocations
+    .map((allocation) => ({
+      department: allocation.department,
+      allocatedBudget: Number(allocation.allocated_budget || 0),
+      selectedEmployeeIds: Array.isArray(allocation.selected_employee_ids)
+        ? allocation.selected_employee_ids.map((id) => String(id))
+        : [],
+      allocationStatus: allocation.allocation_status,
+      childCycleId: allocation.child_cycle_id,
+    }))
+    .sort((left, right) => left.department.localeCompare(right.department));
 }
 
 function sortProposalQueue(proposals: SalaryReviewProposalRecord[]) {
@@ -558,6 +654,8 @@ function computeSuggestedIncrease(employee: Employee): number {
 
 const DEFAULT_SETTINGS: ReviewSettings = {
   cycle: "annual",
+  reviewMode: "company_wide",
+  allocationMethod: "direct",
   budgetType: "percentage",
   budgetPercentage: 5,
   budgetAbsolute: 0,
@@ -595,6 +693,8 @@ export const useSalaryReview = create<SalaryReviewState>()(
         isUsingMockData: false,
         cycles: [],
         activeProposal: null,
+        departmentAllocations: [],
+        childCycles: [],
         proposalItemsByEmployee: {},
         approvalSteps: [],
         proposalNotes: [],
@@ -603,6 +703,8 @@ export const useSalaryReview = create<SalaryReviewState>()(
         approvalQueue: [],
         selectedApprovalProposalId: null,
         selectedApprovalProposal: null,
+        selectedApprovalDepartmentAllocations: [],
+        selectedApprovalChildCycles: [],
         selectedApprovalItemsByEmployee: {},
         selectedApprovalSteps: [],
         selectedApprovalNotes: [],
@@ -646,10 +748,38 @@ export const useSalaryReview = create<SalaryReviewState>()(
 
           return {
             settings: updatedSettings,
+            departmentAllocations:
+              updatedSettings.reviewMode === "department_split"
+                ? buildDepartmentAllocations({
+                    employees,
+                    totalCurrentPayroll: state.totalCurrentPayroll,
+                    settings: updatedSettings,
+                    existingAllocations: state.departmentAllocations,
+                  })
+                : [],
             employees,
             ...totals,
           };
         }),
+
+        syncDepartmentAllocations: () =>
+          set((state) => ({
+            departmentAllocations: buildDepartmentAllocations({
+              employees: state.employees,
+              totalCurrentPayroll: state.totalCurrentPayroll,
+              settings: state.settings,
+              existingAllocations: state.departmentAllocations,
+            }),
+          })),
+
+        updateDepartmentAllocation: (department, allocatedBudget) =>
+          set((state) => ({
+            departmentAllocations: state.departmentAllocations.map((allocation) =>
+              allocation.department === department
+                ? { ...allocation, allocatedBudget: Math.max(0, Math.round(allocatedBudget)) }
+                : allocation
+            ),
+          })),
         
         updateEmployeeIncrease: (employeeId, increase) => set((state) => {
           const employees = state.employees.map(emp => {
@@ -735,6 +865,8 @@ export const useSalaryReview = create<SalaryReviewState>()(
             employees,
             workflowByEmployee: buildWorkflowMap(employees),
             activeProposal: null,
+            departmentAllocations: [],
+            childCycles: [],
             proposalItemsByEmployee: {},
             approvalSteps: [],
             proposalNotes: [],
@@ -779,6 +911,15 @@ export const useSalaryReview = create<SalaryReviewState>()(
               workflowByEmployee,
               isUsingMockData: false,
               totalCurrentPayroll,
+              departmentAllocations:
+                get().settings.reviewMode === "department_split"
+                  ? buildDepartmentAllocations({
+                      employees: reviewEmployees,
+                      totalCurrentPayroll,
+                      settings: get().settings,
+                      existingAllocations: get().departmentAllocations,
+                    })
+                  : [],
               ...totals,
               isLoading: false,
             });
@@ -889,6 +1030,10 @@ export const useSalaryReview = create<SalaryReviewState>()(
               return {
                 cycles: upsertCycleInList(state.cycles, detail.proposal),
                 activeProposal: detail.proposal,
+                departmentAllocations: buildDepartmentAllocationDraftsFromRecords(
+                  detail.departmentAllocations
+                ),
+                childCycles: detail.childCycles,
                 proposalItemsByEmployee: buildProposalItemMap(detail.items),
                 approvalSteps: detail.approvalSteps,
                 proposalNotes: detail.notes,
@@ -917,6 +1062,8 @@ export const useSalaryReview = create<SalaryReviewState>()(
             if (!detail.proposal) {
               set({
                 activeProposal: null,
+                departmentAllocations: [],
+                childCycles: [],
                 proposalItemsByEmployee: {},
                 approvalSteps: [],
                 proposalNotes: [],
@@ -933,6 +1080,10 @@ export const useSalaryReview = create<SalaryReviewState>()(
               return {
                 cycles: upsertCycleInList(state.cycles, detail.proposal),
                 activeProposal: detail.proposal,
+                departmentAllocations: buildDepartmentAllocationDraftsFromRecords(
+                  detail.departmentAllocations
+                ),
+                childCycles: detail.childCycles,
                 proposalItemsByEmployee: buildProposalItemMap(detail.items),
                 approvalSteps: detail.approvalSteps,
                 proposalNotes: detail.notes,
@@ -968,6 +1119,10 @@ export const useSalaryReview = create<SalaryReviewState>()(
                 approvalQueue,
                 selectedApprovalProposalId: hasSelectedProposal ? state.selectedApprovalProposalId : null,
                 selectedApprovalProposal: hasSelectedProposal ? state.selectedApprovalProposal : null,
+            selectedApprovalDepartmentAllocations: hasSelectedProposal
+              ? state.selectedApprovalDepartmentAllocations
+              : [],
+            selectedApprovalChildCycles: hasSelectedProposal ? state.selectedApprovalChildCycles : [],
                 selectedApprovalItemsByEmployee: hasSelectedProposal ? state.selectedApprovalItemsByEmployee : {},
                 selectedApprovalSteps: hasSelectedProposal ? state.selectedApprovalSteps : [],
                 selectedApprovalNotes: hasSelectedProposal ? state.selectedApprovalNotes : [],
@@ -989,6 +1144,10 @@ export const useSalaryReview = create<SalaryReviewState>()(
               approvalQueue: upsertProposalInQueue(state.approvalQueue, detail.proposal),
               selectedApprovalProposalId: detail.proposal?.id ?? proposalId,
               selectedApprovalProposal: detail.proposal,
+              selectedApprovalDepartmentAllocations: buildDepartmentAllocationDraftsFromRecords(
+                detail.departmentAllocations
+              ),
+              selectedApprovalChildCycles: detail.childCycles,
               selectedApprovalItemsByEmployee: buildProposalItemMap(detail.items),
               selectedApprovalSteps: detail.approvalSteps,
               selectedApprovalNotes: detail.notes,
@@ -1006,6 +1165,8 @@ export const useSalaryReview = create<SalaryReviewState>()(
             set({
               selectedApprovalProposalId: null,
               selectedApprovalProposal: null,
+              selectedApprovalDepartmentAllocations: [],
+              selectedApprovalChildCycles: [],
               selectedApprovalItemsByEmployee: {},
               selectedApprovalSteps: [],
               selectedApprovalNotes: [],
@@ -1029,6 +1190,10 @@ export const useSalaryReview = create<SalaryReviewState>()(
               approvalQueue: upsertProposalInQueue(state.approvalQueue, detail.proposal),
               selectedApprovalProposalId: detail.proposal?.id ?? proposalId,
               selectedApprovalProposal: detail.proposal,
+              selectedApprovalDepartmentAllocations: buildDepartmentAllocationDraftsFromRecords(
+                detail.departmentAllocations
+              ),
+              selectedApprovalChildCycles: detail.childCycles,
               selectedApprovalItemsByEmployee: buildProposalItemMap(detail.items),
               selectedApprovalSteps: detail.approvalSteps,
               selectedApprovalNotes: detail.notes,
@@ -1056,6 +1221,10 @@ export const useSalaryReview = create<SalaryReviewState>()(
               approvalQueue: upsertProposalInQueue(state.approvalQueue, detail.proposal),
               selectedApprovalProposalId: detail.proposal?.id ?? proposalId,
               selectedApprovalProposal: detail.proposal,
+              selectedApprovalDepartmentAllocations: buildDepartmentAllocationDraftsFromRecords(
+                detail.departmentAllocations
+              ),
+              selectedApprovalChildCycles: detail.childCycles,
               selectedApprovalItemsByEmployee: buildProposalItemMap(detail.items),
               selectedApprovalSteps: detail.approvalSteps,
               selectedApprovalNotes: detail.notes,
@@ -1072,29 +1241,62 @@ export const useSalaryReview = create<SalaryReviewState>()(
           const state = get();
           set({ isProposalLoading: true });
           try {
-            const draftBody = {
-              source,
-              cycle: state.settings.cycle === "monthly" ? "monthly" : "annual",
-              budgetType: state.settings.budgetType,
-              budgetPercentage: state.settings.budgetPercentage,
-              budgetAbsolute: state.settings.budgetAbsolute,
-              effectiveDate: state.settings.effectiveDate,
-              items: toDraftItems(state.employees),
-            } as const;
-            const detail = state.activeProposal?.id
-              ? await updateSalaryReviewProposal(state.activeProposal.id, {
-                  items: draftBody.items,
-                  cycle: draftBody.cycle,
-                  effectiveDate: draftBody.effectiveDate,
-                  budgetType: draftBody.budgetType,
-                  budgetPercentage: draftBody.budgetPercentage,
-                  budgetAbsolute: draftBody.budgetAbsolute,
-                })
-              : await createSalaryReviewProposal(draftBody);
+            const draftBody =
+              state.settings.reviewMode === "department_split"
+                ? {
+                    source,
+                    reviewMode: state.settings.reviewMode,
+                    allocationMethod: state.settings.allocationMethod,
+                    cycle: state.settings.cycle === "monthly" ? "monthly" : "annual",
+                    budgetType: state.settings.budgetType,
+                    budgetPercentage: state.settings.budgetPercentage,
+                    budgetAbsolute: state.settings.budgetAbsolute,
+                    effectiveDate: state.settings.effectiveDate,
+                    departmentAllocations: state.departmentAllocations.map((allocation) => ({
+                      department: allocation.department,
+                      allocatedBudget: allocation.allocatedBudget,
+                      selectedEmployeeIds: allocation.selectedEmployeeIds,
+                      items: toDraftItems(
+                        state.employees.filter(
+                          (employee) =>
+                            employee.department === allocation.department &&
+                            allocation.selectedEmployeeIds.includes(employee.id)
+                        )
+                      ),
+                    })),
+                  }
+                : {
+                    source,
+                    reviewMode: state.settings.reviewMode,
+                    allocationMethod: state.settings.allocationMethod,
+                    cycle: state.settings.cycle === "monthly" ? "monthly" : "annual",
+                    budgetType: state.settings.budgetType,
+                    budgetPercentage: state.settings.budgetPercentage,
+                    budgetAbsolute: state.settings.budgetAbsolute,
+                    effectiveDate: state.settings.effectiveDate,
+                    items: toDraftItems(state.employees),
+                  };
+            const detail =
+              state.settings.reviewMode === "department_split"
+                ? await createSalaryReviewProposal(draftBody)
+                : state.activeProposal?.id
+                  ? await updateSalaryReviewProposal(state.activeProposal.id, {
+                      items: draftBody.items,
+                      cycle: draftBody.cycle,
+                      effectiveDate: draftBody.effectiveDate,
+                      budgetType: draftBody.budgetType,
+                      budgetPercentage: draftBody.budgetPercentage,
+                      budgetAbsolute: draftBody.budgetAbsolute,
+                    })
+                  : await createSalaryReviewProposal(draftBody);
 
             set((current) => ({
               cycles: upsertCycleInList(current.cycles, detail.proposal),
               activeProposal: detail.proposal,
+              departmentAllocations: buildDepartmentAllocationDraftsFromRecords(
+                detail.departmentAllocations
+              ),
+              childCycles: detail.childCycles,
               proposalItemsByEmployee: buildProposalItemMap(detail.items),
               approvalSteps: detail.approvalSteps,
               proposalNotes: detail.notes,
@@ -1103,6 +1305,9 @@ export const useSalaryReview = create<SalaryReviewState>()(
                 ? {
                     ...current.settings,
                     cycle: detail.proposal.cycle,
+                    reviewMode: detail.proposal.review_mode,
+                    allocationMethod:
+                      detail.proposal.allocation_method ?? current.settings.allocationMethod,
                     budgetType: detail.proposal.budget_type,
                     budgetPercentage: Number(detail.proposal.budget_percentage || 0),
                     budgetAbsolute: Number(detail.proposal.budget_absolute || 0),
@@ -1122,6 +1327,9 @@ export const useSalaryReview = create<SalaryReviewState>()(
                   ? {
                       ...current.settings,
                       cycle: detail.proposal.cycle,
+                      reviewMode: detail.proposal.review_mode,
+                      allocationMethod:
+                        detail.proposal.allocation_method ?? current.settings.allocationMethod,
                       budgetType: detail.proposal.budget_type,
                       budgetPercentage: Number(detail.proposal.budget_percentage || 0),
                       budgetAbsolute: Number(detail.proposal.budget_absolute || 0),
@@ -1153,6 +1361,10 @@ export const useSalaryReview = create<SalaryReviewState>()(
               approvalQueue: upsertProposalInQueue(state.approvalQueue, detail.proposal),
               selectedApprovalProposalId: detail.proposal?.id ?? state.selectedApprovalProposalId,
               selectedApprovalProposal: detail.proposal,
+              selectedApprovalDepartmentAllocations: buildDepartmentAllocationDraftsFromRecords(
+                detail.departmentAllocations
+              ),
+              selectedApprovalChildCycles: detail.childCycles,
               selectedApprovalItemsByEmployee: buildProposalItemMap(detail.items),
               selectedApprovalSteps: detail.approvalSteps,
               selectedApprovalNotes: detail.notes,
@@ -1198,6 +1410,14 @@ export const useSalaryReview = create<SalaryReviewState>()(
                 state.selectedApprovalProposalId === proposalId
                   ? detail.proposal
                   : state.selectedApprovalProposal,
+              selectedApprovalDepartmentAllocations:
+                state.selectedApprovalProposalId === proposalId
+                  ? buildDepartmentAllocationDraftsFromRecords(detail.departmentAllocations)
+                  : state.selectedApprovalDepartmentAllocations,
+              selectedApprovalChildCycles:
+                state.selectedApprovalProposalId === proposalId
+                  ? detail.childCycles
+                  : state.selectedApprovalChildCycles,
               selectedApprovalItemsByEmployee:
                 state.selectedApprovalProposalId === proposalId
                   ? buildProposalItemMap(detail.items)

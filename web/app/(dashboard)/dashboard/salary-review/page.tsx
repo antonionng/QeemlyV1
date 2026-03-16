@@ -103,6 +103,8 @@ function SalaryReviewPageContent() {
     loadEmployeesFromDb,
     loadCycles,
     activeProposal,
+    departmentAllocations,
+    childCycles,
     isProposalLoading,
     cycles,
     loadLatestProposal,
@@ -116,6 +118,8 @@ function SalaryReviewPageContent() {
     approvalQueue,
     selectedApprovalProposalId,
     selectedApprovalProposal,
+    selectedApprovalDepartmentAllocations,
+    selectedApprovalChildCycles,
     selectedApprovalItemsByEmployee,
     selectedApprovalSteps,
     selectedApprovalNotes,
@@ -623,16 +627,88 @@ function SalaryReviewPageContent() {
       ) : null}
 
       {renderedTab === "overview" && (
-        <SalaryReviewOverview
-          cycles={cycles}
-          activeCycle={activeProposal}
-          actionLabel={dashboardModel.hasDraft ? "Continue Draft" : "Start New Review Cycle"}
-          onPrimaryAction={dashboardModel.hasDraft ? handleContinueDraft : () => void handleStartNewCycle()}
-          onImport={() => setShowUploadModal(true)}
-          onExport={handleExport}
-          onReset={resetReview}
-          onSelectCycle={(proposalId) => void selectCycle(proposalId)}
-        />
+        <>
+          {activeProposal?.review_mode === "department_split" &&
+          activeProposal.review_scope === "master" ? (
+            <Card className="dash-card border border-brand-100 bg-gradient-to-r from-brand-50 via-white to-accent-50 p-5">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brand-700">
+                    Master Review
+                  </p>
+                  <h2 className="mt-2 text-xl font-semibold text-accent-950">Department split overview</h2>
+                  <p className="mt-2 text-sm text-accent-700">
+                    Track the master budget, department allocations, and department review progress in one place.
+                  </p>
+                </div>
+                <div className="rounded-2xl border border-accent-200 bg-white px-4 py-3 text-sm font-medium text-accent-700 shadow-sm">
+                  {departmentAllocations.length} department allocation
+                  {departmentAllocations.length === 1 ? "" : "s"}
+                </div>
+              </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-4">
+                <OverviewMetric
+                  label="Master budget"
+                  value={formatAEDCompact(activeProposal.budget_absolute || 0)}
+                  body="This is the total budget being split across departments."
+                />
+                <OverviewMetric
+                  label="Allocated budget"
+                  value={formatAEDCompact(
+                    departmentAllocations.reduce((sum, allocation) => sum + allocation.allocatedBudget, 0)
+                  )}
+                  body="Sum of all current department allocations."
+                />
+                <OverviewMetric
+                  label="Departments ready"
+                  value={`${childCycles.filter((cycle) => cycle.allocation_status === "approved").length}`}
+                  body="Departments whose budgets are approved and ready for manager action."
+                />
+                <OverviewMetric
+                  label="Departments pending"
+                  value={`${childCycles.filter((cycle) => cycle.allocation_status !== "approved").length}`}
+                  body="Departments still waiting on allocation approval."
+                />
+              </div>
+              {childCycles.length > 0 ? (
+                <div className="mt-5 space-y-3">
+                  {childCycles.map((cycle) => (
+                    <div
+                      key={cycle.id}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-accent-100 bg-white px-4 py-4"
+                    >
+                      <div>
+                        <p className="text-sm font-semibold text-accent-950">{cycle.department ?? "Department"}</p>
+                        <p className="mt-1 text-xs text-accent-600">
+                          Allocation {cycle.allocation_status?.replaceAll("_", " ") ?? "pending"}.
+                          Review {cycle.status.replaceAll("_", " ")}.
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void selectCycle(cycle.id)}
+                        className="h-9 rounded-full border-border bg-white px-5 text-accent-700 hover:bg-accent-50"
+                      >
+                        Open Department Review
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+            </Card>
+          ) : null}
+          <SalaryReviewOverview
+            cycles={cycles}
+            activeCycle={activeProposal}
+            actionLabel={dashboardModel.hasDraft ? "Continue Draft" : "Start New Review Cycle"}
+            onPrimaryAction={dashboardModel.hasDraft ? handleContinueDraft : () => void handleStartNewCycle()}
+            onImport={() => setShowUploadModal(true)}
+            onExport={handleExport}
+            onReset={resetReview}
+            onSelectCycle={(proposalId) => void selectCycle(proposalId)}
+          />
+        </>
       )}
 
       {activeTab === "review" && (
@@ -1012,6 +1088,8 @@ function SalaryReviewPageContent() {
               key={activeApprovalProposalId ?? "approvals-empty"}
               proposal={selectedApprovalProposal}
               proposalItems={Object.values(selectedApprovalItemsByEmployee)}
+              departmentAllocations={selectedApprovalDepartmentAllocations}
+              childCycles={selectedApprovalChildCycles}
               approvalSteps={selectedApprovalSteps}
               proposalNotes={selectedApprovalNotes}
               proposalAuditEvents={selectedApprovalAuditEvents}
@@ -1065,6 +1143,8 @@ function SalaryReviewPageContent() {
               key={activeApprovalProposalId ?? "history-empty"}
               proposal={selectedApprovalProposal}
               proposalItems={Object.values(selectedApprovalItemsByEmployee)}
+              departmentAllocations={selectedApprovalDepartmentAllocations}
+              childCycles={selectedApprovalChildCycles}
               approvalSteps={selectedApprovalSteps}
               proposalNotes={selectedApprovalNotes}
               proposalAuditEvents={selectedApprovalAuditEvents}

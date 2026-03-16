@@ -1,6 +1,7 @@
 import type {
   SalaryReviewApprovalStepRecord,
   SalaryReviewAuditEventRecord,
+  SalaryReviewDepartmentAllocationRecord,
   SalaryReviewNoteRecord,
   SalaryReviewProposalItemRecord,
   SalaryReviewProposalRecord,
@@ -13,6 +14,8 @@ export type SalaryReviewProposalDetail = {
   approvalSteps: SalaryReviewApprovalStepRecord[];
   notes: SalaryReviewNoteRecord[];
   auditEvents: SalaryReviewAuditEventRecord[];
+  departmentAllocations: SalaryReviewDepartmentAllocationRecord[];
+  childCycles: SalaryReviewProposalRecord[];
 };
 
 export type SalaryReviewProposalListResponse = {
@@ -57,19 +60,7 @@ export async function createSalaryReviewProposal(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  const payload = await parseJson<{
-    proposal: SalaryReviewProposalRecord;
-    items: SalaryReviewProposalItemRecord[];
-    approvalSteps: SalaryReviewApprovalStepRecord[];
-  }>(response);
-
-  return {
-    proposal: payload.proposal,
-    items: payload.items,
-    approvalSteps: payload.approvalSteps,
-    notes: [],
-    auditEvents: [],
-  };
+  return parseJson<SalaryReviewProposalDetail>(response);
 }
 
 export async function updateSalaryReviewProposal(

@@ -480,9 +480,8 @@ Qeemly is not yet equivalent to a benchmark-first competitor because it still la
 ### Can Defer Because The Feature Is Explicitly Out Of Scope
 
 1. Billing
-2. Integrations, until the feature flag is lifted
-3. Advanced report builder, if the interim report experience is clearly marked limited
-4. Relocation enhancements beyond its current MVP positioning
+2. Advanced report builder, if the interim report experience is clearly marked limited
+3. Relocation enhancements beyond its current MVP positioning
 
 ## Recommended Next Execution Order
 

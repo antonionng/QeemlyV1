@@ -10,3 +10,4 @@ export { QuickActions } from "./quick-actions";
 export { ShortcutsRow } from "./shortcuts-row";
 export { OverviewSkeleton, StatCardsSkeleton, ChartSkeleton } from "./skeletons";
 export { AdvisoryPanel } from "./advisory-panel";
+export { OverviewDetailDrawer } from "./detail-drawer";

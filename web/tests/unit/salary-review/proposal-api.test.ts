@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  createSalaryReviewProposal,
   fetchSalaryReviewCycles,
   fetchApprovalQueueSalaryReviewProposals,
   fetchLatestSalaryReviewProposal,
@@ -91,5 +92,66 @@ describe("salary review proposal api", () => {
       "/api/salary-review/proposals/proposal-123",
       { cache: "no-store" }
     );
+  });
+
+  it("preserves split-review allocations when creating a proposal", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          proposal: {
+            id: "master-1",
+            review_mode: "department_split",
+            review_scope: "master",
+          },
+          items: [],
+          approvalSteps: [],
+          notes: [],
+          auditEvents: [],
+          departmentAllocations: [
+            {
+              id: "alloc-1",
+              master_cycle_id: "master-1",
+              department: "Engineering",
+              allocated_budget: 20_000,
+              allocation_method: "direct",
+              allocation_status: "approved",
+              child_cycle_id: "child-1",
+            },
+          ],
+          childCycles: [
+            {
+              id: "child-1",
+              parent_cycle_id: "master-1",
+              review_mode: "department_split",
+              review_scope: "department",
+              department: "Engineering",
+            },
+          ],
+        }),
+        { status: 201 }
+      )
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const result = await createSalaryReviewProposal({
+      reviewMode: "department_split",
+      allocationMethod: "direct",
+      cycle: "annual",
+      budgetType: "absolute",
+      budgetAbsolute: 20_000,
+      budgetPercentage: 0,
+      effectiveDate: "2026-04-01",
+      departmentAllocations: [
+        {
+          department: "Engineering",
+          allocatedBudget: 20_000,
+          selectedEmployeeIds: ["emp-1"],
+          items: [],
+        },
+      ],
+    });
+
+    expect(result.departmentAllocations).toHaveLength(1);
+    expect(result.childCycles).toHaveLength(1);
   });
 });

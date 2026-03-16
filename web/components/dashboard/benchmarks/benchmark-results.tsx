@@ -353,40 +353,6 @@ export function BenchmarkResults({ result, hasCompanyData = true }: BenchmarkRes
         </button>
       </div>
 
-      <div className="bench-section">
-        <h3 className="bench-section-header">Summary</h3>
-        <div className="space-y-2">
-          {insights.map((insight, index) => (
-            <div
-              key={`${insight.type}-${index}`}
-              className={`flex items-center gap-3 rounded-lg px-4 py-2.5 text-sm ${
-                insight.type === "success"
-                  ? "bg-emerald-50 text-emerald-700"
-                  : insight.type === "warning"
-                    ? "bg-amber-50 text-amber-700"
-                    : "bg-blue-50 text-blue-700"
-              }`}
-            >
-              {insight.type === "success" ? (
-                <CheckCircle className="h-4 w-4 shrink-0" />
-              ) : insight.type === "warning" ? (
-                <AlertCircle className="h-4 w-4 shrink-0" />
-              ) : (
-                <Info className="h-4 w-4 shrink-0" />
-              )}
-              <span className="font-medium">{insight.message}</span>
-            </div>
-          ))}
-        </div>
-        <div className="mt-3 flex items-center gap-3 text-xs text-brand-500">
-          <BenchmarkSourceBadge source={benchmark.benchmarkSource} />
-          <span className="text-brand-300">·</span>
-          <span>{benchmark.sampleSize} data points</span>
-          <span className="text-brand-300">·</span>
-          <span>{benchmark.confidence} confidence</span>
-        </div>
-      </div>
-
       {benchmark.nationalsCostBreakdown && (
         <div className="bench-section">
           <h3 className="bench-section-header">Nationals Total Employer Cost</h3>
@@ -429,7 +395,7 @@ export function BenchmarkResults({ result, hasCompanyData = true }: BenchmarkRes
         </div>
       )}
 
-      <div className="bench-section overflow-x-auto p-0">
+      <div className="bench-section overflow-x-auto p-0" data-testid="benchmark-results-level-table">
         <table className="bench-table">
           <thead>
             <tr>
@@ -479,7 +445,7 @@ export function BenchmarkResults({ result, hasCompanyData = true }: BenchmarkRes
       </div>
 
       {shownRows.length > 0 && (
-        <div className="bench-section overflow-x-auto">
+        <div className="bench-section overflow-x-auto" data-testid="benchmark-results-boxplot-section">
           <div className="mb-6 flex min-w-[640px] items-center gap-6">
             <div className="w-40 shrink-0 text-sm font-semibold text-brand-900">Level</div>
             <div className="w-40 shrink-0 text-sm font-semibold text-brand-900">Data Quality</div>
@@ -598,6 +564,40 @@ export function BenchmarkResults({ result, hasCompanyData = true }: BenchmarkRes
           </div>
         </div>
       )}
+
+      <div className="bench-section" data-testid="benchmark-results-summary">
+        <h3 className="bench-section-header">Summary</h3>
+        <div className="space-y-2">
+          {insights.map((insight, index) => (
+            <div
+              key={`${insight.type}-${index}`}
+              className={`flex items-center gap-3 rounded-lg px-4 py-2.5 text-sm ${
+                insight.type === "success"
+                  ? "bg-emerald-50 text-emerald-700"
+                  : insight.type === "warning"
+                    ? "bg-amber-50 text-amber-700"
+                    : "bg-blue-50 text-blue-700"
+              }`}
+            >
+              {insight.type === "success" ? (
+                <CheckCircle className="h-4 w-4 shrink-0" />
+              ) : insight.type === "warning" ? (
+                <AlertCircle className="h-4 w-4 shrink-0" />
+              ) : (
+                <Info className="h-4 w-4 shrink-0" />
+              )}
+              <span className="font-medium">{insight.message}</span>
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 flex items-center gap-3 text-xs text-brand-500">
+          <BenchmarkSourceBadge source={benchmark.benchmarkSource} />
+          <span className="text-brand-300">·</span>
+          <span>{benchmark.sampleSize} data points</span>
+          <span className="text-brand-300">·</span>
+          <span>{benchmark.confidence} confidence</span>
+        </div>
+      </div>
 
       <div className="flex flex-wrap items-center gap-3 pt-2">
         <Button variant="ghost" onClick={() => saveCurrentFilter()}>

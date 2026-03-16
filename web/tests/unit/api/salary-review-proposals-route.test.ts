@@ -100,9 +100,19 @@ describe("POST /api/salary-review/proposals", () => {
       if (table === "salary_review_cycles") {
         return {
           select: vi.fn(() => ({
-            eq: vi.fn(() => ({
-              single: vi.fn().mockResolvedValue({ data: cycleRecord, error: null }),
-            })),
+            eq: vi.fn((field: string) => {
+              if (field === "id") {
+                return {
+                  single: vi.fn().mockResolvedValue({ data: cycleRecord, error: null }),
+                };
+              }
+              if (field === "parent_cycle_id") {
+                return {
+                  order: vi.fn().mockResolvedValue({ data: [], error: null }),
+                };
+              }
+              throw new Error(`Unexpected eq field on cycles: ${field}`);
+            }),
           })),
           insert: vi.fn(() => ({
             select: vi.fn(() => ({
@@ -130,6 +140,15 @@ describe("POST /api/salary-review/proposals", () => {
         };
       }
       if (table === "salary_review_notes") {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              order: vi.fn().mockResolvedValue({ data: [], error: null }),
+            })),
+          })),
+        };
+      }
+      if (table === "salary_review_department_allocations") {
         return {
           select: vi.fn(() => ({
             eq: vi.fn(() => ({
@@ -204,6 +223,393 @@ describe("POST /api/salary-review/proposals", () => {
       "manager",
       "hr",
     ]);
+  });
+
+  it("creates a department-split master cycle with allocation rows and child cycles", async () => {
+    const cycleRecord = {
+      id: "master-1",
+      status: "draft",
+      workspace_id: "ws-1",
+      budget_type: "absolute",
+      budget_absolute: 30_000,
+      budget_percentage: 0,
+      cycle: "annual",
+      effective_date: "2026-04-01",
+      source: "manual",
+      review_mode: "department_split",
+      review_scope: "master",
+      allocation_method: "direct",
+      allocation_status: "approved",
+      parent_cycle_id: null,
+      department: null,
+      summary: {
+        selectedEmployees: 1,
+        proposedEmployees: 1,
+        totalCurrentPayroll: 100_000,
+        totalIncrease: 6_000,
+        totalProposedPayroll: 106_000,
+        maxIncreasePercentage: 6,
+      },
+    };
+
+    const departmentAllocations = [
+      {
+        id: "alloc-1",
+        master_cycle_id: "master-1",
+        department: "Engineering",
+        allocated_budget: 20_000,
+        allocation_method: "direct",
+        allocation_status: "approved",
+        child_cycle_id: "child-1",
+      },
+      {
+        id: "alloc-2",
+        master_cycle_id: "master-1",
+        department: "Design",
+        allocated_budget: 10_000,
+        allocation_method: "direct",
+        allocation_status: "approved",
+        child_cycle_id: "child-2",
+      },
+    ];
+
+    const childCycles = [
+      {
+        id: "child-1",
+        parent_cycle_id: "master-1",
+        review_mode: "department_split",
+        review_scope: "department",
+        department: "Engineering",
+        status: "draft",
+        workspace_id: "ws-1",
+      },
+      {
+        id: "child-2",
+        parent_cycle_id: "master-1",
+        review_mode: "department_split",
+        review_scope: "department",
+        department: "Design",
+        status: "draft",
+        workspace_id: "ws-1",
+      },
+    ];
+
+    const insertSingleMock = vi.fn().mockResolvedValue({ data: cycleRecord, error: null });
+    const insertManyMock = vi
+      .fn()
+      .mockResolvedValueOnce({ data: [], error: null })
+      .mockResolvedValueOnce({ data: [], error: null })
+      .mockResolvedValueOnce({ data: departmentAllocations, error: null })
+      .mockResolvedValueOnce({ data: childCycles, error: null })
+      .mockResolvedValueOnce({ data: null, error: null });
+
+    const fromMock = vi.fn((table: string) => {
+      if (table === "salary_review_cycles") {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn((field: string, value: string) => {
+              if (field === "id") {
+                return {
+                  single: vi.fn().mockResolvedValue({ data: cycleRecord, error: null }),
+                };
+              }
+              if (field === "parent_cycle_id") {
+                return {
+                  order: vi.fn().mockResolvedValue({ data: childCycles, error: null }),
+                };
+              }
+              throw new Error(`Unexpected eq field on cycles: ${field}=${value}`);
+            }),
+          })),
+          insert: vi.fn(() => ({
+            select: vi.fn(() => ({
+              single: insertSingleMock,
+              order: insertManyMock,
+            })),
+          })),
+        };
+      }
+      if (table === "salary_review_proposal_items" || table === "salary_review_approval_steps") {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              order: vi.fn().mockResolvedValue({ data: [], error: null }),
+            })),
+          })),
+          insert: vi.fn(() => ({
+            select: insertManyMock,
+          })),
+        };
+      }
+      if (table === "salary_review_department_allocations") {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              order: vi.fn().mockResolvedValue({ data: departmentAllocations, error: null }),
+            })),
+          })),
+          insert: vi.fn(() => ({
+            select: insertManyMock,
+          })),
+        };
+      }
+      if (table === "salary_review_notes") {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              order: vi.fn().mockResolvedValue({ data: [], error: null }),
+            })),
+          })),
+        };
+      }
+      if (table === "salary_review_audit_events") {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              order: vi.fn().mockResolvedValue({ data: [], error: null }),
+            })),
+          })),
+          insert: insertManyMock,
+        };
+      }
+      throw new Error(`Unexpected table: ${table}`);
+    });
+
+    createClientMock.mockResolvedValue({
+      from: fromMock,
+    });
+    getWorkspaceContextMock.mockResolvedValue({
+      context: {
+        workspace_id: "ws-1",
+        is_override: false,
+        override_workspace_id: null,
+        profile_workspace_id: "ws-1",
+        is_super_admin: false,
+        user_id: "user-1",
+        user_email: "user@example.com",
+      },
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/salary-review/proposals", {
+        method: "POST",
+        body: JSON.stringify({
+          source: "manual",
+          reviewMode: "department_split",
+          allocationMethod: "direct",
+          cycle: "annual",
+          budgetType: "absolute",
+          budgetAbsolute: 30_000,
+          budgetPercentage: 0,
+          effectiveDate: "2026-04-01",
+          departmentAllocations: [
+            {
+              department: "Engineering",
+              allocatedBudget: 20_000,
+              selectedEmployeeIds: ["emp-1"],
+              items: [
+                {
+                  employeeId: "emp-1",
+                  employeeName: "Ava Stone",
+                  currentSalary: 100_000,
+                  proposedIncrease: 6_000,
+                  proposedSalary: 106_000,
+                  proposedPercentage: 6,
+                  selected: true,
+                  reasonSummary: "Market adjustment",
+                  benchmarkSnapshot: {
+                    source: "market",
+                    matchQuality: "exact",
+                  },
+                  bandPosition: "below",
+                },
+              ],
+            },
+            {
+              department: "Design",
+              allocatedBudget: 10_000,
+              selectedEmployeeIds: ["emp-2"],
+              items: [],
+            },
+          ],
+        }),
+      }) as never,
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(payload.proposal.review_mode).toBe("department_split");
+    expect(payload.proposal.review_scope).toBe("master");
+    expect(payload.departmentAllocations).toHaveLength(2);
+    expect(payload.childCycles.map((cycle: { department: string }) => cycle.department)).toEqual([
+      "Engineering",
+      "Design",
+    ]);
+  });
+
+  it("creates finance-routed split reviews in a pending allocation state", async () => {
+    const cycleRecord = {
+      id: "master-2",
+      status: "submitted",
+      workspace_id: "ws-1",
+      budget_type: "absolute",
+      budget_absolute: 30_000,
+      budget_percentage: 0,
+      cycle: "annual",
+      effective_date: "2026-04-01",
+      source: "manual",
+      review_mode: "department_split",
+      review_scope: "master",
+      allocation_method: "finance_approval",
+      allocation_status: "pending",
+      parent_cycle_id: null,
+      department: null,
+      summary: {
+        selectedEmployees: 1,
+        proposedEmployees: 1,
+        totalCurrentPayroll: 100_000,
+        totalIncrease: 6_000,
+        totalProposedPayroll: 106_000,
+        maxIncreasePercentage: 6,
+      },
+    };
+
+    const childCycles = [
+      {
+        id: "child-3",
+        parent_cycle_id: "master-2",
+        review_mode: "department_split",
+        review_scope: "department",
+        department: "Engineering",
+        status: "draft",
+        allocation_method: "finance_approval",
+        allocation_status: "pending",
+        workspace_id: "ws-1",
+      },
+    ];
+
+    const fromMock = vi.fn((table: string) => {
+      if (table === "salary_review_cycles") {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn((field: string) => {
+              if (field === "id") {
+                return {
+                  single: vi.fn().mockResolvedValue({ data: cycleRecord, error: null }),
+                };
+              }
+              if (field === "parent_cycle_id") {
+                return {
+                  order: vi.fn().mockResolvedValue({ data: childCycles, error: null }),
+                };
+              }
+              throw new Error(`Unexpected eq field on cycles: ${field}`);
+            }),
+          })),
+          insert: vi.fn(() => ({
+            select: vi.fn(() => ({
+              single: vi.fn().mockResolvedValue({ data: cycleRecord, error: null }),
+              order: vi.fn().mockResolvedValue({ data: childCycles, error: null }),
+            })),
+          })),
+        };
+      }
+      if (table === "salary_review_department_allocations") {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              order: vi.fn().mockResolvedValue({
+                data: [
+                  {
+                    id: "alloc-3",
+                    master_cycle_id: "master-2",
+                    department: "Engineering",
+                    allocated_budget: 30_000,
+                    allocation_method: "finance_approval",
+                    allocation_status: "pending",
+                    child_cycle_id: "child-3",
+                  },
+                ],
+                error: null,
+              }),
+            })),
+          })),
+          insert: vi.fn(() => ({
+            select: vi.fn().mockResolvedValue({ data: [], error: null }),
+          })),
+        };
+      }
+      if (
+        table === "salary_review_proposal_items" ||
+        table === "salary_review_approval_steps" ||
+        table === "salary_review_notes"
+      ) {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              order: vi.fn().mockResolvedValue({ data: [], error: null }),
+            })),
+          })),
+          insert: vi.fn(() => ({
+            select: vi.fn().mockResolvedValue({ data: [], error: null }),
+          })),
+        };
+      }
+      if (table === "salary_review_audit_events") {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              order: vi.fn().mockResolvedValue({ data: [], error: null }),
+            })),
+          })),
+          insert: vi.fn().mockResolvedValue({ error: null }),
+        };
+      }
+      throw new Error(`Unexpected table: ${table}`);
+    });
+
+    createClientMock.mockResolvedValue({ from: fromMock });
+    getWorkspaceContextMock.mockResolvedValue({
+      context: {
+        workspace_id: "ws-1",
+        is_override: false,
+        override_workspace_id: null,
+        profile_workspace_id: "ws-1",
+        is_super_admin: false,
+        user_id: "user-1",
+        user_email: "user@example.com",
+      },
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/salary-review/proposals", {
+        method: "POST",
+        body: JSON.stringify({
+          source: "manual",
+          reviewMode: "department_split",
+          allocationMethod: "finance_approval",
+          cycle: "annual",
+          budgetType: "absolute",
+          budgetAbsolute: 30_000,
+          budgetPercentage: 0,
+          effectiveDate: "2026-04-01",
+          departmentAllocations: [
+            {
+              department: "Engineering",
+              allocatedBudget: 30_000,
+              selectedEmployeeIds: ["emp-1"],
+              items: [],
+            },
+          ],
+        }),
+      }) as never,
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(201);
+    expect(payload.proposal.status).toBe("submitted");
+    expect(payload.proposal.allocation_status).toBe("pending");
+    expect(payload.childCycles[0].allocation_status).toBe("pending");
   });
 });
 

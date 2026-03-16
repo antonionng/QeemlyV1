@@ -36,7 +36,15 @@ export async function GET(request: NextRequest) {
     }
     const latest = data?.[0];
     if (!latest) {
-      return NextResponse.json({ proposal: null, items: [], approvalSteps: [], notes: [], auditEvents: [] });
+      return NextResponse.json({
+        proposal: null,
+        items: [],
+        approvalSteps: [],
+        notes: [],
+        auditEvents: [],
+        departmentAllocations: [],
+        childCycles: [],
+      });
     }
     const detail = await loadSalaryReviewProposalDetail(supabase, latest.id);
     return NextResponse.json(detail);
@@ -84,22 +92,28 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: cycleError?.message || "Could not create proposal draft" }, { status: 500 });
   }
 
-  const { data: items, error: itemsError } = await supabase
-    .from("salary_review_proposal_items")
-    .insert(draftRecords.itemInserts(cycle.id))
-    .select("*");
+  const masterItems = draftRecords.itemInserts(cycle.id);
+  if (masterItems.length > 0) {
+    const { error: itemsError } = await supabase
+      .from("salary_review_proposal_items")
+      .insert(masterItems)
+      .select("*");
 
-  if (itemsError) {
-    return NextResponse.json({ error: itemsError.message }, { status: 500 });
+    if (itemsError) {
+      return NextResponse.json({ error: itemsError.message }, { status: 500 });
+    }
   }
 
-  const { data: approvalSteps, error: stepsError } = await supabase
-    .from("salary_review_approval_steps")
-    .insert(draftRecords.approvalStepInserts(cycle.id))
-    .select("*");
+  const masterApprovalSteps = draftRecords.approvalStepInserts(cycle.id);
+  if (masterApprovalSteps.length > 0) {
+    const { error: stepsError } = await supabase
+      .from("salary_review_approval_steps")
+      .insert(masterApprovalSteps)
+      .select("*");
 
-  if (stepsError) {
-    return NextResponse.json({ error: stepsError.message }, { status: 500 });
+    if (stepsError) {
+      return NextResponse.json({ error: stepsError.message }, { status: 500 });
+    }
   }
 
   const { error: auditError } = await supabase
@@ -108,6 +122,56 @@ export async function POST(request: NextRequest) {
 
   if (auditError) {
     return NextResponse.json({ error: auditError.message }, { status: 500 });
+  }
+
+  const childCycleDrafts = draftRecords.childCycleInserts(cycle.id);
+  if (childCycleDrafts.length > 0) {
+    const { data: childCycles, error: childCyclesError } = await supabase
+      .from("salary_review_cycles")
+      .insert(childCycleDrafts)
+      .select("*");
+    if (childCyclesError) {
+      return NextResponse.json({ error: childCyclesError.message }, { status: 500 });
+    }
+
+    const allocationInserts = draftRecords.departmentAllocationInserts(cycle.id).map((allocation) => ({
+      ...allocation,
+      child_cycle_id:
+        childCycles?.find((childCycle) => childCycle.department === allocation.department)?.id ?? null,
+    }));
+    if (allocationInserts.length > 0) {
+      const { error: allocationError } = await supabase
+        .from("salary_review_department_allocations")
+        .insert(allocationInserts)
+        .select("*");
+      if (allocationError) {
+        return NextResponse.json({ error: allocationError.message }, { status: 500 });
+      }
+    }
+
+    for (const childCycle of childCycles || []) {
+      const childItems = draftRecords.childCycleItemInserts(childCycle.id, childCycle.department ?? "");
+      if (childItems.length > 0) {
+        const { error } = await supabase.from("salary_review_proposal_items").insert(childItems).select("*");
+        if (error) {
+          return NextResponse.json({ error: error.message }, { status: 500 });
+        }
+      }
+
+      const childSteps = draftRecords.childApprovalStepInserts(
+        childCycle.id,
+        childCycle.department ?? ""
+      );
+      if (childSteps.length > 0) {
+        const { error } = await supabase
+          .from("salary_review_approval_steps")
+          .insert(childSteps)
+          .select("*");
+        if (error) {
+          return NextResponse.json({ error: error.message }, { status: 500 });
+        }
+      }
+    }
   }
 
   const detail = await loadSalaryReviewProposalDetail(supabase, cycle.id);
