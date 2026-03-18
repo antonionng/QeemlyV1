@@ -188,13 +188,13 @@ export function aggregateMarketPoolObservations(
   }
 
   return [...grouped.entries()]
-    .map(([key, cohort]) => {
+    .flatMap(([key, cohort]) => {
       const effectiveCohort = selectPreferredMarketTierCohort(cohort, minimumContributors);
       const values = effectiveCohort.map((row) => row.value).sort((a, b) => a - b);
       const contributors = new Set(
         effectiveCohort.map((row) => row.contributorKey || `${row.sourceType}:${row.workspaceId}`),
       );
-      if (contributors.size < minimumContributors) return null;
+      if (contributors.size < minimumContributors) return [];
 
       const [role_id, location_id, level_id, currency, industry, company_size] = key.split("::");
       const source_breakdown: Record<MarketPoolSourceType, number> = {
@@ -206,28 +206,29 @@ export function aggregateMarketPoolObservations(
         source_breakdown[row.sourceType] += 1;
       }
 
-      return {
-        role_id,
-        location_id,
-        level_id,
-        currency,
-        industry: industry || null,
-        company_size: company_size || null,
-        p10: getPercentile(values, 10),
-        p25: getPercentile(values, 25),
-        p50: getPercentile(values, 50),
-        p75: getPercentile(values, 75),
-        p90: getPercentile(values, 90),
-        sample_size: values.length,
-        contributor_count: contributors.size,
-        provenance: getProvenance(source_breakdown),
-        market_source_tier: resolveEffectiveMarketSourceTier(effectiveCohort),
-        source_breakdown,
-        valid_from: effectiveDate,
-        freshness_at: refreshedAt,
-      } satisfies PlatformMarketPoolRow;
-    })
-    .filter((row): row is PlatformMarketPoolRow => row != null);
+      return [
+        {
+          role_id,
+          location_id,
+          level_id,
+          currency,
+          industry: industry || null,
+          company_size: company_size || null,
+          p10: getPercentile(values, 10),
+          p25: getPercentile(values, 25),
+          p50: getPercentile(values, 50),
+          p75: getPercentile(values, 75),
+          p90: getPercentile(values, 90),
+          sample_size: values.length,
+          contributor_count: contributors.size,
+          provenance: getProvenance(source_breakdown),
+          market_source_tier: resolveEffectiveMarketSourceTier(effectiveCohort),
+          source_breakdown,
+          valid_from: effectiveDate,
+          freshness_at: refreshedAt,
+        } satisfies PlatformMarketPoolRow,
+      ];
+    });
 }
 
 function toEmployeeObservation(
@@ -378,8 +379,8 @@ export async function refreshPlatformMarketPool(): Promise<{ rowCount: number }>
     buildPublicBenchmarkSnapshotRow(row, refreshedAt),
   );
 
-  await stagePlatformMarketRefresh(supabase, pooledRows, snapshotRows);
-  await swapStagedPlatformMarketRefresh(supabase);
+  await stagePlatformMarketRefresh(supabase as unknown as SupabaseLike, pooledRows, snapshotRows);
+  await swapStagedPlatformMarketRefresh(supabase as unknown as SupabaseLike);
 
   return { rowCount: pooledRows.length };
 }

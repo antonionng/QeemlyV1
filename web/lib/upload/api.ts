@@ -136,12 +136,14 @@ async function applyCanonicalRoleAliases(
     return employees;
   }
 
-  if (error || !data) {
+  if (error || !data || !Array.isArray(data)) {
     return employees;
   }
 
+  type AliasRow = { canonical_role_id?: string | null; alias_normalized?: string | null; workspace_id?: string | null };
+  const rows = (data ?? []) as AliasRow[];
   const aliasToRoleId = new Map<string, string>();
-  for (const row of data) {
+  for (const row of rows) {
     const scopedWorkspaceId = row.workspace_id ? String(row.workspace_id) : null;
     if (scopedWorkspaceId && scopedWorkspaceId !== workspaceId) continue;
     if (!row.alias_normalized || !row.canonical_role_id) continue;
