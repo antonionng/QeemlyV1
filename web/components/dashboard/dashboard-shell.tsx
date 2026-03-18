@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 import { useEffect, useRef, useState } from "react";
 import { DashboardSidebar } from "@/components/dashboard/sidebar";
+import { MarketRefreshBanner } from "@/components/dashboard/market-refresh-banner";
 import { DashboardTopBar } from "@/components/dashboard/topbar";
 import { MobileSidebarDrawer } from "@/components/dashboard/mobile-drawer";
 import { AIDrawer, type AIDrawerInitialRequest } from "@/components/dashboard/ai-drawer";
@@ -83,7 +84,10 @@ export function DashboardShell({ children }: DashboardShellProps) {
         />
 
         <main className="px-4 pb-12 pt-4 sm:px-6 sm:pt-5 lg:px-8 lg:pt-6">
-          <div className="mx-auto w-full max-w-[1600px]">{children}</div>
+          <div className="mx-auto w-full max-w-[1600px]">
+            <MarketRefreshBanner />
+            {children}
+          </div>
         </main>
       </div>
 

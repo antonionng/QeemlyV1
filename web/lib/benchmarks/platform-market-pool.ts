@@ -1,5 +1,6 @@
 import { LEVELS, LOCATIONS, ROLES } from "@/lib/dashboard/dummy-data";
 import { createServiceClient } from "@/lib/supabase/service";
+import { isSourceAllowedForIngestion, type IngestionSource } from "@/lib/ingestion/source-registry";
 
 export type MarketPoolSourceType = "employee" | "uploaded" | "admin";
 
@@ -14,6 +15,7 @@ export type MarketPoolObservation = {
   company_size?: string | null;
   value: number;
   sourceType: MarketPoolSourceType;
+  marketSourceTier?: "official" | "proxy";
 };
 
 export type PlatformMarketPoolRow = {
@@ -31,9 +33,34 @@ export type PlatformMarketPoolRow = {
   sample_size: number;
   contributor_count: number;
   provenance: "employee" | "uploaded" | "admin" | "blended";
+  market_source_tier?: "official" | "proxy" | "blended" | null;
   source_breakdown: Record<MarketPoolSourceType, number>;
   valid_from: string;
   freshness_at: string;
+};
+
+type PublicBenchmarkSnapshotRow = {
+  workspace_id: null;
+  role_id: string;
+  role_label: string;
+  location_id: string;
+  location_label: string;
+  level_id: string;
+  level_label: string;
+  industry: string | null;
+  company_size: string | null;
+  currency: string;
+  p25: number;
+  p50: number;
+  p75: number;
+  submissions_this_week: number;
+  mom_delta_p25: string;
+  mom_delta_p50: string;
+  mom_delta_p75: string;
+  trend_delta: string;
+  is_public: true;
+  updated_at: string;
+  market_source_tier?: "official" | "proxy" | "blended" | null;
 };
 
 type AggregateOptions = {
@@ -65,6 +92,7 @@ type SalaryBenchmarkRow = {
   currency: string | null;
   source: string | null;
   market_source_slug?: string | null;
+  market_source_tier?: "official" | "proxy" | null;
 };
 
 type WorkspaceSettingsRow = {
@@ -73,7 +101,22 @@ type WorkspaceSettingsRow = {
   company_size: string | null;
 };
 
+type SupabaseMutationResult = {
+  error?: { message?: string } | null;
+};
+
+type SupabaseLike = {
+  from: (table: string) => unknown;
+  rpc?: (fn: string, args?: Record<string, unknown>) => Promise<SupabaseMutationResult>;
+};
+
 const DEFAULT_MINIMUM_CONTRIBUTORS = 3;
+
+export function getMarketPoolMinimumContributors(
+  env: Record<string, string | undefined> = process.env,
+): number {
+  return env.QEEMLY_ENABLE_DEMO_MARKET_BOOTSTRAP === "true" ? 1 : DEFAULT_MINIMUM_CONTRIBUTORS;
+}
 
 function getPercentile(sortedValues: number[], percentile: number): number {
   if (sortedValues.length === 0) return 0;
@@ -146,9 +189,10 @@ export function aggregateMarketPoolObservations(
 
   return [...grouped.entries()]
     .map(([key, cohort]) => {
-      const values = cohort.map((row) => row.value).sort((a, b) => a - b);
+      const effectiveCohort = selectPreferredMarketTierCohort(cohort, minimumContributors);
+      const values = effectiveCohort.map((row) => row.value).sort((a, b) => a - b);
       const contributors = new Set(
-        cohort.map((row) => row.contributorKey || `${row.sourceType}:${row.workspaceId}`),
+        effectiveCohort.map((row) => row.contributorKey || `${row.sourceType}:${row.workspaceId}`),
       );
       if (contributors.size < minimumContributors) return null;
 
@@ -158,7 +202,7 @@ export function aggregateMarketPoolObservations(
         uploaded: 0,
         admin: 0,
       };
-      for (const row of cohort) {
+      for (const row of effectiveCohort) {
         source_breakdown[row.sourceType] += 1;
       }
 
@@ -177,6 +221,7 @@ export function aggregateMarketPoolObservations(
         sample_size: values.length,
         contributor_count: contributors.size,
         provenance: getProvenance(source_breakdown),
+        market_source_tier: resolveEffectiveMarketSourceTier(effectiveCohort),
         source_breakdown,
         valid_from: effectiveDate,
         freshness_at: refreshedAt,
@@ -231,9 +276,16 @@ function toUploadedObservation(
   };
 }
 
-function toAdminObservation(row: SalaryBenchmarkRow): MarketPoolObservation | null {
+function toAdminObservation(
+  row: SalaryBenchmarkRow,
+  ingestionSourcesBySlug: Map<string, IngestionSource>,
+): MarketPoolObservation | null {
   if (row.source !== "market") return null;
   if (!row.workspace_id || !row.role_id || !row.location_id || !row.level_id) return null;
+  if (row.market_source_slug) {
+    const source = ingestionSourcesBySlug.get(row.market_source_slug);
+    if (source && !isSourceAllowedForIngestion(source)) return null;
+  }
   const midpoint = Number(row.p50 ?? 0);
   if (!Number.isFinite(midpoint) || midpoint <= 0) return null;
   return {
@@ -249,6 +301,7 @@ function toAdminObservation(row: SalaryBenchmarkRow): MarketPoolObservation | nu
     company_size: row.company_size || null,
     value: midpoint,
     sourceType: "admin",
+    marketSourceTier: row.market_source_tier ?? undefined,
   };
 }
 
@@ -273,6 +326,7 @@ export async function refreshPlatformMarketPool(): Promise<{ rowCount: number }>
     { data: employees, error: employeesError },
     { data: benchmarks, error: benchmarksError },
     { data: workspaceSettings, error: workspaceSettingsError },
+    { data: ingestionSources, error: ingestionSourcesError },
   ] = await Promise.all([
     supabase
       .from("employees")
@@ -280,19 +334,26 @@ export async function refreshPlatformMarketPool(): Promise<{ rowCount: number }>
     supabase
       .from("salary_benchmarks")
       .select(
-        "workspace_id, role_id, location_id, level_id, industry, company_size, p50, currency, source, market_source_slug",
+        "workspace_id, role_id, location_id, level_id, industry, company_size, p50, currency, source, market_source_slug, market_source_tier",
       ),
     supabase
       .from("workspace_settings")
       .select("workspace_id, industry, company_size"),
+    supabase
+      .from("ingestion_sources")
+      .select("slug, enabled, approved_for_commercial, needs_review, tier"),
   ]);
 
   if (employeesError) throw new Error(employeesError.message);
   if (benchmarksError) throw new Error(benchmarksError.message);
   if (workspaceSettingsError) throw new Error(workspaceSettingsError.message);
+  if (ingestionSourcesError) throw new Error(ingestionSourcesError.message);
 
   const workspaceSettingsById = new Map(
     ((workspaceSettings ?? []) as WorkspaceSettingsRow[]).map((row) => [row.workspace_id, row]),
+  );
+  const ingestionSourcesBySlug = new Map(
+    ((ingestionSources ?? []) as IngestionSource[]).map((row) => [row.slug, row]),
   );
 
   const observations = [
@@ -302,49 +363,201 @@ export async function refreshPlatformMarketPool(): Promise<{ rowCount: number }>
     ...((benchmarks ?? []) as SalaryBenchmarkRow[]).map((row) =>
       toUploadedObservation(row, workspaceSettingsById),
     ),
-    ...((benchmarks ?? []) as SalaryBenchmarkRow[]).map(toAdminObservation),
+    ...((benchmarks ?? []) as SalaryBenchmarkRow[]).map((row) =>
+      toAdminObservation(row, ingestionSourcesBySlug),
+    ),
   ].filter((row): row is MarketPoolObservation => row != null);
 
   const pooledRows = aggregateMarketPoolObservations(observations, {
-    minimumContributors: DEFAULT_MINIMUM_CONTRIBUTORS,
+    minimumContributors: getMarketPoolMinimumContributors(),
     effectiveDate,
     refreshedAt,
   });
 
-  await supabase.from("platform_market_benchmarks").delete().gte("valid_from", "1900-01-01");
+  const snapshotRows = pooledRows.map((row) =>
+    buildPublicBenchmarkSnapshotRow(row, refreshedAt),
+  );
 
-  if (pooledRows.length > 0) {
-    await supabase.from("platform_market_benchmarks").insert(pooledRows);
-  }
-
-  await supabase.from("public_benchmark_snapshots").delete().eq("workspace_id", null);
-
-  if (pooledRows.length > 0) {
-    await supabase.from("public_benchmark_snapshots").insert(
-      pooledRows.map((row) => ({
-        workspace_id: null,
-        role_id: row.role_id,
-        role_label: labelForRole(row.role_id),
-        location_id: row.location_id,
-        location_label: labelForLocation(row.location_id),
-        level_id: row.level_id,
-        level_label: labelForLevel(row.level_id),
-        industry: row.industry,
-        company_size: row.company_size,
-        currency: row.currency,
-        p25: row.p25,
-        p50: row.p50,
-        p75: row.p75,
-        submissions_this_week: row.contributor_count,
-        mom_delta_p25: "0%",
-        mom_delta_p50: "0%",
-        mom_delta_p75: "0%",
-        trend_delta: "0%",
-        is_public: true,
-        updated_at: refreshedAt,
-      })),
-    );
-  }
+  await stagePlatformMarketRefresh(supabase, pooledRows, snapshotRows);
+  await swapStagedPlatformMarketRefresh(supabase);
 
   return { rowCount: pooledRows.length };
+}
+
+function buildPublicBenchmarkSnapshotRow(
+  row: PlatformMarketPoolRow,
+  refreshedAt: string,
+): PublicBenchmarkSnapshotRow {
+  return {
+    workspace_id: null,
+    role_id: row.role_id,
+    role_label: labelForRole(row.role_id),
+    location_id: row.location_id,
+    location_label: labelForLocation(row.location_id),
+    level_id: row.level_id,
+    level_label: labelForLevel(row.level_id),
+    industry: row.industry,
+    company_size: row.company_size,
+    currency: row.currency,
+    p25: row.p25,
+    p50: row.p50,
+    p75: row.p75,
+    submissions_this_week: row.contributor_count,
+    mom_delta_p25: "0%",
+    mom_delta_p50: "0%",
+    mom_delta_p75: "0%",
+    trend_delta: "0%",
+    is_public: true,
+    updated_at: refreshedAt,
+    market_source_tier: row.market_source_tier ?? null,
+  };
+}
+
+function selectPreferredMarketTierCohort(
+  cohort: MarketPoolObservation[],
+  minimumContributors: number,
+): MarketPoolObservation[] {
+  const nonMarketRows = cohort.filter((row) => row.sourceType !== "admin");
+  const officialMarketRows = cohort.filter(
+    (row) => row.sourceType === "admin" && row.marketSourceTier === "official",
+  );
+  const proxyMarketRows = cohort.filter(
+    (row) => row.sourceType === "admin" && row.marketSourceTier === "proxy",
+  );
+
+  const officialCandidate = [...nonMarketRows, ...officialMarketRows];
+  if (
+    officialMarketRows.length > 0 &&
+    countDistinctContributors(officialCandidate) >= minimumContributors
+  ) {
+    return officialCandidate;
+  }
+
+  const proxyCandidate = [...nonMarketRows, ...proxyMarketRows];
+  if (
+    proxyMarketRows.length > 0 &&
+    countDistinctContributors(proxyCandidate) >= minimumContributors
+  ) {
+    return proxyCandidate;
+  }
+
+  const blendedCandidate = [...nonMarketRows, ...officialMarketRows, ...proxyMarketRows];
+  if (
+    officialMarketRows.length > 0 &&
+    proxyMarketRows.length > 0 &&
+    countDistinctContributors(blendedCandidate) >= minimumContributors
+  ) {
+    return blendedCandidate;
+  }
+
+  return cohort;
+}
+
+function countDistinctContributors(cohort: MarketPoolObservation[]): number {
+  return new Set(cohort.map((row) => row.contributorKey || `${row.sourceType}:${row.workspaceId}`)).size;
+}
+
+function resolveEffectiveMarketSourceTier(
+  cohort: MarketPoolObservation[],
+): "official" | "proxy" | "blended" | null {
+  const tiers = new Set(
+    cohort
+      .filter((row) => row.sourceType === "admin" && row.marketSourceTier)
+      .map((row) => row.marketSourceTier),
+  );
+  if (tiers.has("official") && tiers.has("proxy")) return "blended";
+  if (tiers.has("official")) return "official";
+  if (tiers.has("proxy")) return "proxy";
+  return null;
+}
+
+async function stagePlatformMarketRefresh(
+  supabase: SupabaseLike,
+  pooledRows: PlatformMarketPoolRow[],
+  snapshotRows: PublicBenchmarkSnapshotRow[],
+) {
+  const { error: platformStageDeleteError } = await deleteAllRows(
+    supabase,
+    "platform_market_benchmarks_staging",
+    "valid_from",
+    "1900-01-01",
+  );
+  if (platformStageDeleteError) {
+    throw new Error(platformStageDeleteError.message ?? "Failed to clear platform market staging rows");
+  }
+
+  if (pooledRows.length > 0) {
+    const { error: platformStageInsertError } = await insertRows(
+      supabase,
+      "platform_market_benchmarks_staging",
+      pooledRows,
+    );
+    if (platformStageInsertError) {
+      throw new Error(platformStageInsertError.message ?? "Failed to stage platform market rows");
+    }
+  }
+
+  const { error: snapshotsStageDeleteError } = await deleteAllRows(
+    supabase,
+    "public_benchmark_snapshots_staging",
+    "updated_at",
+    "1900-01-01T00:00:00.000Z",
+  );
+  if (snapshotsStageDeleteError) {
+    throw new Error(snapshotsStageDeleteError.message ?? "Failed to clear public snapshot staging rows");
+  }
+
+  if (snapshotRows.length > 0) {
+    const { error: snapshotsStageInsertError } = await insertRows(
+      supabase,
+      "public_benchmark_snapshots_staging",
+      snapshotRows,
+    );
+    if (snapshotsStageInsertError) {
+      throw new Error(snapshotsStageInsertError.message ?? "Failed to stage public snapshot rows");
+    }
+  }
+}
+
+async function swapStagedPlatformMarketRefresh(supabase: SupabaseLike) {
+  if (typeof supabase.rpc !== "function") {
+    throw new Error("Supabase client does not support RPC swaps for platform market refresh.");
+  }
+  const { error } = await supabase.rpc("swap_platform_market_refresh_staging");
+  if (error) {
+    throw new Error(error.message ?? "Failed to swap staged platform market refresh rows");
+  }
+}
+
+async function deleteAllRows(
+  supabase: SupabaseLike,
+  table: string,
+  column: string,
+  minimumValue: string,
+): Promise<SupabaseMutationResult> {
+  const query = supabase.from(table);
+  if (!query || typeof query !== "object" || typeof (query as { delete?: unknown }).delete !== "function") {
+    throw new Error(`Unsupported Supabase delete client for table: ${table}`);
+  }
+
+  const deleteQuery = (query as { delete: () => { gte?: (c: string, v: string) => Promise<SupabaseMutationResult> } })
+    .delete();
+  if (!deleteQuery || typeof deleteQuery.gte !== "function") {
+    throw new Error(`Unsupported Supabase delete chain for table: ${table}`);
+  }
+
+  return deleteQuery.gte(column, minimumValue);
+}
+
+async function insertRows<T extends Record<string, unknown>>(
+  supabase: SupabaseLike,
+  table: string,
+  rows: T[],
+): Promise<SupabaseMutationResult> {
+  const query = supabase.from(table);
+  if (!query || typeof query !== "object" || typeof (query as { insert?: unknown }).insert !== "function") {
+    throw new Error(`Unsupported Supabase insert client for table: ${table}`);
+  }
+
+  return (query as { insert: (values: T[]) => Promise<SupabaseMutationResult> }).insert(rows);
 }

@@ -3,6 +3,7 @@
 import type { Employee, CompanyMetrics, DepartmentSummary, Department, PerformanceRating } from "./mock-data";
 import { LOCATIONS, LEVELS, ROLES } from "@/lib/dashboard/dummy-data";
 import type { BenchmarkMatchQuality, BenchmarkTrustMetadata } from "@/lib/benchmarks/trust";
+import { resolveBenchmarkForEmployee, type BenchmarkResolverRow } from "@/lib/benchmarks/benchmark-resolver";
 
 // Cache for database employee count check
 let hasDbEmployeesCache: boolean | null = null;
@@ -66,10 +67,7 @@ export async function fetchDbEmployees(): Promise<Employee[]> {
   }
 }
 
-type BenchmarkRow = {
-  role_id: string;
-  location_id: string;
-  level_id: string;
+type BenchmarkRow = BenchmarkResolverRow & {
   p10: number;
   p25: number;
   p50: number;
@@ -88,23 +86,10 @@ type BenchmarkMatch = {
   row: BenchmarkRow;
   source: "market" | "uploaded";
   matchQuality: BenchmarkMatchQuality;
+  matchType?: BenchmarkTrustMetadata["matchType"];
+  matchedBenchmarkId?: string | null;
+  fallbackReason?: string | null;
 };
-
-function buildBenchmarkMaps(rows: Record<string, unknown>[]) {
-  const exactMap = new Map<string, BenchmarkRow>();
-  const roleLevelMap = new Map<string, BenchmarkRow>();
-  for (const row of rows) {
-    const exactKey = `${row.role_id as string}::${row.location_id as string}::${row.level_id as string}`;
-    if (!exactMap.has(exactKey)) {
-      exactMap.set(exactKey, row as unknown as BenchmarkRow);
-    }
-    const rlKey = `${row.role_id as string}::${row.level_id as string}`;
-    if (!roleLevelMap.has(rlKey)) {
-      roleLevelMap.set(rlKey, row as unknown as BenchmarkRow);
-    }
-  }
-  return { exactMap, roleLevelMap };
-}
 
 function normalizeConfidence(value: string | null | undefined): "High" | "Medium" | "Low" | null {
   const normalized = (value || "").toLowerCase();
@@ -115,26 +100,32 @@ function normalizeConfidence(value: string | null | undefined): "High" | "Medium
 }
 
 function resolveBenchmarkMatch(
-  exactKey: string,
-  fallbackKey: string,
-  market: ReturnType<typeof buildBenchmarkMaps>,
-  workspace: ReturnType<typeof buildBenchmarkMaps>
+  employee: {
+    roleId: string | null | undefined;
+    levelId: string | null | undefined;
+    locationId: string | null | undefined;
+  },
+  dbMarketBenchmarks: Record<string, unknown>[],
+  dbBenchmarks: Record<string, unknown>[],
 ): BenchmarkMatch | null {
-  const marketExact = market.exactMap.get(exactKey);
-  if (marketExact) return { row: marketExact, source: "market", matchQuality: "exact" };
+  const resolved = resolveBenchmarkForEmployee({
+    employee,
+    marketBenchmarks: dbMarketBenchmarks as BenchmarkRow[],
+    workspaceBenchmarks: dbBenchmarks as BenchmarkRow[],
+  });
 
-  const marketFallback = market.roleLevelMap.get(fallbackKey);
-  if (marketFallback) return { row: marketFallback, source: "market", matchQuality: "role_level_fallback" };
-
-  const workspaceExact = workspace.exactMap.get(exactKey);
-  if (workspaceExact) return { row: workspaceExact, source: "uploaded", matchQuality: "exact" };
-
-  const workspaceFallback = workspace.roleLevelMap.get(fallbackKey);
-  if (workspaceFallback) {
-    return { row: workspaceFallback, source: "uploaded", matchQuality: "role_level_fallback" };
+  if (!resolved.row || !resolved.source || resolved.matchQuality === "none") {
+    return null;
   }
 
-  return null;
+  return {
+    row: resolved.row,
+    source: resolved.source,
+    matchQuality: resolved.matchQuality,
+    matchType: resolved.matchType === "none" ? null : resolved.matchType,
+    matchedBenchmarkId: resolved.matchedBenchmarkId,
+    fallbackReason: resolved.fallbackReason,
+  };
 }
 
 function buildBenchmarkContext(match: BenchmarkMatch | null): BenchmarkTrustMetadata | undefined {
@@ -143,6 +134,9 @@ function buildBenchmarkContext(match: BenchmarkMatch | null): BenchmarkTrustMeta
     source: match.source,
     provenance: match.row.provenance || (match.source === "uploaded" ? "uploaded" : null),
     matchQuality: match.matchQuality,
+    matchType: match.matchType ?? null,
+    matchedBenchmarkId: match.matchedBenchmarkId ?? null,
+    fallbackReason: match.fallbackReason ?? null,
     sampleSize: typeof match.row.sample_size === "number" ? match.row.sample_size : null,
     confidence: normalizeConfidence(match.row.confidence),
     freshnessAt: match.row.freshness_at || null,
@@ -176,16 +170,58 @@ function withUniqueDisplayNames(employees: Employee[]): Employee[] {
   });
 }
 
+function resolveEmployeeLocation(emp: Record<string, unknown>) {
+  const locationId = typeof emp.location_id === "string" ? emp.location_id : null;
+  const knownLocation = locationId ? LOCATIONS.find((location) => location.id === locationId) : null;
+  if (knownLocation) return knownLocation;
+
+  return {
+    id: locationId || "unmapped-location",
+    city: typeof emp.location_id === "string" ? String(emp.location_id) : "Unmapped location",
+    country: "Unknown",
+    countryCode: "UN",
+    currency: "AED" as const,
+    flag: "UN",
+  };
+}
+
+function resolveEmployeeLevel(emp: Record<string, unknown>) {
+  const levelId = typeof emp.level_id === "string" ? emp.level_id : null;
+  const knownLevel = levelId ? LEVELS.find((level) => level.id === levelId) : null;
+  if (knownLevel) return knownLevel;
+
+  const originalLevelText = typeof emp.original_level_text === "string" ? emp.original_level_text.trim() : "";
+  return {
+    id: levelId || "unmapped-level",
+    name: originalLevelText || "Unmapped level",
+    category: "IC" as const,
+  };
+}
+
+function resolveEmployeeRole(emp: Record<string, unknown>) {
+  const roleId = typeof emp.canonical_role_id === "string"
+    ? emp.canonical_role_id
+    : typeof emp.role_id === "string"
+      ? emp.role_id
+      : null;
+  const knownRole = roleId ? ROLES.find((role) => role.id === roleId) : null;
+  if (knownRole) return knownRole;
+
+  const originalRoleText = typeof emp.original_role_text === "string" ? emp.original_role_text.trim() : "";
+  return {
+    id: roleId || "unmapped-role",
+    title: originalRoleText || "Unmapped role",
+    family: "Custom",
+    icon: "CUS",
+  };
+}
+
 function mapRowsToEmployees(
   dbEmployees: Record<string, unknown>[],
   dbBenchmarks: Record<string, unknown>[],
   dbMarketBenchmarks: Record<string, unknown>[]
 ): Employee[] {
   if (!dbEmployees.length) return [];
-
-  // Market rows are primary. Workspace bands are an overlay when the market pool has gaps.
-  const market = buildBenchmarkMaps(dbMarketBenchmarks);
-  const workspace = buildBenchmarkMaps(dbBenchmarks);
 
   const toAnnual = (value: number): number => (value < 100_000 ? value * 12 : value);
   const percentileFromComp = (comp: number, b: BenchmarkRow): number => {
@@ -203,19 +239,28 @@ function mapRowsToEmployees(
   };
 
   const employees = dbEmployees.map((emp) => {
-    const location = LOCATIONS.find((l) => l.id === emp.location_id) || LOCATIONS[0];
-    const level = LEVELS.find((l) => l.id === emp.level_id) || LEVELS[2];
-    const role = ROLES.find((r) => r.id === emp.role_id) || ROLES[0];
+    const location = resolveEmployeeLocation(emp);
+    const level = resolveEmployeeLevel(emp);
+    const role = resolveEmployeeRole(emp);
 
     const baseSalary = Number(emp.base_salary) || 0;
     const bonus = Number(emp.bonus) || 0;
     const equity = Number(emp.equity) || 0;
     const totalComp = baseSalary + bonus + equity;
 
-    const exactKey = `${emp.role_id as string}::${emp.location_id as string}::${emp.level_id as string}`;
-    const fallbackKey = `${emp.role_id as string}::${emp.level_id as string}`;
-
-    const benchmarkMatch = resolveBenchmarkMatch(exactKey, fallbackKey, market, workspace);
+    const benchmarkMatch = resolveBenchmarkMatch(
+      {
+        roleId: typeof emp.canonical_role_id === "string"
+          ? emp.canonical_role_id
+          : typeof emp.role_id === "string"
+            ? emp.role_id
+            : null,
+        levelId: typeof emp.level_id === "string" ? emp.level_id : null,
+        locationId: typeof emp.location_id === "string" ? emp.location_id : null,
+      },
+      dbMarketBenchmarks,
+      dbBenchmarks,
+    );
     const benchmark = benchmarkMatch?.row;
 
     let bandPosition: "below" | "in-band" | "above" = "in-band";

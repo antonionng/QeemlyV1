@@ -41,6 +41,8 @@ describe("useBenchmarkState.runBenchmark", () => {
       currentResult: null,
       recentResults: [],
       savedFilters: [],
+      isSubmitting: false,
+      submissionError: null,
       step: "form",
       detailTab: "summary",
     });
@@ -98,6 +100,24 @@ describe("useBenchmarkState.runBenchmark", () => {
     });
     expect(useBenchmarkState.getState().currentResult?.formData.industry).toBe("HealthTech");
     expect(useBenchmarkState.getState().currentResult?.formData.companySize).toBe("51-200");
+  });
+
+  it("stores a visible error when no benchmark row matches the request", async () => {
+    getBenchmarkMock.mockResolvedValueOnce(null);
+
+    const state = useBenchmarkState.getState();
+    state.updateFormField("roleId", "software-engineer");
+    state.updateFormField("levelId", "ic3");
+    state.updateFormField("locationId", "dubai");
+
+    await useBenchmarkState.getState().runBenchmark();
+
+    expect(useBenchmarkState.getState().currentResult).toBeNull();
+    expect(useBenchmarkState.getState().step).toBe("form");
+    expect(useBenchmarkState.getState().submissionError).toBe(
+      "No published benchmark matched this role, level, and location yet. Try another selection.",
+    );
+    expect(useBenchmarkState.getState().isSubmitting).toBe(false);
   });
 
   it("clears persisted benchmark state when the active workspace changes", () => {

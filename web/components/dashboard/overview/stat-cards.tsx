@@ -74,10 +74,10 @@ function MetricDelta({ value }: { value: number }) {
   return (
     <div
       className="text-right text-sm font-medium leading-tight"
-      style={{ color: isPositive ? "#16A34A" : "#DC2626" }}
+      style={{ color: isPositive ? "#05DA5A" : "#FF2056" }}
     >
       {isPositive ? "+" : ""}
-      {value}% <span className="font-normal text-[#6B7280]">vs last year</span>
+      {value}% <span className="font-normal text-[#969799]">vs last year</span>
     </div>
   );
 }
@@ -95,14 +95,14 @@ function ActiveEmployeesSparkline({ trend }: { trend: TrendDataPoint[] }) {
       <svg className="h-[96px] w-full" viewBox={`0 0 ${width} ${height}`} fill="none" aria-hidden="true">
         <defs>
           <linearGradient id="activeEmployeesSparklineFill" x1="0" y1="0" x2="0" y2={height}>
-            <stop offset="0%" stopColor="rgba(124,127,240,0.25)" />
-            <stop offset="100%" stopColor="rgba(124,127,240,0)" />
+            <stop offset="0%" stopColor="rgba(168,155,255,0.25)" />
+            <stop offset="100%" stopColor="rgba(168,155,255,0)" />
           </linearGradient>
         </defs>
         <path d={areaPath} style={{ fill: "url(#activeEmployeesSparklineFill)" }} />
         <path
           d={linePath}
-          style={{ stroke: "#7C7FF0" }}
+          style={{ stroke: "#A89BFF" }}
           strokeWidth={3}
           strokeLinecap="round"
           strokeLinejoin="round"
@@ -126,10 +126,10 @@ function TotalPayrollBars({ trend }: { trend: TrendDataPoint[] }) {
             className="w-9 rounded-[10px]"
             style={{
               height: `${Math.max(56, (item.value / max) * 120)}px`,
-              background: item.active ? "#7C7FF0" : "#E5E7EB",
+              background: item.active ? "#A89BFF" : "rgba(150,151,153,0.2)",
             }}
           />
-          <span className="text-[11px] font-medium text-[#6B7280]">{item.label}</span>
+          <span className="text-[11px] font-medium text-[#969799]">{item.label}</span>
         </div>
       ))}
       </div>
@@ -138,10 +138,8 @@ function TotalPayrollBars({ trend }: { trend: TrendDataPoint[] }) {
 }
 
 function InBandDistribution({
-  inBandPercentage,
   segments,
 }: {
-  inBandPercentage: number;
   segments: { inBand: number; above: number; below: number };
 }) {
   return (
@@ -154,9 +152,9 @@ function InBandDistribution({
           className="flex h-full w-full overflow-hidden rounded-[12px]"
         data-testid="in-band-distribution"
       >
-          <div style={{ width: `${segments.inBand}%`, background: "#7BC8AE" }} />
-          <div style={{ width: `${segments.above}%`, background: "#F2C98A" }} />
-          <div style={{ width: `${segments.below}%`, background: "#E88FA1" }} />
+          <div style={{ width: `${segments.inBand}%`, background: "#00BC7D" }} />
+          <div style={{ width: `${segments.above}%`, background: "#FE9A00" }} />
+          <div style={{ width: `${segments.below}%`, background: "#FF2056" }} />
         </div>
       </div>
     </>
@@ -175,14 +173,14 @@ function RiskFlagsIndicator({
   return (
     <>
       <div className="mt-6" data-testid="risk-flags-card-chart">
-        <div className="h-14 rounded-[12px] bg-[#E5E7EB] p-2">
+        <div className="h-14 rounded-[12px] bg-[rgba(150,151,153,0.2)] p-2">
         <div
           className="h-full rounded-[10px]"
           data-testid="risk-flags-indicator"
           style={{
             width: `${width}%`,
             minWidth: riskFlags > 0 ? "18px" : "0px",
-            background: "#FF3B5C",
+            background: "#FF2056",
           }}
         />
         </div>
@@ -287,7 +285,6 @@ export function StatCards({ metrics, interactions, onInteract }: StatCardsProps)
               <h3 className="overview-metric-card-title">In Band</h3>
               <p className="overview-metric-card-description">{metrics.outOfBandPercentage}% outside band</p>
               <InBandDistribution
-                inBandPercentage={metrics.inBandPercentage}
                 segments={metrics.bandDistribution}
               />
               <div className="mt-auto flex items-end justify-between gap-4 pt-6">
@@ -306,7 +303,6 @@ export function StatCards({ metrics, interactions, onInteract }: StatCardsProps)
             <h3 className="overview-metric-card-title">In Band</h3>
             <p className="overview-metric-card-description">{metrics.outOfBandPercentage}% outside band</p>
             <InBandDistribution
-              inBandPercentage={metrics.inBandPercentage}
               segments={metrics.bandDistribution}
             />
             <div className="mt-auto flex items-end justify-between gap-4 pt-6">

@@ -1,6 +1,14 @@
 "use client";
 
-import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useId,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type ReactNode,
+} from "react";
 import { createPortal } from "react-dom";
 import clsx from "clsx";
 import type { OverviewInteractionTarget } from "@/lib/dashboard/overview-interactions";
@@ -26,11 +34,15 @@ export function OverviewInteractiveSurface({
   testId,
 }: OverviewInteractiveSurfaceProps) {
   const tooltipId = useId();
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const triggerRef = useRef<HTMLElement | null>(null);
   const tooltipRef = useRef<HTMLDivElement | null>(null);
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState<{ left: number; top: number } | null>(null);
   const canPortal = typeof document !== "undefined";
+  const sharedClassName = clsx(
+    "group block w-full text-left rounded-[16px] transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-400",
+    className,
+  );
 
   useSafeLayoutEffect(() => {
     if (!open) return;
@@ -71,31 +83,63 @@ export function OverviewInteractiveSurface({
 
   return (
     <>
-      <button
-        ref={triggerRef}
-        type="button"
-        className={clsx(
-          "group block w-full text-left rounded-[16px] transition focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-400",
-          className,
-        )}
-        aria-describedby={tooltipId}
-        data-overview-action={target.action}
-        data-overview-target={target.id}
-        data-overview-href={target.href ?? ""}
-        onMouseEnter={() => setOpen(true)}
-        onMouseLeave={() => setOpen(false)}
-        onFocus={() => setOpen(true)}
-        onBlur={() => setOpen(false)}
-        onClick={() => onInteract?.(target)}
-        data-testid={testId}
-      >
-        {children}
-        {tooltipTestId ? (
-          <span className="sr-only" data-testid={tooltipTestId}>
-            {target.tooltip.title}
-          </span>
-        ) : null}
-      </button>
+      {target.action === "link" ? (
+        <a
+          ref={(node) => {
+            triggerRef.current = node;
+          }}
+          href={target.href}
+          className={sharedClassName}
+          aria-describedby={tooltipId}
+          data-overview-action={target.action}
+          data-overview-target={target.id}
+          data-overview-href={target.href}
+          onMouseEnter={() => setOpen(true)}
+          onMouseLeave={() => setOpen(false)}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setOpen(false)}
+          onClick={(event) => {
+            if (!onInteract || !isPrimaryUnmodifiedClick(event)) {
+              return;
+            }
+            event.preventDefault();
+            onInteract(target);
+          }}
+          data-testid={testId}
+        >
+          {children}
+          {tooltipTestId ? (
+            <span className="sr-only" data-testid={tooltipTestId}>
+              {target.tooltip.title}
+            </span>
+          ) : null}
+        </a>
+      ) : (
+        <button
+          ref={(node) => {
+            triggerRef.current = node;
+          }}
+          type="button"
+          className={sharedClassName}
+          aria-describedby={tooltipId}
+          data-overview-action={target.action}
+          data-overview-target={target.id}
+          data-overview-href=""
+          onMouseEnter={() => setOpen(true)}
+          onMouseLeave={() => setOpen(false)}
+          onFocus={() => setOpen(true)}
+          onBlur={() => setOpen(false)}
+          onClick={() => onInteract?.(target)}
+          data-testid={testId}
+        >
+          {children}
+          {tooltipTestId ? (
+            <span className="sr-only" data-testid={tooltipTestId}>
+              {target.tooltip.title}
+            </span>
+          ) : null}
+        </button>
+      )}
       {canPortal && position
         ? createPortal(
             <div
@@ -124,5 +168,15 @@ export function OverviewInteractiveSurface({
           )
         : null}
     </>
+  );
+}
+
+function isPrimaryUnmodifiedClick(event: ReactMouseEvent<HTMLAnchorElement>) {
+  return (
+    event.button === 0 &&
+    !event.metaKey &&
+    !event.ctrlKey &&
+    !event.shiftKey &&
+    !event.altKey
   );
 }

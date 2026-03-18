@@ -32,7 +32,11 @@ export function PurchasingPowerWidget({ result }: PurchasingPowerWidgetProps) {
         {formatCurrency(applyViewMode(result.purchasingPowerSalary, salaryView))}
       </p>
 
-      <div className="mt-5 flex items-center gap-4 rounded-2xl border border-border bg-accent-50 p-4">
+      <div className="mt-3 rounded-full bg-brand-50 px-3 py-1.5 text-xs font-medium text-brand-700 ring-1 ring-brand-100">
+        Maintains the same purchasing power after the move
+      </div>
+
+      <div className="mt-5 flex items-center gap-4 rounded-[24px] border border-accent-100 bg-[linear-gradient(180deg,rgba(249,250,251,0.95),rgba(255,255,255,1))] p-4">
         <div className="text-center">
           <p className="text-[10px] font-semibold uppercase tracking-wider text-accent-500">{result.homeCity.name}</p>
           <p className="text-base font-semibold text-brand-900">
@@ -50,12 +54,12 @@ export function PurchasingPowerWidget({ result }: PurchasingPowerWidgetProps) {
         </div>
         <div
           className={clsx(
-            "ml-auto rounded-full px-2.5 py-1 text-xs font-semibold",
+            "ml-auto rounded-full px-3 py-1.5 text-xs font-semibold shadow-sm",
             difference > 0
-              ? "bg-rose-50 text-rose-700"
+              ? "bg-rose-50 text-rose-700 ring-1 ring-rose-100"
               : difference < 0
-              ? "bg-emerald-50 text-emerald-700"
-              : "bg-gray-50 text-gray-700"
+                ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100"
+                : "bg-gray-50 text-gray-700 ring-1 ring-gray-200"
           )}
         >
           {difference > 0 ? "+" : ""}
@@ -64,7 +68,7 @@ export function PurchasingPowerWidget({ result }: PurchasingPowerWidgetProps) {
       </div>
 
       <p className="mt-4 text-sm text-accent-600">
-        Salary required in {result.targetCity.name} to maintain your current lifestyle.
+        Salary required in {result.targetCity.name} to maintain a comparable standard of living for the employee.
       </p>
     </div>
   );

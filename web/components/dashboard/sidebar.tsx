@@ -17,7 +17,6 @@ import {
   type LucideIcon,
   Plug,
   Settings,
-  Shield,
   Upload,
   Users,
   UserRound,
@@ -56,7 +55,6 @@ const adminNavSections: NavSection[] = [
     label: "Analytics",
     items: [
       { href: "/dashboard/reports", label: "Reports", icon: BarChart3 },
-      { href: "/dashboard/compliance", label: "Workforce Compliance", icon: Shield },
     ],
   },
   {

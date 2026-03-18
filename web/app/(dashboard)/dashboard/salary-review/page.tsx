@@ -701,12 +701,13 @@ function SalaryReviewPageContent() {
           <SalaryReviewOverview
             cycles={cycles}
             activeCycle={activeProposal}
-            actionLabel={dashboardModel.hasDraft ? "Continue Draft" : "Start New Review Cycle"}
+            actionLabel={dashboardModel.hasDraft ? "Continue Draft" : "Start Review Cycle"}
             onPrimaryAction={dashboardModel.hasDraft ? handleContinueDraft : () => void handleStartNewCycle()}
             onImport={() => setShowUploadModal(true)}
             onExport={handleExport}
             onReset={resetReview}
             onSelectCycle={(proposalId) => void selectCycle(proposalId)}
+            initialQueryState={initialQueryState}
           />
         </>
       )}

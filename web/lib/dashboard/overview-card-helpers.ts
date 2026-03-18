@@ -3,12 +3,12 @@ import type { OverviewMetrics, OverviewRiskSummary } from "@/lib/dashboard/compa
 type HealthFactorTone = "positive" | "warning" | "critical";
 
 export const OVERVIEW_BAND_COLORS = {
-  inBand: "#33C997",
-  inBandBg: "#E7F7F3",
-  aboveBand: "#FEAE33",
-  aboveBandBg: "#FFF4E5",
-  belowBand: "#FF4D78",
-  belowBandBg: "#FFE9EF",
+  inBand: "#00BC7D",
+  inBandBg: "rgba(0,188,125,0.1)",
+  aboveBand: "#FE9A00",
+  aboveBandBg: "rgba(254,154,0,0.1)",
+  belowBand: "#FF2056",
+  belowBandBg: "rgba(255,32,86,0.1)",
 } as const;
 
 type HealthScoreFactor = {

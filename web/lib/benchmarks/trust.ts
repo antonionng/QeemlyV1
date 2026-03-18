@@ -1,9 +1,19 @@
 export type BenchmarkMatchQuality = "exact" | "role_level_fallback";
+export type BenchmarkMatchType =
+  | "exact"
+  | "location_fallback"
+  | "global_role_level_fallback"
+  | "adjacent_level_fallback"
+  | "family_fallback"
+  | "family_location_fallback";
 
 export type BenchmarkTrustMetadata = {
   source: "market" | "uploaded";
   provenance?: string | null;
   matchQuality?: BenchmarkMatchQuality | null;
+  matchType?: BenchmarkMatchType | null;
+  matchedBenchmarkId?: string | null;
+  fallbackReason?: string | null;
   sampleSize?: number | null;
   confidence?: string | null;
   freshnessAt?: string | null;
@@ -37,6 +47,23 @@ export function getBenchmarkMatchLabel(matchQuality: BenchmarkMatchQuality | nul
   return "Exact match";
 }
 
+export function getBenchmarkMatchTypeLabel(metadata: BenchmarkTrustMetadata | null | undefined): string {
+  switch (metadata?.matchType) {
+    case "location_fallback":
+      return "Same-country market fallback";
+    case "global_role_level_fallback":
+      return "Cross-market role and level fallback";
+    case "adjacent_level_fallback":
+      return "Adjacent level fallback";
+    case "family_fallback":
+      return "Job family fallback";
+    case "family_location_fallback":
+      return "Job family and market fallback";
+    default:
+      return getBenchmarkMatchLabel(metadata?.matchQuality);
+  }
+}
+
 export function buildBenchmarkTrustLabels(metadata: BenchmarkTrustMetadata | null | undefined) {
   if (!metadata) return null;
 
@@ -44,7 +71,7 @@ export function buildBenchmarkTrustLabels(metadata: BenchmarkTrustMetadata | nul
 
   return {
     sourceLabel: getBenchmarkSourceLabel(metadata),
-    matchLabel: getBenchmarkMatchLabel(metadata.matchQuality),
+    matchLabel: getBenchmarkMatchTypeLabel(metadata),
     confidenceLabel: metadata.confidence ? `${toTitleCase(metadata.confidence)} confidence` : null,
     freshnessLabel: freshnessSource ? `Updated ${formatTrustDate(freshnessSource)}` : null,
     sampleLabel:

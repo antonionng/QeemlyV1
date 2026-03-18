@@ -3,6 +3,7 @@ import path from "node:path";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { BandDistributionChart } from "@/components/dashboard/overview/band-distribution-chart";
 import { HealthScore } from "@/components/dashboard/overview/health-score";
 import { StatCards } from "@/components/dashboard/overview/stat-cards";
 import type { OverviewBenchmarkCoverage, OverviewMetrics } from "@/lib/dashboard/company-overview";
@@ -117,21 +118,21 @@ describe("Compensation health score grid", () => {
     expect(html).toContain('data-testid="health-score-gauge-shell"');
     expect(html).toContain('data-testid="health-score-center-stack"');
     expect(html).toContain('data-testid="health-score-status-pill"');
-    expect(html).toContain('viewBox="0 0 360 220"');
-    expect(html).toContain("stroke:#E6E7EB");
-    expect(html).toContain("stroke:#2EC4A7");
+    expect(html).toContain('viewBox="0 0 435 218"');
+    expect(html).toContain('stroke="#E5E7EB"');
+    expect(html).toContain('stroke="#2EC4A6"');
     expect(html).toContain(">70%</");
     expect(html).toContain(">Good<");
-    expect(html).toContain("background:#DFF7F1");
-    expect(html).toContain("color:#1C8C6C");
+    expect(html).toContain("bg-teal-100 text-teal-700");
+    expect(html).toContain('data-testid="health-score-needle"');
     expect(html).toContain('data-testid="health-score-factor-band-alignment"');
     expect(html).toContain('data-testid="health-score-factor-market-position"');
     expect(html).toContain('data-testid="health-score-factor-risk-management"');
     expect(html).toContain('data-testid="health-score-gauge-action"');
     expect(html).toContain('data-testid="health-score-gauge-tooltip"');
-    expect(html).toContain("background:#5A67FF");
-    expect(html).toContain("background:#F59E0B");
-    expect(html).toContain("background:#FF3B5C");
+    expect(html).toContain("background-color:#5C45FD");
+    expect(html).toContain("background-color:#FE9A00");
+    expect(html).toContain("background-color:#FF2056");
   });
 
   it("renders the four metric cards with the exact chart treatments and without legacy chrome", () => {
@@ -150,7 +151,7 @@ describe("Compensation health score grid", () => {
     expect(html).toContain('data-testid="active-employees-sparkline"');
     expect(html).toContain('data-testid="active-employees-card-chart"');
     expect(html).toContain("linearGradient");
-    expect(html).toContain("stroke:#7C7FF0");
+    expect(html).toContain("stroke:#A89BFF");
     expect(html).toContain(">141<");
     expect(html).toContain("+8.2%");
     expect(html).toContain("vs last year");
@@ -172,9 +173,9 @@ describe("Compensation health score grid", () => {
     expect(html).toContain('data-testid="in-band-card-tooltip"');
     expect(html).toContain('data-testid="in-band-distribution"');
     expect(html).toContain('data-testid="in-band-card-chart"');
-    expect(html).toContain("background:#7BC8AE");
-    expect(html).toContain("background:#F2C98A");
-    expect(html).toContain("background:#E88FA1");
+    expect(html).toContain("background:#00BC7D");
+    expect(html).toContain("background:#FE9A00");
+    expect(html).toContain("background:#FF2056");
     expect(html).toContain(">65%<");
 
     expect(html).toContain('data-testid="risk-flags-card"');
@@ -182,9 +183,32 @@ describe("Compensation health score grid", () => {
     expect(html).toContain('data-testid="risk-flags-card-tooltip"');
     expect(html).toContain('data-testid="risk-flags-indicator"');
     expect(html).toContain('data-testid="risk-flags-card-chart"');
-    expect(html).toContain("background:#FF3B5C");
+    expect(html).toContain("background:#FF2056");
     expect(html).toContain(">14<");
 
     expect(html).not.toContain("Coverage");
+  });
+
+  it("renders the band distribution card with row and donut interaction hooks", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(BandDistributionChart, {
+        metrics,
+        benchmarkCoverage,
+        interactions,
+      }),
+    );
+
+    expect(html).toContain('data-testid="band-distribution-in-band-action"');
+    expect(html).toContain('data-testid="band-distribution-above-band-action"');
+    expect(html).toContain('data-testid="band-distribution-below-band-action"');
+    expect(html).toContain('data-testid="band-distribution-in-band-tooltip"');
+    expect(html).toContain('data-testid="band-distribution-above-band-tooltip"');
+    expect(html).toContain('data-testid="band-distribution-below-band-tooltip"');
+    expect(html).toContain('data-testid="band-distribution-in-band-segment-action"');
+    expect(html).toContain('data-testid="band-distribution-above-band-segment-action"');
+    expect(html).toContain('data-testid="band-distribution-below-band-segment-action"');
+    expect(html).toContain('data-overview-href="/dashboard/salary-review?cohort=in-band"');
+    expect(html).toContain('data-overview-href="/dashboard/salary-review?filter=above-band"');
+    expect(html).toContain('data-overview-href="/dashboard/salary-review?filter=below-band"');
   });
 });

@@ -7,6 +7,7 @@ import type {
   TransformedCompensationUpdate,
   TransformedEmployee,
 } from "./transformers";
+import { normalize } from "./transformers";
 import type { UploadDataType } from "./column-detection";
 import type { UploadImportMode } from "./upload-state";
 
@@ -57,6 +58,16 @@ async function refreshMarketPool(): Promise<void> {
   }
 }
 
+async function refreshCoverageSnapshot(): Promise<void> {
+  const response = await fetch("/api/benchmarks/coverage/refresh", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error("Failed to refresh benchmark coverage after import.");
+  }
+}
+
 /**
  * Get the current user's workspace ID
  */
@@ -96,6 +107,65 @@ function createInitialUploadResult(): UploadResult {
     processedEmployees: [],
     processedBenchmarks: [],
   };
+}
+
+async function applyCanonicalRoleAliases(
+  supabase: ReturnType<typeof createClient>,
+  workspaceId: string,
+  employees: TransformedEmployee[],
+): Promise<TransformedEmployee[]> {
+  const unresolvedEmployees = employees.filter(
+    (employee) => employee.roleMappingStatus === "pending" && employee.originalRoleText,
+  );
+  if (unresolvedEmployees.length === 0) {
+    return employees;
+  }
+
+  let data:
+    | Array<{ canonical_role_id?: string | null; alias_normalized?: string | null; workspace_id?: string | null }>
+    | null = null;
+  let error: { message?: string } | null = null;
+  try {
+    const result = await supabase
+      .from("canonical_role_aliases")
+      .select("canonical_role_id,alias_normalized,workspace_id")
+      .eq("is_active", true);
+    data = result.data as typeof data;
+    error = result.error ?? null;
+  } catch {
+    return employees;
+  }
+
+  if (error || !data) {
+    return employees;
+  }
+
+  const aliasToRoleId = new Map<string, string>();
+  for (const row of data) {
+    const scopedWorkspaceId = row.workspace_id ? String(row.workspace_id) : null;
+    if (scopedWorkspaceId && scopedWorkspaceId !== workspaceId) continue;
+    if (!row.alias_normalized || !row.canonical_role_id) continue;
+    aliasToRoleId.set(String(row.alias_normalized), String(row.canonical_role_id));
+  }
+
+  return employees.map((employee) => {
+    if (employee.roleMappingStatus !== "pending" || !employee.originalRoleText) {
+      return employee;
+    }
+
+    const aliasedRoleId = aliasToRoleId.get(normalize(employee.originalRoleText));
+    if (!aliasedRoleId) {
+      return employee;
+    }
+
+    return {
+      ...employee,
+      roleId: aliasedRoleId,
+      canonicalRoleId: aliasedRoleId,
+      roleMappingConfidence: "high",
+      roleMappingStatus: employee.levelId ? "mapped" : "pending",
+    };
+  });
 }
 
 function toBenchmarkConflictKey(row: {
@@ -143,12 +213,23 @@ export async function uploadEmployees(
 
   const result = createInitialUploadResult();
   const batchSize = 50;
+  const pendingReviewRows: Array<{
+    workspace_id: string;
+    subject_type: "employee";
+    subject_id: string;
+    original_role_text: string;
+    proposed_canonical_role_id: string | null;
+    status: "pending";
+    review_reason: string;
+  }> = [];
 
   if (importMode === "replace") {
     await clearEmployees();
   }
 
-  const emailMatches = employees
+  const employeesWithAliases = await applyCanonicalRoleAliases(supabase, workspaceId, employees);
+
+  const emailMatches = employeesWithAliases
     .map((employee) => employee.email?.toLowerCase())
     .filter((email): email is string => Boolean(email));
   const existingEmployeesByEmail = new Map<string, string>();
@@ -179,8 +260,8 @@ export async function uploadEmployees(
   }
   
   // Process in batches
-  for (let i = 0; i < employees.length; i += batchSize) {
-    const batch = employees.slice(i, i + batchSize);
+  for (let i = 0; i < employeesWithAliases.length; i += batchSize) {
+    const batch = employeesWithAliases.slice(i, i + batchSize);
     const records = batch.map((emp) => ({
       workspace_id: workspaceId,
       first_name: emp.firstName,
@@ -188,6 +269,12 @@ export async function uploadEmployees(
       email: emp.email,
       department: emp.department,
       role_id: emp.roleId,
+      canonical_role_id: emp.canonicalRoleId,
+      original_role_text: emp.originalRoleText,
+      original_level_text: emp.originalLevelText,
+      role_mapping_confidence: emp.roleMappingConfidence,
+      role_mapping_source: emp.roleMappingSource,
+      role_mapping_status: emp.roleMappingStatus,
       level_id: emp.levelId,
       location_id: emp.locationId,
       base_salary: emp.baseSalary,
@@ -248,6 +335,20 @@ export async function uploadEmployees(
             lastName: String(record.last_name || ""),
             action: "updated",
           });
+          const sourceEmployee = batch.find(
+            (employee) => String(employee.email || "").toLowerCase() === normalizedEmail,
+          );
+          if (sourceEmployee?.roleMappingStatus === "pending" && sourceEmployee.originalRoleText) {
+            pendingReviewRows.push({
+              workspace_id: workspaceId,
+              subject_type: "employee",
+              subject_id: existingId,
+              original_role_text: sourceEmployee.originalRoleText,
+              proposed_canonical_role_id: sourceEmployee.canonicalRoleId,
+              status: "pending",
+              review_reason: "Upload produced an unresolved or low-confidence role mapping.",
+            });
+          }
         }
       }
 
@@ -276,6 +377,20 @@ export async function uploadEmployees(
                 lastName: String(sourceRecord?.last_name || ""),
                 action: "created",
               });
+              const sourceEmployee = batch.find(
+                (employee) => String(employee.email || "").toLowerCase() === normalizedEmail,
+              );
+              if (sourceEmployee?.roleMappingStatus === "pending" && sourceEmployee.originalRoleText) {
+                pendingReviewRows.push({
+                  workspace_id: workspaceId,
+                  subject_type: "employee",
+                  subject_id: String(row.id),
+                  original_role_text: sourceEmployee.originalRoleText,
+                  proposed_canonical_role_id: sourceEmployee.canonicalRoleId,
+                  status: "pending",
+                  review_reason: "Upload produced an unresolved or low-confidence role mapping.",
+                });
+              }
             }
           }
         }
@@ -358,7 +473,7 @@ export async function uploadEmployees(
     
     // Report progress
     if (onProgress) {
-      onProgress(Math.min(100, Math.round(((i + batch.length) / employees.length) * 100)));
+      onProgress(Math.min(100, Math.round(((i + batch.length) / employeesWithAliases.length) * 100)));
     }
   }
 
@@ -366,10 +481,22 @@ export async function uploadEmployees(
   result.success = result.errors.length === 0;
 
   if (result.insertedCount > 0) {
+    if (pendingReviewRows.length > 0) {
+      try {
+        await supabase.from("role_mapping_reviews").insert(pendingReviewRows);
+      } catch {
+        // Review queue persistence is best-effort during uploads.
+      }
+    }
     try {
       await refreshMarketPool();
     } catch {
       // Market-pool refresh is best-effort during uploads.
+    }
+    try {
+      await refreshCoverageSnapshot();
+    } catch {
+      // Coverage refresh is best-effort during uploads.
     }
   }
 
@@ -554,6 +681,11 @@ export async function uploadBenchmarks(
       await refreshMarketPool();
     } catch {
       // Market-pool refresh is best-effort during uploads.
+    }
+    try {
+      await refreshCoverageSnapshot();
+    } catch {
+      // Coverage refresh is best-effort during uploads.
     }
   }
   

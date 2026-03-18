@@ -22,7 +22,7 @@ The admin panel does not use mock data. It reads live data from the shared Supab
 - `SUPABASE_SERVICE_ROLE_KEY` is required for most admin routes. If it is missing, the admin API will fail and the dashboard will now show an explicit configuration error instead of empty data.
 - `QEEMLY_SUPERADMINS` must include the email address you use to sign in to `/admin/login`.
 - `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` are required for auth/session handling.
-- `PLATFORM_WORKSPACE_ID` is required for shared market ingestion, shared market seeding, and platform benchmark fallback reads.
+- `PLATFORM_WORKSPACE_ID` is required for shared market ingestion and shared market seeding.
 - `npm run db:reset` is only safe against an isolated local database. Automatic demo seeding is disabled by default because `seed_user.sql` clears tenant runtime data.
 - Use `POST /api/admin/market-seed` as the shared-market operator flow after migrations are applied and runtime env is configured.
 - `/admin/freshness`, `/admin/snapshots`, and parts of `/admin` remain empty until ingestion has run at least once.

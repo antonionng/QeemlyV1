@@ -276,24 +276,28 @@ export function BenchmarkResults({ result, hasCompanyData = true }: BenchmarkRes
     if (confidence === "Medium") return "text-amber-600";
     return "text-brand-500";
   };
+  const headerPillClass =
+    "flex h-10 min-w-[140px] max-w-full items-center rounded-full border border-border bg-white text-sm shadow-sm";
+  const filterPillClass = `${headerPillClass} justify-between gap-3 pl-4 pr-3 font-medium text-brand-700`;
+
   return (
     <div className="space-y-6 bench-results">
       <div className="bench-section flex flex-wrap items-center gap-3">
-        <div className="flex h-10 min-w-[140px] items-center gap-2 rounded-full border border-border bg-white px-4 text-sm font-medium text-brand-900">
-          <Search className="h-3.5 w-3.5 text-brand-400" />
-          {role.title}
+        <div className={`${headerPillClass} gap-2 px-4 font-medium text-brand-900`}>
+          <Search className="h-3.5 w-3.5 shrink-0 text-brand-400" />
+          <span className="truncate">{role.title}</span>
         </div>
-        <div className="flex h-10 items-center gap-2 rounded-full border border-border bg-white px-4 text-sm text-brand-700">
-          {location.city}, {location.country}
-          <ChevronDown className="h-3.5 w-3.5 text-brand-400" />
+        <div className={filterPillClass}>
+          <span className="truncate">{location.city}, {location.country}</span>
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-brand-400" />
         </div>
-        <div className="flex h-10 items-center gap-2 rounded-full border border-border bg-white px-4 text-sm text-brand-700">
-          {level.name}
-          <ChevronDown className="h-3.5 w-3.5 text-brand-400" />
+        <div className={filterPillClass}>
+          <span className="truncate">{level.name}</span>
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-brand-400" />
         </div>
-        <div className="flex h-10 items-center gap-2 rounded-full border border-border bg-white px-4 text-sm text-brand-700">
-          {formData.employmentType === "expat" ? "Expat" : "National"}
-          <ChevronDown className="h-3.5 w-3.5 text-brand-400" />
+        <div className={filterPillClass} data-testid="benchmark-employment-pill">
+          <span className="truncate">{formData.employmentType === "expat" ? "Expat" : "National"}</span>
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-brand-400" />
         </div>
         <div className="ml-auto bench-toggle">
           <button

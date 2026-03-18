@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { findMarketBenchmark } from "@/lib/benchmarks/platform-market";
+import { readMarketDataWithFallback } from "@/lib/benchmarks/market-read";
 import { getConfidenceFromSampleSize, type DbBenchmark } from "@/lib/benchmarks/data-service";
 import type { Currency, SalaryBenchmark } from "@/lib/dashboard/dummy-data";
 import { LOCATIONS } from "@/lib/dashboard/dummy-data";
-import { createServiceClient } from "@/lib/supabase/service";
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET(request: NextRequest) {
@@ -35,20 +35,15 @@ export async function GET(request: NextRequest) {
     },
   };
 
-  let marketClient: Awaited<ReturnType<typeof createClient>> | ReturnType<typeof createServiceClient> =
-    supabase;
-
   try {
-    marketClient = createServiceClient();
-    diagnostics.market.readMode = "service";
-  } catch (error) {
-    diagnostics.market.clientWarning = getErrorMessage(error);
-  }
-
-  try {
-    const marketBenchmark = await findMarketBenchmark(marketClient, roleId, locationId, levelId, {
-      industry,
-      companySize,
+    const marketBenchmark = await readMarketDataWithFallback({
+      sessionClient: supabase,
+      diagnostics: diagnostics.market,
+      read: (marketClient) =>
+        findMarketBenchmark(marketClient, roleId, locationId, levelId, {
+          industry,
+          companySize,
+        }),
     });
     if (marketBenchmark) {
       return NextResponse.json({

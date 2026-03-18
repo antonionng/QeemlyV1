@@ -51,7 +51,7 @@ describe("fetchAdminJson", () => {
   it("throws a typed admin api error for failed json responses", async () => {
     const originalFetch = global.fetch;
     global.fetch = (async () =>
-      new Response(JSON.stringify({ error: "Admin configuration error", detail: "Missing key" }), {
+      new Response(JSON.stringify({ error: "Admin configuration error", detail: "Missing key", coverage: { missing: 3 } }), {
         status: 500,
         headers: { "Content-Type": "application/json" },
       })) as typeof fetch;
@@ -61,6 +61,11 @@ describe("fetchAdminJson", () => {
       status: 500,
       message: "Admin configuration error",
       detail: "Missing key",
+      payload: {
+        error: "Admin configuration error",
+        detail: "Missing key",
+        coverage: { missing: 3 },
+      },
     });
 
     global.fetch = originalFetch;

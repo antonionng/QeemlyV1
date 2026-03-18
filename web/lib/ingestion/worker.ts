@@ -9,6 +9,7 @@ import { normalizeBenchmarkRow, type NormalizedBenchmarkRow } from "./normalizer
 import { validateBenchmarkRow, buildDQReport, type BenchmarkRow } from "./data-quality";
 import { getIngestorForSource } from "./adapters";
 import { upsertBenchmarksFreshness } from "./freshness";
+import { getSourceTier, isSourceAllowedForIngestion, type IngestionSource } from "./source-registry";
 import {
   benchmarkRowToIndustrySignals,
   type IndustryMarketSignalInsert,
@@ -21,6 +22,18 @@ export type IngestionResult = {
   records_failed: number;
   error_message?: string;
   dq_report?: Record<string, unknown>;
+  funnel?: IngestionFunnel;
+};
+
+export type IngestionFunnel = {
+  outcome: "fetch_empty" | "normalize_empty" | "dq_empty" | "partial_success" | "success";
+  fetchedRows: number;
+  normalizedRows: number;
+  normalizeFailedRows: number;
+  dqPassedRows: number;
+  dqFailedRows: number;
+  upsertedRows: number;
+  upsertFailedRows: number;
 };
 
 export async function runIngestionForJob(
@@ -32,7 +45,7 @@ export async function runIngestionForJob(
 
   const { data: source } = await supabase
     .from("ingestion_sources")
-    .select("slug")
+    .select("id, slug, enabled, approved_for_commercial, needs_review, tier, config")
     .eq("id", sourceId)
     .single();
 
@@ -46,7 +59,18 @@ export async function runIngestionForJob(
     };
   }
 
-  const ingestor = getIngestorForSource(source.slug);
+  const sourceRecord = source as IngestionSource;
+  if (!isSourceAllowedForIngestion(sourceRecord)) {
+    return {
+      status: "failed",
+      records_created: 0,
+      records_updated: 0,
+      records_failed: 0,
+      error_message: `Source ${sourceRecord.slug} is not approved for ingestion`,
+    };
+  }
+
+  const ingestor = getIngestorForSource(sourceRecord.slug);
 
   if (!ingestor) {
     return {
@@ -71,7 +95,12 @@ export async function runIngestionForJob(
     };
   }
 
-  const rawRows = await ingestor.fetch(sourceId);
+  const rawRows = await ingestor.fetch(sourceId, {
+    source: {
+      slug: sourceRecord.slug,
+      config: sourceRecord.config ?? {},
+    },
+  });
   await persistRawSnapshot(supabase, {
     sourceId,
     workspaceId: targetWorkspaceId,
@@ -92,32 +121,51 @@ export async function runIngestionForJob(
         sampleErrors: [],
         timestamp: new Date().toISOString(),
       },
+      funnel: {
+        outcome: "fetch_empty",
+        fetchedRows: 0,
+        normalizedRows: 0,
+        normalizeFailedRows: 0,
+        dqPassedRows: 0,
+        dqFailedRows: 0,
+        upsertedRows: 0,
+        upsertFailedRows: 0,
+      },
     };
   }
 
   const validated: Array<{ index: number; row: BenchmarkRow; error: string | null }> = [];
   const toUpsert: NormalizedBenchmarkRow[] = [];
   const normalizedSignals: IndustryMarketSignalInsert[] = [];
+  let normalizedRows = 0;
+  let normalizeFailedRows = 0;
+  let dqPassedRows = 0;
+  let dqFailedRows = 0;
 
   for (let i = 0; i < rawRows.length; i++) {
     const raw = rawRows[i] as Record<string, unknown>;
     const normalized = normalizeBenchmarkRow(raw);
     if ("error" in normalized) {
       validated.push({ index: i, row: raw as unknown as BenchmarkRow, error: normalized.error });
+      normalizeFailedRows++;
       continue;
     }
+    normalizedRows++;
     const dq = validateBenchmarkRow(normalized.ok);
     if ("error" in dq) {
       validated.push({ index: i, row: normalized.ok as unknown as BenchmarkRow, error: dq.error });
+      dqFailedRows++;
       continue;
     }
     validated.push({ index: i, row: normalized.ok as unknown as BenchmarkRow, error: null });
     toUpsert.push(normalized.ok);
+    dqPassedRows++;
   }
 
   const dqReport = buildDQReport(validated);
 
   let succeeded = 0;
+  let upsertFailedRows = 0;
   const validFrom = new Date().toISOString().split("T")[0];
 
   for (const row of toUpsert) {
@@ -137,7 +185,8 @@ export async function runIngestionForJob(
         p90: row.p90,
         sample_size: row.sampleSize,
         source: "market",
-        market_source_slug: source.slug,
+        market_source_slug: sourceRecord.slug,
+        market_source_tier: sourceRecord.tier ?? getSourceTier(sourceRecord.slug),
         market_origin: "live_ingestion",
         confidence: row.mappingConfidence,
         valid_from: validFrom,
@@ -152,11 +201,13 @@ export async function runIngestionForJob(
       normalizedSignals.push(
         ...benchmarkRowToIndustrySignals({
           workspaceId: targetWorkspaceId,
-          sourceSlug: source.slug,
+          sourceSlug: sourceRecord.slug,
           row,
           periodStart: validFrom,
         })
       );
+    } else {
+      upsertFailedRows++;
     }
   }
 
@@ -176,6 +227,25 @@ export async function runIngestionForJob(
   const failed = dqReport.failed;
   const status =
     failed === validated.length ? "failed" : failed > 0 ? "partial" : "success";
+  const funnel: IngestionFunnel = {
+    outcome:
+      rawRows.length === 0
+        ? "fetch_empty"
+        : normalizedRows === 0
+          ? "normalize_empty"
+          : dqPassedRows === 0
+            ? "dq_empty"
+            : failed > 0 || upsertFailedRows > 0
+              ? "partial_success"
+              : "success",
+    fetchedRows: rawRows.length,
+    normalizedRows,
+    normalizeFailedRows,
+    dqPassedRows,
+    dqFailedRows,
+    upsertedRows: succeeded,
+    upsertFailedRows,
+  };
 
   if (succeeded > 0) {
     await upsertBenchmarksFreshness(targetWorkspaceId, succeeded, sourceId);
@@ -192,6 +262,7 @@ export async function runIngestionForJob(
         ? `DQ failed for ${failed} rows${signalUpsertError ? `; signal sync: ${signalUpsertError}` : ""}`
         : signalUpsertError || undefined,
     dq_report: dqReport as unknown as Record<string, unknown>,
+    funnel,
   };
 }
 

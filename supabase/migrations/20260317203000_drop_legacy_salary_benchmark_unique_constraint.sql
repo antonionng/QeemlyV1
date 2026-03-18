@@ -1,0 +1,5 @@
+ALTER TABLE salary_benchmarks
+DROP CONSTRAINT IF EXISTS salary_benchmarks_workspace_id_role_id_location_id_level_id_valid_from_key;
+
+ALTER TABLE salary_benchmarks
+DROP CONSTRAINT IF EXISTS salary_benchmarks_workspace_id_role_id_location_id_level_id_key;

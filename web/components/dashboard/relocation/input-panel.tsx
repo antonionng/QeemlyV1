@@ -196,18 +196,21 @@ export function InputPanel({ data, onChange, className }: InputPanelProps) {
   return (
     <Card
       className={clsx(
-        "dash-card bg-white p-5 transition-all",
+        "dash-card border border-brand-100 bg-gradient-to-b from-white to-accent-50/40 p-5 transition-all",
         className
       )}
     >
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-100 text-brand-600">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-50 text-brand-600 ring-1 ring-brand-100">
             <Globe2 className="h-5 w-5" />
           </div>
           <div>
-            <h2 className="font-bold text-brand-900">Relocation Inputs</h2>
-            <p className="text-xs text-accent-500">Configure your scenario</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-accent-500">
+              Scenario setup
+            </p>
+            <h2 className="mt-1 font-bold text-brand-900">Relocation Inputs</h2>
+            <p className="text-xs text-accent-500">Configure the route, pay anchor, and policy</p>
           </div>
         </div>
         <button
@@ -225,7 +228,7 @@ export function InputPanel({ data, onChange, className }: InputPanelProps) {
 
       <div
         className={clsx(
-          "mt-5 space-y-5 overflow-hidden transition-all",
+          "mt-5 space-y-4 overflow-hidden transition-all",
           isCollapsed ? "max-h-0 opacity-0 lg:max-h-none lg:opacity-100" : "max-h-[2000px] opacity-100"
         )}
       >
@@ -267,7 +270,7 @@ export function InputPanel({ data, onChange, className }: InputPanelProps) {
 
         {/* Compensation Approach */}
         <div>
-          <label className="mb-2 block text-xs font-semibold uppercase tracking-wider text-accent-500">
+          <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.14em] text-accent-500">
             Compensation Approach
           </label>
           <div className="space-y-2">
@@ -277,10 +280,10 @@ export function InputPanel({ data, onChange, className }: InputPanelProps) {
                 type="button"
                 onClick={() => updateField("compApproach", approach.id)}
                 className={clsx(
-                  "flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-all",
+                  "flex w-full items-center gap-3 rounded-2xl border p-3 text-left transition-all",
                   data.compApproach === approach.id
-                    ? "border-brand-500 bg-brand-50 ring-1 ring-brand-500"
-                    : "border-border bg-white hover:border-brand-300"
+                    ? "border-brand-300 bg-white ring-2 ring-brand-200"
+                    : "border-border bg-white/90 hover:border-brand-200 hover:bg-white"
                 )}
               >
                 <div
@@ -306,7 +309,7 @@ export function InputPanel({ data, onChange, className }: InputPanelProps) {
 
         {/* Hybrid Cap Slider */}
         {data.compApproach === "hybrid" && (
-          <div className="rounded-xl border border-border bg-accent-50 p-4">
+          <div className="rounded-2xl border border-brand-100 bg-white/80 p-4">
             <div className="flex items-center justify-between">
               <label className="text-sm font-semibold text-brand-900">
                 Maximum Adjustment Cap
@@ -354,7 +357,7 @@ export function InputPanel({ data, onChange, className }: InputPanelProps) {
             />
           </div>
           <p className="mt-1 text-xs text-accent-400">
-            Override the default rent estimate for the target location
+            Override the default rent estimate when you have a known housing assumption.
           </p>
         </div>
       </div>

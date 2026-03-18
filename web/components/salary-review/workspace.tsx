@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import clsx from "clsx";
 import {
   Calendar,
@@ -19,12 +19,14 @@ import { buildBenchmarkTrustLabels } from "@/lib/benchmarks/trust";
 import {
   ALL_COLUMNS,
   type ColumnKey,
+  DEFAULT_SALARY_REVIEW_FILTERS,
   type ReviewEmployee,
   useSalaryReview,
 } from "@/lib/salary-review";
 import { applySalaryReviewFilters } from "@/lib/salary-review/filters";
 import { buildSalaryReviewBudgetModel } from "@/lib/salary-review/workspace-budget";
 import type { SalaryReviewProposalRecord } from "@/lib/salary-review/proposal-types";
+import type { SalaryReviewQueryState } from "@/lib/salary-review/url-state";
 import {
   computeAttritionRisk,
   computeTenure,
@@ -70,6 +72,7 @@ type SalaryReviewOverviewProps = {
   onExport: () => void;
   onReset: () => void;
   onSelectCycle: (cycleId: string) => void;
+  initialQueryState?: SalaryReviewQueryState;
 };
 
 const BAND_STYLES: Record<ReviewEmployee["bandPosition"], string> = {
@@ -148,7 +151,7 @@ export function SalaryReviewHeader({
       <div>
         <h1 className="text-[32px] font-semibold text-[#1F2430]">Salary Review</h1>
         <p className="mt-2 text-sm text-[#2E3440]">
-          Work through salary proposals in the overview workspace, then use the wizard to set up or submit a cycle.
+          Review employee cohorts and compensation data here first. Start a review cycle only when you are ready to take action.
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
@@ -431,70 +434,100 @@ export function ColumnVisibilityPanel() {
 }
 
 export function SalaryReviewFilters({ actions }: SalaryReviewFiltersProps) {
-  const { filters, updateFilters, resetFilters, settings } = useSalaryReview();
+  const { employees, filters, updateFilters, resetFilters, settings } = useSalaryReview();
+  const filteredCount = useMemo(
+    () =>
+      applySalaryReviewFilters(employees, {
+        ...filters,
+        tab: "overview",
+        proposalId: null,
+      }).length,
+    [employees, filters]
+  );
+  const hasActiveFilters =
+    filters.department !== "all" ||
+    filters.location !== "all" ||
+    filters.pool !== "all" ||
+    filters.bandFilter !== "all" ||
+    filters.performance !== "all" ||
+    filters.benchmarkStatus !== "all" ||
+    filters.workflowStatus !== "all" ||
+    Boolean(filters.search);
 
   return (
-    <div className="flex flex-wrap items-center gap-3">
-      <div className="relative min-w-[220px] flex-1">
-        <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9AA0AE]" />
-        <Input
-          value={filters.search}
-          onChange={(event) => updateFilters({ search: event.target.value })}
-          placeholder="Search Employees"
-          className="h-10 rounded-full border-[#E6E8F0] bg-white pl-10 text-[#2E3440]"
-          fullWidth
-        />
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative min-w-[220px] flex-1">
+          <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9AA0AE]" />
+          <Input
+            value={filters.search}
+            onChange={(event) => updateFilters({ search: event.target.value })}
+            placeholder="Search Employees"
+            className="h-10 rounded-full border-[#E6E8F0] bg-white pl-10 text-[#2E3440]"
+            fullWidth
+          />
+        </div>
+        <select
+          value={filters.department}
+          onChange={(event) => updateFilters({ department: event.target.value })}
+          className="h-10 min-w-[170px] rounded-full border border-[#E6E8F0] bg-white px-4 text-sm text-[#2E3440] outline-none"
+        >
+          <option value="all">All Departments</option>
+          {Array.from(new Set(useSalaryReview.getState().employees.map((employee) => employee.department))).map((department) => (
+            <option key={department} value={department}>
+              {department}
+            </option>
+          ))}
+        </select>
+        <select
+          value={filters.location}
+          onChange={(event) => updateFilters({ location: event.target.value })}
+          className="h-10 min-w-[170px] rounded-full border border-[#E6E8F0] bg-white px-4 text-sm text-[#2E3440] outline-none"
+        >
+          <option value="all">All Locations</option>
+          {Array.from(new Set(useSalaryReview.getState().employees.map((employee) => employee.location.city))).map((location) => (
+            <option key={location} value={location}>
+              {location}
+            </option>
+          ))}
+        </select>
+        <select
+          value={filters.pool}
+          onChange={(event) => updateFilters({ pool: event.target.value as typeof filters.pool })}
+          className="h-10 min-w-[160px] rounded-full border border-[#E6E8F0] bg-white px-4 text-sm text-[#2E3440] outline-none"
+        >
+          <option value="all">All Pools</option>
+          <option value="general">General</option>
+          <option value="leadership">Leadership</option>
+        </select>
+        <div className="relative">
+          <Input
+            type="date"
+            value={settings.effectiveDate}
+            onChange={(event) => useSalaryReview.getState().updateSettings({ effectiveDate: event.target.value })}
+            className="h-10 min-w-[180px] rounded-full border-[#E6E8F0] pr-10"
+          />
+          <Calendar className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9AA0AE]" />
+        </div>
+        {actions}
+        <button
+          type="button"
+          onClick={resetFilters}
+          className="text-sm font-medium text-[#6E56CF]"
+        >
+          Clear
+        </button>
       </div>
-      <select
-        value={filters.department}
-        onChange={(event) => updateFilters({ department: event.target.value })}
-        className="h-10 min-w-[170px] rounded-full border border-[#E6E8F0] bg-white px-4 text-sm text-[#2E3440] outline-none"
-      >
-        <option value="all">All Departments</option>
-        {Array.from(new Set(useSalaryReview.getState().employees.map((employee) => employee.department))).map((department) => (
-          <option key={department} value={department}>
-            {department}
-          </option>
-        ))}
-      </select>
-      <select
-        value={filters.location}
-        onChange={(event) => updateFilters({ location: event.target.value })}
-        className="h-10 min-w-[170px] rounded-full border border-[#E6E8F0] bg-white px-4 text-sm text-[#2E3440] outline-none"
-      >
-        <option value="all">All Locations</option>
-        {Array.from(new Set(useSalaryReview.getState().employees.map((employee) => employee.location.city))).map((location) => (
-          <option key={location} value={location}>
-            {location}
-          </option>
-        ))}
-      </select>
-      <select
-        value={filters.pool}
-        onChange={(event) => updateFilters({ pool: event.target.value as typeof filters.pool })}
-        className="h-10 min-w-[160px] rounded-full border border-[#E6E8F0] bg-white px-4 text-sm text-[#2E3440] outline-none"
-      >
-        <option value="all">All Pools</option>
-        <option value="general">General</option>
-        <option value="leadership">Leadership</option>
-      </select>
-      <div className="relative">
-        <Input
-          type="date"
-          value={settings.effectiveDate}
-          onChange={(event) => useSalaryReview.getState().updateSettings({ effectiveDate: event.target.value })}
-          className="h-10 min-w-[180px] rounded-full border-[#E6E8F0] pr-10"
-        />
-        <Calendar className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9AA0AE]" />
+      <div className="flex items-center justify-between px-1">
+        <span className="text-xs text-[#8A90A0]">
+          {filteredCount} of {employees.length} employees shown
+        </span>
+        {hasActiveFilters ? (
+          <span className="text-[11px] text-[#A0A6B4]">Filtered view</span>
+        ) : (
+          <span className="text-[11px] text-[#A0A6B4]">Full roster</span>
+        )}
       </div>
-      {actions}
-      <button
-        type="button"
-        onClick={resetFilters}
-        className="text-sm font-medium text-[#6E56CF]"
-      >
-        Clear
-      </button>
     </div>
   );
 }
@@ -854,8 +887,26 @@ export function SalaryReviewOverview({
   onExport,
   onReset,
   onSelectCycle,
+  initialQueryState,
 }: SalaryReviewOverviewProps) {
   const [selectedEmployee, setSelectedEmployee] = useState<ReviewEmployee | null>(null);
+
+  useEffect(() => {
+    const nextFilters = initialQueryState
+      ? {
+          department: initialQueryState.department,
+          location: initialQueryState.location,
+          pool: initialQueryState.pool,
+          benchmarkStatus: initialQueryState.benchmarkStatus,
+          workflowStatus: initialQueryState.workflowStatus,
+          bandFilter: initialQueryState.bandFilter,
+          performance: initialQueryState.performance,
+          search: initialQueryState.search,
+        }
+      : DEFAULT_SALARY_REVIEW_FILTERS;
+
+    useSalaryReview.setState({ filters: nextFilters });
+  }, [initialQueryState]);
 
   return (
     <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 px-8 py-8">
@@ -866,21 +917,20 @@ export function SalaryReviewOverview({
         onExport={onExport}
         onReset={onReset}
       />
-      <ReviewSettingsCard />
       <PayrollSummaryCards />
       <BudgetUsageBar />
-      <ReviewCycleListCard
-        cycles={cycles}
-        activeCycleId={activeCycle?.id ?? null}
-        onStartWizard={onPrimaryAction}
-        onSelectCycle={onSelectCycle}
-      />
       <Card className="rounded-2xl border-[#E6E8F0] bg-white p-4 shadow-none">
         <SalaryReviewFilters actions={<ColumnVisibilityPanel />} />
         <div className="mt-4">
           <SalaryReviewTable onSelectEmployee={setSelectedEmployee} />
         </div>
       </Card>
+      <ReviewCycleListCard
+        cycles={cycles}
+        activeCycleId={activeCycle?.id ?? null}
+        onStartWizard={onPrimaryAction}
+        onSelectCycle={onSelectCycle}
+      />
       <EmployeeDrawer employee={selectedEmployee} onClose={() => setSelectedEmployee(null)} />
     </div>
   );

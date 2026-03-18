@@ -1,10 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { AuthSplitShell, AUTH_IMAGE_PROMPTS } from "@/components/auth/auth-split-shell";
+import { AuthSplitShell, AUTH_PUBLIC_HERO_IMAGE_PATH } from "@/components/auth/auth-split-shell";
 import { login } from "./actions";
 
 export default function LoginPage() {
@@ -22,47 +21,53 @@ export default function LoginPage() {
     // If successful, login action will redirect
   }
 
+  async function handleFormSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await handleSubmit(new FormData(event.currentTarget));
+  }
+
   return (
     <AuthSplitShell
-      title="Log in"
-      description="Enter your credentials to access your dashboard."
-      marketingBadge="Compensation intelligence"
-      marketingHeadline="Compensation intelligence, localized for the Gulf."
-      marketingSubhead="Benchmark roles, validate offers, and forecast salary budgets with confidence, with market data your teams can trust."
-      bullets={[
-        "Real-time ranges by role, level, and location",
-        "Fair-pay signals and trendlines, not spreadsheets",
-        "Finance-ready exports and audit-friendly reporting",
-      ]}
-      heroImagePathHint="/public/auth/hero-login.png"
-      heroPrompt={AUTH_IMAGE_PROMPTS.loginHero}
-      footer={
-        <p>
-          Don&apos;t have an account?{" "}
-          <Link href="/register" className="font-semibold text-brand-800 underline underline-offset-4">
-            Request access
-          </Link>
-        </p>
-      }
+      title="Log In"
+      activeNav="login"
+      heroImageSrc={AUTH_PUBLIC_HERO_IMAGE_PATH}
     >
-      <form action={handleSubmit} className="space-y-4">
-        <div className="space-y-2">
-          <label htmlFor="email" className="text-sm font-semibold text-brand-900">
-            Work email
+      <form onSubmit={handleFormSubmit} className="space-y-6">
+        <div className="space-y-3">
+          <label htmlFor="email" className="text-base font-medium text-[#111233]">
+            Email
           </label>
-          <Input id="email" name="email" placeholder="name@company.com" type="email" autoComplete="email" fullWidth required />
+          <Input
+            id="email"
+            name="email"
+            placeholder="Example@eg.com"
+            type="email"
+            autoComplete="email"
+            className="h-16 rounded-[32px] border-brand-200/70 px-6 text-[17px] font-medium text-[#111233] placeholder:text-[#111233]/55 focus:ring-brand-100"
+            fullWidth
+            required
+          />
         </div>
 
-        <div className="space-y-2">
-          <label htmlFor="password" className="text-sm font-semibold text-brand-900">
+        <div className="space-y-3">
+          <label htmlFor="password" className="text-base font-medium text-[#111233]">
             Password
           </label>
-          <Input id="password" name="password" placeholder="Enter your password" type="password" autoComplete="current-password" fullWidth required />
+          <Input
+            id="password"
+            name="password"
+            placeholder="---------"
+            type="password"
+            autoComplete="current-password"
+            className="h-16 rounded-[32px] border-brand-200/70 px-6 text-[17px] font-medium text-[#111233] placeholder:text-[#111233]/55 focus:ring-brand-100"
+            fullWidth
+            required
+          />
         </div>
 
         {error && <p className="text-sm font-medium text-red-600">{error}</p>}
 
-        <Button type="submit" fullWidth isLoading={isLoading}>
+        <Button type="submit" className="h-16 rounded-[32px] text-lg font-semibold shadow-none" fullWidth isLoading={isLoading}>
           Sign in
         </Button>
       </form>

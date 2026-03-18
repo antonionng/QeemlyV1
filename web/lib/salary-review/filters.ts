@@ -41,6 +41,7 @@ export function applySalaryReviewFilters(
 
     const matchesBand =
       query.bandFilter === "all" ||
+      (query.bandFilter === "in-band" && employee.bandPosition === "in-band") ||
       (query.bandFilter === "below" && employee.bandPosition === "below") ||
       (query.bandFilter === "above" && employee.bandPosition === "above") ||
       (query.bandFilter === "outside-band" && employee.bandPosition !== "in-band");

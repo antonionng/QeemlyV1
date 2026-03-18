@@ -91,7 +91,7 @@ describe("DashboardSidebar", () => {
     expect(html).toContain("Salary Review");
     expect(html).toContain("ANALYTICS");
     expect(html).toContain("Reports");
-    expect(html).toContain("Workforce Compliance");
+    expect(html).not.toContain("/dashboard/compliance");
     expect(html).toContain("TOOLS");
     expect(html).toContain("CoL Calculator");
     expect(html).toContain("Upload Data");
@@ -117,7 +117,7 @@ describe("DashboardSidebar", () => {
     expect(html).toContain('title="People"');
     expect(html).toContain('title="Salary Review"');
     expect(html).toContain('title="Reports"');
-    expect(html).toContain('title="Workforce Compliance"');
+    expect(html).not.toContain("/dashboard/compliance");
     expect(html).toContain('title="CoL Calculator"');
     expect(html).toContain('title="Upload Data"');
     expect(html).toContain('title="Integrations"');

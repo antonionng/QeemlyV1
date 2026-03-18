@@ -1,0 +1,2 @@
+ALTER TABLE platform_market_benchmarks
+  DROP CONSTRAINT IF EXISTS platform_market_benchmarks_role_id_location_id_level_id_val_key;

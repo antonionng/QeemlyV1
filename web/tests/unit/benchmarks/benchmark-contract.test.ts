@@ -78,4 +78,22 @@ describe("benchmark source contract", () => {
     expect(sourceKeyMigration).toContain("ADD COLUMN IF NOT EXISTS source_key");
     expect(workerSource).toContain("source_key,valid_from");
   });
+
+  it("drops the legacy salary benchmark uniqueness constraint that blocks multi-source market ingestion", () => {
+    const migration = fs.readFileSync(
+      path.resolve(
+        process.cwd(),
+        "../supabase/migrations/20260317203000_drop_legacy_salary_benchmark_unique_constraint.sql",
+      ),
+      "utf8",
+    );
+
+    expect(migration).toContain("ALTER TABLE salary_benchmarks");
+    expect(migration).toContain(
+      "DROP CONSTRAINT IF EXISTS salary_benchmarks_workspace_id_role_id_location_id_level_id_valid_from_key",
+    );
+    expect(migration).toContain(
+      "DROP CONSTRAINT IF EXISTS salary_benchmarks_workspace_id_role_id_location_id_level_id_key",
+    );
+  });
 });

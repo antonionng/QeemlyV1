@@ -19,7 +19,10 @@ vi.mock("@/lib/supabase/service", () => ({
 
 import { GET } from "@/app/api/benchmarks/search/route";
 
-function createSessionSupabase(workspaceId = "workspace-1") {
+function createSessionSupabase(
+  workspaceId = "workspace-1",
+  marketRows: Array<Record<string, unknown>> = [],
+) {
   return {
     auth: {
       getUser: vi.fn().mockResolvedValue({
@@ -53,6 +56,20 @@ function createSessionSupabase(workspaceId = "workspace-1") {
                     }),
                   })),
                 })),
+              })),
+            })),
+          })),
+        };
+      }
+
+      if (table === "platform_market_benchmarks") {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              order: vi.fn(() => ({
+                range: vi.fn().mockResolvedValue({
+                  data: marketRows,
+                }),
               })),
             })),
           })),
@@ -270,5 +287,54 @@ describe("GET /api/benchmarks/search", () => {
       isSegmented: false,
       isFallback: true,
     });
+  });
+
+  it("falls back to the session client when the service client query fails with an invalid API key", async () => {
+    createClientMock.mockResolvedValue(
+      createSessionSupabase("workspace-1", [
+        {
+          role_id: "swe-devops",
+          location_id: "dubai",
+          level_id: "ic2",
+          currency: "AED",
+          p10: 12000,
+          p25: 14000,
+          p50: 16247,
+          p75: 19000,
+          p90: 21500,
+          sample_size: null,
+          contributor_count: 6,
+          provenance: "blended",
+          freshness_at: "2026-03-11T00:00:00.000Z",
+          source_breakdown: { employee: 2, uploaded: 2, admin: 2 },
+        },
+      ]),
+    );
+    createServiceClientMock.mockReturnValue({
+      from: vi
+        .fn()
+        .mockImplementationOnce(() => {
+          throw new Error("Invalid API key");
+        })
+        .mockImplementationOnce((table: string) => createMarketSupabase().from(table)),
+    });
+
+    const request = new Request(
+      "http://localhost/api/benchmarks/search?roleId=swe-devops&locationId=dubai&levelId=ic2",
+    ) as unknown as Parameters<typeof GET>[0];
+
+    const response = await GET(request);
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.benchmark).toMatchObject({
+      roleId: "swe-devops",
+      locationId: "dubai",
+      levelId: "ic2",
+      benchmarkSource: "market",
+    });
+    expect(payload.diagnostics.market.readMode).toBe("session");
+    expect(payload.diagnostics.market.error).toBeNull();
+    expect(payload.diagnostics.market.clientWarning).toBeNull();
   });
 });

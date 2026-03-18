@@ -30,9 +30,12 @@ import { wbMenaGdpPerCapitaAdapter } from "./wb-mena-gdp-per-capita";
 import { wbGccLaborParticipationAdapter } from "./wb-gcc-labor-participation";
 import { wbGccEmployedServicesAdapter } from "./wb-gcc-employed-services";
 import { wbGccEmployedIndustryAdapter } from "./wb-gcc-employed-industry";
+import { configurableBenchmarkFeedAdapter } from "./configurable-benchmark-feed";
 
 const adapters: Record<string, IngestionAdapter> = {
   // Live government APIs - GCC
+  sample_gcc_market: configurableBenchmarkFeedAdapter,
+  gulf_talent_2024: configurableBenchmarkFeedAdapter,
   kapsarc_saudi: kapsarcSaudiAdapter,
   qatar_wages: qatarWagesAdapter,
   bahrain_compensation: bahrainCompensationAdapter,

@@ -41,7 +41,26 @@ vi.mock("@/components/dashboard/overview", () => ({
   DepartmentTabs: () => React.createElement("div", null, "DepartmentTabs"),
   HealthScore: () => React.createElement("div", null, "HealthScore"),
   PayrollTrend: () => React.createElement("div", null, "PayrollTrend"),
-  BandDistributionChart: () => React.createElement("div", null, "BandDistributionChart"),
+  BandDistributionChart: ({
+    interactions,
+    onInteract,
+  }: {
+    interactions?: { bandDistribution: { belowBand: unknown } };
+    onInteract?: (target: unknown) => void;
+  }) =>
+    React.createElement(
+      "button",
+      {
+        type: "button",
+        "data-testid": "band-distribution-chart-action",
+        onClick: () => {
+          if (interactions?.bandDistribution.belowBand) {
+            onInteract?.(interactions.bandDistribution.belowBand);
+          }
+        },
+      },
+      "BandDistributionChart",
+    ),
   QuickActions: () => React.createElement("div", null, "QuickActions"),
   ShortcutsRow: () => React.createElement("div", null, "ShortcutsRow"),
   AdvisoryPanel: () => React.createElement("div", null, "AdvisoryPanel"),
@@ -152,5 +171,28 @@ describe("CompanyOverviewPage", () => {
 
     expect(container.textContent).toContain("Company Overview");
     expect(container.textContent).toContain("StatCards");
+    expect(container.textContent).not.toContain("Executive Summary");
+  });
+
+  it("routes band distribution drilldowns through the shared overview interaction handler", async () => {
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(React.createElement(CompanyOverviewPage));
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const bandAction = container.querySelector('[data-testid="band-distribution-chart-action"]');
+    expect(bandAction).toBeTruthy();
+
+    await act(async () => {
+      bandAction?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    });
+
+    expect(pushMock).toHaveBeenCalledWith("/dashboard/salary-review?filter=below-band");
   });
 });

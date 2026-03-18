@@ -12,6 +12,7 @@ import {
   type OverviewFreshnessRow,
   type OverviewSyncLog,
 } from "@/lib/dashboard/company-overview";
+import { loadLatestBenchmarkCoverageSnapshot } from "@/lib/benchmarks/coverage-snapshots";
 
 function isMissingRelationError(error: { code?: string; message?: string } | null | undefined): boolean {
   if (!error) return false;
@@ -158,11 +159,26 @@ export async function GET(request: Request) {
     benchmarksResult.data || [],
     marketBenchmarks,
   );
+  const coverageSnapshot = await loadLatestBenchmarkCoverageSnapshot(
+    workspace_id,
+    queryClient as never,
+  ).catch(() => null);
   const snapshot = buildCompanyOverviewSnapshot({
     employees,
     freshness: ((isMissingRelationError(freshnessResult.error) ? [] : freshnessResult.data) ||
       []) as OverviewFreshnessRow[],
     syncLogs,
+    coverageSnapshot:
+      coverageSnapshot == null
+        ? null
+        : {
+            activeEmployees: Number(coverageSnapshot.employee_count || 0),
+            benchmarkedEmployees:
+              Number(coverageSnapshot.exact_match_count || 0) +
+              Number(coverageSnapshot.fallback_match_count || 0),
+            unbenchmarkedEmployees: Number(coverageSnapshot.unresolved_count || 0),
+            coveragePct: Number(coverageSnapshot.market_coverage_rate || 0),
+          },
   });
 
   return NextResponse.json(snapshot);

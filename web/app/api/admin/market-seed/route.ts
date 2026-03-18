@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireSuperAdmin } from "@/lib/admin/auth";
 import { invalidateMarketBenchmarkCache } from "@/lib/benchmarks/platform-market";
+import {
+  getMissingBenchmarkCoverageGroups,
+  getMarketSourceCoverageSummary,
+  getPublishedBenchmarkCoverageSummary,
+  getPublishedContributionMixSummary,
+  getTopMissingBenchmarkTriples,
+} from "@/lib/benchmarks/coverage-contract";
 import { refreshPlatformMarketPool } from "@/lib/benchmarks/platform-market-pool";
 import { validateRuntimeEnv } from "@/lib/config/env";
 import { completeJob, failJobForRetry } from "@/lib/ingestion/job-runner";
@@ -66,6 +73,16 @@ export async function POST(request: NextRequest) {
       status: "success" | "partial" | "failed";
       recordsCreated: number;
       recordsFailed: number;
+      funnel?: {
+        outcome: "fetch_empty" | "normalize_empty" | "dq_empty" | "partial_success" | "success";
+        fetchedRows: number;
+        normalizedRows: number;
+        normalizeFailedRows: number;
+        dqPassedRows: number;
+        dqFailedRows: number;
+        upsertedRows: number;
+        upsertFailedRows: number;
+      };
     }> = [];
 
     if (!body.skipIngestion) {
@@ -98,6 +115,7 @@ export async function POST(request: NextRequest) {
             status: result.status,
             recordsCreated: result.records_created,
             recordsFailed: result.records_failed,
+            funnel: result.funnel,
           });
         } catch (error) {
           const message = error instanceof Error ? error.message : "Unknown error";
@@ -116,12 +134,44 @@ export async function POST(request: NextRequest) {
 
     const poolResult = await refreshPlatformMarketPool();
     invalidateMarketBenchmarkCache();
+    const coverage = await getPublishedBenchmarkCoverageSummary();
+    const contributionMix = await getPublishedContributionMixSummary();
+    const missingCoverageGroups = await getMissingBenchmarkCoverageGroups();
+    const topMissingExactTriples = await getTopMissingBenchmarkTriples();
+    const sourceCoverage = await getMarketSourceCoverageSummary(
+      selectedSources.map((source) => source.slug),
+    );
+    const sourceCoverageBySlug = new Map(
+      sourceCoverage.map((source) => [source.sourceSlug, source]),
+    );
+    const sourceDiagnostics = ingested.map((source) => {
+      const coverageForSource = sourceCoverageBySlug.get(source.slug);
+      return {
+        sourceSlug: source.slug,
+        rawExactTriples: coverageForSource?.exactTriples ?? 0,
+        coveragePercent: coverageForSource?.coveragePercent ?? 0,
+        outcome: source.funnel?.outcome ?? "fetch_empty",
+        fetchedRows: source.funnel?.fetchedRows ?? 0,
+        normalizedRows: source.funnel?.normalizedRows ?? 0,
+        normalizeFailedRows: source.funnel?.normalizeFailedRows ?? 0,
+        dqPassedRows: source.funnel?.dqPassedRows ?? 0,
+        dqFailedRows: source.funnel?.dqFailedRows ?? 0,
+        upsertedRows: source.funnel?.upsertedRows ?? 0,
+        upsertFailedRows: source.funnel?.upsertFailedRows ?? 0,
+      };
+    });
 
     return NextResponse.json({
       ok: true,
       ingested,
       selectedSourceSlugs: selectedSources.map((source) => source.slug),
       poolRows: poolResult.rowCount,
+      coverage,
+      sourceCoverage,
+      sourceDiagnostics,
+      contributionMix,
+      missingCoverageGroups,
+      topMissingExactTriples,
     });
   } catch (error) {
     return NextResponse.json(

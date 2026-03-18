@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Search, ChevronDown, ArrowRight } from "lucide-react";
+import { Search, ChevronDown, ArrowRight, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import {
   useBenchmarkState,
@@ -15,6 +15,8 @@ export function BenchmarkForm() {
   const {
     formData,
     isFormComplete,
+    isSubmitting,
+    submissionError,
     updateFormField,
     runBenchmark,
   } = useBenchmarkState();
@@ -119,12 +121,13 @@ export function BenchmarkForm() {
             <select
               value={formData.employmentType}
               onChange={(e) => updateFormField("employmentType", e.target.value as "national" | "expat")}
-              className="bench-pill-select pr-8"
+              className="bench-pill-select min-w-[128px] pr-11"
+              data-testid="benchmark-employment-type-select"
             >
               <option value="national">National</option>
               <option value="expat">Expat</option>
             </select>
-            <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-brand-400" />
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-brand-400" />
           </div>
 
           <div className="ml-auto bench-toggle">
@@ -202,22 +205,36 @@ export function BenchmarkForm() {
                   e.target.value ? (Number(e.target.value) as TargetPercentile) : null,
                 )
               }
-              className="bench-pill-select pr-8"
+              className="bench-pill-select min-w-[170px] pr-11"
+              data-testid="benchmark-target-percentile-select"
             >
               <option value="25">25th Percentile</option>
               <option value="50">50th Percentile</option>
               <option value="75">75th Percentile</option>
               <option value="90">90th Percentile</option>
             </select>
-            <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-brand-400" />
+            <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-brand-400" />
           </div>
         </div>
       </div>
 
       {/* ── CTA ── */}
-      <button type="submit" disabled={!isFormComplete} className="bench-cta">
-        Run Benchmark Search <ArrowRight className="h-4 w-4" />
+      <button type="submit" disabled={!isFormComplete || isSubmitting} className="bench-cta">
+        {isSubmitting ? (
+          <>
+            Searching benchmark <Loader2 className="h-4 w-4 animate-spin" />
+          </>
+        ) : (
+          <>
+            Run Benchmark Search <ArrowRight className="h-4 w-4" />
+          </>
+        )}
       </button>
+      {submissionError ? (
+        <p className="text-sm text-amber-700" role="status">
+          {submissionError}
+        </p>
+      ) : null}
     </form>
   );
 }

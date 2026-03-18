@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { AuthSplitShell, AUTH_IMAGE_PROMPTS } from "@/components/auth/auth-split-shell";
+import { AuthSplitShell, AUTH_PUBLIC_HERO_IMAGE_PATH } from "@/components/auth/auth-split-shell";
 import { signup } from "../login/actions";
 
 export default function RegisterPage() {
@@ -22,20 +22,17 @@ export default function RegisterPage() {
     // If successful, signup action will redirect
   }
 
+  async function handleFormSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await handleSubmit(new FormData(event.currentTarget));
+  }
+
   return (
     <AuthSplitShell
       title="Create account"
       description="Tell us a bit about you to get started."
-      marketingBadge="Built for teams"
-      marketingHeadline="Move faster with confident offers and fair bands."
-      marketingSubhead="Qeemly helps HR, founders, and finance teams align comp, reduce negotiation churn, and plan budgets with clarity."
-      bullets={[
-        "Gulf-localized benchmarks you can explain and defend",
-        "Scenario planning for hires, promotions, and team growth",
-        "Audit-friendly reporting for internal equity and compliance",
-      ]}
-      heroImagePathHint="/public/auth/hero-register.png"
-      heroPrompt={AUTH_IMAGE_PROMPTS.registerHero}
+      activeNav="register"
+      heroImageSrc={AUTH_PUBLIC_HERO_IMAGE_PATH}
       footer={
         <p>
           Already have an account?{" "}
@@ -45,38 +42,72 @@ export default function RegisterPage() {
         </p>
       }
     >
-      <form action={handleSubmit} className="space-y-4">
-        <div className="space-y-2">
-          <label htmlFor="name" className="text-sm font-semibold text-brand-900">
+      <form onSubmit={handleFormSubmit} className="space-y-6">
+        <div className="space-y-3">
+          <label htmlFor="name" className="text-base font-medium text-[#111233]">
             Full name
           </label>
-          <Input id="name" name="name" placeholder="Your name" autoComplete="name" fullWidth required />
+          <Input
+            id="name"
+            name="name"
+            placeholder="Your name"
+            autoComplete="name"
+            className="h-16 rounded-[32px] border-brand-200/70 px-6 text-[17px] font-medium text-[#111233] placeholder:text-[#111233]/55 focus:ring-brand-100"
+            fullWidth
+            required
+          />
         </div>
 
-        <div className="space-y-2">
-          <label htmlFor="email" className="text-sm font-semibold text-brand-900">
+        <div className="space-y-3">
+          <label htmlFor="email" className="text-base font-medium text-[#111233]">
             Work email
           </label>
-          <Input id="email" name="email" placeholder="name@company.com" type="email" autoComplete="email" fullWidth required />
+          <Input
+            id="email"
+            name="email"
+            placeholder="name@company.com"
+            type="email"
+            autoComplete="email"
+            className="h-16 rounded-[32px] border-brand-200/70 px-6 text-[17px] font-medium text-[#111233] placeholder:text-[#111233]/55 focus:ring-brand-100"
+            fullWidth
+            required
+          />
         </div>
 
-        <div className="space-y-2">
-          <label htmlFor="password" className="text-sm font-semibold text-brand-900">
+        <div className="space-y-3">
+          <label htmlFor="password" className="text-base font-medium text-[#111233]">
             Password
           </label>
-          <Input id="password" name="password" placeholder="Create a password" type="password" autoComplete="new-password" fullWidth required />
+          <Input
+            id="password"
+            name="password"
+            placeholder="Create a password"
+            type="password"
+            autoComplete="new-password"
+            className="h-16 rounded-[32px] border-brand-200/70 px-6 text-[17px] font-medium text-[#111233] placeholder:text-[#111233]/55 focus:ring-brand-100"
+            fullWidth
+            required
+          />
         </div>
 
-        <div className="space-y-2">
-          <label htmlFor="company" className="text-sm font-semibold text-brand-900">
+        <div className="space-y-3">
+          <label htmlFor="company" className="text-base font-medium text-[#111233]">
             Company
           </label>
-          <Input id="company" name="company" placeholder="Company name" autoComplete="organization" fullWidth required />
+          <Input
+            id="company"
+            name="company"
+            placeholder="Company name"
+            autoComplete="organization"
+            className="h-16 rounded-[32px] border-brand-200/70 px-6 text-[17px] font-medium text-[#111233] placeholder:text-[#111233]/55 focus:ring-brand-100"
+            fullWidth
+            required
+          />
         </div>
 
         {error && <p className="text-sm font-medium text-red-600">{error}</p>}
 
-        <Button type="submit" fullWidth isLoading={isLoading}>
+        <Button type="submit" className="h-16 rounded-[32px] text-lg font-semibold shadow-none" fullWidth isLoading={isLoading}>
           Create account
         </Button>
 

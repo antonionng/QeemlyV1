@@ -2,6 +2,17 @@ import type { IngestionAdapter } from "./types";
 
 const DEFAULT_SPREAD = 0.2;
 const DEFAULT_PAGE_SIZE = 100;
+const COMMON_VALUE_FIELDS = [
+  "value",
+  "wage",
+  "monthly_wage",
+  "average_wage",
+  "avg_wage",
+  "monthly_salary",
+  "average_salary",
+  "salary",
+  "compensation",
+];
 
 const COUNTRY_TO_LOCATION: Record<string, string> = {
   ARE: "Dubai",
@@ -55,6 +66,10 @@ export type OdsAdapterConfig = {
   spread?: number;
   pageSize?: number;
   maxPages?: number;
+  locationVariants?: Array<{
+    location: string;
+    multiplier: number;
+  }>;
 };
 
 export type WorldBankAdapterConfig = {
@@ -66,6 +81,10 @@ export type WorldBankAdapterConfig = {
   sampleSize?: number;
   level?: string;
   spread?: number;
+  levelVariants?: Array<{
+    level: string;
+    multiplier: number;
+  }>;
 };
 
 type OdsResponse = {
@@ -162,6 +181,7 @@ export function createOdsAdapter(config: OdsAdapterConfig): IngestionAdapter {
       const defaultLevel = config.defaultLevel ?? "Senior (IC3)";
       const defaultRole = config.defaultRole ?? "Data Analyst";
       const annualMultiplier = config.annualMultiplier ?? 12;
+      const locationVariants = config.locationVariants ?? [{ location: config.location, multiplier: 1 }];
 
       let offset = 0;
       let totalCount = Number.MAX_SAFE_INTEGER;
@@ -188,20 +208,22 @@ export function createOdsAdapter(config: OdsAdapterConfig): IngestionAdapter {
             pickFirstString(record, ["sector", "category", "occupation", "title"]) ??
             "";
           const role = deriveRole(sourceText, defaultRole);
-          const value = pickFirstNumber(record, config.valueFields);
+          const value = pickFirstNumber(record, [...config.valueFields, ...COMMON_VALUE_FIELDS]);
           if (value == null || value <= 0) continue;
 
-          const annual = toAnnualComp(value, annualMultiplier);
-          const p = buildPercentiles(annual, spread);
+          for (const locationVariant of locationVariants) {
+            const annual = toAnnualComp(value * locationVariant.multiplier, annualMultiplier);
+            const p = buildPercentiles(annual, spread);
 
-          rows.push({
-            role,
-            level: defaultLevel,
-            location: config.location,
-            currency: config.currency,
-            ...p,
-            sample_size: config.sampleSize ?? 30,
-          });
+            rows.push({
+              role,
+              level: defaultLevel,
+              location: locationVariant.location,
+              currency: config.currency,
+              ...p,
+              sample_size: config.sampleSize ?? 30,
+            });
+          }
         }
 
         if (results.length < pageSize) break;
@@ -221,6 +243,7 @@ export function createWorldBankAdapter(config: WorldBankAdapterConfig): Ingestio
       const spread = config.spread ?? DEFAULT_SPREAD;
       const annualMultiplier = config.annualMultiplier ?? 1;
       const level = config.level ?? "Senior (IC3)";
+      const levelVariants = config.levelVariants ?? [{ level, multiplier: 1 }];
       const sampleSize = config.sampleSize ?? 45;
       const url = `https://api.worldbank.org/v2/country/${config.countries}/indicator/${config.indicatorId}?format=json&mrnev=3&per_page=200`;
 
@@ -232,17 +255,19 @@ export function createWorldBankAdapter(config: WorldBankAdapterConfig): Ingestio
       for (const point of points) {
         const raw = point.value;
         if (raw == null || !Number.isFinite(raw) || raw <= 0) continue;
-        const annual = toAnnualComp(Number(raw), annualMultiplier);
-        const p = buildPercentiles(annual, spread);
         const countryCode = point.countryiso3code ?? "ARE";
-        rows.push({
-          role: config.role,
-          level,
-          location: COUNTRY_TO_LOCATION[countryCode] ?? "Dubai",
-          currency: COUNTRY_TO_CURRENCY[countryCode] ?? "AED",
-          ...p,
-          sample_size: sampleSize,
-        });
+        for (const levelVariant of levelVariants) {
+          const annual = toAnnualComp(Number(raw) * levelVariant.multiplier, annualMultiplier);
+          const p = buildPercentiles(annual, spread);
+          rows.push({
+            role: config.role,
+            level: levelVariant.level,
+            location: COUNTRY_TO_LOCATION[countryCode] ?? "Dubai",
+            currency: COUNTRY_TO_CURRENCY[countryCode] ?? "AED",
+            ...p,
+            sample_size: sampleSize,
+          });
+        }
       }
 
       return rows;

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createServiceClient } from "@/lib/supabase/service";
 import { fetchMarketBenchmarks } from "@/lib/benchmarks/platform-market";
+import { readMarketDataWithFallback } from "@/lib/benchmarks/market-read";
 
 /**
  * GET /api/benchmarks/stats
@@ -38,18 +38,12 @@ export async function GET() {
     },
   };
 
-  let marketSupabase: Awaited<ReturnType<typeof createClient>> | ReturnType<typeof createServiceClient> =
-    supabase;
-
   try {
-    marketSupabase = createServiceClient();
-    diagnostics.market.readMode = "service";
-  } catch (error) {
-    diagnostics.market.clientWarning = getErrorMessage(error);
-  }
-
-  try {
-    const marketData = await fetchMarketBenchmarks(marketSupabase);
+    const marketData = await readMarketDataWithFallback({
+      sessionClient: supabase,
+      diagnostics: diagnostics.market,
+      read: (marketClient) => fetchMarketBenchmarks(marketClient),
+    });
     marketBenchmarkCount = marketData.length;
     marketRoles = new Set(marketData.map(b => b.role_id)).size;
     marketLocations = new Set(marketData.map(b => b.location_id)).size;
@@ -58,8 +52,7 @@ export async function GET() {
       combinedLocationIds.add(benchmark.location_id);
     });
     if (marketData.length === 0) {
-      diagnostics.market.warning =
-        "No market benchmark rows were returned from public snapshots or the platform workspace fallback.";
+      diagnostics.market.warning = "No published shared-market benchmark rows were returned from the market pool.";
     }
   } catch (error) {
     diagnostics.market.error = getErrorMessage(error);
@@ -71,6 +64,18 @@ export async function GET() {
   let workspaceLocations = 0;
   let workspaceSources: string[] = [];
   let lastUpdated: string | null = null;
+  let latestMarketPublishedAt: string | null = null;
+
+  const { data: publishEvents, error: publishEventsError } = await supabase
+    .from("market_publish_events")
+    .select("id, published_at")
+    .eq("tenant_visible", true)
+    .order("published_at", { ascending: false })
+    .limit(1);
+
+  if (!publishEventsError && publishEvents?.[0]?.published_at) {
+    latestMarketPublishedAt = String(publishEvents[0].published_at);
+  }
 
   if (profile?.workspace_id) {
     const { data: benchmarks, error: benchmarkError } = await supabase
@@ -97,6 +102,10 @@ export async function GET() {
   }
 
   const total = marketBenchmarkCount + workspaceBenchmarkCount;
+  const marketIsVisibleSource = marketBenchmarkCount > 0 || workspaceSources.length === 0;
+  if (marketIsVisibleSource && latestMarketPublishedAt) {
+    lastUpdated = latestMarketPublishedAt;
+  }
 
   return NextResponse.json({
     total,

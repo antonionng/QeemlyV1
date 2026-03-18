@@ -17,6 +17,8 @@ const benchmarkStateMock = vi.hoisted(() => ({
     targetPercentile: null,
   },
   isFormComplete: true,
+  isSubmitting: false,
+  submissionError: null,
   updateFormField: vi.fn(),
   runBenchmark: vi.fn(),
 }));
@@ -71,5 +73,14 @@ describe("benchmark location selectors", () => {
     expect(html).not.toContain("United Kingdom");
     expect(html).not.toContain("London");
     expect(html).not.toContain("Manchester");
+  });
+
+  it("gives the employment and percentile pill selects enough room for the chevron", () => {
+    const html = renderToStaticMarkup(React.createElement(BenchmarkForm));
+
+    expect(html).toContain('data-testid="benchmark-employment-type-select"');
+    expect(html).toContain('data-testid="benchmark-target-percentile-select"');
+    expect(html).toContain('class="bench-pill-select min-w-[128px] pr-11"');
+    expect(html).toContain('class="bench-pill-select min-w-[170px] pr-11"');
   });
 });

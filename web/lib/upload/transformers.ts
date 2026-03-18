@@ -117,6 +117,17 @@ const ACTIVITY_TO_ROLE: Record<string, string> = {
   ict: "swe",
   "information and communication": "swe",
   "information & communication": "swe",
+  frontend: "swe-fe",
+  "front end": "swe-fe",
+  backend: "swe-be",
+  "back end": "swe-be",
+  mobile: "swe-mobile",
+  "mobile applications": "swe-mobile",
+  "machine learning": "swe-ml",
+  "artificial intelligence": "swe-ml",
+  "data engineering": "swe-data",
+  "data platform": "swe-data",
+  "technical program": "tpm",
   financial: "data-analyst",
   "financial and insurance": "data-analyst",
   "financial and insurance activities": "data-analyst",
@@ -150,6 +161,19 @@ const SOC_TO_ROLE: Record<string, string> = {
 
 // Profession keyword phrases -> role_id (for KAPSARC and similar survey data)
 const PROFESSION_KEYWORDS: Array<{ keywords: string[]; roleId: string }> = [
+  { keywords: ["frontend"], roleId: "swe-fe" },
+  { keywords: ["front", "end"], roleId: "swe-fe" },
+  { keywords: ["backend"], roleId: "swe-be" },
+  { keywords: ["back", "end"], roleId: "swe-be" },
+  { keywords: ["mobile"], roleId: "swe-mobile" },
+  { keywords: ["ios"], roleId: "swe-mobile" },
+  { keywords: ["android"], roleId: "swe-mobile" },
+  { keywords: ["machine", "learning"], roleId: "swe-ml" },
+  { keywords: ["ml"], roleId: "swe-ml" },
+  { keywords: ["data", "engineer"], roleId: "swe-data" },
+  { keywords: ["data", "platform"], roleId: "swe-data" },
+  { keywords: ["technical", "program", "manager"], roleId: "tpm" },
+  { keywords: ["tpm"], roleId: "tpm" },
   { keywords: ["scientific", "technical", "specialist"], roleId: "pm" },
   { keywords: ["scientific", "technical", "technician"], roleId: "swe" },
   { keywords: ["clerical"], roleId: "data-analyst" },
@@ -215,6 +239,12 @@ export function matchRole(roleStr: string): string | null {
   }
   
   // Fallback keyword matching
+  if (lower.includes("frontend") || lower.includes("front end")) return "swe-fe";
+  if (lower.includes("backend") || lower.includes("back end")) return "swe-be";
+  if (lower.includes("mobile") || lower.includes("ios") || lower.includes("android")) return "swe-mobile";
+  if (lower.includes("machine learning") || lower.includes(" ml ") || lower.startsWith("ml ")) return "swe-ml";
+  if (lower.includes("data engineer") || lower.includes("data platform")) return "swe-data";
+  if (lower.includes("technical program manager") || lower.includes("tpm")) return "tpm";
   if (lower.includes("technician") || lower.includes("technical")) return "swe";
   if (lower.includes("specialist")) return "pm";
   if (lower.includes("information") || lower.includes("ict") || lower.includes("software")) return "swe";
@@ -262,6 +292,25 @@ export function matchLevel(levelStr: string): string | null {
   const normalized = normalize(levelStr);
   const level = levelByNorm.get(normalized);
   if (level) return level.id;
+
+  const keywordLevels: Array<[string, string]> = [
+    ["vice president", "vp"],
+    ["senior director", "d2"],
+    ["director", "d1"],
+    ["senior manager", "m2"],
+    ["manager", "m1"],
+    ["junior", "ic1"],
+    ["entry", "ic1"],
+    ["mid", "ic2"],
+    ["intermediate", "ic2"],
+    ["staff", "ic4"],
+    ["lead", "ic4"],
+    ["principal", "ic5"],
+    ["senior", "ic3"],
+  ];
+  for (const [keyword, levelId] of keywordLevels) {
+    if (normalized.includes(keyword)) return levelId;
+  }
   
   // Try to extract level codes like IC3, M2, etc.
   const match = normalized.match(/\b(ic[1-5]|m[1-2]|d[1-2]|vp)\b/);
@@ -397,8 +446,14 @@ export type TransformedEmployee = {
   lastName: string;
   email: string | null;
   department: string;
-  roleId: string;
-  levelId: string;
+  roleId: string | null;
+  canonicalRoleId: string | null;
+  roleMappingConfidence: "high" | "medium" | "low";
+  roleMappingSource: "upload";
+  roleMappingStatus: "mapped" | "pending";
+  originalRoleText: string | null;
+  levelId: string | null;
+  originalLevelText: string | null;
   locationId: string;
   baseSalary: number;
   bonus: number | null;
@@ -439,13 +494,25 @@ export function transformEmployee(data: Record<string, unknown>): TransformedEmp
   const baseSalary = parseNumber(String(data.baseSalary || ""));
   if (baseSalary === null) return null;
   
+  const originalRoleText = (data.role as string | undefined)?.trim() || null;
+  const originalLevelText = (data.level as string | undefined)?.trim() || null;
+  const roleId = matchRole(data.role as string || "");
+  const levelId = matchLevel(data.level as string || "");
+  const roleMappingStatus = roleId && levelId ? "mapped" : "pending";
+
   return {
     firstName,
     lastName: lastName || "",
     email: (data.email as string)?.toLowerCase() || null,
     department: normalizeDepartment(data.department as string || ""),
-    roleId: matchRole(data.role as string || "") || "swe",
-    levelId: matchLevel(data.level as string || "") || "ic3",
+    roleId,
+    canonicalRoleId: roleId,
+    roleMappingConfidence: roleMappingStatus === "mapped" ? "high" : roleId || levelId ? "medium" : "low",
+    roleMappingSource: "upload",
+    roleMappingStatus,
+    originalRoleText,
+    levelId,
+    originalLevelText,
     locationId,
     baseSalary,
     bonus: parseNumber(String(data.bonus || "")),

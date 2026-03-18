@@ -8,17 +8,20 @@ type AdminErrorResponseOptions = {
 type AdminErrorBody = {
   error: string;
   detail?: string | null;
+  [key: string]: unknown;
 };
 
 export class AdminApiError extends Error {
   status: number;
   detail: string | null;
+  payload: AdminErrorBody | null;
 
-  constructor(message: string, status: number, detail: string | null = null) {
+  constructor(message: string, status: number, detail: string | null = null, payload: AdminErrorBody | null = null) {
     super(message);
     this.name = "AdminApiError";
     this.status = status;
     this.detail = detail;
+    this.payload = payload;
   }
 }
 
@@ -74,7 +77,8 @@ export async function fetchAdminJson<T>(input: RequestInfo | URL, init?: Request
     throw new AdminApiError(
       payload?.error ?? `Admin request failed with status ${response.status}`,
       response.status,
-      payload?.detail ?? null
+      payload?.detail ?? null,
+      payload,
     );
   }
 

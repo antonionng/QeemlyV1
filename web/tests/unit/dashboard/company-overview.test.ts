@@ -6,6 +6,7 @@ import {
   type OverviewFreshnessRow,
   type OverviewSyncLog,
 } from "@/lib/dashboard/company-overview";
+import { buildOverviewInteractionMap } from "@/lib/dashboard/overview-interactions";
 
 function createEmployee(overrides: Partial<Employee>): Employee {
   return {
@@ -185,6 +186,42 @@ describe("buildCompanyOverviewSnapshot", () => {
         coverageNote: "Counts are based on benchmarked employees only.",
       }),
     );
+
+    const interactionMap = buildOverviewInteractionMap(snapshot);
+
+    expect(interactionMap.bandDistribution.inBand).toEqual({
+      id: "band-distribution-in-band",
+      label: "In Band",
+      action: "link",
+      href: "/dashboard/salary-review?cohort=in-band",
+      tooltip: {
+        title: "In Band",
+        value: "34%",
+        description: "34% of benchmarked employees. 1 employee is currently inside the target range.",
+      },
+    });
+    expect(interactionMap.bandDistribution.aboveBand).toEqual({
+      id: "band-distribution-above-band",
+      label: "Above Band",
+      action: "link",
+      href: "/dashboard/salary-review?filter=above-band",
+      tooltip: {
+        title: "Above Band",
+        value: "33%",
+        description: "33% of benchmarked employees. 1 employee is currently above the target range.",
+      },
+    });
+    expect(interactionMap.bandDistribution.belowBand).toEqual({
+      id: "band-distribution-below-band",
+      label: "Below Band",
+      action: "link",
+      href: "/dashboard/salary-review?filter=below-band",
+      tooltip: {
+        title: "Below Band",
+        value: "33%",
+        description: "33% of benchmarked employees. 1 employee is currently below the target range.",
+      },
+    });
   });
 
   it("prefers benchmark freshness rows for benchmark health instead of the most recent unrelated metric", () => {
@@ -385,6 +422,47 @@ describe("buildCompanyOverviewSnapshot", () => {
         aboveBandPct: 74,
         belowBandPct: 12,
       }),
+    );
+  });
+
+  it("renders natural grammar for zero and plural band tooltip counts", () => {
+    const snapshot = buildCompanyOverviewSnapshot({
+      employees: [
+        createEmployee({
+          id: "eng-in-band",
+          benchmarkContext: { source: "market", matchQuality: "exact" },
+          bandPosition: "in-band",
+        }),
+        createEmployee({
+          id: "eng-above-1",
+          email: "eng-above-1@example.com",
+          benchmarkContext: { source: "market", matchQuality: "exact" },
+          bandPosition: "above",
+        }),
+        createEmployee({
+          id: "eng-above-2",
+          email: "eng-above-2@example.com",
+          benchmarkContext: { source: "market", matchQuality: "exact" },
+          bandPosition: "above",
+        }),
+      ],
+      freshness: [],
+      syncLogs: [],
+    });
+
+    const interactionMap = buildOverviewInteractionMap(snapshot);
+
+    expect(interactionMap.bandDistribution.aboveBand.tooltip.description).toBe(
+      "67% of benchmarked employees. 2 employees are currently above the target range.",
+    );
+    expect(interactionMap.bandDistribution.aboveBand.href).toBe(
+      "/dashboard/salary-review?filter=above-band",
+    );
+    expect(interactionMap.bandDistribution.belowBand.tooltip.description).toBe(
+      "0% of benchmarked employees. 0 employees are currently below the target range.",
+    );
+    expect(interactionMap.bandDistribution.belowBand.href).toBe(
+      "/dashboard/salary-review?filter=below-band",
     );
   });
 });

@@ -23,6 +23,7 @@ type PooledRow = PlatformRow & {
   provenance: "employee" | "uploaded" | "admin" | "blended";
   industry?: string | null;
   company_size?: string | null;
+  market_source_tier?: "official" | "proxy" | "blended" | null;
 };
 
 function makePooledRows(count: number): PooledRow[] {
@@ -284,6 +285,33 @@ describe("fetchMarketBenchmarks", () => {
     });
   });
 
+  it("exposes market_source_tier from the canonical pool", async () => {
+    invalidateMarketBenchmarkCache();
+    const client = createCanonicalPoolOnlyClient([
+      {
+        role_id: "swe",
+        location_id: "dubai",
+        level_id: "ic3",
+        currency: "AED",
+        p10: 13_000,
+        p25: 15_000,
+        p50: 17_000,
+        p75: 19_000,
+        p90: 21_000,
+        sample_size: 8,
+        provenance: "admin",
+        market_source_tier: "official",
+      },
+    ]);
+
+    const result = await fetchMarketBenchmarks(client, { includeSegmented: true });
+
+    expect(result[0]).toMatchObject<Partial<MarketBenchmark>>({
+      role_id: "swe",
+      market_source_tier: "official",
+    });
+  });
+
   it("does not use public snapshot rows for product benchmark reads", async () => {
     invalidateMarketBenchmarkCache();
     const client = {
@@ -358,7 +386,7 @@ describe("fetchMarketBenchmarks", () => {
     expect(result).toEqual([]);
   });
 
-  it("falls back to platform workspace rows with the same builder contract", async () => {
+  it("does not depend on platform workspace salary benchmark fallbacks for tenant reads", async () => {
     vi.stubEnv("PLATFORM_WORKSPACE_ID", "platform-workspace");
     const client = createPlatformFallbackClient([], [
       {
@@ -377,14 +405,7 @@ describe("fetchMarketBenchmarks", () => {
 
     const result = await fetchMarketBenchmarks(client);
 
-    expect(result).toHaveLength(1);
-    expect(result[0]).toMatchObject<Partial<MarketBenchmark>>({
-      role_id: "role-platform",
-      location_id: "riyadh",
-      level_id: "ic4",
-      currency: "SAR",
-      source: "market",
-    });
+    expect(result).toEqual([]);
   });
 
   it("prefers canonical pooled market rows before public snapshots", async () => {

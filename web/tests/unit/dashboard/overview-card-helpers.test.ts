@@ -57,12 +57,12 @@ const baseRiskSummary: OverviewRiskSummary = {
 describe("overview card helpers", () => {
   it("exposes the Figma band palette and background tints", () => {
     expect(OVERVIEW_BAND_COLORS).toEqual({
-      inBand: "#33C997",
-      inBandBg: "#E7F7F3",
-      aboveBand: "#FEAE33",
-      aboveBandBg: "#FFF4E5",
-      belowBand: "#FF4D78",
-      belowBandBg: "#FFE9EF",
+      inBand: "#00BC7D",
+      inBandBg: "rgba(0,188,125,0.1)",
+      aboveBand: "#FE9A00",
+      aboveBandBg: "rgba(254,154,0,0.1)",
+      belowBand: "#FF2056",
+      belowBandBg: "rgba(255,32,86,0.1)",
     });
   });
 

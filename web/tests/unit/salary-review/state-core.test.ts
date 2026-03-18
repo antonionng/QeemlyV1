@@ -259,6 +259,23 @@ describe("salary review core state", () => {
 });
 
 describe("salary review URL state", () => {
+  it("maps semantic cohort URLs into overview filters", () => {
+    const params = new URLSearchParams("cohort=in-band");
+
+    expect(parseSalaryReviewSearchParams(params)).toEqual({
+      tab: "overview",
+      proposalId: null,
+      department: "all",
+      location: "all",
+      pool: "all",
+      benchmarkStatus: "all",
+      workflowStatus: "all",
+      bandFilter: "in-band",
+      performance: "all",
+      search: "",
+    });
+  });
+
   it("parses department and outside-band shortcut filters", () => {
     const params = new URLSearchParams("department=Engineering&filter=outside-band");
 
@@ -280,6 +297,13 @@ describe("salary review URL state", () => {
     const params = new URLSearchParams("filter=above-band");
 
     expect(parseSalaryReviewSearchParams(params).bandFilter).toBe("above");
+  });
+
+  it("keeps legacy review drill-down links on the overview workspace", () => {
+    const params = new URLSearchParams("tab=review&filter=outside-band");
+
+    expect(parseSalaryReviewSearchParams(params).tab).toBe("overview");
+    expect(parseSalaryReviewSearchParams(params).bandFilter).toBe("outside-band");
   });
 
   it("parses the approvals tab from search params", () => {

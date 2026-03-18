@@ -8,6 +8,11 @@ const {
   failJobForRetryMock,
   refreshPlatformMarketPoolMock,
   invalidateMarketBenchmarkCacheMock,
+  getPublishedBenchmarkCoverageSummaryMock,
+  getMarketSourceCoverageSummaryMock,
+  getMissingBenchmarkCoverageGroupsMock,
+  getTopMissingBenchmarkTriplesMock,
+  getPublishedContributionMixSummaryMock,
 } = vi.hoisted(() => ({
   requireSuperAdminMock: vi.fn(),
   createServiceClientMock: vi.fn(),
@@ -16,6 +21,11 @@ const {
   failJobForRetryMock: vi.fn(),
   refreshPlatformMarketPoolMock: vi.fn(),
   invalidateMarketBenchmarkCacheMock: vi.fn(),
+  getPublishedBenchmarkCoverageSummaryMock: vi.fn(),
+  getMarketSourceCoverageSummaryMock: vi.fn(),
+  getMissingBenchmarkCoverageGroupsMock: vi.fn(),
+  getTopMissingBenchmarkTriplesMock: vi.fn(),
+  getPublishedContributionMixSummaryMock: vi.fn(),
 }));
 
 vi.mock("@/lib/admin/auth", () => ({
@@ -41,6 +51,14 @@ vi.mock("@/lib/benchmarks/platform-market-pool", () => ({
 
 vi.mock("@/lib/benchmarks/platform-market", () => ({
   invalidateMarketBenchmarkCache: invalidateMarketBenchmarkCacheMock,
+}));
+
+vi.mock("@/lib/benchmarks/coverage-contract", () => ({
+  getPublishedBenchmarkCoverageSummary: getPublishedBenchmarkCoverageSummaryMock,
+  getMarketSourceCoverageSummary: getMarketSourceCoverageSummaryMock,
+  getMissingBenchmarkCoverageGroups: getMissingBenchmarkCoverageGroupsMock,
+  getTopMissingBenchmarkTriples: getTopMissingBenchmarkTriplesMock,
+  getPublishedContributionMixSummary: getPublishedContributionMixSummaryMock,
 }));
 
 import { POST } from "@/app/api/admin/market-seed/route";
@@ -120,9 +138,62 @@ describe("POST /api/admin/market-seed", () => {
     vi.clearAllMocks();
     vi.unstubAllEnvs();
     requireSuperAdminMock.mockResolvedValue({ user: { id: "admin-1" } });
+    getPublishedBenchmarkCoverageSummaryMock.mockResolvedValue({
+      supportedExactTriples: 1200,
+      coveredExactTriples: 144,
+      officialCoveredExactTriples: 96,
+      proxyBackedExactTriples: 48,
+      missingExactTriples: 1056,
+      coveragePercent: 12,
+      missingExamples: ["swe::ic1::dubai", "pm::ic3::riyadh"],
+    });
+    getMarketSourceCoverageSummaryMock.mockResolvedValue([
+      {
+        sourceSlug: "uae_fcsc_workforce_comp",
+        exactTriples: 90,
+        coveragePercent: 7.5,
+        sampleTriples: ["swe::ic1::dubai", "swe::ic2::dubai"],
+      },
+      {
+        sourceSlug: "qatar_wages",
+        exactTriples: 54,
+        coveragePercent: 4.5,
+        sampleTriples: ["pm::ic3::riyadh"],
+      },
+    ]);
+    getMissingBenchmarkCoverageGroupsMock.mockResolvedValue({
+      byRoleFamily: [
+        { label: "Engineering", missingExactTriples: 558 },
+        { label: "Product", missingExactTriples: 79 },
+      ],
+      byCountry: [
+        { label: "UAE", missingExactTriples: 299 },
+        { label: "Saudi Arabia", missingExactTriples: 299 },
+      ],
+    });
+    getTopMissingBenchmarkTriplesMock.mockResolvedValue([
+      {
+        key: "tpm::ic5::riyadh",
+        roleTitle: "Technical PM",
+        levelName: "Principal (IC5)",
+        locationLabel: "Riyadh, Saudi Arabia",
+      },
+      {
+        key: "pm::ic3::doha",
+        roleTitle: "Product Manager",
+        levelName: "Senior (IC3)",
+        locationLabel: "Doha, Qatar",
+      },
+    ]);
+    getPublishedContributionMixSummaryMock.mockResolvedValue({
+      rowsWithEmployeeSupport: 18,
+      rowsWithUploadedSupport: 9,
+      rowsWithAdminSupport: 144,
+    });
   });
 
   it("returns a configuration error when shared-market env is incomplete", async () => {
+    vi.stubEnv("PLATFORM_WORKSPACE_ID", "");
     const response = await POST(
       new Request("http://localhost/api/admin/market-seed", {
         method: "POST",
@@ -148,12 +219,32 @@ describe("POST /api/admin/market-seed", () => {
         records_created: 12,
         records_updated: 0,
         records_failed: 0,
+        funnel: {
+          outcome: "success",
+          fetchedRows: 12,
+          normalizedRows: 12,
+          normalizeFailedRows: 0,
+          dqPassedRows: 12,
+          dqFailedRows: 0,
+          upsertedRows: 12,
+          upsertFailedRows: 0,
+        },
       })
       .mockResolvedValueOnce({
         status: "partial",
         records_created: 4,
         records_updated: 0,
         records_failed: 1,
+        funnel: {
+          outcome: "partial_success",
+          fetchedRows: 8,
+          normalizedRows: 6,
+          normalizeFailedRows: 1,
+          dqPassedRows: 5,
+          dqFailedRows: 1,
+          upsertedRows: 4,
+          upsertFailedRows: 1,
+        },
       });
     refreshPlatformMarketPoolMock.mockResolvedValue({ rowCount: 144 });
 
@@ -181,6 +272,16 @@ describe("POST /api/admin/market-seed", () => {
           status: "success",
           recordsCreated: 12,
           recordsFailed: 0,
+          funnel: {
+            outcome: "success",
+            fetchedRows: 12,
+            normalizedRows: 12,
+            normalizeFailedRows: 0,
+            dqPassedRows: 12,
+            dqFailedRows: 0,
+            upsertedRows: 12,
+            upsertFailedRows: 0,
+          },
         },
         {
           jobId: "job-2",
@@ -188,10 +289,100 @@ describe("POST /api/admin/market-seed", () => {
           status: "partial",
           recordsCreated: 4,
           recordsFailed: 1,
+          funnel: {
+            outcome: "partial_success",
+            fetchedRows: 8,
+            normalizedRows: 6,
+            normalizeFailedRows: 1,
+            dqPassedRows: 5,
+            dqFailedRows: 1,
+            upsertedRows: 4,
+            upsertFailedRows: 1,
+          },
         },
       ],
       selectedSourceSlugs: ["uae_fcsc_workforce_comp", "qatar_wages"],
       poolRows: 144,
+      coverage: {
+        supportedExactTriples: 1200,
+        coveredExactTriples: 144,
+        officialCoveredExactTriples: 96,
+        proxyBackedExactTriples: 48,
+        missingExactTriples: 1056,
+        coveragePercent: 12,
+        missingExamples: ["swe::ic1::dubai", "pm::ic3::riyadh"],
+      },
+      sourceCoverage: [
+        {
+          sourceSlug: "uae_fcsc_workforce_comp",
+          exactTriples: 90,
+          coveragePercent: 7.5,
+          sampleTriples: ["swe::ic1::dubai", "swe::ic2::dubai"],
+        },
+        {
+          sourceSlug: "qatar_wages",
+          exactTriples: 54,
+          coveragePercent: 4.5,
+          sampleTriples: ["pm::ic3::riyadh"],
+        },
+      ],
+      sourceDiagnostics: [
+        {
+          sourceSlug: "uae_fcsc_workforce_comp",
+          rawExactTriples: 90,
+          coveragePercent: 7.5,
+          outcome: "success",
+          fetchedRows: 12,
+          normalizedRows: 12,
+          normalizeFailedRows: 0,
+          dqPassedRows: 12,
+          dqFailedRows: 0,
+          upsertedRows: 12,
+          upsertFailedRows: 0,
+        },
+        {
+          sourceSlug: "qatar_wages",
+          rawExactTriples: 54,
+          coveragePercent: 4.5,
+          outcome: "partial_success",
+          fetchedRows: 8,
+          normalizedRows: 6,
+          normalizeFailedRows: 1,
+          dqPassedRows: 5,
+          dqFailedRows: 1,
+          upsertedRows: 4,
+          upsertFailedRows: 1,
+        },
+      ],
+      contributionMix: {
+        rowsWithEmployeeSupport: 18,
+        rowsWithUploadedSupport: 9,
+        rowsWithAdminSupport: 144,
+      },
+      missingCoverageGroups: {
+        byRoleFamily: [
+          { label: "Engineering", missingExactTriples: 558 },
+          { label: "Product", missingExactTriples: 79 },
+        ],
+        byCountry: [
+          { label: "UAE", missingExactTriples: 299 },
+          { label: "Saudi Arabia", missingExactTriples: 299 },
+        ],
+      },
+      topMissingExactTriples: [
+        {
+          key: "tpm::ic5::riyadh",
+          roleTitle: "Technical PM",
+          levelName: "Principal (IC5)",
+          locationLabel: "Riyadh, Saudi Arabia",
+        },
+        {
+          key: "pm::ic3::doha",
+          roleTitle: "Product Manager",
+          levelName: "Senior (IC3)",
+          locationLabel: "Doha, Qatar",
+        },
+      ],
     });
   });
 
@@ -224,5 +415,52 @@ describe("POST /api/admin/market-seed", () => {
       "kuwait_open_labor",
     ]);
     expect(payload.poolRows).toBe(188);
+    expect(payload.coverage).toEqual({
+      supportedExactTriples: 1200,
+      coveredExactTriples: 144,
+      officialCoveredExactTriples: 96,
+      proxyBackedExactTriples: 48,
+      missingExactTriples: 1056,
+      coveragePercent: 12,
+      missingExamples: ["swe::ic1::dubai", "pm::ic3::riyadh"],
+    });
+    expect(payload.sourceCoverage).toEqual([
+      {
+        sourceSlug: "uae_fcsc_workforce_comp",
+        exactTriples: 90,
+        coveragePercent: 7.5,
+        sampleTriples: ["swe::ic1::dubai", "swe::ic2::dubai"],
+      },
+      {
+        sourceSlug: "qatar_wages",
+        exactTriples: 54,
+        coveragePercent: 4.5,
+        sampleTriples: ["pm::ic3::riyadh"],
+      },
+    ]);
+    expect(payload.missingCoverageGroups).toEqual({
+      byRoleFamily: [
+        { label: "Engineering", missingExactTriples: 558 },
+        { label: "Product", missingExactTriples: 79 },
+      ],
+      byCountry: [
+        { label: "UAE", missingExactTriples: 299 },
+        { label: "Saudi Arabia", missingExactTriples: 299 },
+      ],
+    });
+    expect(payload.topMissingExactTriples).toEqual([
+      {
+        key: "tpm::ic5::riyadh",
+        roleTitle: "Technical PM",
+        levelName: "Principal (IC5)",
+        locationLabel: "Riyadh, Saudi Arabia",
+      },
+      {
+        key: "pm::ic3::doha",
+        roleTitle: "Product Manager",
+        levelName: "Senior (IC3)",
+        locationLabel: "Doha, Qatar",
+      },
+    ]);
   });
 });

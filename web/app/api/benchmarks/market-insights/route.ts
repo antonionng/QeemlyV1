@@ -5,8 +5,8 @@ import {
   type MarketDiagnostics,
   type WorkspaceOverlaySummary,
 } from "@/lib/benchmarks/market-insights";
-import { createServiceClient } from "@/lib/supabase/service";
 import { createClient } from "@/lib/supabase/server";
+import { readMarketDataWithFallback } from "@/lib/benchmarks/market-read";
 
 export async function GET() {
   const supabase = await createClient();
@@ -38,19 +38,13 @@ export async function GET() {
     },
   };
 
-  let marketSupabase: Awaited<ReturnType<typeof createClient>> | ReturnType<typeof createServiceClient> =
-    supabase;
-
-  try {
-    marketSupabase = createServiceClient();
-    diagnostics.market.readMode = "service";
-  } catch (error) {
-    diagnostics.market.clientWarning = getErrorMessage(error);
-  }
-
   let marketRows: Awaited<ReturnType<typeof fetchMarketBenchmarks>> = [];
   try {
-    marketRows = await fetchMarketBenchmarks(marketSupabase);
+    marketRows = await readMarketDataWithFallback({
+      sessionClient: supabase,
+      diagnostics: diagnostics.market,
+      read: (marketClient) => fetchMarketBenchmarks(marketClient),
+    });
     if (marketRows.length === 0) {
       diagnostics.market.warning = "No market benchmark rows were returned from the platform market dataset.";
     }

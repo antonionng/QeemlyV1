@@ -5,9 +5,8 @@
  * platform-level market benchmarks that every tenant should see. It is NOT a
  * fallback — it is the primary benchmark source.
  *
- * Data sources (in priority order):
+ * Data sources:
  *  1. platform_market_benchmarks (canonical pooled market rows)
- *  2. salary_benchmarks where source = 'market' under PLATFORM_WORKSPACE_ID
  */
 
 export type MarketBenchmark = {
@@ -26,6 +25,7 @@ export type MarketBenchmark = {
   source: "market";
   contributor_count?: number | null;
   provenance?: "employee" | "uploaded" | "admin" | "blended";
+  market_source_tier?: "official" | "proxy" | "blended" | null;
   freshness_at?: string | null;
   source_breakdown?: Record<string, number> | null;
 };
@@ -87,10 +87,9 @@ export async function fetchMarketBenchmarks(
     return filterMarketBenchmarks(benchmarks, query);
   }
 
-  const platformBenchmarks = await fetchFromPlatformWorkspace(supabase);
-  cachedMarketBenchmarks = platformBenchmarks;
+  cachedMarketBenchmarks = [];
   cacheTimestamp = Date.now();
-  return filterMarketBenchmarks(platformBenchmarks, query);
+  return [];
 }
 
 /**
@@ -205,7 +204,7 @@ async function fetchFromCanonicalPool(supabase: SupabaseLike): Promise<MarketBen
   const data = await fetchAllRows(supabase, "platform_market_benchmarks", (query) =>
     query
       .select(
-        "role_id,location_id,level_id,currency,industry,company_size,p10,p25,p50,p75,p90,sample_size,contributor_count,provenance,freshness_at,source_breakdown",
+        "role_id,location_id,level_id,currency,industry,company_size,p10,p25,p50,p75,p90,sample_size,contributor_count,provenance,market_source_tier,freshness_at,source_breakdown",
       )
       .eq("is_public", true)
       .order("freshness_at", { ascending: false }),
@@ -234,6 +233,12 @@ async function fetchFromCanonicalPool(supabase: SupabaseLike): Promise<MarketBen
       row.provenance === "blended"
         ? row.provenance
         : undefined,
+    market_source_tier:
+      row.market_source_tier === "official" ||
+      row.market_source_tier === "proxy" ||
+      row.market_source_tier === "blended"
+        ? row.market_source_tier
+        : null,
     freshness_at: row.freshness_at ? String(row.freshness_at) : null,
     source_breakdown:
       row.source_breakdown && typeof row.source_breakdown === "object"
@@ -241,45 +246,6 @@ async function fetchFromCanonicalPool(supabase: SupabaseLike): Promise<MarketBen
         : null,
     source: "market" as const,
   }));
-}
-
-async function fetchFromPlatformWorkspace(supabase: SupabaseLike): Promise<MarketBenchmark[]> {
-  const platformWsId = process.env.PLATFORM_WORKSPACE_ID;
-  if (!platformWsId) return [];
-
-  const data = await fetchAllRows(supabase, "salary_benchmarks", (query) =>
-    query
-      .select("role_id,location_id,level_id,currency,industry,company_size,p10,p25,p50,p75,p90,sample_size")
-      .eq("workspace_id", platformWsId)
-      .eq("source", "market")
-      .order("valid_from", { ascending: false })
-  );
-
-  if (!data || data.length === 0) return [];
-
-  const seen = new Set<string>();
-  const results: MarketBenchmark[] = [];
-  for (const row of data as Array<Record<string, unknown>>) {
-    const key = `${row.role_id}::${row.location_id}::${row.level_id}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    results.push({
-      role_id: String(row.role_id),
-      location_id: String(row.location_id),
-      level_id: String(row.level_id),
-      currency: String(row.currency),
-      industry: normalizeSegmentValue(row.industry),
-      company_size: normalizeSegmentValue(row.company_size),
-      p10: Number(row.p10),
-      p25: Number(row.p25),
-      p50: Number(row.p50),
-      p75: Number(row.p75),
-      p90: Number(row.p90),
-      sample_size: row.sample_size != null ? Number(row.sample_size) : null,
-      source: "market",
-    });
-  }
-  return results;
 }
 
 async function fetchAllRows(

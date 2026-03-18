@@ -90,6 +90,8 @@ export interface BenchmarkState {
   // Form state
   formData: BenchmarkFormData;
   isFormComplete: boolean;
+  isSubmitting: boolean;
+  submissionError: string | null;
   
   // Results state
   currentResult: BenchmarkResult | null;
@@ -151,6 +153,8 @@ export const useBenchmarkState = create<BenchmarkState>()(
       workspaceId: null,
       formData: { ...DEFAULT_FORM_DATA },
       isFormComplete: false,
+      isSubmitting: false,
+      submissionError: null,
       currentResult: null,
       recentResults: [],
       savedFilters: [],
@@ -169,6 +173,8 @@ export const useBenchmarkState = create<BenchmarkState>()(
             workspaceId,
             formData: { ...DEFAULT_FORM_DATA },
             isFormComplete: false,
+            isSubmitting: false,
+            submissionError: null,
             currentResult: null,
             recentResults: [],
             savedFilters: [],
@@ -184,6 +190,7 @@ export const useBenchmarkState = create<BenchmarkState>()(
           return {
             formData: newFormData,
             isFormComplete: isFormComplete(newFormData),
+            submissionError: null,
           };
         });
       },
@@ -192,6 +199,8 @@ export const useBenchmarkState = create<BenchmarkState>()(
         set({
           formData: { ...DEFAULT_FORM_DATA },
           isFormComplete: false,
+          isSubmitting: false,
+          submissionError: null,
           currentResult: null,
           step: "form",
           detailTab: getDefaultBenchmarkDetailTab(),
@@ -206,6 +215,11 @@ export const useBenchmarkState = create<BenchmarkState>()(
           return;
         }
 
+        set({
+          isSubmitting: true,
+          submissionError: null,
+        });
+
         const resolvedFormData: BenchmarkFormData = {
           ...formData,
           industry: formData.industry || companySettings.industry || null,
@@ -216,45 +230,63 @@ export const useBenchmarkState = create<BenchmarkState>()(
         const level = LEVELS.find(l => l.id === resolvedFormData.levelId)!;
         const location = BENCHMARK_LOCATIONS.find(l => l.id === resolvedFormData.locationId);
         if (!location) {
+          set({
+            isSubmitting: false,
+            submissionError: "Select a valid benchmark location to continue.",
+          });
           return;
         }
-        
-        const benchmark = await getBenchmark(
-          resolvedFormData.roleId!,
-          resolvedFormData.locationId!,
-          resolvedFormData.levelId!,
-          {
-            industry: resolvedFormData.industry,
-            companySize: resolvedFormData.companySize,
-          },
-        );
-        if (!benchmark) {
-          return;
+
+        try {
+          const benchmark = await getBenchmark(
+            resolvedFormData.roleId!,
+            resolvedFormData.locationId!,
+            resolvedFormData.levelId!,
+            {
+              industry: resolvedFormData.industry,
+              companySize: resolvedFormData.companySize,
+            },
+          );
+          if (!benchmark) {
+            set({
+              isSubmitting: false,
+              submissionError:
+                "No published benchmark matched this role, level, and location yet. Try another selection.",
+            });
+            return;
+          }
+          
+          // Check if any settings were overridden
+          const isOverridden = !!(
+            formData.targetPercentile ||
+            formData.industry ||
+            formData.companySize
+          );
+          
+          const result: BenchmarkResult = {
+            formData: resolvedFormData,
+            benchmark,
+            role,
+            level,
+            location,
+            isOverridden,
+            createdAt: new Date(),
+          };
+          
+          set((state) => ({
+            isSubmitting: false,
+            submissionError: null,
+            currentResult: result,
+            recentResults: [result, ...state.recentResults.slice(0, 9)],
+            step: "results",
+            detailTab: getDefaultBenchmarkDetailTab(),
+          }));
+        } catch {
+          set({
+            isSubmitting: false,
+            submissionError: "Benchmark search failed. Please try again.",
+          });
         }
-        
-        // Check if any settings were overridden
-        const isOverridden = !!(
-          formData.targetPercentile ||
-          formData.industry ||
-          formData.companySize
-        );
-        
-        const result: BenchmarkResult = {
-          formData: resolvedFormData,
-          benchmark,
-          role,
-          level,
-          location,
-          isOverridden,
-          createdAt: new Date(),
-        };
-        
-        set((state) => ({
-          currentResult: result,
-          recentResults: [result, ...state.recentResults.slice(0, 9)],
-          step: "results",
-          detailTab: getDefaultBenchmarkDetailTab(),
-        }));
       },
       
       goToStep: (step) => {
@@ -265,6 +297,7 @@ export const useBenchmarkState = create<BenchmarkState>()(
         set({
           detailTab: tab,
           step: "detail",
+          submissionError: null,
         });
       },
 
@@ -274,6 +307,8 @@ export const useBenchmarkState = create<BenchmarkState>()(
       
       clearResult: () => {
         set({
+          isSubmitting: false,
+          submissionError: null,
           currentResult: null,
           step: "form",
           detailTab: getDefaultBenchmarkDetailTab(),
@@ -308,6 +343,8 @@ export const useBenchmarkState = create<BenchmarkState>()(
           set({
             formData: { ...filter.formData },
             isFormComplete: isFormComplete(filter.formData),
+            isSubmitting: false,
+            submissionError: null,
             step: "form",
             detailTab: getDefaultBenchmarkDetailTab(),
           });

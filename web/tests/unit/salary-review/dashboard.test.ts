@@ -110,7 +110,7 @@ describe("salary review dashboard model", () => {
 });
 
 describe("salary review route compatibility", () => {
-  it("redirects the legacy review tab into the wizard route", () => {
+  it("redirects only the explicit review-builder tab into the wizard route", () => {
     expect(shouldRedirectSalaryReviewTab("review")).toBe(true);
     expect(shouldRedirectSalaryReviewTab("overview")).toBe(false);
   });

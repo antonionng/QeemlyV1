@@ -19,7 +19,6 @@ import {
   OverviewDetailDrawer,
 } from "@/components/dashboard/overview";
 import { useCompanySettings } from "@/lib/company";
-import { buildCompanyOverviewHeadlineCards } from "@/lib/company-vs-market";
 import {
   hydrateCompanyOverviewSnapshot,
   type CompanyOverviewSnapshot,
@@ -210,14 +209,6 @@ export default function CompanyOverviewPage() {
     actions,
     dataHealth,
   } = snapshot;
-  const headlineCards = buildCompanyOverviewHeadlineCards(metrics, benchmarkCoverage);
-  const headlineToneClasses = {
-    neutral: "border-border bg-white",
-    warning: "border-amber-200 bg-[#FFF4E5]",
-    positive: "border-emerald-200 bg-[#E7F7F3]",
-    market: "border-brand-200 bg-brand-50",
-    overlay: "border-sky-200 bg-sky-50",
-  } as const;
 
   return (
     <>
@@ -235,41 +226,23 @@ export default function CompanyOverviewPage() {
               size="sm"
               onClick={handleRefresh}
               disabled={isRefreshing}
+              className="h-11 rounded-full px-5 text-[13px] font-semibold"
             >
+              <span>Refresh</span>
               <RefreshCw className={isRefreshing ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
-              Refresh
             </Button>
             <Link href="/dashboard/settings">
-              <Button variant="secondary" size="sm">
-                <Settings className="mr-2 h-4 w-4" />
-                Settings
+              <Button
+                variant="secondary"
+                size="sm"
+                className="h-11 rounded-full px-5 text-[13px] font-semibold"
+              >
+                <span>Settings</span>
+                <Settings className="h-4 w-4" />
               </Button>
             </Link>
           </div>
         </div>
-
-        <section className="overview-section">
-          <div>
-            <h2 className="overview-section-title">Executive Summary</h2>
-            <p className="overview-supporting-text mt-1">
-              A clean snapshot of compensation health and market coverage for your current roster.
-            </p>
-          </div>
-          <div className="grid gap-6 md:grid-cols-2">
-            {headlineCards.map((card) => (
-              <Card
-                key={card.label}
-                className={`${headlineToneClasses[card.tone]} p-6`}
-              >
-                <div className="space-y-4">
-                  <p className="overview-card-heading">{card.label}</p>
-                  <p className="overview-primary-metric">{card.value}</p>
-                  <p className="overview-supporting-text">{card.description}</p>
-                </div>
-              </Card>
-            ))}
-          </div>
-        </section>
 
         {error && (
           <Card className="border-amber-200 bg-[#FFF4E5] p-6 text-sm text-amber-800">
@@ -358,7 +331,12 @@ export default function CompanyOverviewPage() {
         </section>
 
         <div className="grid gap-6 lg:grid-cols-2">
-          <BandDistributionChart metrics={metrics} benchmarkCoverage={benchmarkCoverage} />
+          <BandDistributionChart
+            metrics={metrics}
+            benchmarkCoverage={benchmarkCoverage}
+            interactions={interactionMap}
+            onInteract={handleOverviewInteraction}
+          />
           <DepartmentTabs summaries={departmentSummaries} />
         </div>
 

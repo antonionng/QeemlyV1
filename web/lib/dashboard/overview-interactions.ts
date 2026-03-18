@@ -27,14 +27,25 @@ export type OverviewMetricDrawerContent = {
   sections: OverviewDrawerSection[];
 };
 
-export type OverviewInteractionTarget = {
+export type OverviewLinkInteractionTarget = {
   id: string;
   label: string;
-  action: "link" | "drawer";
-  href?: string;
-  drawer?: OverviewMetricDrawerContent;
+  action: "link";
+  href: string;
   tooltip: OverviewInteractionTooltip;
 };
+
+export type OverviewDrawerInteractionTarget = {
+  id: string;
+  label: string;
+  action: "drawer";
+  drawer: OverviewMetricDrawerContent;
+  tooltip: OverviewInteractionTooltip;
+};
+
+export type OverviewInteractionTarget =
+  | OverviewLinkInteractionTarget
+  | OverviewDrawerInteractionTarget;
 
 export type OverviewInteractionMap = {
   healthScoreGauge: OverviewInteractionTarget;
@@ -42,6 +53,11 @@ export type OverviewInteractionMap = {
     bandAlignment: OverviewInteractionTarget;
     marketPosition: OverviewInteractionTarget;
     riskManagement: OverviewInteractionTarget;
+  };
+  bandDistribution: {
+    inBand: OverviewInteractionTarget;
+    aboveBand: OverviewInteractionTarget;
+    belowBand: OverviewInteractionTarget;
   };
   statCards: {
     activeEmployees: OverviewInteractionTarget;
@@ -59,6 +75,16 @@ export function buildOverviewInteractionMap(
   const healthPresentation = getHealthScorePresentation(metrics);
   const averagePayroll =
     metrics.activeEmployees > 0 ? Math.round(metrics.totalPayroll / metrics.activeEmployees) : 0;
+  const formatBandDistributionDescription = (
+    percentage: number,
+    employeeCount: number,
+    position: "inside" | "above" | "below",
+  ) => {
+    const noun = `employee${employeeCount === 1 ? "" : "s"}`;
+    const verb = employeeCount === 1 ? "is" : "are";
+
+    return `${percentage}% of benchmarked employees. ${employeeCount} ${noun} ${verb} currently ${position} the target range.`;
+  };
 
   return {
     healthScoreGauge: {
@@ -89,7 +115,7 @@ export function buildOverviewInteractionMap(
         id: "band-alignment",
         label: "Band Alignment",
         action: "link",
-        href: "/dashboard/salary-review?tab=review&filter=outside-band",
+        href: buildSalaryReviewHref({ cohort: "outside-band" }),
         tooltip: {
           title: "Band Alignment",
           value: `${metrics.inBandPercentage}% in band`,
@@ -111,11 +137,58 @@ export function buildOverviewInteractionMap(
         id: "risk-management",
         label: "Risk Management",
         action: "link",
-        href: "/dashboard/salary-review?tab=review&filter=above-band",
+        href: buildSalaryReviewHref({ cohort: "above-band" }),
         tooltip: {
           title: "Risk Management",
           value: `${metrics.payrollRiskFlags} risk flags`,
           description: riskSummary.methodologyLabel,
+        },
+      },
+    },
+    bandDistribution: {
+      inBand: {
+        id: "band-distribution-in-band",
+        label: "In Band",
+        action: "link",
+        href: buildSalaryReviewHref({ cohort: "in-band" }),
+        tooltip: {
+          title: "In Band",
+          value: `${metrics.bandDistribution.inBand}%`,
+          description: formatBandDistributionDescription(
+            metrics.bandDistribution.inBand,
+            metrics.bandDistributionCounts.inBand,
+            "inside",
+          ),
+        },
+      },
+      aboveBand: {
+        id: "band-distribution-above-band",
+        label: "Above Band",
+        action: "link",
+        href: buildSalaryReviewHref({ filter: "above-band" }),
+        tooltip: {
+          title: "Above Band",
+          value: `${metrics.bandDistribution.above}%`,
+          description: formatBandDistributionDescription(
+            metrics.bandDistribution.above,
+            metrics.bandDistributionCounts.above,
+            "above",
+          ),
+        },
+      },
+      belowBand: {
+        id: "band-distribution-below-band",
+        label: "Below Band",
+        action: "link",
+        href: buildSalaryReviewHref({ filter: "below-band" }),
+        tooltip: {
+          title: "Below Band",
+          value: `${metrics.bandDistribution.below}%`,
+          description: formatBandDistributionDescription(
+            metrics.bandDistribution.below,
+            metrics.bandDistributionCounts.below,
+            "below",
+          ),
         },
       },
     },
@@ -124,7 +197,7 @@ export function buildOverviewInteractionMap(
         id: "active-employees",
         label: "Active Employees",
         action: "link",
-        href: "/dashboard/salary-review?tab=review",
+        href: buildSalaryReviewHref({ cohort: "active-employees" }),
         tooltip: {
           title: "Active Employees",
           value: `${metrics.activeEmployees}`,
@@ -172,7 +245,7 @@ export function buildOverviewInteractionMap(
         id: "in-band",
         label: "In Band",
         action: "link",
-        href: "/dashboard/salary-review?tab=review&filter=outside-band",
+        href: buildSalaryReviewHref({ cohort: "in-band" }),
         tooltip: {
           title: "In Band",
           value: `${metrics.inBandPercentage}%`,
@@ -183,7 +256,7 @@ export function buildOverviewInteractionMap(
         id: "risk-flags",
         label: "Risk Flags",
         action: "link",
-        href: "/dashboard/salary-review?tab=review&filter=above-band",
+        href: buildSalaryReviewHref({ cohort: "above-band" }),
         tooltip: {
           title: "Risk Flags",
           value: `${metrics.payrollRiskFlags}`,
@@ -192,4 +265,24 @@ export function buildOverviewInteractionMap(
       },
     },
   };
+}
+
+function buildSalaryReviewHref({
+  cohort,
+  filter,
+}: {
+  cohort: "active-employees" | "in-band" | "outside-band" | "above-band";
+  filter?: never;
+} | {
+  cohort?: never;
+  filter: "outside-band" | "above-band" | "below-band";
+}) {
+  const searchParams = new URLSearchParams();
+  if (cohort) {
+    searchParams.set("cohort", cohort);
+  }
+  if (filter) {
+    searchParams.set("filter", filter);
+  }
+  return `/dashboard/salary-review?${searchParams.toString()}`;
 }

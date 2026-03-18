@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
+import clsx from "clsx";
+import Image from "next/image";
 import Link from "next/link";
 import { Logo } from "@/components/logo";
-import { Badge } from "@/components/ui/badge";
 
 export const AUTH_IMAGE_PROMPTS = {
   loginHero:
@@ -12,91 +13,55 @@ export const AUTH_IMAGE_PROMPTS = {
     "Set of 3 transparent-background editorial 3D glass UI modal cards (salary range, forecast, compliance), purple glow accents, no text, clean minimal, consistent lighting, PNG with alpha.",
 } as const;
 
-type OverlayCard = {
-  eyebrow?: string;
-  title: string;
-  value?: string;
-  meta?: string;
-  tone?: "brand" | "muted" | "ghost";
-};
+export const AUTH_PUBLIC_HERO_IMAGE_PATH = "/auth/public-auth-hero.png";
 
 type AuthSplitShellProps = {
-  /** Left panel */
   title: string;
   description?: string;
   children: ReactNode;
   footer?: ReactNode;
-  /** Optional link under logo (e.g. “Back to site”) */
-  topLinkHref?: string;
-  topLinkLabel?: string;
-
-  /** Right panel */
+  activeNav?: "login" | "register";
   marketingBadge?: string;
-  marketingHeadline: string;
-  marketingSubhead: string;
-  bullets: string[];
-  heroImagePathHint: string;
+  marketingHeadline?: string;
+  marketingSubhead?: string;
+  bullets?: string[];
+  heroImagePathHint?: string;
+  heroImageSrc?: string;
   heroPrompt?: string;
-  overlayCards?: [OverlayCard, OverlayCard, OverlayCard];
-
-  /** Optional extra right-panel content (e.g. trust logos) */
   rightFooter?: ReactNode;
 };
 
-function OverlayMiniChart() {
-  return (
-    <div className="mt-2 flex items-end gap-1.5">
-      <div className="h-3 w-1.5 rounded-full bg-brand-200" />
-      <div className="h-5 w-1.5 rounded-full bg-brand-300" />
-      <div className="h-4 w-1.5 rounded-full bg-brand-200" />
-      <div className="h-7 w-1.5 rounded-full bg-brand-400/80" />
-      <div className="h-6 w-1.5 rounded-full bg-brand-300" />
-      <div className="h-8 w-1.5 rounded-full bg-brand-500/80" />
-    </div>
-  );
+function normalizePublicAssetPath(path?: string) {
+  if (!path) return undefined;
+  return path.startsWith("/public/") ? path.replace("/public", "") : path;
 }
 
-function OverlayCardUI({ eyebrow, title, value, meta, tone = "ghost" }: OverlayCard) {
-  const badgeVariant = tone === "brand" ? "brand" : tone === "muted" ? "muted" : "ghost";
+function AuthNavButton({
+  href,
+  label,
+  active = false,
+  variant = "dark",
+}: {
+  href: string;
+  label: string;
+  active?: boolean;
+  variant?: "dark" | "mint";
+}) {
   return (
-    <div className="rounded-2xl bg-white/65 p-4 shadow-[0_18px_50px_rgba(15,15,26,0.10)] ring-1 ring-border/60 backdrop-blur-xl">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          {eyebrow ? (
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-brand-600/90">{eyebrow}</div>
-          ) : null}
-          <div className="mt-1 text-sm font-semibold text-brand-900">{title}</div>
-        </div>
-        <Badge variant={badgeVariant} className="shrink-0 whitespace-nowrap">
-          {tone === "brand" ? "Live" : tone === "muted" ? "Verified" : "Preview"}
-        </Badge>
-      </div>
-      {value ? <div className="mt-2 text-xl font-semibold text-brand-900">{value}</div> : null}
-      {meta ? <div className="mt-1 text-xs text-brand-700/75">{meta}</div> : null}
-      <OverlayMiniChart />
-    </div>
-  );
-}
-
-function HeroPlaceholder({ pathHint, prompt }: { pathHint: string; prompt?: string }) {
-  return (
-    <div className="relative overflow-hidden rounded-3xl bg-white/55 ring-1 ring-border/60 backdrop-blur-xl">
-      <div className="absolute inset-0 bg-[radial-gradient(650px_circle_at_20%_25%,rgba(92,69,253,0.20),transparent_55%),radial-gradient(700px_circle_at_80%_30%,rgba(167,139,250,0.22),transparent_60%)]" />
-      <div className="relative flex min-h-[260px] flex-col items-center justify-center p-6 text-center">
-        <div className="rounded-2xl border border-dashed border-border/80 bg-white/55 px-5 py-4 shadow-sm">
-          <div className="text-xs font-semibold uppercase tracking-wide text-brand-600/90">Hero image placeholder</div>
-          <div className="mt-2 text-sm font-semibold text-brand-900">
-            Drop an image at <span className="font-mono text-[13px]">{pathHint}</span>
-          </div>
-          <div className="mt-1 text-xs text-brand-700/70">Recommended: 16:10 PNG/WebP, no text.</div>
-        </div>
-        {prompt ? (
-          <div className="mt-4 max-w-[520px] text-xs text-brand-700/70">
-            <span className="font-semibold text-brand-800">Prompt:</span> {prompt}
-          </div>
-        ) : null}
-      </div>
-    </div>
+    <Link
+      href={href}
+      aria-current={active ? "page" : undefined}
+      className={clsx(
+        "inline-flex min-h-14 items-center justify-center rounded-full px-6 text-sm font-semibold transition-colors sm:px-8",
+        variant === "mint"
+          ? "bg-[#28e7c5] text-[#111233] hover:bg-[#20d3b4]"
+          : active
+            ? "bg-[#111233] text-white"
+            : "bg-[#111233] text-white hover:bg-[#20245d]",
+      )}
+    >
+      {label}
+    </Link>
   );
 }
 
@@ -105,140 +70,115 @@ export function AuthSplitShell({
   description,
   children,
   footer,
-  topLinkHref = "/home",
-  topLinkLabel = "Back to home",
-  marketingBadge = "Qeemly Platform",
+  activeNav = "login",
   marketingHeadline,
-  marketingSubhead,
-  bullets,
   heroImagePathHint,
-  heroPrompt,
-  overlayCards,
+  heroImageSrc,
+  heroPrompt: _heroPrompt,
   rightFooter,
 }: AuthSplitShellProps) {
-  const overlays: [OverlayCard, OverlayCard, OverlayCard] =
-    overlayCards ??
-    ([
-      {
-        eyebrow: "Salary range",
-        title: "Senior Product Designer",
-        value: "AED 32k–48k",
-        meta: "P50–P90 • Dubai • Updated today",
-        tone: "brand",
-      },
-      {
-        eyebrow: "Offer check",
-        title: "Within band",
-        value: "+3.2%",
-        meta: "Fair-pay signal: strong",
-        tone: "muted",
-      },
-      {
-        eyebrow: "Budget forecast",
-        title: "Headcount plan",
-        value: "AED 3.1M",
-        meta: "Next 2 quarters • Scenario A",
-        tone: "ghost",
-      },
-    ] as [OverlayCard, OverlayCard, OverlayCard]);
+  const resolvedHeroImageSrc =
+    normalizePublicAssetPath(heroImageSrc) ?? normalizePublicAssetPath(heroImagePathHint) ?? AUTH_PUBLIC_HERO_IMAGE_PATH;
 
   return (
-    <div className="min-h-screen bg-background">
-      <div className="mx-auto grid min-h-screen max-w-[1200px] grid-cols-1 lg:grid-cols-2">
-        {/* Left / Form */}
-        <div className="flex flex-col px-6 py-10 sm:px-10 lg:px-12">
-          <div className="flex items-center justify-between gap-4">
+    <div data-testid="auth-shell" className="min-h-screen bg-white">
+      <div className="mx-auto hidden min-h-screen w-full max-w-[1440px] lg:block">
+        <header data-testid="auth-top-nav" className="flex h-[112px] items-start justify-between px-20 pt-6">
+          <div className="flex h-16 items-center">
             <Logo href="/home" className="shrink-0" />
-            <Link
-              href={topLinkHref}
-              className="rounded-full px-3 py-1.5 text-xs font-semibold text-brand-700 transition-colors hover:bg-muted hover:text-brand-900"
-            >
-              {topLinkLabel}
-            </Link>
           </div>
+          <div className="flex items-center gap-2 pt-1">
+            <AuthNavButton href="/register" label="Early access" active={activeNav === "register"} variant="mint" />
+            <AuthNavButton href="/login" label="Log in" active={activeNav === "login"} />
+          </div>
+        </header>
 
-          <div className="mt-10 flex flex-1 flex-col justify-center">
-            <div className="max-w-md">
-              <h1 className="text-3xl font-semibold tracking-tight text-brand-900">{title}</h1>
-              {description ? <p className="mt-2 text-sm leading-relaxed text-brand-700/80">{description}</p> : null}
-
-              <div className="mt-6 rounded-3xl border border-border bg-white p-6 shadow-sm">
+        <main className="relative h-[812px]">
+          <section className="absolute left-[84px] top-[138px] w-[512px]">
+            <div
+              data-testid="auth-form-panel"
+              className="rounded-[24px] bg-white p-10 shadow-[0_20px_60px_rgba(17,18,51,0.08)]"
+            >
+              <div className="flex flex-col gap-8">
+                <div>
+                  <h1 className="text-[2rem] font-semibold leading-[1.2] tracking-[-0.03em] text-[#111233]">{title}</h1>
+                  {description ? <p className="mt-3 max-w-[24rem] text-sm leading-6 text-brand-700/75">{description}</p> : null}
+                </div>
                 {children}
               </div>
-
-              {footer ? <div className="mt-5 text-sm text-brand-700/80">{footer}</div> : null}
             </div>
-          </div>
+            {footer ? <div className="mt-4 text-sm text-brand-700/80">{footer}</div> : null}
+          </section>
 
-          <div className="mt-10 text-xs text-brand-700/60">
-            © {new Date().getFullYear()} Qeemly. All rights reserved.
-          </div>
-        </div>
-
-        {/* Right / Marketing */}
-        <div className="auth-hero-panel relative hidden overflow-hidden border-l border-border/70 bg-white/60 px-10 py-10 lg:flex lg:flex-col lg:justify-between">
-          <div className="pointer-events-none absolute inset-0 auth-hero-grid" aria-hidden="true" />
-          <div className="pointer-events-none absolute inset-0 auth-hero-glow" aria-hidden="true" />
-
-          <div className="relative">
-            <Badge variant="ghost" className="bg-white/70 backdrop-blur">
-              {marketingBadge}
-            </Badge>
-            <h2 className="mt-4 text-3xl font-semibold tracking-tight text-brand-900">{marketingHeadline}</h2>
-            <p className="mt-3 max-w-xl text-sm leading-relaxed text-brand-700/80">{marketingSubhead}</p>
-
-            <ul className="mt-6 space-y-3 text-sm text-brand-800/90">
-              {bullets.slice(0, 3).map((b) => (
-                <li key={b} className="flex gap-3">
-                  <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-brand-500/80" />
-                  <span className="leading-relaxed">{b}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          <div className="relative mt-10">
-            <HeroPlaceholder pathHint={heroImagePathHint} prompt={heroPrompt} />
-
-            {/* Floating “modal” overlays */}
-            <div className="pointer-events-none absolute -left-6 -top-8 w-[320px] rotate-[-5deg]">
-              <OverlayCardUI {...overlays[0]} />
+          <section
+            data-testid="auth-visual-panel"
+            className="auth-hero-panel absolute left-[731px] top-0 h-[758px] w-[713px] overflow-hidden rounded-bl-[40px] rounded-tl-[40px] bg-[#111233]"
+          >
+            <div
+              aria-hidden="true"
+              className="absolute inset-0 rounded-bl-[40px] rounded-tl-[40px]"
+              style={{
+                backgroundImage:
+                  "url(\"data:image/svg+xml;utf8,<svg viewBox='0 0 713 758' xmlns='http://www.w3.org/2000/svg' preserveAspectRatio='none'><rect x='0' y='0' height='100%' width='100%' fill='url(%23grad)' opacity='1'/><defs><radialGradient id='grad' gradientUnits='userSpaceOnUse' cx='0' cy='0' r='10' gradientTransform='matrix(70.755 73.61 -69.083 220.24 0 0)'><stop stop-color='rgba(92,69,253,1)' offset='0'/><stop stop-color='rgba(92,69,253,0)' offset='1'/></radialGradient></defs></svg>\"), linear-gradient(90deg, rgb(17, 18, 51) 0%, rgb(17, 18, 51) 100%)",
+              }}
+            />
+            <div className="absolute inset-0">
+              <Image
+                src={resolvedHeroImageSrc}
+                alt={marketingHeadline ?? `${title} illustration`}
+                fill
+                priority
+                sizes="713px"
+                className="object-cover rounded-bl-[40px] rounded-tl-[40px]"
+              />
             </div>
-            <div className="pointer-events-none absolute -right-8 top-10 w-[300px] rotate-[6deg]">
-              <OverlayCardUI {...overlays[1]} />
-            </div>
-            <div className="pointer-events-none absolute left-10 -bottom-10 w-[320px] rotate-[2deg]">
-              <OverlayCardUI {...overlays[2]} />
-            </div>
+            {rightFooter ? <div className="absolute bottom-6 right-6 z-10">{rightFooter}</div> : null}
+          </section>
+        </main>
+      </div>
+
+      <div className="mx-auto flex min-h-screen w-full max-w-[34rem] flex-col px-6 py-6 lg:hidden">
+        <header data-testid="auth-top-nav" className="flex items-center justify-between gap-4">
+          <Logo href="/home" className="shrink-0" />
+          <div className="flex items-center gap-2">
+            <AuthNavButton href="/register" label="Early access" active={activeNav === "register"} variant="mint" />
+            <AuthNavButton href="/login" label="Log in" active={activeNav === "login"} />
           </div>
+        </header>
 
-          {rightFooter ? <div className="relative mt-10">{rightFooter}</div> : <div className="relative" />}
-        </div>
-
-        {/* Mobile marketing (condensed) */}
-        <div className="auth-hero-panel relative border-t border-border/70 bg-white/60 px-6 py-10 lg:hidden">
-          <div className="pointer-events-none absolute inset-0 auth-hero-grid" aria-hidden="true" />
-          <div className="pointer-events-none absolute inset-0 auth-hero-glow" aria-hidden="true" />
-
-          <div className="relative mx-auto max-w-md">
-            <Badge variant="ghost" className="bg-white/70 backdrop-blur">
-              {marketingBadge}
-            </Badge>
-            <h2 className="mt-4 text-2xl font-semibold tracking-tight text-brand-900">{marketingHeadline}</h2>
-            <p className="mt-3 text-sm leading-relaxed text-brand-700/80">{marketingSubhead}</p>
-
-            <div className="mt-6">
-              <HeroPlaceholder pathHint={heroImagePathHint} prompt={heroPrompt} />
+        <section className="mt-10 rounded-[24px] bg-white p-6 shadow-[0_20px_60px_rgba(17,18,51,0.08)]">
+          <div className="flex flex-col gap-8">
+            <div>
+              <h1 className="text-[2rem] font-semibold leading-[1.2] tracking-[-0.03em] text-[#111233]">{title}</h1>
+              {description ? <p className="mt-3 text-sm leading-6 text-brand-700/75">{description}</p> : null}
             </div>
+            {children}
           </div>
-        </div>
+        </section>
+
+        {footer ? <div className="mt-4 text-sm text-brand-700/80">{footer}</div> : null}
+
+        <section className="auth-hero-panel relative mt-8 overflow-hidden rounded-[32px]">
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 rounded-[32px]"
+            style={{
+              backgroundImage:
+                "url(\"data:image/svg+xml;utf8,<svg viewBox='0 0 713 758' xmlns='http://www.w3.org/2000/svg' preserveAspectRatio='none'><rect x='0' y='0' height='100%' width='100%' fill='url(%23grad)' opacity='1'/><defs><radialGradient id='grad' gradientUnits='userSpaceOnUse' cx='0' cy='0' r='10' gradientTransform='matrix(70.755 73.61 -69.083 220.24 0 0)'><stop stop-color='rgba(92,69,253,1)' offset='0'/><stop stop-color='rgba(92,69,253,0)' offset='1'/></radialGradient></defs></svg>\"), linear-gradient(90deg, rgb(17, 18, 51) 0%, rgb(17, 18, 51) 100%)",
+            }}
+          />
+          <div className="relative min-h-[360px]">
+            <Image
+              src={resolvedHeroImageSrc}
+              alt={marketingHeadline ?? `${title} illustration`}
+              fill
+              sizes="100vw"
+              className="object-cover rounded-[32px]"
+            />
+          </div>
+        </section>
       </div>
     </div>
   );
 }
-
-
-
-
-
 

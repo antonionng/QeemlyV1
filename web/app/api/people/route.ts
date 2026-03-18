@@ -5,6 +5,7 @@ import { getWorkspaceContext } from "@/lib/workspace-context";
 import { refreshPlatformMarketPoolBestEffort } from "@/lib/benchmarks/platform-market-sync";
 import { refreshComplianceSnapshot } from "@/lib/compliance/snapshot-service";
 import { fetchMarketBenchmarks, type MarketBenchmark } from "@/lib/benchmarks/platform-market";
+import { refreshBenchmarkCoverageSnapshot } from "@/lib/benchmarks/coverage-snapshots";
 
 function isMissingRelationError(error: { code?: string; message?: string } | null | undefined): boolean {
   if (!error) return false;
@@ -162,6 +163,11 @@ export async function POST(request: NextRequest) {
     // Keep mutation success even if compliance refresh fails.
   }
   await refreshPlatformMarketPoolBestEffort();
+  try {
+    await refreshBenchmarkCoverageSnapshot(wsContext.context.workspace_id);
+  } catch {
+    // Keep mutation success even if coverage refresh fails.
+  }
 
   return NextResponse.json({ ok: true, employee: data });
 }
@@ -197,6 +203,11 @@ export async function PATCH(request: NextRequest) {
     // Keep mutation success even if compliance refresh fails.
   }
   await refreshPlatformMarketPoolBestEffort();
+  try {
+    await refreshBenchmarkCoverageSnapshot(wsContext.context.workspace_id);
+  } catch {
+    // Keep mutation success even if coverage refresh fails.
+  }
 
   return NextResponse.json({ ok: true, count: ids.length });
 }

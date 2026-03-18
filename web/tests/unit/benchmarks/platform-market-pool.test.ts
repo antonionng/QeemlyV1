@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   aggregateMarketPoolObservations,
+  getMarketPoolMinimumContributors,
   type MarketPoolObservation,
 } from "@/lib/benchmarks/platform-market-pool";
 
@@ -270,5 +271,16 @@ describe("aggregateMarketPoolObservations", () => {
       },
     });
     expect(row.p50).toBe(80_000);
+  });
+});
+
+describe("getMarketPoolMinimumContributors", () => {
+  it("keeps the production trust threshold by default", () => {
+    expect(getMarketPoolMinimumContributors({})).toBe(3);
+    expect(getMarketPoolMinimumContributors({ QEEMLY_ENABLE_DEMO_MARKET_BOOTSTRAP: "false" })).toBe(3);
+  });
+
+  it("allows a single-workspace bootstrap only when explicitly enabled", () => {
+    expect(getMarketPoolMinimumContributors({ QEEMLY_ENABLE_DEMO_MARKET_BOOTSTRAP: "true" })).toBe(1);
   });
 });

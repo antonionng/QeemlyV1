@@ -13,4 +13,8 @@ export const uaeFcscWorkforceCompAdapter = createOdsAdapter({
   annualMultiplier: 12,
   sampleSize: 40,
   defaultRole: "Software Engineer",
+  locationVariants: [
+    { location: "Dubai", multiplier: 1 },
+    { location: "Abu Dhabi", multiplier: 1.04 },
+  ],
 });

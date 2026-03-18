@@ -98,6 +98,55 @@ describe("buildSalaryReviewAiPlan", () => {
     expect(plan.items[0].warnings.some((warning) => warning.includes("fallback"))).toBe(true);
   });
 
+  it("uses the same-country market fallback before a workspace exact match", () => {
+    const plan = buildSalaryReviewAiPlan({
+      request: { ...baseRequest, budgetAbsolute: 8_000 },
+      employees: [
+        {
+          id: "e1",
+          firstName: "B",
+          lastName: "Two",
+          roleId: "r2",
+          levelId: "l3",
+          locationId: "abu-dhabi",
+          baseSalary: 110_000,
+          performanceRating: "exceeds",
+          hireDate: "2019-05-01",
+        },
+      ],
+      workspaceBenchmarks: [
+        {
+          roleId: "r2",
+          levelId: "l3",
+          locationId: "abu-dhabi",
+          p50: 150_000,
+          provenance: "workspace",
+          sourceSlug: "workspace_uploaded",
+          sourceName: "Workspace Benchmarks",
+        },
+      ],
+      ingestionBenchmarks: [
+        {
+          roleId: "r2",
+          levelId: "l3",
+          locationId: "dubai",
+          p50: 120_000,
+          provenance: "ingestion",
+          sourceSlug: "qeemly_ingestion",
+          sourceName: "Qeemly Ingestion",
+        },
+      ],
+      freshness: [
+        { provenance: "workspace", lastUpdatedAt: "2026-03-05T10:00:00.000Z", confidence: "high" },
+        { provenance: "ingestion", lastUpdatedAt: "2026-03-05T09:00:00.000Z", confidence: "high" },
+      ],
+    });
+
+    expect(plan.items[0].benchmark.provenance).toBe("ingestion");
+    expect(plan.items[0].benchmark.matchQuality).toBe("role_level_fallback");
+    expect(plan.items[0].benchmark.matchType).toBe("location_fallback");
+  });
+
   it("keeps total proposed increases within budget", () => {
     const plan = buildSalaryReviewAiPlan({
       request: baseRequest,

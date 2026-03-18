@@ -13,4 +13,8 @@ export const uaeFcscGovCompensationAdapter = createOdsAdapter({
   annualMultiplier: 12,
   sampleSize: 30,
   defaultRole: "Data Analyst",
+  locationVariants: [
+    { location: "Dubai", multiplier: 1 },
+    { location: "Abu Dhabi", multiplier: 1.03 },
+  ],
 });

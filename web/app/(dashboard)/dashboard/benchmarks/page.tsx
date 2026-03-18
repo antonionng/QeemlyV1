@@ -30,6 +30,54 @@ type BenchmarkStats = {
   };
 };
 
+function getSourceBadgeLabel(sources: string[]) {
+  const hasMarket = sources.includes("market");
+  const hasUploaded = sources.includes("uploaded");
+
+  if (hasMarket && hasUploaded) {
+    return "Qeemly Market Data + Your Data";
+  }
+  if (hasMarket) {
+    return "Qeemly Market Data";
+  }
+  if (hasUploaded) {
+    return "Your Data";
+  }
+  return "N/A";
+}
+
+function getFreshnessBadge(stats: BenchmarkStats | null) {
+  if (!stats) {
+    return { label: "Published", value: "Loading..." };
+  }
+
+  const hasMarket = stats.sources.includes("market");
+  if (hasMarket) {
+    if (!stats.lastUpdated) {
+      return { label: "Published", value: "Not published yet" };
+    }
+
+    const publishedAt = new Date(stats.lastUpdated);
+    return {
+      label: "Published",
+      value: publishedAt.toLocaleDateString("en-GB", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      }),
+    };
+  }
+
+  if (!stats.lastUpdated) {
+    return { label: "Updated", value: "Date unavailable" };
+  }
+
+  return {
+    label: "Updated",
+    value: new Date(stats.lastUpdated).toLocaleDateString("en-GB"),
+  };
+}
+
 export default function BenchmarksPage() {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [stats, setStats] = useState<BenchmarkStats | null>(null);
@@ -57,13 +105,9 @@ export default function BenchmarksPage() {
     }
   }, []);
 
-  const freshnessLabel = stats?.lastUpdated
-    ? new Date(stats.lastUpdated).toLocaleDateString("en-GB")
-    : "Unknown";
+  const freshnessBadge = getFreshnessBadge(stats);
   const marketDiagnosticMessage =
-    stats?.diagnostics?.market.error ||
-    stats?.diagnostics?.market.warning ||
-    stats?.diagnostics?.market.clientWarning;
+    stats?.diagnostics?.market.error || stats?.diagnostics?.market.clientWarning;
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -144,10 +188,10 @@ export default function BenchmarksPage() {
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-surface-1 px-4 py-3 text-xs text-accent-600">
             <span className="rounded-full bg-brand-100 px-2.5 py-1 text-brand-700">
-              Source: {stats.sources.length > 0 ? stats.sources.slice(0, 2).join(", ") : "N/A"}
+              Source: {getSourceBadgeLabel(stats.sources)}
             </span>
             <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-emerald-700">
-              Refreshed: {freshnessLabel}
+              {freshnessBadge.label}: {freshnessBadge.value}
             </span>
           </div>
 

@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { AuthSplitShell, AUTH_IMAGE_PROMPTS } from "@/components/auth/auth-split-shell";
+import { AuthSplitShell, AUTH_PUBLIC_HERO_IMAGE_PATH } from "@/components/auth/auth-split-shell";
 import { employeeSignup } from "./actions";
 
 function EmployeeRegisterForm() {
@@ -27,6 +27,11 @@ function EmployeeRegisterForm() {
     }
   }
 
+  async function handleFormSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await handleSubmit(new FormData(event.currentTarget));
+  }
+
   if (!token) {
     return (
       <div className="text-center py-8">
@@ -42,16 +47,24 @@ function EmployeeRegisterForm() {
   }
 
   return (
-    <form action={handleSubmit} className="space-y-4">
-      <div className="space-y-2">
-        <label htmlFor="name" className="text-sm font-semibold text-brand-900">
+    <form onSubmit={handleFormSubmit} className="space-y-6">
+      <div className="space-y-3">
+        <label htmlFor="name" className="text-base font-medium text-[#111233]">
           Full name
         </label>
-        <Input id="name" name="name" placeholder="Your name" autoComplete="name" fullWidth required />
+        <Input
+          id="name"
+          name="name"
+          placeholder="Your name"
+          autoComplete="name"
+          className="h-16 rounded-[32px] border-brand-200/70 px-6 text-[17px] font-medium text-[#111233] placeholder:text-[#111233]/55 focus:ring-brand-100"
+          fullWidth
+          required
+        />
       </div>
 
-      <div className="space-y-2">
-        <label htmlFor="email" className="text-sm font-semibold text-brand-900">
+      <div className="space-y-3">
+        <label htmlFor="email" className="text-base font-medium text-[#111233]">
           Work email
         </label>
         <Input
@@ -62,6 +75,7 @@ function EmployeeRegisterForm() {
           autoComplete="email"
           defaultValue={prefillEmail}
           readOnly={!!prefillEmail}
+          className="h-16 rounded-[32px] border-brand-200/70 px-6 text-[17px] font-medium text-[#111233] placeholder:text-[#111233]/55 focus:ring-brand-100"
           fullWidth
           required
         />
@@ -70,8 +84,8 @@ function EmployeeRegisterForm() {
         )}
       </div>
 
-      <div className="space-y-2">
-        <label htmlFor="password" className="text-sm font-semibold text-brand-900">
+      <div className="space-y-3">
+        <label htmlFor="password" className="text-base font-medium text-[#111233]">
           Password
         </label>
         <Input
@@ -80,6 +94,7 @@ function EmployeeRegisterForm() {
           placeholder="Create a password"
           type="password"
           autoComplete="new-password"
+          className="h-16 rounded-[32px] border-brand-200/70 px-6 text-[17px] font-medium text-[#111233] placeholder:text-[#111233]/55 focus:ring-brand-100"
           fullWidth
           required
         />
@@ -89,7 +104,7 @@ function EmployeeRegisterForm() {
 
       {error && <p className="text-sm font-medium text-red-600">{error}</p>}
 
-      <Button type="submit" fullWidth isLoading={isLoading}>
+      <Button type="submit" className="h-16 rounded-[32px] text-lg font-semibold shadow-none" fullWidth isLoading={isLoading}>
         Create my account
       </Button>
 
@@ -105,16 +120,8 @@ export default function EmployeeRegisterPage() {
     <AuthSplitShell
       title="Join your team"
       description="Your company has invited you to view your compensation details."
-      marketingBadge="Employee Portal"
-      marketingHeadline="Your compensation, clearly explained."
-      marketingSubhead="See your salary, bonus, equity, and growth history in one place."
-      bullets={[
-        "View your total compensation breakdown",
-        "Track your salary growth over time",
-        "Understand where you sit within your salary band",
-      ]}
-      heroImagePathHint="/public/auth/hero-register.png"
-      heroPrompt={AUTH_IMAGE_PROMPTS.registerHero}
+      activeNav="register"
+      heroImageSrc={AUTH_PUBLIC_HERO_IMAGE_PATH}
       footer={
         <p>
           Already have an account?{" "}

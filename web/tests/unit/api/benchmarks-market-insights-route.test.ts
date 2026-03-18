@@ -353,4 +353,41 @@ describe("GET /api/benchmarks/market-insights", () => {
         "Broaden your view, start with the strongest coverage areas below, and use extra caution before making compensation decisions from low-density cohorts.",
     });
   });
+
+  it("falls back to the session client when the service client query fails with an invalid API key", async () => {
+    createClientMock.mockResolvedValue(createSessionSupabase({ workspaceId: null }));
+    createServiceClientMock.mockReturnValue({ from: vi.fn() });
+    fetchMarketBenchmarksMock
+      .mockRejectedValueOnce(new Error("Invalid API key"))
+      .mockResolvedValueOnce([
+        {
+          role_id: "swe-devops",
+          location_id: "dubai",
+          level_id: "ic2",
+          currency: "AED",
+          p10: 12000,
+          p25: 14000,
+          p50: 16000,
+          p75: 18000,
+          p90: 20000,
+          sample_size: 24,
+          contributor_count: 4,
+          provenance: "blended",
+          freshness_at: "2026-03-10T00:00:00.000Z",
+          source_breakdown: { employee: 2, uploaded: 1 },
+          source: "market",
+        },
+      ]);
+
+    const response = await GET();
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.status).toBe("ready");
+    expect(payload.summary.benchmarkCount).toBe(1);
+    expect(payload.diagnostics.market.readMode).toBe("session");
+    expect(payload.diagnostics.market.error).toBeNull();
+    expect(payload.diagnostics.market.clientWarning).toBeNull();
+    expect(fetchMarketBenchmarksMock).toHaveBeenCalledTimes(2);
+  });
 });

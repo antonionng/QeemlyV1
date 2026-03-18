@@ -27,6 +27,7 @@ import { GET } from "@/app/api/benchmarks/stats/route";
 function createSessionSupabase({
   workspaceId = "workspace-1",
   workspaceBenchmarks = [],
+  latestMarketPublishEvent = null,
 }: {
   workspaceId?: string | null;
   workspaceBenchmarks?: Array<{
@@ -36,6 +37,10 @@ function createSessionSupabase({
     source: string;
     updated_at: string;
   }>;
+  latestMarketPublishEvent?: {
+    id: string;
+    published_at: string;
+  } | null;
 }) {
   return {
     auth: {
@@ -64,6 +69,21 @@ function createSessionSupabase({
               data: workspaceBenchmarks,
               error: null,
             }),
+          })),
+        };
+      }
+
+      if (table === "market_publish_events") {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              order: vi.fn(() => ({
+                limit: vi.fn().mockResolvedValue({
+                  data: latestMarketPublishEvent ? [latestMarketPublishEvent] : [],
+                  error: null,
+                }),
+              })),
+            })),
           })),
         };
       }
@@ -156,5 +176,55 @@ describe("GET /api/benchmarks/stats", () => {
     expect(payload.diagnostics.market.error).toBe("market read failed");
     expect(payload.diagnostics.market.readMode).toBe("session");
     expect(payload.diagnostics.market.clientWarning).toContain("SUPABASE_SERVICE_ROLE_KEY");
+  });
+
+  it("uses the latest market publish event as the benchmark freshness timestamp", async () => {
+    createClientMock.mockResolvedValue(
+      createSessionSupabase({
+        workspaceBenchmarks: [],
+        latestMarketPublishEvent: {
+          id: "publish-1",
+          published_at: "2026-03-17T10:00:00.000Z",
+        },
+      }),
+    );
+    createServiceClientMock.mockReturnValue({ from: vi.fn() });
+    fetchMarketBenchmarksMock.mockResolvedValue([
+      {
+        role_id: "swe-devops",
+        location_id: "dubai",
+        level_id: "ic2",
+      },
+    ]);
+
+    const response = await GET();
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.lastUpdated).toBe("2026-03-17T10:00:00.000Z");
+  });
+
+  it("falls back to the session client when the service client query fails with an invalid API key", async () => {
+    createClientMock.mockResolvedValue(createSessionSupabase({ workspaceBenchmarks: [] }));
+    createServiceClientMock.mockReturnValue({ from: vi.fn() });
+    fetchMarketBenchmarksMock
+      .mockRejectedValueOnce(new Error("Invalid API key"))
+      .mockResolvedValueOnce([
+        {
+          role_id: "swe-devops",
+          location_id: "dubai",
+          level_id: "ic2",
+        },
+      ]);
+
+    const response = await GET();
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.market.count).toBe(1);
+    expect(payload.diagnostics.market.readMode).toBe("session");
+    expect(payload.diagnostics.market.error).toBeNull();
+    expect(payload.diagnostics.market.clientWarning).toBeNull();
+    expect(fetchMarketBenchmarksMock).toHaveBeenCalledTimes(2);
   });
 });

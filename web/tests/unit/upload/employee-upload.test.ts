@@ -314,4 +314,228 @@ describe("uploadEmployees", () => {
     expect(result.failedCount).toBe(1);
     expect(result.errors[0]).toContain("another workspace");
   });
+
+  it("creates pending role-mapping reviews and refreshes coverage after importing unresolved employees", async () => {
+    const profileQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: { workspace_id: "ws-1" } }),
+    };
+
+    const existingEmployeesQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      in: vi.fn().mockResolvedValue({ data: [], error: null }),
+    };
+
+    const employeesQuery = {
+      insert: vi.fn().mockReturnValue({
+        select: vi.fn().mockResolvedValue({
+          data: [{ id: "emp-new", email: "ava@example.com" }],
+          error: null,
+        }),
+      }),
+    };
+
+    const roleMappingReviewsInsert = vi.fn().mockResolvedValue({ error: null });
+
+    let employeeTableCall = 0;
+
+    createClientMock.mockReturnValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
+      },
+      from: vi.fn((table: string) => {
+        if (table === "profiles") return profileQuery;
+        if (table === "employees") {
+          employeeTableCall += 1;
+          return employeeTableCall === 1 ? existingEmployeesQuery : employeesQuery;
+        }
+        if (table === "role_mapping_reviews") {
+          return { insert: roleMappingReviewsInsert };
+        }
+        if (table === "employee_profile_enrichment") {
+          return { upsert: vi.fn().mockResolvedValue({ error: null }) };
+        }
+        if (table === "employee_visa_records") {
+          return { insert: vi.fn().mockResolvedValue({ error: null }) };
+        }
+        throw new Error(`Unexpected table: ${table}`);
+      }),
+    });
+
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { uploadEmployees } = await import("@/lib/upload/api");
+
+    const result = await uploadEmployees([
+      {
+        firstName: "Ava",
+        lastName: "Stone",
+        email: "ava@example.com",
+        department: "Operations",
+        roleId: null,
+        canonicalRoleId: null,
+        roleMappingConfidence: "low",
+        roleMappingSource: "upload",
+        roleMappingStatus: "pending",
+        originalRoleText: "Founder's Associate",
+        levelId: "ic3",
+        originalLevelText: "IC3",
+        locationId: "dubai",
+        baseSalary: 120_000,
+        bonus: null,
+        equity: null,
+        currency: "AED",
+        status: "active",
+        employmentType: "national",
+        hireDate: null,
+        performanceRating: null,
+        avatarUrl: null,
+        visaType: null,
+        visaStatus: null,
+        visaIssueDate: null,
+        visaExpiryDate: null,
+        visaSponsor: null,
+        visaPermitId: null,
+      },
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(roleMappingReviewsInsert).toHaveBeenCalledWith([
+      expect.objectContaining({
+        workspace_id: "ws-1",
+        subject_type: "employee",
+        subject_id: "emp-new",
+        original_role_text: "Founder's Associate",
+        status: "pending",
+      }),
+    ]);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/benchmarks/coverage/refresh",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("applies approved workspace aliases before creating a new review", async () => {
+    const profileQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: { workspace_id: "ws-1" } }),
+    };
+
+    const existingEmployeesQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      in: vi.fn().mockResolvedValue({ data: [], error: null }),
+    };
+
+    const employeesInsert = vi.fn().mockReturnValue({
+      select: vi.fn().mockResolvedValue({
+        data: [{ id: "emp-new", email: "ava@example.com" }],
+        error: null,
+      }),
+    });
+
+    let employeeTableCall = 0;
+
+    createClientMock.mockReturnValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
+      },
+      from: vi.fn((table: string) => {
+        if (table === "profiles") return profileQuery;
+        if (table === "employees") {
+          employeeTableCall += 1;
+          return employeeTableCall === 1
+            ? existingEmployeesQuery
+            : {
+                insert: employeesInsert,
+              };
+        }
+        if (table === "canonical_role_aliases") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockResolvedValue({
+              data: [
+                {
+                  canonical_role_id: "pm",
+                  alias_normalized: "founder s associate",
+                },
+              ],
+              error: null,
+            }),
+          };
+        }
+        if (table === "role_mapping_reviews") {
+          return { insert: vi.fn().mockResolvedValue({ error: null }) };
+        }
+        if (table === "employee_profile_enrichment") {
+          return { upsert: vi.fn().mockResolvedValue({ error: null }) };
+        }
+        if (table === "employee_visa_records") {
+          return { insert: vi.fn().mockResolvedValue({ error: null }) };
+        }
+        throw new Error(`Unexpected table: ${table}`);
+      }),
+    });
+
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { uploadEmployees } = await import("@/lib/upload/api");
+
+    const result = await uploadEmployees([
+      {
+        firstName: "Ava",
+        lastName: "Stone",
+        email: "ava@example.com",
+        department: "Operations",
+        roleId: null,
+        canonicalRoleId: null,
+        roleMappingConfidence: "low",
+        roleMappingSource: "upload",
+        roleMappingStatus: "pending",
+        originalRoleText: "Founder's Associate",
+        levelId: "ic3",
+        originalLevelText: "IC3",
+        locationId: "dubai",
+        baseSalary: 120_000,
+        bonus: null,
+        equity: null,
+        currency: "AED",
+        status: "active",
+        employmentType: "national",
+        hireDate: null,
+        performanceRating: null,
+        avatarUrl: null,
+        visaType: null,
+        visaStatus: null,
+        visaIssueDate: null,
+        visaExpiryDate: null,
+        visaSponsor: null,
+        visaPermitId: null,
+      },
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(employeesInsert).toHaveBeenCalledWith([
+      expect.objectContaining({
+        role_id: "pm",
+        canonical_role_id: "pm",
+        role_mapping_status: "mapped",
+      }),
+    ]);
+  });
 });

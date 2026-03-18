@@ -26,28 +26,28 @@ const ICONS = {
 
 const TONE_STYLES = {
   danger: {
-    card: "border-rose-200 bg-rose-50/60 hover:bg-rose-50",
-    iconBg: "bg-rose-100",
-    iconColor: "text-rose-600",
-    count: "text-rose-700 bg-white",
+    card: "border-[rgba(255,32,86,0.2)] bg-[rgba(255,32,86,0.08)] hover:bg-[rgba(255,32,86,0.12)]",
+    iconBg: "bg-[rgba(255,32,86,0.14)]",
+    iconColor: "text-[#FF2056]",
+    count: "bg-white text-[#FF2056]",
   },
   warning: {
-    card: "border-amber-200 bg-amber-50/60 hover:bg-amber-50",
-    iconBg: "bg-amber-100",
-    iconColor: "text-amber-600",
-    count: "text-amber-700 bg-white",
+    card: "border-[rgba(254,154,0,0.2)] bg-[rgba(254,154,0,0.08)] hover:bg-[rgba(254,154,0,0.12)]",
+    iconBg: "bg-[rgba(254,154,0,0.14)]",
+    iconColor: "text-[#FE9A00]",
+    count: "bg-white text-[#FE9A00]",
   },
   info: {
-    card: "border-brand-200 bg-brand-50/70 hover:bg-brand-50",
-    iconBg: "bg-brand-100",
-    iconColor: "text-brand-600",
-    count: "text-brand-700 bg-white",
+    card: "border-[rgba(92,69,253,0.2)] bg-[rgba(92,69,253,0.08)] hover:bg-[rgba(92,69,253,0.12)]",
+    iconBg: "bg-[rgba(92,69,253,0.14)]",
+    iconColor: "text-[#5C45FD]",
+    count: "bg-white text-[#5C45FD]",
   },
   positive: {
-    card: "border-emerald-200 bg-emerald-50/70 hover:bg-emerald-50",
-    iconBg: "bg-emerald-100",
-    iconColor: "text-emerald-600",
-    count: "text-emerald-700 bg-white",
+    card: "border-[rgba(0,188,125,0.2)] bg-[rgba(0,188,125,0.08)] hover:bg-[rgba(0,188,125,0.12)]",
+    iconBg: "bg-[rgba(0,188,125,0.14)]",
+    iconColor: "text-[#00BC7D]",
+    count: "bg-white text-[#00BC7D]",
   },
 } as const;
 
@@ -102,7 +102,7 @@ export function QuickActions({ actions }: QuickActionsProps) {
           const tone = TONE_STYLES[action.tone];
 
           return (
-            <Link key={action.id} href={action.href} className="shrink-0 w-[260px]">
+            <Link key={action.id} href={action.href} className="w-[260px] shrink-0">
               <Card
                 className={clsx(
                   "flex h-full flex-col border p-6 transition-shadow hover:shadow-md",
@@ -113,7 +113,7 @@ export function QuickActions({ actions }: QuickActionsProps) {
                   <Icon className={clsx("h-5 w-5", tone.iconColor)} strokeWidth={1.5} />
                 </div>
                 <div className="mb-2 flex items-start justify-between gap-2">
-                  <p className="text-sm font-medium leading-snug text-accent-900">
+                  <p className="text-sm font-medium leading-snug text-[#111233]">
                     {action.title}
                   </p>
                   {action.countLabel && (
@@ -122,10 +122,10 @@ export function QuickActions({ actions }: QuickActionsProps) {
                     </span>
                   )}
                 </div>
-                <p className="mb-6 flex-1 text-[13px] text-accent-600">
+                <p className="mb-6 flex-1 text-[13px] text-[#969799]">
                   {action.description}
                 </p>
-                <div className="group flex items-center gap-1 text-xs font-semibold text-accent-700">
+                <div className="group flex items-center gap-1 text-xs font-semibold text-[#111233]">
                   {action.actionLabel}
                   <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" strokeWidth={1.5} />
                 </div>

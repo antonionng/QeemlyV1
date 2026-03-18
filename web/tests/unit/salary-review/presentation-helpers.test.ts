@@ -81,6 +81,21 @@ describe("salary review filters", () => {
     expect(result.map((employee) => employee.id)).toEqual(["a", "c"]);
   });
 
+  it("keeps only in-band employees for the in-band cohort", () => {
+    const employees = [
+      makeEmployee({ id: "a", bandPosition: "below" }),
+      makeEmployee({ id: "b", bandPosition: "in-band" }),
+      makeEmployee({ id: "c", bandPosition: "above" }),
+    ];
+
+    const result = applySalaryReviewFilters(employees, {
+      ...defaultQuery,
+      bandFilter: "in-band",
+    });
+
+    expect(result.map((employee) => employee.id)).toEqual(["b"]);
+  });
+
   it("combines department and benchmark fallback filtering", () => {
     const employees = [
       makeEmployee({

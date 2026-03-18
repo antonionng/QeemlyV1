@@ -129,15 +129,17 @@ export function buildCompanyOverviewSnapshot({
   employees,
   freshness,
   syncLogs,
+  coverageSnapshot,
 }: {
   employees: Employee[];
   freshness: OverviewFreshnessRow[];
   syncLogs: OverviewSyncLog[];
+  coverageSnapshot?: OverviewBenchmarkCoverage | null;
 }): CompanyOverviewSnapshot {
   const metrics = buildOverviewMetrics(employees);
   const departmentSummaries = buildOverviewDepartmentSummaries(employees);
   const activeEmployees = employees.filter((employee) => employee.status === "active");
-  const benchmarkCoverage = buildBenchmarkCoverage(activeEmployees);
+  const benchmarkCoverage = coverageSnapshot ?? buildBenchmarkCoverage(activeEmployees);
   const benchmarkTrust = summarizeBenchmarkTrust(activeEmployees);
 
   return {

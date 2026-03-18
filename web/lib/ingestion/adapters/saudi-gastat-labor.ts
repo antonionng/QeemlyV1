@@ -13,4 +13,8 @@ export const saudiGastatLaborAdapter = createOdsAdapter({
   annualMultiplier: 12,
   sampleSize: 42,
   defaultRole: "Product Manager",
+  locationVariants: [
+    { location: "Riyadh", multiplier: 1 },
+    { location: "Jeddah", multiplier: 0.97 },
+  ],
 });

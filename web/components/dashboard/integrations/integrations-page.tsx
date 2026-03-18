@@ -17,6 +17,7 @@ import clsx from "clsx";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { IntegrationCard } from "./integration-card";
+import { IntegrationContactModal } from "./integration-contact-modal";
 import { IntegrationDetailModal } from "./integration-detail-modal";
 import { DeveloperHub } from "./developer/developer-hub";
 import {
@@ -43,6 +44,7 @@ export function IntegrationsPage() {
   const [activeTab, setActiveTab] = useState<Tab>("all");
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedProvider, setSelectedProvider] = useState<IntegrationProvider | null>(null);
+  const [contactProvider, setContactProvider] = useState<IntegrationProvider | null>(null);
   const [showDetailModal, setShowDetailModal] = useState(false);
 
   const store = useIntegrationsStore();
@@ -80,7 +82,7 @@ export function IntegrationsPage() {
   const filteredAtsProviders = filterBySearch(atsProviders);
 
   const handleConnect = (provider: IntegrationProvider) => {
-    store.connectIntegration(provider.id, provider.category as "notification" | "hris" | "ats");
+    setContactProvider(provider);
   };
 
   const handleManage = (provider: IntegrationProvider) => {
@@ -380,6 +382,13 @@ export function IntegrationsPage() {
             setShowDetailModal(false);
             setSelectedProvider(null);
           }}
+        />
+      )}
+
+      {contactProvider && (
+        <IntegrationContactModal
+          providerName={contactProvider.name}
+          onClose={() => setContactProvider(null)}
         />
       )}
     </div>

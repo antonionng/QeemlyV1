@@ -236,6 +236,19 @@ function createSessionSupabase() {
         };
       }
 
+      if (table === "benchmark_coverage_snapshots") {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: null,
+                error: null,
+              }),
+            })),
+          })),
+        };
+      }
+
       throw new Error(`Unexpected table: ${table}`);
     },
   };
@@ -283,14 +296,13 @@ describe("GET /api/dashboard/company-overview", () => {
     expect(response.status).toBe(200);
     expect(payload.benchmarkCoverage).toEqual({
       activeEmployees: 4,
-      benchmarkedEmployees: 3,
-      unbenchmarkedEmployees: 1,
-      coveragePct: 75,
+      benchmarkedEmployees: 4,
+      unbenchmarkedEmployees: 0,
+      coveragePct: 100,
     });
     expect(payload.actions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ id: "outside-band" }),
-        expect.objectContaining({ id: "coverage-gap", href: "/dashboard/upload" }),
       ]),
     );
     expect(payload.dataHealth.latestBenchmarkFreshness).toEqual({
@@ -306,5 +318,46 @@ describe("GET /api/dashboard/company-overview", () => {
   it("invalidates the market cache when refresh is requested", async () => {
     await GET(new Request("http://localhost/api/dashboard/company-overview?refresh=1"));
     expect(invalidateMarketBenchmarkCacheMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("prefers the persisted coverage snapshot when one exists", async () => {
+    const supabase = createSessionSupabase();
+    const originalFrom = supabase.from;
+    supabase.from = (table: string) => {
+      if (table === "benchmark_coverage_snapshots") {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              maybeSingle: vi.fn().mockResolvedValue({
+                data: {
+                  workspace_id: "workspace-1",
+                  employee_count: 4,
+                  exact_match_count: 2,
+                  fallback_match_count: 1,
+                  unresolved_count: 1,
+                  market_coverage_rate: 75,
+                },
+                error: null,
+              }),
+            })),
+          })),
+        };
+      }
+
+      return originalFrom(table);
+    };
+
+    createClientMock.mockResolvedValue(supabase);
+
+    const response = await GET(new Request("http://localhost/api/dashboard/company-overview"));
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.benchmarkCoverage).toEqual({
+      activeEmployees: 4,
+      benchmarkedEmployees: 3,
+      unbenchmarkedEmployees: 1,
+      coveragePct: 75,
+    });
   });
 });

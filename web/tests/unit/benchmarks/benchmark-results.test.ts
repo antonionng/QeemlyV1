@@ -327,4 +327,79 @@ describe("BenchmarkResults", () => {
     root.unmount();
     vi.unstubAllGlobals();
   });
+
+  it("renders the employment pill with dedicated space for the chevron", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          benchmarkSource: "market",
+          bandLow: 120000,
+          bandHigh: 180000,
+          matchingEmployeeCount: 0,
+          inBandCount: 0,
+        }),
+      })),
+    );
+
+    const container = document.createElement("div");
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        React.createElement(BenchmarkResults, {
+          result: {
+            formData: {
+              context: "existing",
+              roleId: "pm",
+              levelId: "ic3",
+              locationId: "riyadh",
+              employmentType: "national",
+              currentSalaryLow: null,
+              currentSalaryHigh: null,
+              industry: "Fintech",
+              companySize: "1-50",
+              fundingStage: null,
+              targetPercentile: 50,
+            },
+            benchmark: baseBenchmark,
+            role: {
+              id: "pm",
+              title: "Product Manager",
+              family: "Product",
+              icon: "PM",
+            },
+            level: {
+              id: "ic3",
+              name: "Senior (IC3)",
+              category: "IC",
+            },
+            location: {
+              id: "riyadh",
+              city: "Riyadh",
+              country: "Saudi Arabia",
+              countryCode: "SA",
+              currency: "AED",
+              flag: "SA",
+            },
+            isOverridden: false,
+            createdAt: new Date("2026-03-12T00:00:00.000Z"),
+          },
+        }),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const employmentPill = container.querySelector('[data-testid="benchmark-employment-pill"]');
+
+    expect(employmentPill).not.toBeNull();
+    expect(employmentPill?.className).toContain("justify-between");
+    expect(employmentPill?.className).toContain("min-w-[140px]");
+
+    root.unmount();
+    vi.unstubAllGlobals();
+  });
 });

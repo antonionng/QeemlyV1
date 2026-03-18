@@ -14,6 +14,14 @@ export type SalaryReviewAiPlanRequest = {
 export type BenchmarkProvenance = "workspace" | "ingestion" | "none";
 
 export type BenchmarkMatchQuality = "exact" | "role_level_fallback" | "none";
+export type BenchmarkMatchType =
+  | "exact"
+  | "location_fallback"
+  | "global_role_level_fallback"
+  | "adjacent_level_fallback"
+  | "family_fallback"
+  | "family_location_fallback"
+  | "none";
 
 export type SalaryReviewAiProposalFactor = {
   key: "market_gap" | "performance" | "band_position" | "tenure";
@@ -38,6 +46,8 @@ export type SalaryReviewAiProposalItem = {
     sourceSlug: string | null;
     sourceName: string | null;
     matchQuality: BenchmarkMatchQuality;
+    matchType?: BenchmarkMatchType;
+    fallbackReason?: string | null;
     freshness: {
       lastUpdatedAt: string | null;
       confidence: "high" | "medium" | "low" | "unknown";

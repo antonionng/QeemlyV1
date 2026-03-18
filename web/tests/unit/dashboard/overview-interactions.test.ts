@@ -98,22 +98,22 @@ const snapshot = {
 } satisfies CompanyOverviewSnapshot;
 
 describe("buildOverviewInteractionMap", () => {
-  it("routes existing drill-downs to active destination pages", () => {
+  it("routes employee drill-downs to salary review cohort URLs", () => {
     const map = buildOverviewInteractionMap(snapshot);
 
     expect(map.healthScoreFactors.bandAlignment.action).toBe("link");
-    expect(map.healthScoreFactors.bandAlignment.href).toBe("/dashboard/salary-review?tab=review&filter=outside-band");
+    expect(map.healthScoreFactors.bandAlignment.href).toBe("/dashboard/salary-review?cohort=outside-band");
     expect(map.healthScoreFactors.marketPosition.action).toBe("link");
     expect(map.healthScoreFactors.marketPosition.href).toBe("/dashboard/benchmarks");
     expect(map.healthScoreFactors.riskManagement.action).toBe("link");
-    expect(map.healthScoreFactors.riskManagement.href).toBe("/dashboard/salary-review?tab=review&filter=above-band");
+    expect(map.healthScoreFactors.riskManagement.href).toBe("/dashboard/salary-review?cohort=above-band");
 
     expect(map.statCards.activeEmployees.action).toBe("link");
-    expect(map.statCards.activeEmployees.href).toBe("/dashboard/salary-review?tab=review");
+    expect(map.statCards.activeEmployees.href).toBe("/dashboard/salary-review?cohort=active-employees");
     expect(map.statCards.inBand.action).toBe("link");
-    expect(map.statCards.inBand.href).toBe("/dashboard/salary-review?tab=review&filter=outside-band");
+    expect(map.statCards.inBand.href).toBe("/dashboard/salary-review?cohort=in-band");
     expect(map.statCards.riskFlags.action).toBe("link");
-    expect(map.statCards.riskFlags.href).toBe("/dashboard/salary-review?tab=review&filter=above-band");
+    expect(map.statCards.riskFlags.href).toBe("/dashboard/salary-review?cohort=above-band");
   });
 
   it("uses drawer fallback content for overview-only surfaces", () => {

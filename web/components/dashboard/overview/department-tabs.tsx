@@ -26,8 +26,8 @@ export function DepartmentTabs({ summaries }: DepartmentTabsProps) {
     return (
       <Card className="rounded-[16px] border-[#EEF1F6] bg-white p-7 shadow-[0px_2px_8px_rgba(16,24,40,0.04)]">
         <div className="space-y-1">
-          <h3 className="text-base font-semibold text-[#111827]">Department Breakdown</h3>
-          <p className="text-[13px] leading-5 text-[#6B7280]">
+          <h3 className="text-base font-semibold text-[#111233]">Department Breakdown</h3>
+          <p className="text-[13px] leading-5 text-[#969799]">
             Department insights will appear once employee benchmarks are available.
           </p>
         </div>
@@ -36,39 +36,39 @@ export function DepartmentTabs({ summaries }: DepartmentTabsProps) {
   }
 
   const payrollValue = formatPayrollValue(selectedSummary.totalPayroll, salaryView);
-  const metricDeltaTone = selectedSummary.avgVsMarket > 0 ? "text-[#B56A00]" : "text-[#C72C4D]";
+  const metricDeltaTone = selectedSummary.avgVsMarket > 0 ? "text-[#FE9A00]" : "text-[#FF2056]";
   const summaryCards = [
     {
       label: "In Band",
       count: selectedSummary.inBandCount,
       pct: selectedSummary.inBandPct,
-      bgColor: "#EEF7F4",
-      borderColor: "#D6ECE4",
-      textColor: "#1F8F6A",
+      bgColor: "rgba(0,188,125,0.1)",
+      borderColor: "rgba(0,188,125,0.2)",
+      textColor: "#00BC7D",
     },
     {
       label: "Above Band",
       count: selectedSummary.aboveBandCount,
       pct: selectedSummary.aboveBandPct,
-      bgColor: "#FFF5E8",
-      borderColor: "#FFE7C2",
-      textColor: "#B56A00",
+      bgColor: "rgba(254,154,0,0.1)",
+      borderColor: "rgba(254,154,0,0.2)",
+      textColor: "#FE9A00",
     },
     {
       label: "Below Band",
       count: selectedSummary.belowBandCount,
       pct: selectedSummary.belowBandPct,
-      bgColor: "#FFEFF2",
-      borderColor: "#FFD7E0",
-      textColor: "#C72C4D",
+      bgColor: "rgba(255,32,86,0.1)",
+      borderColor: "rgba(255,32,86,0.2)",
+      textColor: "#FF2056",
     },
   ];
 
   return (
     <Card className="rounded-[16px] border-[#EEF1F6] bg-white p-7 shadow-[0px_2px_8px_rgba(16,24,40,0.04)]">
       <div className="space-y-1">
-        <h3 className="text-base font-semibold text-[#111827]">Department Breakdown</h3>
-        <p className="text-[13px] leading-5 text-[#6B7280]">
+        <h3 className="text-base font-semibold text-[#111233]">Department Breakdown</h3>
+        <p className="text-[13px] leading-5 text-[#969799]">
           Click a department for detail
         </p>
       </div>
@@ -82,8 +82,8 @@ export function DepartmentTabs({ summaries }: DepartmentTabsProps) {
             className={clsx(
               "rounded-full border px-[14px] py-1.5 text-[13px] font-medium leading-5 transition-colors",
               selectedDept === summary.department
-                ? "border-transparent bg-[#6B5BFF] text-white"
-                : "border-[#E3E5EF] bg-[#F2F3F7] text-[#374151]",
+                ? "border-[#5C45FD] bg-[rgba(92,69,253,0.8)] text-white"
+                : "border-[rgba(92,69,253,0.2)] bg-white text-[#111233]",
             )}
           >
             {summary.department}
@@ -93,21 +93,21 @@ export function DepartmentTabs({ summaries }: DepartmentTabsProps) {
 
       <div className="mt-6 grid gap-6 md:grid-cols-2">
         <div className="space-y-2">
-          <p className="text-[13px] font-medium leading-5 text-[#111827]">
+          <p className="text-[13px] font-medium leading-5 text-[#111233]">
             {selectedSummary.department} Payroll
           </p>
           <div className="flex items-end gap-3">
-            <p className="text-[40px] font-bold leading-none text-[#111827]">{payrollValue}</p>
+            <p className="text-[40px] font-bold leading-none text-[#111233]">{payrollValue}</p>
             <p className={`pb-1 text-sm font-medium ${metricDeltaTone}`}>
               {selectedSummary.avgVsMarket >= 0 ? "+" : ""}
-              {selectedSummary.avgVsMarket}%<span className="ml-1 text-[#6B7280]">vs market</span>
+              {selectedSummary.avgVsMarket}%<span className="ml-1 text-[#969799]">vs market</span>
             </p>
           </div>
         </div>
 
         <div className="space-y-2">
-          <p className="text-[13px] font-medium leading-5 text-[#111827]">Headcount</p>
-          <p className="text-[40px] font-bold leading-none text-[#111827]">{selectedSummary.activeCount}</p>
+          <p className="text-[13px] font-medium leading-5 text-[#111233]">Headcount</p>
+          <p className="text-[40px] font-bold leading-none text-[#111233]">{selectedSummary.activeCount}</p>
         </div>
       </div>
 
@@ -122,9 +122,9 @@ export function DepartmentTabs({ summaries }: DepartmentTabsProps) {
               <p className="text-[13px] font-semibold leading-5" style={{ color: card.textColor }}>
                 {card.label}
               </p>
-              <p className="text-[13px] font-medium leading-5 text-[#4B5563]">{card.pct}%</p>
+              <p className="text-[13px] font-medium leading-5 text-[#969799]">{card.pct}%</p>
             </div>
-            <p className="mt-2 text-[30px] font-bold leading-none text-[#111827]">{card.count}</p>
+            <p className="mt-2 text-[30px] font-bold leading-none text-[#111233]">{card.count}</p>
           </div>
         ))}
       </div>
@@ -132,7 +132,7 @@ export function DepartmentTabs({ summaries }: DepartmentTabsProps) {
       <div className="mt-6">
         <Link
           href={`/dashboard/salary-review?department=${selectedSummary.department}`}
-          className="group flex h-12 w-full items-center justify-center gap-2 rounded-[12px] bg-[linear-gradient(90deg,#6B5BFF,#4C5CE7)] px-4 text-sm font-semibold text-white transition-transform hover:-translate-y-0.5"
+          className="group flex h-12 w-full items-center justify-center gap-2 rounded-[12px] bg-[linear-gradient(90deg,#5C45FD,#5C45FD)] px-4 text-sm font-semibold text-white transition-transform hover:-translate-y-0.5"
         >
           <span>View {selectedSummary.department} employees</span>
           <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" strokeWidth={1.7} />

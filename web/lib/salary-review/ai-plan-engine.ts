@@ -1,11 +1,13 @@
 import {
   type BenchmarkMatchQuality,
+  type BenchmarkMatchType,
   type BenchmarkProvenance,
   type SalaryReviewAiPlanRequest,
   type SalaryReviewAiPlanResponse,
   type SalaryReviewAiProposalFactor,
   type SalaryReviewAiProposalItem,
 } from "./ai-plan";
+import { resolveBenchmarkForEmployee } from "@/lib/benchmarks/benchmark-resolver";
 
 export type SalaryReviewAiEmployeeInput = {
   id: string;
@@ -38,6 +40,8 @@ export type SalaryReviewAiFreshnessInput = {
 type MatchedBenchmark = {
   benchmark: SalaryReviewAiBenchmarkInput | null;
   matchQuality: BenchmarkMatchQuality;
+  matchType: BenchmarkMatchType;
+  fallbackReason: string | null;
 };
 
 const BAND_WEIGHT = 0.2;
@@ -153,51 +157,53 @@ function allocateRoundedBudget(totalBudget: number, shares: Array<{ id: string; 
   return rounded;
 }
 
-function buildBenchmarkMaps(benchmarks: SalaryReviewAiBenchmarkInput[]) {
-  const exactMap = new Map<string, SalaryReviewAiBenchmarkInput>();
-  const roleLevelMap = new Map<string, SalaryReviewAiBenchmarkInput>();
-
-  for (const benchmark of benchmarks) {
-    const exactKey = `${benchmark.roleId}::${benchmark.locationId}::${benchmark.levelId}`;
-    if (!exactMap.has(exactKey)) {
-      exactMap.set(exactKey, benchmark);
-    }
-    const fallbackKey = `${benchmark.roleId}::${benchmark.levelId}`;
-    if (!roleLevelMap.has(fallbackKey)) {
-      roleLevelMap.set(fallbackKey, benchmark);
-    }
-  }
-
-  return { exactMap, roleLevelMap };
-}
-
 function resolveBenchmarkMatch(
   employee: SalaryReviewAiEmployeeInput,
-  workspaceMaps: ReturnType<typeof buildBenchmarkMaps>,
-  ingestionMaps: ReturnType<typeof buildBenchmarkMaps>
+  workspaceBenchmarks: SalaryReviewAiBenchmarkInput[],
+  ingestionBenchmarks: SalaryReviewAiBenchmarkInput[],
 ): MatchedBenchmark {
-  const exactKey = `${employee.roleId}::${employee.locationId}::${employee.levelId}`;
-  const fallbackKey = `${employee.roleId}::${employee.levelId}`;
+  const resolved = resolveBenchmarkForEmployee({
+    employee,
+    marketBenchmarks: ingestionBenchmarks.map((benchmark, index) => ({
+      ...benchmark,
+      id: `${benchmark.roleId}::${benchmark.locationId}::${benchmark.levelId}::${index}`,
+      role_id: benchmark.roleId,
+      level_id: benchmark.levelId,
+      location_id: benchmark.locationId,
+    })),
+    workspaceBenchmarks: workspaceBenchmarks.map((benchmark, index) => ({
+      ...benchmark,
+      id: `${benchmark.roleId}::${benchmark.locationId}::${benchmark.levelId}::workspace::${index}`,
+      role_id: benchmark.roleId,
+      level_id: benchmark.levelId,
+      location_id: benchmark.locationId,
+    })),
+  });
 
-  const ingestionExact = ingestionMaps.exactMap.get(exactKey);
-  if (ingestionExact) return { benchmark: ingestionExact, matchQuality: "exact" };
-
-  const ingestionFallback = ingestionMaps.roleLevelMap.get(fallbackKey);
-  if (ingestionFallback) return { benchmark: ingestionFallback, matchQuality: "role_level_fallback" };
-
-  const workspaceExact = workspaceMaps.exactMap.get(exactKey);
-  if (workspaceExact) return { benchmark: workspaceExact, matchQuality: "exact" };
-
-  const workspaceFallback = workspaceMaps.roleLevelMap.get(fallbackKey);
-  if (workspaceFallback) return { benchmark: workspaceFallback, matchQuality: "role_level_fallback" };
-
-  return { benchmark: null, matchQuality: "none" };
+  return {
+    benchmark: resolved.row
+      ? {
+          roleId: String(resolved.row.role_id),
+          levelId: String(resolved.row.level_id),
+          locationId: String(resolved.row.location_id),
+          p50: Number(resolved.row.p50),
+          sourceSlug: (resolved.row as { sourceSlug?: string | null }).sourceSlug ?? null,
+          sourceName: (resolved.row as { sourceName?: string | null }).sourceName ?? null,
+          provenance: (resolved.row as { provenance?: BenchmarkProvenance }).provenance ?? "none",
+        }
+      : null,
+    matchQuality: resolved.matchQuality,
+    matchType: resolved.matchType,
+    fallbackReason: resolved.fallbackReason,
+  };
 }
 
 type ScoredEmployee = {
   employee: SalaryReviewAiEmployeeInput;
   benchmark: SalaryReviewAiBenchmarkInput | null;
   matchQuality: BenchmarkMatchQuality;
+  matchType: BenchmarkMatchType;
+  fallbackReason: string | null;
   score: number;
   confidence: number;
   warnings: string[];
@@ -209,6 +215,8 @@ function scoreEmployee(
   employee: SalaryReviewAiEmployeeInput,
   benchmark: SalaryReviewAiBenchmarkInput | null,
   matchQuality: BenchmarkMatchQuality,
+  matchType: BenchmarkMatchType,
+  fallbackReason: string | null,
   freshness: SalaryReviewAiProposalItem["benchmark"]["freshness"]
 ): ScoredEmployee {
   const warnings: string[] = [];
@@ -288,7 +296,11 @@ function scoreEmployee(
   confidence = clamp(Math.round(confidence), 30, 96);
 
   if (matchQuality === "role_level_fallback") {
-    warnings.push("Benchmark uses role+level fallback (location-specific match unavailable).");
+    warnings.push(
+      fallbackReason
+        ? `Benchmark fallback: ${fallbackReason}`
+        : "Benchmark fallback: strict role-level-location match is unavailable.",
+    );
   }
   if (freshness.confidence === "low") {
     warnings.push("Benchmark freshness confidence is low.");
@@ -298,6 +310,8 @@ function scoreEmployee(
     employee,
     benchmark,
     matchQuality,
+    matchType,
+    fallbackReason,
     score,
     confidence,
     warnings,
@@ -320,13 +334,17 @@ export function buildSalaryReviewAiPlan(args: {
 
   const totalCurrentPayroll = selectedEmployees.reduce((sum, employee) => sum + employee.baseSalary, 0);
   const budget = getBudgetFromRequest(args.request, totalCurrentPayroll);
-  const workspaceMaps = buildBenchmarkMaps(args.workspaceBenchmarks);
-  const ingestionMaps = buildBenchmarkMaps(args.ingestionBenchmarks);
-
   const scored = selectedEmployees.map((employee) => {
-    const matched = resolveBenchmarkMatch(employee, workspaceMaps, ingestionMaps);
+    const matched = resolveBenchmarkMatch(employee, args.workspaceBenchmarks, args.ingestionBenchmarks);
     const freshness = getFreshnessForProvenance(args.freshness, matched.benchmark?.provenance ?? "none");
-    return scoreEmployee(employee, matched.benchmark, matched.matchQuality, freshness);
+    return scoreEmployee(
+      employee,
+      matched.benchmark,
+      matched.matchQuality,
+      matched.matchType,
+      matched.fallbackReason,
+      freshness,
+    );
   });
 
   const shares = scored.map((entry) => {
@@ -370,6 +388,8 @@ export function buildSalaryReviewAiPlan(args: {
         sourceSlug: entry.benchmark?.sourceSlug ?? null,
         sourceName: entry.benchmark?.sourceName ?? null,
         matchQuality: entry.matchQuality,
+        matchType: entry.matchType,
+        fallbackReason: entry.fallbackReason,
         freshness,
       },
       warnings: entry.warnings,

@@ -83,6 +83,12 @@ describe("uploadBenchmarks", () => {
         method: "POST",
       })
     );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/benchmarks/coverage/refresh",
+      expect.objectContaining({
+        method: "POST",
+      }),
+    );
   });
 
   it("clears the current company benchmark overlay before reimporting in replace mode", async () => {
