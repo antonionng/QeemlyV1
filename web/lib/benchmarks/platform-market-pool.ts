@@ -1,6 +1,10 @@
 import { LEVELS, LOCATIONS, ROLES } from "@/lib/dashboard/dummy-data";
 import { createServiceClient } from "@/lib/supabase/service";
 import { isSourceAllowedForIngestion, type IngestionSource } from "@/lib/ingestion/source-registry";
+import {
+  annualizeBenchmarkValue,
+  resolveBenchmarkPayPeriod,
+} from "@/lib/benchmarks/pay-period";
 
 export type MarketPoolSourceType = "employee" | "uploaded" | "admin";
 
@@ -37,6 +41,7 @@ export type PlatformMarketPoolRow = {
   source_breakdown: Record<MarketPoolSourceType, number>;
   valid_from: string;
   freshness_at: string;
+  pay_period: "annual";
 };
 
 type PublicBenchmarkSnapshotRow = {
@@ -91,6 +96,7 @@ type SalaryBenchmarkRow = {
   p50: number | null;
   currency: string | null;
   source: string | null;
+  pay_period?: "monthly" | "annual" | null;
   market_source_slug?: string | null;
   market_source_tier?: "official" | "proxy" | null;
 };
@@ -226,6 +232,7 @@ export function aggregateMarketPoolObservations(
           source_breakdown,
           valid_from: effectiveDate,
           freshness_at: refreshedAt,
+          pay_period: "annual",
         } satisfies PlatformMarketPoolRow,
       ];
     });
@@ -260,7 +267,10 @@ function toUploadedObservation(
 ): MarketPoolObservation | null {
   if (row.source !== "uploaded") return null;
   if (!row.workspace_id || !row.role_id || !row.location_id || !row.level_id) return null;
-  const midpoint = Number(row.p50 ?? 0);
+  const midpoint = annualizeBenchmarkValue(
+    Number(row.p50 ?? 0),
+    resolveBenchmarkPayPeriod(row.pay_period, Number(row.p50 ?? 0)),
+  );
   if (!Number.isFinite(midpoint) || midpoint <= 0) return null;
   const workspaceSettings = workspaceSettingsById.get(row.workspace_id);
   return {
@@ -287,7 +297,10 @@ function toAdminObservation(
     const source = ingestionSourcesBySlug.get(row.market_source_slug);
     if (source && !isSourceAllowedForIngestion(source)) return null;
   }
-  const midpoint = Number(row.p50 ?? 0);
+  const midpoint = annualizeBenchmarkValue(
+    Number(row.p50 ?? 0),
+    resolveBenchmarkPayPeriod(row.pay_period, Number(row.p50 ?? 0)),
+  );
   if (!Number.isFinite(midpoint) || midpoint <= 0) return null;
   return {
     workspaceId: row.workspace_id,
@@ -335,7 +348,7 @@ export async function refreshPlatformMarketPool(): Promise<{ rowCount: number }>
     supabase
       .from("salary_benchmarks")
       .select(
-        "workspace_id, role_id, location_id, level_id, industry, company_size, p50, currency, source, market_source_slug, market_source_tier",
+        "workspace_id, role_id, location_id, level_id, industry, company_size, p50, currency, source, pay_period, market_source_slug, market_source_tier",
       ),
     supabase
       .from("workspace_settings")

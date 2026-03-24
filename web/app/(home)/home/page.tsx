@@ -5,6 +5,7 @@ import { HomeIntegrationsStrip } from "@/components/marketing/home/integrations-
 import { HomeIntro } from "@/components/marketing/home/intro";
 import { HomeServicesShowcase } from "@/components/marketing/home/services-showcase";
 import { HomeTicker } from "@/components/marketing/home/ticker";
+import { SiteFooter } from "@/components/layout/site-footer";
 import { SiteNav } from "@/components/layout/site-nav";
 
 export default function HomePage() {
@@ -17,6 +18,7 @@ export default function HomePage() {
       <HomeIntegrationsStrip />
       <HomeServicesShowcase />
       <HomeFinalCta />
+      <SiteFooter />
     </div>
   );
 }

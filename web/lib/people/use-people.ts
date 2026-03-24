@@ -7,12 +7,13 @@ import { LOCATIONS } from "@/lib/dashboard/dummy-data";
 
 export type PeopleViewMode = "table" | "grid";
 export type PeopleSortKey = "name" | "department" | "totalComp" | "marketComparison" | "hireDate";
+export type PeopleBandFilter = BandPosition | "outside-band" | "all";
 
-type Filters = {
+export type PeopleFilters = {
   search: string;
   department: Department | "all";
   locationId: string | "all";
-  band: BandPosition | "all";
+  band: PeopleBandFilter;
   performance: PerformanceRating | "all";
 };
 
@@ -82,7 +83,7 @@ export type EmployeeProfileAggregate = {
   timeline: Array<Record<string, unknown>>;
 };
 
-const DEFAULT_FILTERS: Filters = {
+export const DEFAULT_PEOPLE_FILTERS: PeopleFilters = {
   search: "",
   department: "all",
   locationId: "all",
@@ -200,7 +201,7 @@ export function usePeople() {
   const [pendingDeletes, setPendingDeletes] = useState<Array<{ employee: Employee; timeoutId: number }>>([]);
   const [viewMode, setViewMode] = useState<PeopleViewMode>("table");
   const [sortBy, setSortBy] = useState<PeopleSortKey>("name");
-  const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS);
+  const [filters, setFilters] = useState<PeopleFilters>(DEFAULT_PEOPLE_FILTERS);
 
   const loadEmployees = useCallback(async () => {
     setLoading(true);
@@ -474,7 +475,10 @@ export function usePeople() {
       const matchesLocation =
         filters.locationId === "all" || employee.location.id === filters.locationId;
       const matchesBand =
-        filters.band === "all" || (employee.hasBenchmark === true && employee.bandPosition === filters.band);
+        filters.band === "all" ||
+        (filters.band === "outside-band"
+          ? employee.hasBenchmark === true && employee.bandPosition !== "in-band"
+          : employee.hasBenchmark === true && employee.bandPosition === filters.band);
       const matchesPerformance =
         filters.performance === "all" || employee.performanceRating === filters.performance;
       return (

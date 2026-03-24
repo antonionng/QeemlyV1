@@ -4,7 +4,10 @@ import {
   type MarketBenchmark,
   type MarketBenchmarkQuery,
 } from "@/lib/benchmarks/platform-market";
-import { monthlyToAnnual } from "@/lib/utils/currency";
+import {
+  annualizeBenchmarkValue,
+  resolveBenchmarkPayPeriod,
+} from "@/lib/benchmarks/pay-period";
 
 export type OrgPeerSummaryEmployee = {
   id: string;
@@ -50,7 +53,6 @@ export function getOrgPeerSummary({
     (employee) =>
       employee.status !== "inactive" &&
       employee.role_id === roleId &&
-      employee.location_id === locationId &&
       employee.level_id === levelId,
   );
 
@@ -81,8 +83,16 @@ export function getOrgPeerSummary({
     };
   }
 
-  const bandLow = monthlyToAnnual(Number(resolvedBenchmark.p25) || 0);
-  const bandHigh = monthlyToAnnual(Number(resolvedBenchmark.p75) || 0);
+  const sourcePayPeriod = resolveBenchmarkPayPeriod(
+    "pay_period" in resolvedBenchmark ? resolvedBenchmark.pay_period : undefined,
+    {
+      p25: Number(resolvedBenchmark.p25) || 0,
+      p50: Number(resolvedBenchmark.p50) || 0,
+      p75: Number(resolvedBenchmark.p75) || 0,
+    },
+  );
+  const bandLow = annualizeBenchmarkValue(Number(resolvedBenchmark.p25) || 0, sourcePayPeriod);
+  const bandHigh = annualizeBenchmarkValue(Number(resolvedBenchmark.p75) || 0, sourcePayPeriod);
   const benchmarkSource = marketBenchmark ? "market" : "uploaded";
 
   const inBandCount = matchingEmployees.filter((employee) => {

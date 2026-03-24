@@ -73,7 +73,7 @@ function MetricDelta({ value }: { value: number }) {
 
   return (
     <div
-      className="text-right text-sm font-medium leading-tight"
+      className="text-left text-sm font-medium leading-tight sm:text-right"
       style={{ color: isPositive ? "#05DA5A" : "#FF2056" }}
     >
       {isPositive ? "+" : ""}
@@ -119,17 +119,20 @@ function TotalPayrollBars({ trend }: { trend: TrendDataPoint[] }) {
 
   return (
     <div className="mt-6" data-testid="total-payroll-card-chart">
-      <div className="flex items-end gap-[14px]">
+      <div
+        className="grid min-w-0 grid-cols-4 items-end gap-2 overflow-hidden sm:gap-3"
+        data-testid="total-payroll-bars-grid"
+      >
       {series.map((item) => (
-        <div key={item.label} className="flex flex-col items-center gap-2">
+        <div key={item.label} className="flex min-w-0 flex-col items-center gap-2">
           <div
-            className="w-9 rounded-[10px]"
+            className="w-full min-w-0 max-w-8 rounded-[10px]"
             style={{
               height: `${Math.max(56, (item.value / max) * 120)}px`,
               background: item.active ? "#A89BFF" : "rgba(150,151,153,0.2)",
             }}
           />
-          <span className="text-[11px] font-medium text-[#969799]">{item.label}</span>
+          <span className="text-[10px] font-medium text-[#969799] sm:text-[11px]">{item.label}</span>
         </div>
       ))}
       </div>
@@ -191,7 +194,7 @@ function RiskFlagsIndicator({
 
 export function StatCards({ metrics, interactions, onInteract }: StatCardsProps) {
   return (
-    <div className="grid h-full min-w-0 auto-rows-fr gap-6 sm:grid-cols-2" data-testid="overview-stat-card-grid">
+    <div className="grid h-full min-w-0 auto-rows-fr gap-6 xl:grid-cols-1 2xl:grid-cols-2" data-testid="overview-stat-card-grid">
       {interactions?.statCards.activeEmployees ? (
         <OverviewInteractiveSurface
           target={interactions.statCards.activeEmployees}
@@ -200,15 +203,15 @@ export function StatCards({ metrics, interactions, onInteract }: StatCardsProps)
           tooltipTestId="active-employees-card-tooltip"
         >
           <Card
-            className="overview-metric-card flex h-full min-h-[250px] flex-col justify-between p-6"
+            className="overview-metric-card flex h-full min-h-[250px] min-w-0 flex-col justify-between p-5 sm:p-6"
             data-testid="active-employees-card"
           >
             <div className="flex h-full flex-col">
               <h3 className="overview-metric-card-title">Active Employees</h3>
               <p className="overview-metric-card-description">{metrics.totalEmployees} total</p>
               <ActiveEmployeesSparkline trend={metrics.headcountTrend} />
-              <div className="mt-auto flex items-end justify-between gap-4 pt-6">
-                <span className="overview-metric-card-value">{metrics.activeEmployees}</span>
+              <div className="mt-auto flex flex-col items-start gap-3 pt-6 sm:flex-row sm:items-end sm:justify-between">
+                <span className="overview-metric-card-value break-words">{metrics.activeEmployees}</span>
                 <MetricDelta value={metrics.headcountChange} />
               </div>
             </div>
@@ -216,15 +219,15 @@ export function StatCards({ metrics, interactions, onInteract }: StatCardsProps)
         </OverviewInteractiveSurface>
       ) : (
         <Card
-          className="overview-metric-card flex h-full min-h-[250px] flex-col justify-between p-6"
+          className="overview-metric-card flex h-full min-h-[250px] min-w-0 flex-col justify-between p-5 sm:p-6"
           data-testid="active-employees-card"
         >
           <div className="flex h-full flex-col">
             <h3 className="overview-metric-card-title">Active Employees</h3>
             <p className="overview-metric-card-description">{metrics.totalEmployees} total</p>
             <ActiveEmployeesSparkline trend={metrics.headcountTrend} />
-            <div className="mt-auto flex items-end justify-between gap-4 pt-6">
-              <span className="overview-metric-card-value">{metrics.activeEmployees}</span>
+            <div className="mt-auto flex flex-col items-start gap-3 pt-6 sm:flex-row sm:items-end sm:justify-between">
+              <span className="overview-metric-card-value break-words">{metrics.activeEmployees}</span>
               <MetricDelta value={metrics.headcountChange} />
             </div>
           </div>
@@ -239,15 +242,15 @@ export function StatCards({ metrics, interactions, onInteract }: StatCardsProps)
           tooltipTestId="total-payroll-card-tooltip"
         >
           <Card
-            className="overview-metric-card flex h-full min-h-[250px] flex-col justify-between p-6"
+            className="overview-metric-card flex h-full min-h-[250px] min-w-0 flex-col justify-between p-5 sm:p-6"
             data-testid="total-payroll-card"
           >
             <div className="flex h-full flex-col">
               <h3 className="overview-metric-card-title">Total Payroll</h3>
               <p className="overview-metric-card-description">Annual compensation</p>
               <TotalPayrollBars trend={metrics.payrollTrend} />
-              <div className="mt-auto flex items-end justify-between gap-4 pt-6">
-                <span className="overview-metric-card-value">{formatAEDCompact(metrics.totalPayroll)}</span>
+              <div className="mt-auto flex flex-col items-start gap-3 pt-6 sm:flex-row sm:items-end sm:justify-between">
+                <span className="overview-metric-card-value break-words">{formatAEDCompact(metrics.totalPayroll)}</span>
                 <MetricDelta value={metrics.payrollChange} />
               </div>
             </div>
@@ -255,15 +258,15 @@ export function StatCards({ metrics, interactions, onInteract }: StatCardsProps)
         </OverviewInteractiveSurface>
       ) : (
         <Card
-          className="overview-metric-card flex h-full min-h-[250px] flex-col justify-between p-6"
+          className="overview-metric-card flex h-full min-h-[250px] min-w-0 flex-col justify-between p-5 sm:p-6"
           data-testid="total-payroll-card"
         >
           <div className="flex h-full flex-col">
             <h3 className="overview-metric-card-title">Total Payroll</h3>
             <p className="overview-metric-card-description">Annual compensation</p>
             <TotalPayrollBars trend={metrics.payrollTrend} />
-            <div className="mt-auto flex items-end justify-between gap-4 pt-6">
-              <span className="overview-metric-card-value">{formatAEDCompact(metrics.totalPayroll)}</span>
+            <div className="mt-auto flex flex-col items-start gap-3 pt-6 sm:flex-row sm:items-end sm:justify-between">
+              <span className="overview-metric-card-value break-words">{formatAEDCompact(metrics.totalPayroll)}</span>
               <MetricDelta value={metrics.payrollChange} />
             </div>
           </div>
@@ -278,7 +281,7 @@ export function StatCards({ metrics, interactions, onInteract }: StatCardsProps)
           tooltipTestId="in-band-card-tooltip"
         >
           <Card
-            className="overview-metric-card flex h-full min-h-[250px] flex-col justify-between p-6"
+            className="overview-metric-card flex h-full min-h-[250px] min-w-0 flex-col justify-between p-5 sm:p-6"
             data-testid="in-band-card"
           >
             <div className="flex h-full flex-col">
@@ -287,8 +290,8 @@ export function StatCards({ metrics, interactions, onInteract }: StatCardsProps)
               <InBandDistribution
                 segments={metrics.bandDistribution}
               />
-              <div className="mt-auto flex items-end justify-between gap-4 pt-6">
-                <span className="overview-metric-card-value">{metrics.inBandPercentage}%</span>
+              <div className="mt-auto flex flex-col items-start gap-3 pt-6 sm:flex-row sm:items-end sm:justify-between">
+                <span className="overview-metric-card-value break-words">{metrics.inBandPercentage}%</span>
                 <MetricDelta value={metrics.inBandChange} />
               </div>
             </div>
@@ -296,7 +299,7 @@ export function StatCards({ metrics, interactions, onInteract }: StatCardsProps)
         </OverviewInteractiveSurface>
       ) : (
         <Card
-          className="overview-metric-card flex h-full min-h-[250px] flex-col justify-between p-6"
+          className="overview-metric-card flex h-full min-h-[250px] min-w-0 flex-col justify-between p-5 sm:p-6"
           data-testid="in-band-card"
         >
           <div className="flex h-full flex-col">
@@ -305,8 +308,8 @@ export function StatCards({ metrics, interactions, onInteract }: StatCardsProps)
             <InBandDistribution
               segments={metrics.bandDistribution}
             />
-            <div className="mt-auto flex items-end justify-between gap-4 pt-6">
-              <span className="overview-metric-card-value">{metrics.inBandPercentage}%</span>
+            <div className="mt-auto flex flex-col items-start gap-3 pt-6 sm:flex-row sm:items-end sm:justify-between">
+              <span className="overview-metric-card-value break-words">{metrics.inBandPercentage}%</span>
               <MetricDelta value={metrics.inBandChange} />
             </div>
           </div>
@@ -321,7 +324,7 @@ export function StatCards({ metrics, interactions, onInteract }: StatCardsProps)
           tooltipTestId="risk-flags-card-tooltip"
         >
           <Card
-            className="overview-metric-card flex h-full min-h-[250px] flex-col justify-between p-6"
+            className="overview-metric-card flex h-full min-h-[250px] min-w-0 flex-col justify-between p-5 sm:p-6"
             data-testid="risk-flags-card"
           >
             <div className="flex h-full flex-col">
@@ -333,15 +336,15 @@ export function StatCards({ metrics, interactions, onInteract }: StatCardsProps)
                   ("benchmarkedEmployees" in metrics ? metrics.benchmarkedEmployees : metrics.activeEmployees) ?? 0,
                 )}
               />
-              <div className="mt-auto flex items-end justify-between gap-4 pt-6">
-                <span className="overview-metric-card-value">{metrics.payrollRiskFlags}</span>
+              <div className="mt-auto flex flex-col items-start gap-3 pt-6 sm:flex-row sm:items-end sm:justify-between">
+                <span className="overview-metric-card-value break-words">{metrics.payrollRiskFlags}</span>
               </div>
             </div>
           </Card>
         </OverviewInteractiveSurface>
       ) : (
         <Card
-          className="overview-metric-card flex h-full min-h-[250px] flex-col justify-between p-6"
+          className="overview-metric-card flex h-full min-h-[250px] min-w-0 flex-col justify-between p-5 sm:p-6"
           data-testid="risk-flags-card"
         >
           <div className="flex h-full flex-col">
@@ -353,8 +356,8 @@ export function StatCards({ metrics, interactions, onInteract }: StatCardsProps)
                 ("benchmarkedEmployees" in metrics ? metrics.benchmarkedEmployees : metrics.activeEmployees) ?? 0,
               )}
             />
-            <div className="mt-auto flex items-end justify-between gap-4 pt-6">
-              <span className="overview-metric-card-value">{metrics.payrollRiskFlags}</span>
+            <div className="mt-auto flex flex-col items-start gap-3 pt-6 sm:flex-row sm:items-end sm:justify-between">
+              <span className="overview-metric-card-value break-words">{metrics.payrollRiskFlags}</span>
             </div>
           </div>
         </Card>

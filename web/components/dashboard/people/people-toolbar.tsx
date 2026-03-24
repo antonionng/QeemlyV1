@@ -5,19 +5,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LOCATIONS } from "@/lib/dashboard/dummy-data";
 import type { Department, PerformanceRating } from "@/lib/employees";
-import type { PeopleSortKey, PeopleViewMode } from "@/lib/people/use-people";
-
-type Filters = {
-  search: string;
-  department: Department | "all";
-  locationId: string | "all";
-  band: "below" | "in-band" | "above" | "all";
-  performance: PerformanceRating | "all";
-};
+import type { PeopleFilters, PeopleSortKey, PeopleViewMode } from "@/lib/people/use-people";
 
 type Props = {
-  filters: Filters;
-  onFiltersChange: (next: Filters) => void;
+  filters: PeopleFilters;
+  onFiltersChange: (next: PeopleFilters) => void;
   viewMode: PeopleViewMode;
   onViewModeChange: (mode: PeopleViewMode) => void;
   sortBy: PeopleSortKey;
@@ -53,22 +45,22 @@ export function PeopleToolbar({
       <div className="space-y-3">
         <div
           data-testid="people-toolbar-filters"
-          className="grid gap-3 xl:grid-cols-[minmax(0,1.45fr)_repeat(2,minmax(0,0.9fr))]"
+          className="grid gap-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1.45fr)_repeat(2,minmax(0,0.9fr))]"
         >
-          <div className="relative xl:col-span-1">
+          <div className="relative md:col-span-2 xl:col-span-1">
             <label htmlFor="people-search" className="sr-only">
               Search employees
             </label>
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-accent-400" />
-          <Input
-            id="people-search"
-            value={filters.search}
-            onChange={(event) => onFiltersChange({ ...filters, search: event.target.value })}
-            className="h-11 pl-9"
-            placeholder="Search employees, emails, roles..."
-            fullWidth
-          />
-        </div>
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-accent-400" />
+            <Input
+              id="people-search"
+              value={filters.search}
+              onChange={(event) => onFiltersChange({ ...filters, search: event.target.value })}
+              className="h-11 pl-9"
+              placeholder="Search employees, emails, roles..."
+              fullWidth
+            />
+          </div>
 
           <select
             value={filters.department}
@@ -99,16 +91,17 @@ export function PeopleToolbar({
           </select>
         </div>
 
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <div className="grid gap-3 md:grid-cols-3 xl:min-w-0 xl:flex-1">
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-start">
+          <div className="grid gap-3 md:grid-cols-2 xl:min-w-0 xl:grid-cols-3">
             <select
               value={filters.band}
               onChange={(event) =>
-                onFiltersChange({ ...filters, band: event.target.value as Filters["band"] })
+                onFiltersChange({ ...filters, band: event.target.value as PeopleFilters["band"] })
               }
               className="h-11 w-full rounded-xl border border-border bg-white px-3 text-sm text-accent-700 focus:border-brand-300 focus:outline-none"
             >
               <option value="all">All Bands</option>
+              <option value="outside-band">Outside band</option>
               <option value="below">Below band</option>
               <option value="in-band">In band</option>
               <option value="above">Above band</option>
@@ -117,7 +110,10 @@ export function PeopleToolbar({
             <select
               value={filters.performance}
               onChange={(event) =>
-                onFiltersChange({ ...filters, performance: event.target.value as Filters["performance"] })
+                onFiltersChange({
+                  ...filters,
+                  performance: event.target.value as PeopleFilters["performance"],
+                })
               }
               className="h-11 w-full rounded-xl border border-border bg-white px-3 text-sm text-accent-700 focus:border-brand-300 focus:outline-none"
             >
@@ -143,9 +139,9 @@ export function PeopleToolbar({
 
           <div
             data-testid="people-toolbar-actions"
-            className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end xl:flex-nowrap"
+            className="grid gap-3 sm:grid-cols-2 lg:flex lg:flex-wrap lg:justify-end"
           >
-            <div className="flex overflow-hidden rounded-xl border border-border bg-white">
+            <div className="flex w-full overflow-hidden rounded-xl border border-border bg-white sm:w-auto">
               <button
                 type="button"
                 className={`inline-flex h-11 items-center justify-center gap-2 px-4 text-sm font-medium ${
@@ -172,11 +168,16 @@ export function PeopleToolbar({
               </button>
             </div>
 
-            <Button variant="secondary" size="sm" onClick={onExportCsv} className="h-11 px-5">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={onExportCsv}
+              className="h-11 w-full px-5 sm:w-auto"
+            >
               <Download className="h-4 w-4" />
               Export CSV
             </Button>
-            <Button size="sm" onClick={onAddEmployee} className="h-11 px-5">
+            <Button size="sm" onClick={onAddEmployee} className="h-11 w-full px-5 sm:w-auto">
               <Plus className="h-4 w-4" />
               Add Employee
             </Button>

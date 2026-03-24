@@ -1,6 +1,11 @@
 // Currency formatting utilities with company settings integration
 
 import { useCompanySettings, CURRENCIES } from "@/lib/company";
+import {
+  applyBenchmarkViewMode,
+  resolveBenchmarkPayPeriod,
+  type BenchmarkPayPeriod,
+} from "@/lib/benchmarks/pay-period";
 
 // Currency conversion rates (relative to USD)
 // In production, these would come from an API
@@ -28,6 +33,7 @@ interface BenchmarkValueOptions {
   salaryView: BenchmarkSalaryView;
   sourceCurrency: string;
   targetCurrency: string;
+  payPeriod?: BenchmarkPayPeriod | null;
 }
 
 /**
@@ -109,14 +115,17 @@ export function convertCurrency(
 
 /**
  * Convert benchmark source value for the active salary view and target market currency.
- * Assumes source value is monthly.
+ * Assumes source value uses the provided pay period. Falls back to inference when omitted.
  */
 export function toBenchmarkDisplayValue(
   sourceValue: number,
   options: BenchmarkValueOptions
 ): number {
-  const { salaryView, sourceCurrency, targetCurrency } = options;
-  const periodAdjusted = salaryView === "annual" ? monthlyToAnnual(sourceValue) : sourceValue;
+  const { salaryView, sourceCurrency, targetCurrency, payPeriod } = options;
+  const resolvedPayPeriod = resolveBenchmarkPayPeriod(payPeriod, sourceValue);
+  const annualValue =
+    resolvedPayPeriod === "annual" ? sourceValue : monthlyToAnnual(sourceValue);
+  const periodAdjusted = applyBenchmarkViewMode(annualValue, salaryView);
   return roundToThousand(convertCurrency(periodAdjusted, sourceCurrency, targetCurrency));
 }
 

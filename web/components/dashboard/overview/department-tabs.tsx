@@ -24,7 +24,7 @@ export function DepartmentTabs({ summaries }: DepartmentTabsProps) {
 
   if (!selectedSummary) {
     return (
-      <Card className="rounded-[16px] border-[#EEF1F6] bg-white p-7 shadow-[0px_2px_8px_rgba(16,24,40,0.04)]">
+      <Card className="rounded-[16px] border-[#EEF1F6] bg-white p-5 shadow-[0px_2px_8px_rgba(16,24,40,0.04)] sm:p-7">
         <div className="space-y-1">
           <h3 className="text-base font-semibold text-[#111233]">Department Breakdown</h3>
           <p className="text-[13px] leading-5 text-[#969799]">
@@ -65,7 +65,7 @@ export function DepartmentTabs({ summaries }: DepartmentTabsProps) {
   ];
 
   return (
-    <Card className="rounded-[16px] border-[#EEF1F6] bg-white p-7 shadow-[0px_2px_8px_rgba(16,24,40,0.04)]">
+    <Card className="rounded-[16px] border-[#EEF1F6] bg-white p-5 shadow-[0px_2px_8px_rgba(16,24,40,0.04)] sm:p-7">
       <div className="space-y-1">
         <h3 className="text-base font-semibold text-[#111233]">Department Breakdown</h3>
         <p className="text-[13px] leading-5 text-[#969799]">
@@ -96,8 +96,10 @@ export function DepartmentTabs({ summaries }: DepartmentTabsProps) {
           <p className="text-[13px] font-medium leading-5 text-[#111233]">
             {selectedSummary.department} Payroll
           </p>
-          <div className="flex items-end gap-3">
-            <p className="text-[40px] font-bold leading-none text-[#111233]">{payrollValue}</p>
+          <div className="flex flex-wrap items-end gap-3">
+            <p className="break-words text-[clamp(2rem,7vw,2.5rem)] font-bold leading-none text-[#111233]">
+              {payrollValue}
+            </p>
             <p className={`pb-1 text-sm font-medium ${metricDeltaTone}`}>
               {selectedSummary.avgVsMarket >= 0 ? "+" : ""}
               {selectedSummary.avgVsMarket}%<span className="ml-1 text-[#969799]">vs market</span>
@@ -107,11 +109,13 @@ export function DepartmentTabs({ summaries }: DepartmentTabsProps) {
 
         <div className="space-y-2">
           <p className="text-[13px] font-medium leading-5 text-[#111233]">Headcount</p>
-          <p className="text-[40px] font-bold leading-none text-[#111233]">{selectedSummary.activeCount}</p>
+          <p className="break-words text-[clamp(2rem,7vw,2.5rem)] font-bold leading-none text-[#111233]">
+            {selectedSummary.activeCount}
+          </p>
         </div>
       </div>
 
-      <div className="mt-5 grid gap-4 md:grid-cols-3">
+      <div className="mt-5 grid gap-4 sm:grid-cols-3">
         {summaryCards.map((card) => (
           <div
             key={card.label}
@@ -119,7 +123,7 @@ export function DepartmentTabs({ summaries }: DepartmentTabsProps) {
             style={{ backgroundColor: card.bgColor, borderColor: card.borderColor }}
           >
             <div className="flex items-start justify-between gap-3">
-              <p className="text-[13px] font-semibold leading-5" style={{ color: card.textColor }}>
+              <p className="break-words text-[13px] font-semibold leading-5" style={{ color: card.textColor }}>
                 {card.label}
               </p>
               <p className="text-[13px] font-medium leading-5 text-[#969799]">{card.pct}%</p>
@@ -134,7 +138,7 @@ export function DepartmentTabs({ summaries }: DepartmentTabsProps) {
           href={`/dashboard/salary-review?department=${selectedSummary.department}`}
           className="group flex h-12 w-full items-center justify-center gap-2 rounded-[12px] bg-[linear-gradient(90deg,#5C45FD,#5C45FD)] px-4 text-sm font-semibold text-white transition-transform hover:-translate-y-0.5"
         >
-          <span>View {selectedSummary.department} employees</span>
+          <span className="text-center">View {selectedSummary.department} employees</span>
           <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" strokeWidth={1.7} />
         </Link>
       </div>

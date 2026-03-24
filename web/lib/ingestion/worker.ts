@@ -10,6 +10,7 @@ import { validateBenchmarkRow, buildDQReport, type BenchmarkRow } from "./data-q
 import { getIngestorForSource } from "./adapters";
 import { upsertBenchmarksFreshness } from "./freshness";
 import { getSourceTier, isSourceAllowedForIngestion, type IngestionSource } from "./source-registry";
+import { resolveBenchmarkPayPeriod } from "@/lib/benchmarks/pay-period";
 import {
   benchmarkRowToIndustrySignals,
   type IndustryMarketSignalInsert,
@@ -169,6 +170,13 @@ export async function runIngestionForJob(
   const validFrom = new Date().toISOString().split("T")[0];
 
   for (const row of toUpsert) {
+    const payPeriod = resolveBenchmarkPayPeriod(row.payPeriod, {
+      p10: row.p10,
+      p25: row.p25,
+      p50: row.p50,
+      p75: row.p75,
+      p90: row.p90,
+    });
     const { error } = await supabase.from("salary_benchmarks").upsert(
       {
         workspace_id: targetWorkspaceId,
@@ -185,6 +193,7 @@ export async function runIngestionForJob(
         p90: row.p90,
         sample_size: row.sampleSize,
         source: "market",
+        pay_period: payPeriod,
         market_source_slug: sourceRecord.slug,
         market_source_tier: sourceRecord.tier ?? getSourceTier(sourceRecord.slug),
         market_origin: "live_ingestion",

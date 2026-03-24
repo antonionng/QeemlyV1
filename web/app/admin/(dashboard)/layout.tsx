@@ -17,9 +17,9 @@ export default function AdminDashboardLayout({
   };
 
   return (
-    <div className="flex min-h-screen bg-surface-2 text-text-primary">
+    <div className="flex min-h-screen flex-col bg-surface-2 text-text-primary lg:flex-row">
       {/* Sidebar */}
-      <aside className="flex w-60 flex-col border-r border-border bg-surface-1">
+      <aside className="flex w-full flex-col border-b border-border bg-surface-1 lg:sticky lg:top-0 lg:h-screen lg:w-60 lg:shrink-0 lg:border-b-0 lg:border-r">
         {/* Logo area */}
         <div className="border-b border-border px-5 py-5">
           <div className="flex items-center gap-2">
@@ -32,8 +32,8 @@ export default function AdminDashboardLayout({
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 overflow-y-auto p-3">
-          <div className="space-y-5">
+        <nav className="flex-1 overflow-x-auto p-3 lg:overflow-y-auto">
+          <div className="flex min-w-0 flex-col gap-5">
             {ADMIN_NAV_GROUPS.map((group) => (
               <div key={group.heading}>
                 <p className="px-3 pb-2 text-[11px] font-semibold uppercase tracking-[0.14em] text-text-tertiary">
@@ -77,7 +77,9 @@ export default function AdminDashboardLayout({
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 p-8">{children}</main>
+      <main className="responsive-page-gutters min-w-0 flex-1 py-4 sm:py-6 lg:py-8">
+        <div className="responsive-page-shell min-w-0">{children}</div>
+      </main>
     </div>
   );
 }

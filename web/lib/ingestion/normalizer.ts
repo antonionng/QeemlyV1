@@ -12,6 +12,7 @@ import {
   parseNumber,
   normalize,
 } from "@/lib/upload/transformers";
+import { isBenchmarkPayPeriod, type BenchmarkPayPeriod } from "@/lib/benchmarks/pay-period";
 import { COMPANY_SIZES, INDUSTRIES, LOCATIONS } from "@/lib/dashboard/dummy-data";
 
 export type MappingConfidence = "high" | "medium" | "low";
@@ -132,6 +133,7 @@ export type NormalizedBenchmarkRow = {
   p75: number;
   p90: number;
   sampleSize: number | null;
+  payPeriod?: BenchmarkPayPeriod;
   mappingConfidence: MappingConfidence;
   originalRole?: string;
   originalLocation?: string;
@@ -152,6 +154,14 @@ function normalizeCompanySizeValue(value: unknown): string | null {
   return (
     COMPANY_SIZES.find((option) => option.replace(/\s+/g, "") === compactInput) ?? input
   );
+}
+
+function normalizePayPeriodValue(value: unknown): BenchmarkPayPeriod | undefined {
+  if (typeof value !== "string") return undefined;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "month" || normalized === "monthly") return "monthly";
+  if (normalized === "year" || normalized === "annual" || normalized === "annually") return "annual";
+  return isBenchmarkPayPeriod(normalized) ? normalized : undefined;
 }
 
 /**
@@ -181,6 +191,9 @@ export function normalizeBenchmarkRow(
   );
 
   const sampleSize = row.sample_size != null ? Number(row.sample_size) : null;
+  const payPeriod = normalizePayPeriodValue(
+    row.pay_period ?? row.salary_period ?? row.compensation_period ?? row.period,
+  );
 
   const mappingConfidence = overallConfidence([
     roleResult,
@@ -202,6 +215,7 @@ export function normalizeBenchmarkRow(
       p75,
       p90,
       sampleSize: Number.isFinite(sampleSize) ? sampleSize : null,
+      payPeriod,
       mappingConfidence,
       originalRole: roleResult.original,
       originalLocation: locationResult.original,

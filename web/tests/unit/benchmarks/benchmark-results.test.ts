@@ -28,6 +28,16 @@ vi.mock("@/components/ui/benchmark-source-badge", () => ({
 }));
 
 vi.mock("@/lib/benchmarks/benchmark-state", () => ({
+  BENCHMARK_LOCATIONS: [
+    {
+      id: "riyadh",
+      city: "Riyadh",
+      country: "Saudi Arabia",
+      countryCode: "SA",
+      currency: "AED",
+      flag: "SA",
+    },
+  ],
   useBenchmarkState: useBenchmarkStateMock,
 }));
 
@@ -36,6 +46,7 @@ vi.mock("@/lib/benchmarks/data-service", () => ({
 }));
 
 vi.mock("@/lib/company", () => ({
+  FUNDING_STAGES: ["Series B", "Series C"],
   useCompanySettings: useCompanySettingsMock,
 }));
 
@@ -51,6 +62,14 @@ vi.mock("@/lib/utils/currency", () => ({
   convertCurrency: (value: number) => value,
   monthlyToAnnual: (value: number) => value * 12,
   roundToThousand: (value: number) => value,
+  toBenchmarkDisplayValue: (
+    value: number,
+    options: { salaryView: "monthly" | "annual"; payPeriod?: "monthly" | "annual" | null },
+  ) => {
+    const payPeriod = options.payPeriod || "annual";
+    const annualValue = payPeriod === "annual" ? value : value * 12;
+    return options.salaryView === "annual" ? annualValue : annualValue / 12;
+  },
   useCurrencyFormatter: () => ({
     defaultCurrency: "AED",
     format: (value: number) => `AED ${value}`,
@@ -64,12 +83,14 @@ const baseBenchmark = {
   locationId: "riyadh",
   levelId: "ic3",
   currency: "AED" as const,
+  payPeriod: "annual" as const,
+  sourcePayPeriod: "annual" as const,
   percentiles: {
-    p10: 10000,
-    p25: 12000,
-    p50: 14000,
-    p75: 16000,
-    p90: 18000,
+    p10: 120000,
+    p25: 144000,
+    p50: 168000,
+    p75: 192000,
+    p90: 216000,
   },
   sampleSize: 0,
   confidence: "Low" as const,
@@ -87,9 +108,25 @@ describe("BenchmarkResults", () => {
       clearResult: vi.fn(),
       goToStep: vi.fn(),
       saveCurrentFilter: vi.fn(),
+      formData: {
+        roleId: "pm",
+        levelId: "ic3",
+        locationId: "riyadh",
+        employmentType: "national",
+        industry: "Fintech",
+        companySize: "1-50",
+        fundingStage: null,
+        targetPercentile: 50,
+      },
+      updateFormField: vi.fn(),
+      runBenchmark: vi.fn(),
+      isSubmitting: false,
     });
     useCompanySettingsMock.mockReturnValue({
       targetPercentile: 50,
+      industry: "Fintech",
+      companySize: "1-50",
+      fundingStage: "Series B",
     });
     useSalaryViewMock.mockReturnValue({
       salaryView: "annual",
@@ -321,14 +358,17 @@ describe("BenchmarkResults", () => {
     expect(tableSection).not.toBeNull();
     expect(graphSection).not.toBeNull();
     expect(summarySection).not.toBeNull();
-    expect(tableSection?.compareDocumentPosition(summarySection as Node) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(graphSection?.compareDocumentPosition(summarySection as Node) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const summaryNode = summarySection as Node;
+    const tableNode = tableSection as Node;
+    const graphNode = graphSection as Node;
+    expect(tableNode.compareDocumentPosition(summaryNode) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(graphNode.compareDocumentPosition(summaryNode) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
     root.unmount();
     vi.unstubAllGlobals();
   });
 
-  it("renders the employment pill with dedicated space for the chevron", async () => {
+  it("renders editable filters directly beneath the top-anchored back action", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => ({
@@ -393,11 +433,170 @@ describe("BenchmarkResults", () => {
       await Promise.resolve();
     });
 
-    const employmentPill = container.querySelector('[data-testid="benchmark-employment-pill"]');
+    const editableFilters = container.querySelector('[data-testid="benchmark-results-editable-filters"]');
+    const backButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Back",
+    );
+    const editableSelects = Array.from(
+      container.querySelectorAll('[data-testid="benchmark-results-editable-filters"] select'),
+    );
 
-    expect(employmentPill).not.toBeNull();
-    expect(employmentPill?.className).toContain("justify-between");
-    expect(employmentPill?.className).toContain("min-w-[140px]");
+    expect(editableFilters).not.toBeNull();
+    expect(backButton).toBeTruthy();
+    const editableFiltersNode = editableFilters as Node;
+    const backButtonNode = backButton as Node;
+    expect(backButtonNode.compareDocumentPosition(editableFiltersNode) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(container.textContent).toContain("Edit Search");
+    expect(container.textContent).toContain("Refresh Search");
+    expect(editableSelects.length).toBeGreaterThan(0);
+    editableSelects.forEach((select) => {
+      expect(select.className).toContain("appearance-none");
+    });
+
+    root.unmount();
+    vi.unstubAllGlobals();
+  });
+
+  it("does not multiply annual benchmark values by 12 again in annual view", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          benchmarkSource: "market",
+          bandLow: 120000,
+          bandHigh: 180000,
+          matchingEmployeeCount: 0,
+          inBandCount: 0,
+        }),
+      })),
+    );
+
+    const container = document.createElement("div");
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        React.createElement(BenchmarkResults, {
+          result: {
+            formData: {
+              context: "existing",
+              roleId: "pm",
+              levelId: "ic3",
+              locationId: "riyadh",
+              employmentType: "national",
+              currentSalaryLow: null,
+              currentSalaryHigh: null,
+              industry: "Fintech",
+              companySize: "1-50",
+              fundingStage: null,
+              targetPercentile: 50,
+            },
+            benchmark: baseBenchmark,
+            role: {
+              id: "pm",
+              title: "Product Manager",
+              family: "Product",
+              icon: "PM",
+            },
+            level: {
+              id: "ic3",
+              name: "Senior (IC3)",
+              category: "IC",
+            },
+            location: {
+              id: "riyadh",
+              city: "Riyadh",
+              country: "Saudi Arabia",
+              countryCode: "SA",
+              currency: "AED",
+              flag: "SA",
+            },
+            isOverridden: false,
+            createdAt: new Date("2026-03-12T00:00:00.000Z"),
+          },
+        }),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain("AED 168000");
+    expect(container.textContent).not.toContain("AED 2016000");
+
+    root.unmount();
+    vi.unstubAllGlobals();
+  });
+
+  it("uses mobile-safe filter and chart wrappers for dense benchmark content", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          benchmarkSource: "market",
+          bandLow: 120000,
+          bandHigh: 180000,
+          matchingEmployeeCount: 0,
+          inBandCount: 0,
+        }),
+      })),
+    );
+
+    const container = document.createElement("div");
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        React.createElement(BenchmarkResults, {
+          result: {
+            formData: {
+              context: "existing",
+              roleId: "pm",
+              levelId: "ic3",
+              locationId: "riyadh",
+              employmentType: "national",
+              currentSalaryLow: null,
+              currentSalaryHigh: null,
+              industry: "Fintech",
+              companySize: "1-50",
+              fundingStage: null,
+              targetPercentile: 50,
+            },
+            benchmark: baseBenchmark,
+            role: {
+              id: "pm",
+              title: "Product Manager",
+              family: "Product",
+              icon: "PM",
+            },
+            level: {
+              id: "ic3",
+              name: "Senior (IC3)",
+              category: "IC",
+            },
+            location: {
+              id: "riyadh",
+              city: "Riyadh",
+              country: "Saudi Arabia",
+              countryCode: "SA",
+              currency: "AED",
+              flag: "SA",
+            },
+            isOverridden: false,
+            createdAt: new Date("2026-03-12T00:00:00.000Z"),
+          },
+        }),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.innerHTML).toContain("md:grid-cols-2");
+    expect(container.innerHTML).toContain("2xl:grid-cols-[repeat(4,minmax(0,1fr))_auto_auto]");
+    expect(container.innerHTML).toContain("data-testid=\"benchmark-results-boxplot-scroller\"");
+    expect(container.innerHTML).toContain("min-w-[720px]");
 
     root.unmount();
     vi.unstubAllGlobals();

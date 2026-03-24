@@ -43,13 +43,11 @@ export function WidgetWrapper({
 
   // Body scroll lock when expanded
   useEffect(() => {
-    if (isExpanded) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "unset";
-    }
+    if (!isExpanded) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
     return () => {
-      document.body.style.overflow = "unset";
+      document.body.style.overflow = prevOverflow;
     };
   }, [isExpanded]);
 
@@ -63,11 +61,11 @@ export function WidgetWrapper({
       {/* Widget Header */}
       <div
         className={clsx(
-          "flex items-center justify-between gap-2 border-b border-border/40 px-5 py-4",
+          "flex flex-wrap items-start justify-between gap-3 border-b border-border/40 px-4 py-4 sm:flex-nowrap sm:items-center sm:px-5",
           expanded ? "bg-white border-b-2" : "bg-white/60 backdrop-blur-md sticky top-0 z-10"
         )}
       >
-        <div className="flex items-center gap-3 min-w-0">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
           {/* Drag Handle - Hidden when expanded */}
           {!expanded && (
             <div
@@ -85,12 +83,12 @@ export function WidgetWrapper({
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-brand-50 text-brand-500 shadow-sm border border-brand-100">
             <Icon className="h-4.5 w-4.5" />
           </div>
-          <div className="min-w-0">
-            <h3 className="truncate text-[15px] font-bold text-brand-900 tracking-tight">
+          <div className="min-w-0 flex-1">
+            <h3 className="break-words text-[15px] font-bold tracking-tight text-brand-900 sm:truncate">
               {widget.name}
             </h3>
             {expanded && widget.description && (
-              <p className="text-xs text-brand-600 truncate max-w-md">
+              <p className="max-w-md break-words text-xs text-brand-600 sm:truncate">
                 {widget.description}
               </p>
             )}
@@ -100,8 +98,10 @@ export function WidgetWrapper({
         {/* Controls */}
         <div
           className={clsx(
-            "flex items-center gap-2 transition-all duration-200",
-            isHovered || expanded ? "opacity-100 translate-x-0" : "opacity-0 translate-x-2"
+            "flex w-full justify-end gap-2 transition-all duration-200 sm:w-auto",
+            isHovered || expanded
+              ? "opacity-100 translate-x-0"
+              : "opacity-100 translate-x-0 sm:opacity-0 sm:translate-x-2"
           )}
         >
           {/* AI Tooltip */}

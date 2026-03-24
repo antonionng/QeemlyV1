@@ -1,6 +1,7 @@
 "use client";
 
 import { type BenchmarkResult } from "@/lib/benchmarks/benchmark-state";
+import { applyBenchmarkViewMode } from "@/lib/benchmarks/pay-period";
 import { useSalaryView } from "@/lib/salary-view-store";
 
 interface CompMixViewProps {
@@ -11,8 +12,12 @@ export function CompMixView({ result }: CompMixViewProps) {
   const { level, benchmark } = result;
   const { salaryView } = useSalaryView();
   
-  // Convert from monthly AED based on salary view mode
-  const convertValue = (value: number) => salaryView === "annual" ? Math.round(value * 12 / 1000) * 1000 : Math.round(value / 100) * 100;
+  const convertValue = (annualValue: number) => {
+    const viewValue = applyBenchmarkViewMode(annualValue, salaryView);
+    return salaryView === "annual"
+      ? Math.round(viewValue / 1000) * 1000
+      : Math.round(viewValue / 100) * 100;
+  };
   
   const formatAED = (value: number) => {
     if (value >= 1000) {

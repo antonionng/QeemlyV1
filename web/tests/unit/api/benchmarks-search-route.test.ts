@@ -165,8 +165,10 @@ describe("GET /api/benchmarks/search", () => {
       locationId: "dubai",
       levelId: "ic2",
       benchmarkSource: "market",
+      payPeriod: "annual",
+      sourcePayPeriod: "monthly",
     });
-    expect(payload.benchmark.percentiles.p50).toBe(16247);
+    expect(payload.benchmark.percentiles.p50).toBe(194964);
     expect(payload.diagnostics.market.error).toBeNull();
     expect(payload.diagnostics.market.readMode).toBe("service");
   });
@@ -185,6 +187,49 @@ describe("GET /api/benchmarks/search", () => {
     expect(response.status).toBe(200);
     expect(payload.benchmark.sampleSize).toBe(0);
     expect(payload.benchmark.confidence).toBe("Low");
+  });
+
+  it("preserves annual benchmark rows without multiplying them again", async () => {
+    createClientMock.mockResolvedValue(
+      createSessionSupabase("workspace-1", [
+        {
+          role_id: "swe-devops",
+          location_id: "dubai",
+          level_id: "ic2",
+          currency: "AED",
+          p10: 180000,
+          p25: 195000,
+          p50: 210000,
+          p75: 225000,
+          p90: 240000,
+          pay_period: "annual",
+          sample_size: 10,
+          contributor_count: 4,
+          provenance: "blended",
+          freshness_at: "2026-03-11T00:00:00.000Z",
+          source_breakdown: { employee: 2, uploaded: 1, admin: 1 },
+        },
+      ]),
+    );
+    createServiceClientMock.mockReturnValue({
+      from: vi.fn().mockImplementationOnce(() => {
+        throw new Error("Invalid API key");
+      }),
+    });
+
+    const request = new Request(
+      "http://localhost/api/benchmarks/search?roleId=swe-devops&locationId=dubai&levelId=ic2",
+    ) as unknown as Parameters<typeof GET>[0];
+
+    const response = await GET(request);
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.benchmark).toMatchObject({
+      payPeriod: "annual",
+      sourcePayPeriod: "annual",
+    });
+    expect(payload.benchmark.percentiles.p50).toBe(210000);
   });
 
   it("returns an exact segmented cohort when one exists", async () => {
@@ -238,7 +283,7 @@ describe("GET /api/benchmarks/search", () => {
     const payload = await response.json();
 
     expect(response.status).toBe(200);
-    expect(payload.benchmark.percentiles.p50).toBe(18000);
+    expect(payload.benchmark.percentiles.p50).toBe(216000);
     expect(payload.benchmark.benchmarkSegmentation).toMatchObject({
       matchedIndustry: "Fintech",
       matchedCompanySize: "201-500",
@@ -280,7 +325,7 @@ describe("GET /api/benchmarks/search", () => {
     const payload = await response.json();
 
     expect(response.status).toBe(200);
-    expect(payload.benchmark.percentiles.p50).toBe(16247);
+    expect(payload.benchmark.percentiles.p50).toBe(194964);
     expect(payload.benchmark.benchmarkSegmentation).toMatchObject({
       requestedIndustry: "Fintech",
       matchedIndustry: null,

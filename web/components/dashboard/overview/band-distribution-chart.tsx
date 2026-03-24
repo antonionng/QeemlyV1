@@ -127,7 +127,7 @@ export function BandDistributionChart({
   }, [segmentTooltip]);
 
   return (
-    <Card className="rounded-[16px] border-[#EEF1F6] bg-white p-7 shadow-[0px_2px_8px_rgba(16,24,40,0.04)]">
+    <Card className="rounded-[16px] border-[#EEF1F6] bg-white p-5 shadow-[0px_2px_8px_rgba(16,24,40,0.04)] sm:p-7">
       <div className="space-y-1">
         <h3 className="text-base font-semibold text-[#111233]">Band Distribution</h3>
         <p className="text-[13px] leading-5 text-[#969799]">
@@ -135,7 +135,7 @@ export function BandDistributionChart({
         </p>
       </div>
 
-      <div className="mt-6 grid gap-5 lg:grid-cols-[180px_1fr]">
+      <div className="mt-6 grid gap-5 xl:grid-cols-[180px_1fr]">
         <div className="flex justify-center lg:justify-start">
           <svg
             width={donutSize}
@@ -229,7 +229,7 @@ export function BandDistributionChart({
           </svg>
         </div>
 
-        <div className="flex flex-col gap-3">
+        <div className="flex min-w-0 flex-col gap-3">
           {rows.map((row) =>
             row.target ? (
               <OverviewInteractiveSurface
@@ -250,10 +250,12 @@ export function BandDistributionChart({
       </div>
 
       <div className="mt-6 space-y-3">
-        <div className="flex items-end justify-between gap-4">
+        <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <p className="text-[13px] leading-5 text-[#969799]">Target</p>
-            <p className="text-[28px] font-bold leading-none text-[#111233]">{targetInBand}% In Band</p>
+            <p className="break-words text-[clamp(1.9rem,6vw,2.2rem)] font-bold leading-none text-[#111233] sm:text-[28px]">
+              {targetInBand}% In Band
+            </p>
           </div>
           <p className="text-[13px] font-semibold leading-5 text-[#5C45FD]">
             {remainingToTarget === 0 ? "Target met" : `${remainingToTarget}% to go`}

@@ -115,7 +115,7 @@ export function buildOverviewInteractionMap(
         id: "band-alignment",
         label: "Band Alignment",
         action: "link",
-        href: buildSalaryReviewHref({ cohort: "outside-band" }),
+        href: buildPeopleHref({ band: "outside-band" }),
         tooltip: {
           title: "Band Alignment",
           value: `${metrics.inBandPercentage}% in band`,
@@ -137,7 +137,7 @@ export function buildOverviewInteractionMap(
         id: "risk-management",
         label: "Risk Management",
         action: "link",
-        href: buildSalaryReviewHref({ cohort: "above-band" }),
+        href: buildPeopleHref({ band: "above" }),
         tooltip: {
           title: "Risk Management",
           value: `${metrics.payrollRiskFlags} risk flags`,
@@ -150,7 +150,7 @@ export function buildOverviewInteractionMap(
         id: "band-distribution-in-band",
         label: "In Band",
         action: "link",
-        href: buildSalaryReviewHref({ cohort: "in-band" }),
+        href: buildPeopleHref({ band: "in-band" }),
         tooltip: {
           title: "In Band",
           value: `${metrics.bandDistribution.inBand}%`,
@@ -165,7 +165,7 @@ export function buildOverviewInteractionMap(
         id: "band-distribution-above-band",
         label: "Above Band",
         action: "link",
-        href: buildSalaryReviewHref({ filter: "above-band" }),
+        href: buildPeopleHref({ band: "above" }),
         tooltip: {
           title: "Above Band",
           value: `${metrics.bandDistribution.above}%`,
@@ -180,7 +180,7 @@ export function buildOverviewInteractionMap(
         id: "band-distribution-below-band",
         label: "Below Band",
         action: "link",
-        href: buildSalaryReviewHref({ filter: "below-band" }),
+        href: buildPeopleHref({ band: "below" }),
         tooltip: {
           title: "Below Band",
           value: `${metrics.bandDistribution.below}%`,
@@ -197,11 +197,11 @@ export function buildOverviewInteractionMap(
         id: "active-employees",
         label: "Active Employees",
         action: "link",
-        href: buildSalaryReviewHref({ cohort: "active-employees" }),
+        href: buildPeopleHref({}),
         tooltip: {
           title: "Active Employees",
           value: `${metrics.activeEmployees}`,
-          description: `${metrics.totalEmployees} total employees. Open Salary Review to inspect the live roster.`,
+          description: `${metrics.totalEmployees} total employees. Open People to inspect the live roster.`,
         },
       },
       totalPayroll: {
@@ -245,7 +245,7 @@ export function buildOverviewInteractionMap(
         id: "in-band",
         label: "In Band",
         action: "link",
-        href: buildSalaryReviewHref({ cohort: "in-band" }),
+        href: buildPeopleHref({ band: "in-band" }),
         tooltip: {
           title: "In Band",
           value: `${metrics.inBandPercentage}%`,
@@ -256,7 +256,7 @@ export function buildOverviewInteractionMap(
         id: "risk-flags",
         label: "Risk Flags",
         action: "link",
-        href: buildSalaryReviewHref({ cohort: "above-band" }),
+        href: buildPeopleHref({ band: "above" }),
         tooltip: {
           title: "Risk Flags",
           value: `${metrics.payrollRiskFlags}`,
@@ -267,22 +267,15 @@ export function buildOverviewInteractionMap(
   };
 }
 
-function buildSalaryReviewHref({
-  cohort,
-  filter,
+function buildPeopleHref({
+  band,
 }: {
-  cohort: "active-employees" | "in-band" | "outside-band" | "above-band";
-  filter?: never;
-} | {
-  cohort?: never;
-  filter: "outside-band" | "above-band" | "below-band";
+  band?: "outside-band" | "in-band" | "above" | "below";
 }) {
   const searchParams = new URLSearchParams();
-  if (cohort) {
-    searchParams.set("cohort", cohort);
+  if (band) {
+    searchParams.set("band", band);
   }
-  if (filter) {
-    searchParams.set("filter", filter);
-  }
-  return `/dashboard/salary-review?${searchParams.toString()}`;
+  const query = searchParams.toString();
+  return query ? `/dashboard/people?${query}` : "/dashboard/people";
 }

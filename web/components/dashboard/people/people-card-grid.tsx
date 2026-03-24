@@ -3,7 +3,7 @@
 import { MapPin, Pencil, Trash2 } from "lucide-react";
 import { buildBenchmarkTrustLabels } from "@/lib/benchmarks/trust";
 import type { Employee } from "@/lib/employees";
-import { formatAEDCompact } from "@/lib/employees";
+import { useCurrencyFormatter } from "@/lib/utils/currency";
 
 type Props = {
   employees: Employee[];
@@ -33,6 +33,11 @@ function visaBadge(employee: Employee) {
 }
 
 export function PeopleCardGrid({ employees, onOpenDetails, onDelete }: Props) {
+  const { defaultCurrency, convertToDefault } = useCurrencyFormatter();
+  const numberFormatter = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
+  const formatSalaryNumber = (value: number, sourceCurrency: string) =>
+    numberFormatter.format(Math.round(convertToDefault(value, sourceCurrency)));
+
   return (
     <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
       {employees.map((employee) => {
@@ -44,13 +49,13 @@ export function PeopleCardGrid({ employees, onOpenDetails, onDelete }: Props) {
           key={employee.id}
           className="group rounded-2xl border border-border bg-white p-5 shadow-sm transition-transform hover:-translate-y-0.5"
         >
-          <div className="flex items-start justify-between">
+          <div className="flex flex-wrap items-start justify-between gap-2">
             <button
               type="button"
-              className="text-left"
+              className="min-w-0 flex-1 text-left"
               onClick={() => onOpenDetails(employee)}
             >
-              <div className="flex items-center gap-3">
+              <div className="flex min-w-0 items-center gap-3">
                 {employee.avatar ? (
                   <img
                     src={employee.avatar}
@@ -63,11 +68,11 @@ export function PeopleCardGrid({ employees, onOpenDetails, onDelete }: Props) {
                     {employee.lastName[0]}
                   </div>
                 )}
-                <div>
-                  <p className="text-sm font-semibold text-brand-900">
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-brand-900">
                     {employeeLabel}
                   </p>
-                  <p className="text-xs text-accent-500">{employee.role.title}</p>
+                  <p className="truncate text-xs text-accent-500">{employee.role.title}</p>
                 </div>
               </div>
             </button>
@@ -82,32 +87,49 @@ export function PeopleCardGrid({ employees, onOpenDetails, onDelete }: Props) {
               <MapPin className="h-3.5 w-3.5" />
               {employee.location.city}, {employee.location.country}
             </p>
-            <p>
-              Salary: <span className="font-semibold text-brand-900">{formatAEDCompact(employee.totalComp)}</span>
-            </p>
-            {employee.hasBenchmark ? (
-              <p>
-                Market:{" "}
-                <span className={`font-semibold ${employee.marketComparison > 0 ? "text-red-600" : "text-emerald-600"}`}>
-                  {employee.marketComparison > 0 ? "+" : ""}
-                  {employee.marketComparison}%
-                </span>
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.16em] text-accent-400">
+                {`Salary (${defaultCurrency})`}
               </p>
+              <p className="mt-1 text-base font-semibold text-brand-900">
+                {formatSalaryNumber(employee.totalComp, employee.location.currency)}
+              </p>
+              <p className="text-[11px] text-accent-500">
+                Basic {formatSalaryNumber(employee.baseSalary, employee.location.currency)}
+              </p>
+            </div>
+            {employee.hasBenchmark ? (
+              <div className="space-y-1">
+                <p>
+                  Market:{" "}
+                  <span className={`font-semibold ${employee.marketComparison > 0 ? "text-red-600" : "text-emerald-600"}`}>
+                    {employee.marketComparison > 0 ? "+" : ""}
+                    {employee.marketComparison}%
+                  </span>
+                </p>
+                {benchmarkTrust && (
+                  <>
+                    <p className="text-[11px] font-medium text-brand-700">{benchmarkTrust.sourceLabel}</p>
+                    <p className="text-[11px] text-accent-500">
+                      {benchmarkTrust.matchLabel}
+                      {benchmarkTrust.freshnessLabel ? ` · ${benchmarkTrust.freshnessLabel}` : ""}
+                    </p>
+                  </>
+                )}
+              </div>
             ) : (
               <p>
                 Market: <span className="font-semibold text-accent-500">Benchmark pending</span>
               </p>
             )}
-            {employee.hasBenchmark && benchmarkTrust && (
-              <div className="flex flex-wrap gap-1">
-                <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-medium text-brand-700">
-                  {benchmarkTrust.sourceLabel}
-                </span>
-                <span className="rounded-full bg-accent-100 px-2 py-0.5 text-[10px] font-medium text-accent-600">
-                  {benchmarkTrust.matchLabel}
-                </span>
-              </div>
-            )}
+            <div className="flex flex-wrap gap-2">
+              <span className="rounded-full bg-accent-50 px-2 py-1 text-[10px] font-semibold text-accent-600">
+                {employee.status}
+              </span>
+              <span className="rounded-full bg-accent-50 px-2 py-1 text-[10px] font-semibold text-accent-600">
+                {employee.level.name}
+              </span>
+            </div>
             {visa && (
               <p className={`inline-flex rounded-full border px-2 py-1 text-[10px] font-semibold ${visa.cls}`}>
                 {visa.label}
@@ -115,14 +137,14 @@ export function PeopleCardGrid({ employees, onOpenDetails, onDelete }: Props) {
             )}
           </div>
 
-          <div className="mt-4 flex items-center gap-2 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
+          <div className="mt-4 flex flex-wrap gap-2 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
             <button
               type="button"
               onClick={() => onOpenDetails(employee)}
               className="inline-flex h-8 items-center gap-1 rounded-lg border border-border px-3 text-xs font-medium text-accent-600 hover:bg-accent-50"
             >
               <Pencil className="h-3.5 w-3.5" />
-              Edit
+              Open Profile
             </button>
             <button
               type="button"

@@ -30,6 +30,8 @@ type Source = {
   slug: string;
   name: string;
   enabled: boolean;
+  approved_for_commercial: boolean;
+  needs_review: boolean;
   config?: { health?: string };
 };
 
@@ -49,6 +51,10 @@ function getRelativeTime(dateStr: string): string {
   if (diffMins < 60) return `${diffMins}m ago`;
   if (diffHours < 24) return `${diffHours}h ago`;
   return `${diffDays}d ago`;
+}
+
+function isRunnableSource(source: Source): boolean {
+  return source.enabled && source.approved_for_commercial && !source.needs_review;
 }
 
 export default function AdminRunsPage() {
@@ -91,7 +97,9 @@ export default function AdminRunsPage() {
   }, []);
 
   const sourceMap = useMemo(() => new Map(sources.map((source) => [source.id, source])), [sources]);
-  const enabledSources = sources.filter((source) => source.enabled).sort((a, b) => a.name.localeCompare(b.name));
+  const runnableSources = sources
+    .filter((source) => isRunnableSource(source))
+    .sort((a, b) => a.name.localeCompare(b.name));
   const hasRunningJobs = jobs.some((job) => job.status === "running" || job.status === "queued");
 
   useEffect(() => {
@@ -104,7 +112,7 @@ export default function AdminRunsPage() {
 
   const triggerRun = async (sourceIds: string[]) => {
     if (sourceIds.length === 0) {
-      setToast({ type: "error", message: "No enabled sources available to run." });
+      setToast({ type: "error", message: "No runnable sources are currently available." });
       return;
     }
 
@@ -210,7 +218,7 @@ export default function AdminRunsPage() {
                 className="w-full rounded-lg border border-border bg-surface-1 px-3 py-2 text-sm text-text-primary focus:border-border-focus focus:outline-none focus:ring-2 focus:ring-brand-100"
               >
                 <option value="">Select a source</option>
-                {enabledSources.map((source) => (
+                {runnableSources.map((source) => (
                   <option key={source.id} value={source.id}>
                     {source.name}
                   </option>
@@ -226,12 +234,12 @@ export default function AdminRunsPage() {
               Run Selected Source
             </button>
             <button
-              onClick={() => triggerRun(enabledSources.map((source) => source.id))}
-              disabled={triggering || enabledSources.length === 0}
+              onClick={() => triggerRun(runnableSources.map((source) => source.id))}
+              disabled={triggering || runnableSources.length === 0}
               className="flex w-full items-center justify-center gap-2 rounded-lg border border-border bg-surface-1 px-4 py-2.5 text-sm font-medium text-text-primary hover:bg-surface-2 disabled:opacity-50"
             >
               {triggering ? <Loader2 className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-              Run All Enabled Sources
+              Run All Runnable Sources
             </button>
             <div className="rounded-xl border border-border bg-surface-2 p-4">
               <p className="text-sm font-semibold text-text-primary">Operator guidance</p>
@@ -243,10 +251,10 @@ export default function AdminRunsPage() {
         </div>
 
         <div className="panel p-5">
-          <h2 className="section-header">Enabled Sources</h2>
+          <h2 className="section-header">Runnable Sources</h2>
           <div className="mt-4 grid gap-3 md:grid-cols-2">
-            {enabledSources.length > 0 ? (
-              enabledSources.map((source) => (
+            {runnableSources.length > 0 ? (
+              runnableSources.map((source) => (
                 <div key={source.id} className="rounded-xl border border-border bg-surface-2 p-4">
                   <p className="text-sm font-semibold text-text-primary">{source.name}</p>
                   <p className="mt-1 font-mono text-xs text-text-tertiary">{source.slug}</p>
@@ -257,7 +265,7 @@ export default function AdminRunsPage() {
               ))
             ) : (
               <div className="rounded-xl border border-dashed border-border bg-surface-2 p-4 text-sm text-text-tertiary">
-                No enabled sources configured yet.
+                No runnable sources configured yet.
               </div>
             )}
           </div>

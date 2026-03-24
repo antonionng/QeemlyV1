@@ -10,13 +10,13 @@ vi.mock("next/link", () => ({
 }));
 
 vi.mock("next/image", () => ({
-  default: ({
-    priority: _priority,
-    unoptimized: _unoptimized,
-    fill: _fill,
-    ...props
-  }: React.ComponentProps<"img"> & { priority?: boolean; unoptimized?: boolean; fill?: boolean }) =>
-    React.createElement("img", props),
+  default: (props: React.ComponentProps<"img"> & { priority?: boolean; unoptimized?: boolean; fill?: boolean }) => {
+    const { priority, unoptimized, fill, ...imgProps } = props;
+    void priority;
+    void unoptimized;
+    void fill;
+    return React.createElement("img", imgProps);
+  },
 }));
 
 describe("public auth pages", () => {
@@ -57,6 +57,8 @@ describe("public auth pages", () => {
     expect(html).toContain('href="/login"');
     expect(html).toContain(">Create account<");
     expect(html).toContain('placeholder="name@company.com"');
+    expect(html).toContain('href="/terms"');
+    expect(html).toContain('href="/privacy"');
   });
 
   it("does not mark more than one auth hero image as priority", () => {

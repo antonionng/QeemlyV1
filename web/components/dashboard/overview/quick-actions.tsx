@@ -69,12 +69,12 @@ export function QuickActions({ actions }: QuickActionsProps) {
 
   return (
     <section className="overview-section">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="min-w-0 flex-1">
           <h2 className="overview-section-title">Quick Actions</h2>
           <p className="overview-supporting-text mt-1">Prioritized actions and issues that need attention.</p>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex shrink-0 items-center gap-1">
           <button
             type="button"
             onClick={() => scroll("left")}
@@ -94,7 +94,7 @@ export function QuickActions({ actions }: QuickActionsProps) {
 
       <div
         ref={scrollRef}
-        className="flex gap-6 overflow-x-auto pb-1 scrollbar-none"
+        className="flex gap-4 overflow-x-auto pb-1 scrollbar-none sm:gap-6"
         style={{ scrollbarWidth: "none" }}
       >
         {actions.map((action) => {
@@ -102,7 +102,7 @@ export function QuickActions({ actions }: QuickActionsProps) {
           const tone = TONE_STYLES[action.tone];
 
           return (
-            <Link key={action.id} href={action.href} className="w-[260px] shrink-0">
+            <Link key={action.id} href={action.href} className="w-[240px] max-w-[85vw] shrink-0 sm:w-[260px]">
               <Card
                 className={clsx(
                   "flex h-full flex-col border p-6 transition-shadow hover:shadow-md",
@@ -112,8 +112,8 @@ export function QuickActions({ actions }: QuickActionsProps) {
                 <div className={clsx("mb-4 flex h-10 w-10 items-center justify-center rounded-xl", tone.iconBg)}>
                   <Icon className={clsx("h-5 w-5", tone.iconColor)} strokeWidth={1.5} />
                 </div>
-                <div className="mb-2 flex items-start justify-between gap-2">
-                  <p className="text-sm font-medium leading-snug text-[#111233]">
+                <div className="mb-2 flex min-h-[3rem] items-start justify-between gap-2">
+                  <p className="min-w-0 flex-1 break-words text-sm font-medium leading-snug text-[#111233] line-clamp-2">
                     {action.title}
                   </p>
                   {action.countLabel && (
@@ -122,7 +122,7 @@ export function QuickActions({ actions }: QuickActionsProps) {
                     </span>
                   )}
                 </div>
-                <p className="mb-6 flex-1 text-[13px] text-[#969799]">
+                <p className="mb-6 min-h-[4.5rem] flex-1 text-[13px] text-[#969799] line-clamp-3">
                   {action.description}
                 </p>
                 <div className="group flex items-center gap-1 text-xs font-semibold text-[#111233]">

@@ -1,6 +1,7 @@
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
+import { PeopleCardGrid } from "@/components/dashboard/people/people-card-grid";
 import { PeopleStatsBar } from "@/components/dashboard/people/people-stats-bar";
 import { PeopleTable } from "@/components/dashboard/people/people-table";
 import { PeopleToolbar } from "@/components/dashboard/people/people-toolbar";
@@ -110,6 +111,9 @@ describe("People layout surfaces", () => {
 
     expect(html).toContain('data-testid="people-toolbar-filters"');
     expect(html).toContain('data-testid="people-toolbar-actions"');
+    expect(html).toContain("md:grid-cols-2");
+    expect(html).toContain("sm:grid-cols-2");
+    expect(html).not.toContain("xl:flex-nowrap");
     expect(html).toContain("Search employees, emails");
     expect(html).toContain("Add Employee");
   });
@@ -131,6 +135,8 @@ describe("People layout surfaces", () => {
 
     expect(html).not.toContain('type="number"');
     expect(html).not.toContain("<select");
+    expect(html).toContain('data-testid="people-table-scroller"');
+    expect(html).toContain("lg:min-w-[1320px]");
     expect(html).toContain("Edit");
   });
 
@@ -158,5 +164,30 @@ describe("People layout surfaces", () => {
 
     expect(html).toContain("Benchmark pending");
     expect(html).toContain("Not mapped");
+  });
+
+  it("lets dense card content shrink instead of colliding with the level badge", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(PeopleCardGrid, {
+        employees: [
+          createEmployee({
+            firstName: "Alexandria",
+            lastName: "Montgomery-Windsor",
+            role: {
+              id: "staff-eng",
+              title: "Staff Platform Reliability Engineer",
+              family: "Engineering",
+              icon: "SE",
+            },
+          }),
+        ],
+        onOpenDetails: () => undefined,
+        onDelete: () => undefined,
+      })
+    );
+
+    expect(html).toContain("min-w-0 flex-1");
+    expect(html).toContain("truncate");
+    expect(html).toContain("flex-wrap gap-2");
   });
 });

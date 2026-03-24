@@ -3,7 +3,7 @@
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { SalaryReviewOverview } from "@/components/salary-review/workspace";
+import { ReviewCycleListCard, SalaryReviewOverview } from "@/components/salary-review/workspace";
 import { useSalaryReview, type ReviewEmployee } from "@/lib/salary-review";
 import type { SalaryReviewProposalRecord } from "@/lib/salary-review/proposal-types";
 import type { SalaryReviewQueryState } from "@/lib/salary-review/url-state";
@@ -263,6 +263,52 @@ describe("SalaryReviewOverview", () => {
     });
 
     expect(container.textContent).toContain("1 of 2 employees shown");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+});
+
+describe("ReviewCycleListCard", () => {
+  let container: HTMLDivElement;
+
+  beforeEach(() => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    container = document.createElement("div");
+    document.body.appendChild(container);
+  });
+
+  afterEach(() => {
+    delete (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT;
+    vi.restoreAllMocks();
+    container.remove();
+  });
+
+  it("labels department-split drafts by department", async () => {
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        React.createElement(ReviewCycleListCard, {
+          cycles: [
+            makeCycle({
+              id: "dept-draft-1",
+              review_mode: "department_split",
+              review_scope: "department",
+              department: "Engineering",
+              status: "draft",
+            }),
+          ],
+          activeCycleId: null,
+          onStartWizard: vi.fn(),
+          onSelectCycle: vi.fn(),
+        }),
+      );
+    });
+
+    expect(container.textContent).toContain("Engineering Review");
+    expect(container.textContent).not.toContain("Annual Review");
 
     await act(async () => {
       root.unmount();

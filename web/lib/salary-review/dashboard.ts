@@ -1,6 +1,6 @@
 import type { SalaryReviewProposalRecord } from "./proposal-types";
 
-type SalaryReviewDashboardTabId = "overview" | "review" | "approvals" | "history";
+type SalaryReviewDashboardTabId = "overview" | "drafts" | "review" | "approvals" | "history";
 
 type SalaryReviewDashboardTab = {
   id: SalaryReviewDashboardTabId;
@@ -10,6 +10,7 @@ type SalaryReviewDashboardTab = {
 
 type SalaryReviewDashboardModel = {
   tabs: Record<SalaryReviewDashboardTabId, SalaryReviewDashboardTab>;
+  drafts: SalaryReviewProposalRecord[];
   awaitingReview: SalaryReviewProposalRecord[];
   history: SalaryReviewProposalRecord[];
   masterCycles: SalaryReviewProposalRecord[];
@@ -45,6 +46,7 @@ export function buildSalaryReviewDashboardModel(args: {
   cycles?: SalaryReviewProposalRecord[];
   approvalQueue: SalaryReviewProposalRecord[];
 }): SalaryReviewDashboardModel {
+  const drafts = (args.cycles ?? []).filter((proposal) => proposal.status === "draft");
   const awaitingReview = args.approvalQueue.filter(
     (proposal) => proposal.status === "submitted" || proposal.status === "in_review"
   );
@@ -74,10 +76,12 @@ export function buildSalaryReviewDashboardModel(args: {
   return {
     tabs: {
       overview: { id: "overview", label: "Overview", badge: awaitingReview.length + history.length },
+      drafts: { id: "drafts", label: "Drafts", badge: drafts.length },
       review: { id: "review", label: "Build Review", badge: hasDraft ? 1 : 0 },
       approvals: { id: "approvals", label: "Approvals", badge: awaitingReview.length },
       history: { id: "history", label: "History", badge: history.length },
     },
+    drafts,
     awaitingReview,
     history,
     masterCycles,

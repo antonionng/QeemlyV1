@@ -43,12 +43,13 @@ type NavSection = {
 
 const adminNavSections: NavSection[] = [
   {
-    label: null,
+    label: "Company",
     items: [
       { href: getDashboardOverviewRoutes()[0].href, label: getDashboardOverviewRoutes()[0].label, icon: LayoutGrid },
       { href: getDashboardOverviewRoutes()[1].href, label: getDashboardOverviewRoutes()[1].label, icon: ChartColumnIncreasing },
       { href: "/dashboard/people", label: "People", icon: Users },
       { href: "/dashboard/salary-review", label: "Salary Review", icon: DollarSign },
+      { href: "/dashboard/integrations", label: "Integrations", icon: Plug, featureKey: "integrations" },
     ],
   },
   {
@@ -62,7 +63,6 @@ const adminNavSections: NavSection[] = [
     items: [
       { href: "/dashboard/relocation", label: "CoL Calculator", icon: Globe2 },
       { href: "/dashboard/upload", label: "Upload Data", icon: Upload },
-      { href: "/dashboard/integrations", label: "Integrations", icon: Plug, featureKey: "integrations" },
       { href: "/dashboard/data/runs", label: "Data Runs", icon: Database },
     ],
   },
@@ -244,7 +244,7 @@ export function DashboardSidebar({
   const profileTooltip = user?.email ? `${displayName} (${user.email})` : displayName;
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-white">
+    <div className="flex h-full min-h-0 min-w-0 flex-col bg-white">
       <div
         className={clsx(
           "relative flex h-14 shrink-0 items-center px-5",
@@ -278,12 +278,12 @@ export function DashboardSidebar({
       </div>
 
       {!collapsed && (
-        <div className="shrink-0 px-3 pb-2 pt-1">
+        <div className="min-w-0 shrink-0 px-3 pb-2 pt-1">
           <WorkspaceSwitcher />
         </div>
       )}
 
-      <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <div className="min-h-0 flex-1 overflow-y-auto pt-1">
           <nav className="flex flex-col gap-[18px]">
             {navSections.map((section, sectionIndex) => (

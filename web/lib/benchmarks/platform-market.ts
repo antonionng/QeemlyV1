@@ -14,6 +14,7 @@ export type MarketBenchmark = {
   location_id: string;
   level_id: string;
   currency: string;
+  pay_period?: "monthly" | "annual" | null;
   industry?: string | null;
   company_size?: string | null;
   p10: number;
@@ -204,7 +205,7 @@ async function fetchFromCanonicalPool(supabase: SupabaseLike): Promise<MarketBen
   const data = await fetchAllRows(supabase, "platform_market_benchmarks", (query) =>
     query
       .select(
-        "role_id,location_id,level_id,currency,industry,company_size,p10,p25,p50,p75,p90,sample_size,contributor_count,provenance,market_source_tier,freshness_at,source_breakdown",
+        "role_id,location_id,level_id,currency,pay_period,industry,company_size,p10,p25,p50,p75,p90,sample_size,contributor_count,provenance,market_source_tier,freshness_at,source_breakdown",
       )
       .eq("is_public", true)
       .order("freshness_at", { ascending: false }),
@@ -217,6 +218,10 @@ async function fetchFromCanonicalPool(supabase: SupabaseLike): Promise<MarketBen
     location_id: String(row.location_id),
     level_id: String(row.level_id),
     currency: String(row.currency),
+    pay_period:
+      row.pay_period === "monthly" || row.pay_period === "annual"
+        ? row.pay_period
+        : null,
     industry: normalizeSegmentValue(row.industry),
     company_size: normalizeSegmentValue(row.company_size),
     p10: Number(row.p10),

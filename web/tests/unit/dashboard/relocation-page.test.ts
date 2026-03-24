@@ -10,74 +10,52 @@ vi.mock("next/navigation", () => ({
   }),
 }));
 
-vi.mock("@/components/ui/button", () => ({
-  Button: ({ children, ...props }: React.ComponentProps<"button">) =>
-    React.createElement("button", props, children),
-}));
-
 vi.mock("@/components/dashboard/relocation/input-panel", () => ({
   InputPanel: () => React.createElement("div", null, "InputPanel"),
-}));
-
-vi.mock("@/components/dashboard/relocation/layout-manager", () => ({
-  RelocationLayoutManager: () => React.createElement("div", null, "RelocationLayoutManager"),
-}));
-
-vi.mock("@/components/dashboard/relocation/widgets/comparison", () => ({
-  ComparisonWidget: () => React.createElement("div", null, "ComparisonWidget"),
-}));
-
-vi.mock("@/components/dashboard/relocation/widgets/col-index", () => ({
-  ColIndexWidget: () => React.createElement("div", null, "ColIndexWidget"),
-}));
-
-vi.mock("@/components/dashboard/relocation/widgets/purchasing-power", () => ({
-  PurchasingPowerWidget: () => React.createElement("div", null, "PurchasingPowerWidget"),
-}));
-
-vi.mock("@/components/dashboard/relocation/widgets/recommended-range", () => ({
-  RecommendedRangeWidget: () => React.createElement("div", null, "RecommendedRangeWidget"),
-}));
-
-vi.mock("@/components/dashboard/relocation/widgets/cost-breakdown", () => ({
-  CostBreakdownWidget: () => React.createElement("div", null, "CostBreakdownWidget"),
-}));
-
-vi.mock("@/components/dashboard/relocation/widgets/summary-export", () => ({
-  SummaryExportWidget: () => React.createElement("div", null, "SummaryExportWidget"),
 }));
 
 vi.mock("@/lib/relocation/calculator", () => ({
   calculateRelocation: () => ({
     homeCity: {
-      id: "dubai",
-      name: "Dubai",
-      country: "UAE",
-      flag: "AE",
-      colIndex: 100,
-    },
-    targetCity: {
       id: "london",
       name: "London",
       country: "United Kingdom",
       flag: "GB",
       colIndex: 145,
+      breakdown: { rent: 12800, transport: 1650, food: 2900, utilities: 900, other: 2200 },
     },
-    colRatio: 1.45,
+    targetCity: {
+      id: "dubai",
+      name: "Dubai",
+      country: "UAE",
+      flag: "AE",
+      colIndex: 100,
+      breakdown: { rent: 9000, transport: 1100, food: 2200, utilities: 750, other: 1500 },
+    },
+    colRatio: 0.69,
     baseSalary: 450000,
-    purchasingPowerSalary: 652500,
-    recommendedSalary: 652500,
-    recommendedRange: { min: 620000, max: 685000 },
-    annualDifference: 174600,
+    purchasingPowerSalary: 310500,
+    recommendedSalary: 310500,
+    recommendedRange: { min: 294975, max: 326025 },
+    annualDifference: -52800,
+    monthlyDifference: -4400,
     costBreakdown: {
-      home: { rent: 1000, transport: 500, food: 800, utilities: 300, other: 400 },
-      target: { rent: 1500, transport: 700, food: 900, utilities: 350, other: 500 },
+      home: { rent: 12800, transport: 1650, food: 2900, utilities: 900, other: 2200 },
+      target: { rent: 9000, transport: 1100, food: 2200, utilities: 750, other: 1500 },
     },
   }),
+  formatCurrency: (amount: number, compact?: boolean) => {
+    if (compact && amount >= 1000) return `AED ${Math.round(amount / 1000)}K`;
+    return `AED ${amount.toLocaleString()}`;
+  },
+  getApproachExplanation: () =>
+    "This approach adjusts for purchasing power but caps the increase.",
 }));
 
 vi.mock("@/lib/relocation/col-data", () => ({
   setRelocationCities: vi.fn(),
+  getTotalMonthlyCost: (b: Record<string, number>) =>
+    Object.values(b).reduce((s, v) => s + v, 0),
 }));
 
 import RelocationPage from "@/app/(dashboard)/dashboard/relocation/page";
@@ -106,7 +84,7 @@ describe("RelocationPage", () => {
     container.remove();
   });
 
-  it("uses platform sections instead of the widget dashboard shell", async () => {
+  it("renders the relocation calculator with shared dashboard page styling", async () => {
     const root = createRoot(container);
 
     await act(async () => {
@@ -118,21 +96,22 @@ describe("RelocationPage", () => {
       await Promise.resolve();
     });
 
-    expect(container.textContent).toContain("Decision summary");
-    expect(container.textContent).toContain("Key outputs");
-    expect(container.textContent).toContain("Share analysis");
-    expect(container.textContent).toContain("Relocation strategy workspace");
-    expect(container.textContent).toContain("Leadership-ready summary");
-    expect(container.textContent).toContain("Calm, decision-ready guidance for every move.");
+    const heading = container.querySelector("h1");
+
+    expect(heading?.textContent).toBe("Relocation Calculator");
+    expect(heading?.className).toContain("page-title");
+    expect(container.textContent).toContain(
+      "Compare cost of living, salary impact, and recommended compensation for relocation decisions.",
+    );
+    expect(container.textContent).toContain("COL Index");
+    expect(container.textContent).toContain("Monthly estimated cost of living");
+    expect(container.textContent).toContain("Recommended Salary Needed");
+    expect(container.textContent).toContain("Recommended Range");
+    expect(container.textContent).toContain("Export as PDF");
+    expect(container.textContent).toContain("current salary");
+
     expect(container.textContent).not.toContain("Reset Layout");
-    expect(container.textContent).not.toContain("How it works");
     expect(container.textContent).not.toContain("MVP");
-    expect(container.textContent).not.toContain("Policy guidance");
-    expect(container.textContent).not.toContain("Structured for decision quality");
-    expect(container.textContent).not.toContain("Build premium, decision-ready relocation recommendations");
-    expect(container.textContent).not.toContain("Relocation analysis");
-    expect(container.textContent).not.toContain("Source: Workspace relocation dataset");
-    expect(container.textContent).not.toContain("Refreshed");
-    expect(container.textContent).not.toContain("Base salary");
+    expect(container.textContent).not.toContain("How it works");
   });
 });

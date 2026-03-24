@@ -127,9 +127,11 @@ function MetricRow({
 }: MetricRowProps) {
   const content = (
     <div className="flex flex-col gap-2" data-testid={testId}>
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col items-start gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
         <span className="text-[18px] font-semibold leading-[1.2] text-[#111233]">{label}</span>
-        <span className="text-right text-[14px] leading-[1.2] text-[#969799]">{description}</span>
+        <span className="break-words text-left text-[14px] leading-[1.2] text-[#969799] sm:text-right">
+          {description}
+        </span>
       </div>
       <div className="h-3 overflow-hidden rounded-full bg-[rgba(150,151,153,0.2)]">
         <div
@@ -232,7 +234,7 @@ export function CompensationHealthScoreCard({
         className="absolute inset-0 flex flex-col items-center justify-center pt-11 text-center"
         data-testid="health-score-center-stack"
       >
-        <span className="text-[64px] font-semibold leading-none tracking-[-1px] text-[#111233]">
+        <span className="text-[clamp(2.75rem,10vw,4rem)] font-semibold leading-none tracking-[-1px] text-[#111233]">
           {normalizedScore}%
         </span>
         <span
@@ -249,7 +251,7 @@ export function CompensationHealthScoreCard({
 
   return (
     <Card
-      className="flex h-full w-full min-h-[620px] flex-col justify-between rounded-[24px] border border-gray-200 bg-white px-8 py-10 shadow-sm"
+      className="flex h-full w-full min-h-[520px] flex-col justify-between rounded-[24px] border border-gray-200 bg-white px-5 py-6 shadow-sm sm:min-h-[620px] sm:px-8 sm:py-10"
       data-testid={cardTestId}
     >
       <div className="flex flex-col gap-2">

@@ -55,8 +55,8 @@ vi.mock("@/components/dashboard/salary-review", () => ({
   ApprovalProposalDetail: () => React.createElement("div", null, "ApprovalProposalDetail"),
   ApprovalProposalList: () => React.createElement("div", null, "ApprovalProposalList"),
   ReviewTable: () => React.createElement("div", null, "ReviewTable"),
-  ReviewTabs: ({ activeTab }: { activeTab: string }) =>
-    React.createElement("div", null, `ReviewTabs:${activeTab}`),
+  ReviewTabs: ({ activeTab, items }: { activeTab: string; items: Array<{ label: string }> }) =>
+    React.createElement("div", null, `ReviewTabs:${activeTab}:${items.map((item) => item.label).join("|")}`),
 }));
 
 vi.mock("@/components/dashboard/upload", () => ({
@@ -256,7 +256,7 @@ describe("SalaryReviewPage", () => {
     });
 
     expect(replaceMock).not.toHaveBeenCalledWith("/dashboard/salary-review/new");
-    expect(container.textContent).toContain("ReviewTabs:overview");
+    expect(container.textContent).toContain("ReviewTabs:overview:Overview|Drafts|Approvals|History");
     expect(container.textContent).toContain("SalaryReviewOverview:Start Review Cycle:outside-band");
 
     await act(async () => {

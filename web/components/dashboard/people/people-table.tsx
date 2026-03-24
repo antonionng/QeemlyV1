@@ -3,9 +3,9 @@
 import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import { buildBenchmarkTrustLabels } from "@/lib/benchmarks/trust";
 import type { Employee } from "@/lib/employees";
-import { formatAEDCompact } from "@/lib/employees";
 import { DropdownItem, DropdownMenu } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
+import { useCurrencyFormatter } from "@/lib/utils/currency";
 
 type Props = {
   employees: Employee[];
@@ -46,6 +46,11 @@ export function PeopleTable({
   mutating,
 }: Props) {
   const allSelected = employees.length > 0 && employees.every((employee) => selectedIds.includes(employee.id));
+  const { defaultCurrency, convertToDefault } = useCurrencyFormatter();
+  const numberFormatter = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
+
+  const formatSalaryNumber = (value: number, sourceCurrency: string) =>
+    numberFormatter.format(Math.round(convertToDefault(value, sourceCurrency)));
 
   return (
     <div className="overflow-hidden rounded-3xl border border-border/70 bg-white shadow-sm shadow-brand-100/20">
@@ -63,8 +68,8 @@ export function PeopleTable({
           Archive Selected
         </Button>
       </div>
-      <div className="overflow-x-auto">
-        <table className="min-w-[1180px] w-full">
+      <div className="responsive-scroll-x" data-testid="people-table-scroller">
+        <table className="w-full min-w-full lg:min-w-[1320px]">
           <thead className="bg-accent-50/60">
             <tr className="text-left text-xs uppercase tracking-[0.18em] text-accent-500">
               <th className="px-4 py-3 font-semibold">
@@ -79,10 +84,11 @@ export function PeopleTable({
               <th className="px-4 py-3 font-semibold">Role</th>
               <th className="px-4 py-3 font-semibold">Department</th>
               <th className="px-4 py-3 font-semibold">Location</th>
-              <th className="px-4 py-3 font-semibold">Salary</th>
+              <th className="px-4 py-3 font-semibold">{`Salary (${defaultCurrency})`}</th>
               <th className="px-4 py-3 font-semibold">Band</th>
-              <th className="px-4 py-3 font-semibold">Market %</th>
-              <th className="px-4 py-3 font-semibold">Status / Level</th>
+              <th className="px-4 py-3 font-semibold">Market Data</th>
+              <th className="px-4 py-3 font-semibold">Status</th>
+              <th className="px-4 py-3 font-semibold">Level</th>
               <th className="px-4 py-3 font-semibold text-right">Actions</th>
             </tr>
           </thead>
@@ -106,7 +112,7 @@ export function PeopleTable({
                   />
                 </td>
                 <td className="px-4 py-3">
-                  <div className="flex items-center gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
                     {employee.avatar ? (
                       <img
                         src={employee.avatar}
@@ -119,11 +125,11 @@ export function PeopleTable({
                         {employee.lastName[0]}
                       </div>
                     )}
-                    <div>
-                      <p className="text-sm font-semibold text-brand-900">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-brand-900">
                         {employeeLabel}
                       </p>
-                      <p className="text-xs text-accent-500">{employee.email || "No email"}</p>
+                      <p className="truncate text-xs text-accent-500">{employee.email || "No email"}</p>
                       {visa && (
                         <span className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${visa.cls}`}>
                           {visa.label}
@@ -133,8 +139,10 @@ export function PeopleTable({
                   </div>
                 </td>
                 <td className="px-4 py-3 text-sm text-brand-800">
-                  <p className="font-medium">{employee.role.title}</p>
-                  <p className="text-xs text-accent-500">{employee.level.name}</p>
+                  <div className="min-w-[180px] max-w-[220px]">
+                    <p className="truncate font-medium">{employee.role.title}</p>
+                    <p className="truncate text-xs text-accent-500">{employee.role.family}</p>
+                  </div>
                 </td>
                 <td className="px-4 py-3 text-sm text-brand-800">
                   <span className="inline-flex rounded-full bg-accent-50 px-2.5 py-1 text-xs font-medium text-accent-700">
@@ -145,9 +153,15 @@ export function PeopleTable({
                   <p className="font-medium">{employee.location.city}</p>
                   <p className="text-xs text-accent-500">{employee.location.country}</p>
                 </td>
-                <td className="px-4 py-3 text-sm font-semibold text-brand-900">
-                  <p>{formatAEDCompact(employee.baseSalary)}</p>
-                  <p className="mt-1 text-[10px] text-accent-500">{formatAEDCompact(employee.totalComp)} total</p>
+                <td className="px-4 py-3">
+                  <div className="space-y-1">
+                    <p className="text-base font-semibold text-brand-900">
+                      {formatSalaryNumber(employee.totalComp, employee.location.currency)}
+                    </p>
+                    <p className="text-[11px] text-accent-500">
+                      Basic {formatSalaryNumber(employee.baseSalary, employee.location.currency)}
+                    </p>
+                  </div>
                 </td>
                 <td className="px-4 py-3">
                   {employee.hasBenchmark ? (
@@ -162,50 +176,41 @@ export function PeopleTable({
                 </td>
                 <td className="px-4 py-3">
                   {employee.hasBenchmark ? (
-                    <div className="space-y-1">
+                    <div className="min-w-[180px] space-y-1">
                       <p className={`text-sm font-semibold ${employee.marketComparison > 0 ? "text-red-600" : "text-emerald-600"}`}>
                         {employee.marketComparison > 0 ? "+" : ""}
                         {employee.marketComparison}%
                       </p>
-                      <div className="h-1.5 w-20 rounded-full bg-accent-100">
-                        <div
-                          className={`h-full rounded-full ${employee.marketComparison > 8 ? "bg-red-500" : employee.marketComparison < -3 ? "bg-emerald-500" : "bg-brand-500"}`}
-                          style={{ width: `${Math.min(100, Math.max(10, Math.abs(employee.marketComparison) * 3))}%` }}
-                        />
-                      </div>
                       {benchmarkTrust && (
-                        <div className="flex flex-wrap gap-1 pt-1">
-                          <span className="rounded-full bg-brand-50 px-2 py-0.5 text-[10px] font-medium text-brand-700">
+                        <>
+                          <p className="text-[11px] font-medium text-brand-700">
                             {benchmarkTrust.sourceLabel}
-                          </span>
-                          <span className="rounded-full bg-accent-100 px-2 py-0.5 text-[10px] font-medium text-accent-600">
+                          </p>
+                          <p className="text-[11px] text-accent-500">
                             {benchmarkTrust.matchLabel}
-                          </span>
-                          {benchmarkTrust.freshnessLabel && (
-                            <span className="rounded-full bg-accent-100 px-2 py-0.5 text-[10px] font-medium text-accent-600">
-                              {benchmarkTrust.freshnessLabel}
-                            </span>
-                          )}
-                        </div>
+                            {benchmarkTrust.freshnessLabel ? ` · ${benchmarkTrust.freshnessLabel}` : ""}
+                          </p>
+                        </>
                       )}
                     </div>
                   ) : (
-                    <div className="space-y-1">
+                    <div className="min-w-[180px] space-y-1">
                       <p className="text-sm font-semibold text-accent-500">Not mapped</p>
                       <p className="text-[10px] text-accent-400">Awaiting benchmark coverage</p>
                     </div>
                   )}
                 </td>
                 <td className="px-4 py-3 text-sm text-brand-800 capitalize">
-                  <div className="space-y-1">
-                    <span className="inline-flex rounded-full bg-accent-50 px-2.5 py-1 text-xs font-medium text-accent-700">
-                      {employee.status}
-                    </span>
-                    <p className="text-xs text-accent-500">{employee.level.name}</p>
-                  </div>
+                  <span className="inline-flex rounded-full bg-accent-50 px-2.5 py-1 text-xs font-medium text-accent-700">
+                    {employee.status}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-sm text-brand-800">
+                  <p className="font-medium">{employee.level.name}</p>
+                  <p className="text-xs text-accent-500">{employee.level.category}</p>
                 </td>
                 <td className="px-4 py-3 text-right" onClick={(event) => event.stopPropagation()}>
-                  <div className="flex items-center justify-end gap-2">
+                  <div className="flex flex-wrap items-center justify-end gap-2">
                     <button
                       type="button"
                       className="inline-flex h-9 items-center gap-2 rounded-full border border-brand-200 px-4 text-sm font-medium text-brand-700 hover:bg-brand-50"

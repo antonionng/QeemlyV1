@@ -10,6 +10,7 @@ import {
   findMarketBenchmark,
   type MarketBenchmark,
 } from "@/lib/benchmarks/platform-market";
+import { normalizeBenchmarkPercentilesToAnnual } from "@/lib/benchmarks/pay-period";
 
 export type BenchmarkLookupFilters = {
   industry?: string | null;
@@ -67,6 +68,7 @@ export type DbBenchmark = {
   sample_size: number | null;
   source: string;
   confidence: string;
+  pay_period?: "monthly" | "annual" | null;
   industry?: string | null;
   company_size?: string | null;
   valid_from: string;
@@ -171,19 +173,25 @@ function transformMarketBenchmark(
   const currency = (location?.currency || mb.currency || "AED") as Currency;
   const sampleSize = Number(mb.sample_size) || 0;
   const confidence = getConfidenceFromSampleSize(sampleSize);
-
-  return {
-    roleId: mb.role_id,
-    locationId: mb.location_id,
-    levelId: mb.level_id,
-    currency,
-    percentiles: {
+  const normalized = normalizeBenchmarkPercentilesToAnnual(
+    {
       p10: mb.p10,
       p25: mb.p25,
       p50: mb.p50,
       p75: mb.p75,
       p90: mb.p90,
     },
+    mb.pay_period,
+  );
+
+  return {
+    roleId: mb.role_id,
+    locationId: mb.location_id,
+    levelId: mb.level_id,
+    currency,
+    payPeriod: normalized.payPeriod,
+    sourcePayPeriod: normalized.sourcePayPeriod,
+    percentiles: normalized.percentiles,
     sampleSize,
     confidence,
     lastUpdated: mb.freshness_at || new Date().toISOString(),
@@ -207,19 +215,25 @@ function transformDbBenchmark(db: DbBenchmark): SalaryBenchmark {
   const location = LOCATIONS.find(l => l.id === db.location_id);
   const currency = (location?.currency || db.currency || "AED") as Currency;
   const confidence = (db.confidence || "medium") as "High" | "Medium" | "Low";
-  
-  return {
-    roleId: db.role_id,
-    locationId: db.location_id,
-    levelId: db.level_id,
-    currency,
-    percentiles: {
+  const normalized = normalizeBenchmarkPercentilesToAnnual(
+    {
       p10: Number(db.p10),
       p25: Number(db.p25),
       p50: Number(db.p50),
       p75: Number(db.p75),
       p90: Number(db.p90),
     },
+    db.pay_period,
+  );
+  
+  return {
+    roleId: db.role_id,
+    locationId: db.location_id,
+    levelId: db.level_id,
+    currency,
+    payPeriod: normalized.payPeriod,
+    sourcePayPeriod: normalized.sourcePayPeriod,
+    percentiles: normalized.percentiles,
     sampleSize: db.sample_size || 0,
     confidence,
     lastUpdated: db.created_at,

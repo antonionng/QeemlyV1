@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { PilotApplicationModal } from "@/components/marketing/pilot-application-modal";
 
 type HomeHeroProps = {
   header?: ReactNode;
@@ -24,14 +25,10 @@ export function HomeHero({ header }: HomeHeroProps) {
               benchmarks needed to build a fair, high-performing organization with total certainty
             </p>
             <div className="mt-12 flex flex-wrap gap-3">
-              <Link href="/register">
-                <Button
-                  size="lg"
-                  className="h-16 rounded-full !bg-[#28e7c5] !px-10 !text-[1.125rem] !font-semibold !tracking-[0.02em] !text-[#111233]"
-                >
-                  Join pilot scheme
-                </Button>
-              </Link>
+              <PilotApplicationModal
+                sourceCta="hero"
+                triggerClassName="h-16 rounded-full !bg-[#28e7c5] !px-10 !text-[1.125rem] !font-semibold !tracking-[0.02em] !text-[#111233]"
+              />
               <Link href="/contact">
                 <Button
                   variant="outline"

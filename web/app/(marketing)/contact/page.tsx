@@ -62,11 +62,11 @@ export default function ContactPage() {
               </Card>
 
               <div className="flex flex-wrap items-center gap-3">
-                <Link href="/pricing">
-                  <Button variant="outline">View pricing</Button>
+                <Link href="/register">
+                  <Button variant="outline">Request access</Button>
                 </Link>
-                <Link href="/search" className="text-sm font-semibold text-brand-700 hover:text-brand-900">
-                  Try Benchmark Search →
+                <Link href="/home" className="text-sm font-semibold text-brand-700 hover:text-brand-900">
+                  Back to home →
                 </Link>
               </div>
             </div>

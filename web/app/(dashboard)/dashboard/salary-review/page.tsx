@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AiDistributionModal, ApprovalProposalDetail, ApprovalProposalList, ReviewTable, ReviewTabs } from "@/components/dashboard/salary-review";
 import { UploadModal } from "@/components/dashboard/upload";
-import { SalaryReviewOverview } from "@/components/salary-review";
+import { ReviewCycleListCard, SalaryReviewOverview } from "@/components/salary-review";
 import { useSalaryReview, type SalaryReviewAiPlanRequest } from "@/lib/salary-review";
 import { REVIEW_CYCLES, type ReviewCycle } from "@/lib/company";
 import { formatAEDCompact, type Department } from "@/lib/employees";
@@ -242,6 +242,7 @@ function SalaryReviewPageContent() {
   });
   const reviewTabs = [
     dashboardModel.tabs.overview,
+    dashboardModel.tabs.drafts,
     dashboardModel.tabs.approvals,
     dashboardModel.tabs.history,
   ];
@@ -483,7 +484,9 @@ function SalaryReviewPageContent() {
           </h1>
           <p className="mt-1 text-sm text-accent-600">
             {activeTab === "overview"
-              ? "Start a new cycle, continue an active draft, or review alerts and past cycles."
+              ? "Review employee coverage, watchouts, and budget context before opening a draft."
+              : activeTab === "drafts"
+                ? "Open saved draft cycles and continue the right review flow."
               : activeTab === "review"
                 ? buildReviewFlow.activeStep === "setup"
                   ? "Step 1 of 3. Set up the cycle, choose the employee scope, and decide whether to draft manually or with AI."
@@ -699,7 +702,7 @@ function SalaryReviewPageContent() {
             </Card>
           ) : null}
           <SalaryReviewOverview
-            cycles={cycles}
+            cycles={dashboardModel.drafts}
             activeCycle={activeProposal}
             actionLabel={dashboardModel.hasDraft ? "Continue Draft" : "Start Review Cycle"}
             onPrimaryAction={dashboardModel.hasDraft ? handleContinueDraft : () => void handleStartNewCycle()}
@@ -708,8 +711,18 @@ function SalaryReviewPageContent() {
             onReset={resetReview}
             onSelectCycle={(proposalId) => void selectCycle(proposalId)}
             initialQueryState={initialQueryState}
+            showCycleList={false}
           />
         </>
+      )}
+
+      {renderedTab === "drafts" && (
+        <ReviewCycleListCard
+          cycles={dashboardModel.drafts}
+          activeCycleId={activeProposal?.status === "draft" ? activeProposal.id : null}
+          onStartWizard={() => void handleStartNewCycle()}
+          onSelectCycle={(proposalId) => void selectCycle(proposalId)}
+        />
       )}
 
       {activeTab === "review" && (

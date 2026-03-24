@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
     queryClient
       .from("salary_benchmarks")
       .select(
-        "id,workspace_id,role_id,location_id,level_id,currency,p10,p25,p50,p75,p90,sample_size,source,confidence,industry,company_size,valid_from,created_at",
+        "id,workspace_id,role_id,location_id,level_id,currency,p10,p25,p50,p75,p90,sample_size,source,confidence,pay_period,industry,company_size,valid_from,created_at",
       )
       .eq("workspace_id", wsContext.context.workspace_id)
       .order("valid_from", { ascending: false })

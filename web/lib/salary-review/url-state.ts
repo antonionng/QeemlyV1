@@ -3,7 +3,7 @@ export type SalaryReviewBenchmarkStatus = "all" | "exact" | "fallback" | "missin
 export type SalaryReviewWorkflowStatus = "all" | "draft" | "submitted" | "in_review" | "approved" | "rejected";
 export type SalaryReviewPerformanceFilter = "all" | "exceptional" | "exceeds" | "meets" | "low";
 export type SalaryReviewPoolFilter = "all" | "leadership" | "general";
-export type SalaryReviewTab = "overview" | "review" | "approvals" | "history";
+export type SalaryReviewTab = "overview" | "drafts" | "review" | "approvals" | "history";
 export type SalaryReviewCohort =
   | "active-employees"
   | "in-band"
@@ -103,7 +103,7 @@ function hasEmployeeDrilldownParams(params: URLSearchParams): boolean {
 export function parseSalaryReviewSearchParams(params: URLSearchParams): SalaryReviewQueryState {
   const rawTab = readEnumValue(
     params.get("tab"),
-    ["overview", "review", "approvals", "history"] as const,
+    ["overview", "drafts", "review", "approvals", "history"] as const,
     DEFAULT_SALARY_REVIEW_QUERY_STATE.tab
   );
   const bandFilter = resolveBandFilter(params);

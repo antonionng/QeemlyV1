@@ -53,13 +53,20 @@ export function BenchmarkDetail({ result, hasCompanyData = true }: BenchmarkDeta
   );
 
   return (
-    <div className="flex flex-col gap-6 lg:flex-row">
-      <div className="flex-shrink-0 lg:w-64">
+    <div className="flex flex-col gap-6 xl:flex-row">
+      <div className="w-full xl:w-64 xl:flex-shrink-0">
         <ViewSelector hasCompanyData={hasCompanyData} />
       </div>
 
       <div className="min-w-0 flex-1 space-y-6">
-        <div className="bench-section flex flex-wrap items-center gap-2 text-sm">
+        <div className="flex items-center justify-start">
+          <Button variant="ghost" onClick={() => goToStep("results")}>
+            <ArrowLeft className="mr-2 h-4 w-4" />
+            Back
+          </Button>
+        </div>
+
+        <div className="bench-section flex flex-wrap items-start gap-x-2 gap-y-2 text-sm">
           <span className="font-semibold text-brand-900">{role.title}</span>
           <span className="text-brand-400">·</span>
           <span className="text-brand-700">{level.name}</span>
@@ -92,11 +99,7 @@ export function BenchmarkDetail({ result, hasCompanyData = true }: BenchmarkDeta
           </div>
         )}
 
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
-          <Button variant="ghost" onClick={() => goToStep("results")}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back
-          </Button>
+        <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
           {hasCompanyData && (
             <button
               onClick={() => {

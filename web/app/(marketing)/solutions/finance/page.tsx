@@ -56,11 +56,11 @@ export default function FinanceSolutionPage() {
                   Talk to us <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>
-              <Link href="/pricing">
-                <Button variant="outline">See pricing</Button>
+              <Link href="/register">
+                <Button variant="outline">Request access</Button>
               </Link>
-              <Link href="/analytics" className="text-sm font-semibold text-brand-700 hover:text-brand-900">
-                Explore dashboard
+              <Link href="/home" className="text-sm font-semibold text-brand-700 hover:text-brand-900">
+                Back to home
               </Link>
             </div>
 
@@ -117,8 +117,8 @@ export default function FinanceSolutionPage() {
             <div className="text-xs font-bold uppercase tracking-wider text-brand-500">Before → After</div>
             <h2 className="text-2xl font-semibold text-brand-900">From spreadsheet debates to a board-ready narrative</h2>
           </div>
-          <Link href="/analytics" className="text-sm font-semibold text-brand-700 hover:text-brand-900">
-            Explore dashboard →
+          <Link href="/contact" className="text-sm font-semibold text-brand-700 hover:text-brand-900">
+            Book a demo →
           </Link>
         </div>
 
@@ -214,9 +214,9 @@ export default function FinanceSolutionPage() {
             <Link href="/contact" className="flex-1">
               <Button fullWidth>Talk to us</Button>
             </Link>
-            <Link href="/pricing" className="flex-1">
+            <Link href="/register" className="flex-1">
               <Button variant="outline" fullWidth>
-                See pricing
+                Request access
               </Button>
             </Link>
           </div>
@@ -229,7 +229,7 @@ export default function FinanceSolutionPage() {
           {
             title: "Headcount planning",
             body: "Model hiring impact with percentiles as inputs and scenario visibility.",
-            link: { href: "/analytics", label: "Explore dashboard →" },
+            link: { href: "/contact", label: "Book a demo →" },
           },
           {
             title: "Raise cycles",
@@ -239,7 +239,7 @@ export default function FinanceSolutionPage() {
           {
             title: "Board packs",
             body: "Export a clean narrative: ranges, confidence, and impact summary.",
-            link: { href: "/pricing", label: "See pricing →" },
+            link: { href: "/register", label: "Request access →" },
           },
         ].map((u) => (
           <Card key={u.title} className="p-6 transition-transform hover:-translate-y-0.5">
@@ -267,8 +267,8 @@ export default function FinanceSolutionPage() {
                   Talk to us <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>
-              <Link href="/pricing">
-                <Button variant="outline">See pricing</Button>
+              <Link href="/register">
+                <Button variant="outline">Request access</Button>
               </Link>
             </div>
           </div>

@@ -72,11 +72,16 @@ export function OfferBuilderView({ result }: OfferBuilderViewProps) {
     void loadEmployees();
   }, []);
 
-  const convertToMarket = (value: number, sourceCurrency: string = benchmark.currency) => {
+  const convertToMarket = (
+    value: number,
+    sourceCurrency: string = benchmark.currency,
+    payPeriod = benchmark.payPeriod,
+  ) => {
     return toBenchmarkDisplayValue(value, {
       salaryView,
       sourceCurrency,
       targetCurrency,
+      payPeriod,
     });
   };
 
@@ -435,11 +440,11 @@ export function OfferBuilderView({ result }: OfferBuilderViewProps) {
           {shownLevels.map((lvl) => {
             const bench = levelBenchmarks[lvl.id];
             if (!bench) return null;
-            const p10 = convertToMarket(bench.percentiles.p10, bench.currency);
-            const p25 = convertToMarket(bench.percentiles.p25, bench.currency);
-            const p50 = convertToMarket(bench.percentiles.p50, bench.currency);
-            const p75 = convertToMarket(bench.percentiles.p75, bench.currency);
-            const p90 = convertToMarket(bench.percentiles.p90, bench.currency);
+            const p10 = convertToMarket(bench.percentiles.p10, bench.currency, bench.payPeriod);
+            const p25 = convertToMarket(bench.percentiles.p25, bench.currency, bench.payPeriod);
+            const p50 = convertToMarket(bench.percentiles.p50, bench.currency, bench.payPeriod);
+            const p75 = convertToMarket(bench.percentiles.p75, bench.currency, bench.payPeriod);
+            const p90 = convertToMarket(bench.percentiles.p90, bench.currency, bench.payPeriod);
 
             const gMin = p10 * 0.85;
             const gMax = p90 * 1.15;

@@ -12,19 +12,66 @@ import { PeopleTable } from "@/components/dashboard/people/people-table";
 import { PeopleToolbar } from "@/components/dashboard/people/people-toolbar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import type { Employee } from "@/lib/employees";
-import type { UpdateEmployeeProfileInput } from "@/lib/people/use-people";
-import { usePeople } from "@/lib/people/use-people";
+import type { Department, Employee } from "@/lib/employees";
+import {
+  DEFAULT_PEOPLE_FILTERS,
+  type PeopleBandFilter,
+  type PeopleFilters,
+  type UpdateEmployeeProfileInput,
+  usePeople,
+} from "@/lib/people/use-people";
 
-function buildPeopleSearchHref(employeeId?: string) {
-  if (!employeeId) return "/dashboard/people";
-  return `/dashboard/people?employeeId=${encodeURIComponent(employeeId)}`;
+function resolveBandFilterParam(value: string | null): PeopleBandFilter {
+  if (value === "below" || value === "in-band" || value === "above" || value === "outside-band") {
+    return value;
+  }
+  return "all";
+}
+
+function resolveDepartmentFilterParam(value: string | null): Department | "all" {
+  const departments: Department[] = [
+    "Engineering",
+    "Product",
+    "Design",
+    "Data",
+    "Sales",
+    "Marketing",
+    "Operations",
+    "Finance",
+    "HR",
+  ];
+  return value && departments.includes(value as Department) ? (value as Department) : "all";
+}
+
+function buildPeopleSearchHref({
+  employeeId,
+  band,
+  department,
+}: {
+  employeeId?: string | null;
+  band?: PeopleBandFilter;
+  department?: Department | "all";
+}) {
+  const params = new URLSearchParams();
+  if (employeeId) {
+    params.set("employeeId", employeeId);
+  }
+  if (band && band !== "all") {
+    params.set("band", band);
+  }
+  if (department && department !== "all") {
+    params.set("department", department);
+  }
+  const queryString = params.toString();
+  return queryString ? `/dashboard/people?${queryString}` : "/dashboard/people";
 }
 
 export function PeoplePageClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const selectedEmployeeId = searchParams.get("employeeId");
+  const requestedBandFilter = resolveBandFilterParam(searchParams.get("band"));
+  const requestedDepartmentFilter = resolveDepartmentFilterParam(searchParams.get("department"));
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isAddEmployeeOpen, setIsAddEmployeeOpen] = useState(false);
   const [activeEmployee, setActiveEmployee] = useState<Employee | null>(null);
@@ -67,6 +114,20 @@ export function PeoplePageClient() {
     setActiveEmployee(matchedEmployee);
   }, [allEmployees, selectedEmployeeId]);
 
+  useEffect(() => {
+    setFilters((current) =>
+      current.band === requestedBandFilter ? current : { ...current, band: requestedBandFilter }
+    );
+  }, [requestedBandFilter, setFilters]);
+
+  useEffect(() => {
+    setFilters((current) =>
+      current.department === requestedDepartmentFilter
+        ? current
+        : { ...current, department: requestedDepartmentFilter }
+    );
+  }, [requestedDepartmentFilter, setFilters]);
+
   const activeWarnings = useMemo(() => {
     return actionError ? [actionError, ...warnings] : warnings;
   }, [actionError, warnings]);
@@ -74,12 +135,34 @@ export function PeoplePageClient() {
   const handleOpenEmployee = (employee: Employee) => {
     setActionError(null);
     setActiveEmployee(employee);
-    router.replace(buildPeopleSearchHref(employee.id), { scroll: false });
+    router.replace(
+      buildPeopleSearchHref({
+        employeeId: employee.id,
+        band: filters.band,
+        department: filters.department,
+      }),
+      { scroll: false }
+    );
   };
 
   const handleCloseEmployee = () => {
     setActiveEmployee(null);
-    router.replace(buildPeopleSearchHref(), { scroll: false });
+    router.replace(
+      buildPeopleSearchHref({ band: filters.band, department: filters.department }),
+      { scroll: false }
+    );
+  };
+
+  const handleFiltersChange = (next: PeopleFilters) => {
+    setFilters(next);
+    router.replace(
+      buildPeopleSearchHref({
+        employeeId: selectedEmployeeId,
+        band: next.band,
+        department: next.department,
+      }),
+      { scroll: false }
+    );
   };
 
   const handleToggleSelect = (employeeId: string) => {
@@ -265,7 +348,7 @@ export function PeoplePageClient() {
             <PeopleStatsBar employees={employees} />
             <PeopleToolbar
               filters={filters}
-              onFiltersChange={setFilters}
+              onFiltersChange={handleFiltersChange}
               viewMode={viewMode}
               onViewModeChange={setViewMode}
               sortBy={sortBy}
@@ -284,15 +367,7 @@ export function PeoplePageClient() {
                   <Button
                     variant="secondary"
                     size="sm"
-                    onClick={() =>
-                      setFilters({
-                        search: "",
-                        department: "all",
-                        locationId: "all",
-                        band: "all",
-                        performance: "all",
-                      })
-                    }
+                    onClick={() => handleFiltersChange(DEFAULT_PEOPLE_FILTERS)}
                   >
                     Reset Filters
                   </Button>

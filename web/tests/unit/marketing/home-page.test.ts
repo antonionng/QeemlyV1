@@ -13,30 +13,33 @@ vi.mock("@/components/layout/site-nav", () => ({
       },
       createElement("img", { src: "logo-white.svg", alt: "Qeemly" }),
       createElement("a", { href: "/home" }, "Home"),
-      createElement("a", { href: "/search" }, "Search"),
-      createElement("a", { href: "/pricing" }, "Pricing"),
       createElement("a", { href: "/contact" }, "Contact"),
       createElement("a", { href: "/register" }, "Early access"),
       createElement("a", { href: "/login" }, "Log in"),
     ),
+}));
+
+vi.mock("@/components/layout/site-footer", () => ({
+  SiteFooter: () => createElement("footer", { "data-testid": "site-footer" }, "Footer"),
 }));
 import HomePage from "@/app/(home)/home/page";
 
 describe("home page", () => {
   it("renders the Figma landing page sections and primary CTAs", () => {
     const html = renderToStaticMarkup(createElement(HomePage));
+    const registerHrefMatches = html.match(/href="\/register"/g) ?? [];
 
     expect(html).toContain("Build a culture of trust with transparent UAE pay data");
     expect(html).toContain('data-testid="site-nav"');
     expect(html).toContain('data-variant="dark"');
     expect(html).toContain('href="/home"');
-    expect(html).toContain('href="/search"');
-    expect(html).toContain('href="/pricing"');
+    expect(html).not.toContain('href="/search"');
+    expect(html).not.toContain('href="/pricing"');
     expect(html).toContain("Early access");
     expect(html).toContain("Log in");
     expect(html).toContain("Join pilot scheme");
     expect(html).toContain("Book a demo");
-    expect(html).toContain('href="/register"');
+    expect(registerHrefMatches).toHaveLength(1);
     expect(html).toContain('href="/login"');
     expect(html).toContain('href="/contact"');
     expect(html).toContain(">for<");
@@ -87,15 +90,57 @@ describe("home page", () => {
     expect(html).toContain("Salary benchmarks in seconds");
     expect(html).toContain("Build scalable pay frameworks");
     expect(html).toContain("Seamless HRIS Integrations");
+    expect(html).toContain('data-testid="integrations-marquee"');
+    expect(html).toContain('data-testid="integrations-track"');
+    expect(html).toContain('data-testid="integrations-track-clone"');
+    expect(html).toContain("overflow-hidden");
+    expect(html).toContain("min-w-max");
+    expect(html).toContain("whitespace-nowrap");
+    expect(html).toContain("motion-reduce:animate-none");
     expect(html).toContain("See how Qeemly works");
     expect(html).toContain("Real-Time Salary Benchmarking");
+    expect(html).toContain("Get Early Access");
+    expect(html).toContain("Market-backed offer guidance");
+    expect(html).toContain("Board-ready output");
     expect(html).toContain("See it with your own data");
+    expect(html).toContain('data-testid="site-footer"');
     expect(html).toContain("logo-white.svg");
     expect(html).toContain("hero-figure.png");
     expect(html).toContain("bento-gcc.png");
-    expect(html).toContain("bento-pay-gaps.png");
     expect(html).toContain("services-table.png");
-    expect(html).toContain("logo-1.svg");
+    expect(html).toContain("workable-logo.png");
+    expect(html).toContain("Workable logo");
+    expect(html).toContain('data-integration-name="Workable"');
+    expect(html).toContain("h-7 w-auto max-w-none object-contain lg:h-8");
+    expect(html).toContain("slack-logo.svg");
+    expect(html).toContain("Slack logo");
+    expect(html).toContain("microsoft-teams-logo.svg");
+    expect(html).toContain("Microsoft Teams logo");
+    expect(html).toContain("workday-logo.svg");
+    expect(html).toContain("Workday logo");
+    expect(html).toContain("deel-logo.svg");
+    expect(html).toContain("Deel logo");
+    expect(html).toContain("greenhouse-logo.svg");
+    expect(html).toContain("Greenhouse logo");
+    expect(html).toContain("bamboohr-logo.svg");
+    expect(html).toContain("BambooHR logo");
+    expect(html).toContain("h-11 w-auto max-w-none object-contain lg:h-12");
+    expect(html).toContain("rippling-logo.svg");
+    expect(html).toContain("Rippling logo");
+    expect(html).toContain("h-[2.625rem] w-auto max-w-none object-contain lg:h-[3rem]");
+    expect(html).toContain("personio-logo.svg");
+    expect(html).toContain("Personio logo");
+    expect(html).toContain("h-[2.625rem] w-auto max-w-none object-contain lg:h-[3rem]");
+    expect(html).toContain("gusto-logo.svg");
+    expect(html).toContain("Gusto logo");
+    expect(html).toContain("lever-logo.svg");
+    expect(html).toContain("Lever logo");
+    expect(html).toContain("hibob-logo.svg");
+    expect(html).toContain("HiBob logo");
+    expect(html).toContain("sap-logo.svg");
+    expect(html).toContain("SAP logo");
+    expect(html).toContain("zanhr-logo.svg");
+    expect(html).toContain("ZANHR logo");
     expect(html).not.toContain("Pay with confidence, powered by Gulf salary intelligence");
     expect(html).not.toContain("What do P25 / P50 / P75 mean?");
     expect(html).not.toContain("See sample output");

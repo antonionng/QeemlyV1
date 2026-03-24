@@ -12,6 +12,12 @@ export type AdminInboxStatus =
   | "published"
   | "failed";
 
+export type AdminInboxPdfReviewStatus =
+  | "pending"
+  | "approved"
+  | "rejected"
+  | "ingested";
+
 export type AdminInboxUpload = {
   id: string;
   file_name: string;
@@ -24,6 +30,30 @@ export type AdminInboxUpload = {
   ingestion_notes: string | null;
   uploaded_by: string | null;
   created_at: string;
+  updated_at?: string;
+};
+
+export type AdminInboxPdfRow = {
+  id: string;
+  upload_id: string;
+  row_index: number;
+  source_family: string;
+  raw_text: string;
+  role_title: string;
+  function_name: string | null;
+  employment_type: string | null;
+  pay_period: "monthly" | "annual";
+  currency: string;
+  location_hint: string;
+  level_hint: string;
+  salary_2025_min: number;
+  salary_2025_max: number;
+  salary_2026_min: number;
+  salary_2026_max: number;
+  parse_confidence: "high" | "medium" | "low";
+  review_status: AdminInboxPdfReviewStatus;
+  review_notes: string | null;
+  created_at?: string;
   updated_at?: string;
 };
 

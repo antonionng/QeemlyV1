@@ -132,14 +132,14 @@ export function ContactForm() {
         </div>
 
         <div className="mt-6 grid gap-3 sm:grid-cols-2">
-          <Link href="/pricing">
+          <Link href="/register">
             <Button variant="outline" fullWidth>
-              View pricing
+              Request access
             </Button>
           </Link>
-          <Link href="/search">
+          <Link href="/home">
             <Button fullWidth>
-              Try Benchmark Search <ArrowRight className="h-4 w-4" />
+              Back to home <ArrowRight className="h-4 w-4" />
             </Button>
           </Link>
         </div>
@@ -325,9 +325,9 @@ export function ContactForm() {
               </>
             )}
           </Button>
-          <Link href="/pricing">
+          <Link href="/register">
             <Button variant="outline" fullWidth type="button">
-              View pricing
+              Request access
             </Button>
           </Link>
         </div>

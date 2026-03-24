@@ -300,7 +300,7 @@ function buildOverviewActions(
       id: "outside-band",
       title: `${metrics.rolesOutsideBand} of ${benchmarkedLabel} outside band`,
       description: "Review employees whose pay sits outside the market-aligned range.",
-      href: "/dashboard/salary-review?filter=outside-band",
+      href: "/dashboard/people?band=outside-band",
       actionLabel: "Review employees",
       countLabel: `${metrics.rolesOutsideBand} flagged`,
       tone: metrics.rolesOutsideBand >= 2 ? "danger" : "warning",
@@ -343,7 +343,7 @@ function buildOverviewActions(
       id: "department-risk",
       title: `${highestRiskDepartment.department} has the highest above-market concentration`,
       description: "Inspect the department with the largest cluster of above-band employees.",
-      href: `/dashboard/salary-review?department=${encodeURIComponent(highestRiskDepartment.department)}`,
+      href: `/dashboard/people?department=${encodeURIComponent(highestRiskDepartment.department)}&band=above`,
       actionLabel: `View ${highestRiskDepartment.department}`,
       countLabel: `${highestRiskDepartment.aboveBandCount} above band`,
       tone: "info",
@@ -378,8 +378,8 @@ function buildOverviewInsights(
       id: "outside-band-summary",
       title: `${metrics.rolesOutsideBand} benchmarked employee${metrics.rolesOutsideBand === 1 ? "" : "s"} sit outside the market-aligned band`,
       description: "Review above-band and below-band cases first to address the clearest compensation gaps.",
-      href: "/dashboard/salary-review?filter=outside-band",
-      actionLabel: "Open salary review",
+      href: "/dashboard/people?band=outside-band",
+      actionLabel: "Open people",
       tone: "danger",
     });
   }
@@ -403,7 +403,7 @@ function buildOverviewInsights(
       id: "department-below-market",
       title: `${belowMarketDepartment.department} is furthest below market`,
       description: `${belowMarketDepartment.department} averages ${belowMarketDepartment.avgVsMarket}% versus market across benchmarked employees.`,
-      href: `/dashboard/salary-review?department=${encodeURIComponent(belowMarketDepartment.department)}`,
+      href: `/dashboard/people?department=${encodeURIComponent(belowMarketDepartment.department)}`,
       actionLabel: `Review ${belowMarketDepartment.department}`,
       tone: "info",
     });

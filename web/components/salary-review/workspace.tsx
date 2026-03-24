@@ -73,6 +73,7 @@ type SalaryReviewOverviewProps = {
   onReset: () => void;
   onSelectCycle: (cycleId: string) => void;
   initialQueryState?: SalaryReviewQueryState;
+  showCycleList?: boolean;
 };
 
 const BAND_STYLES: Record<ReviewEmployee["bandPosition"], string> = {
@@ -96,8 +97,16 @@ function deriveAllowanceBreakdown(currentSalary: number) {
   return { basic, housing, transport, other };
 }
 
-function formatCycleLabel(cycle: SalaryReviewProposalRecord["cycle"]) {
-  return cycle === "monthly" ? "Monthly Review" : "Annual Review";
+function formatCycleLabel(cycle: SalaryReviewProposalRecord) {
+  if (cycle.review_mode === "department_split" && cycle.review_scope === "master") {
+    return cycle.allocation_method === "finance_approval"
+      ? "Finance Allocation Review"
+      : "Department Split Master Review";
+  }
+  if (cycle.review_mode === "department_split" && cycle.review_scope === "department") {
+    return `${cycle.department ?? "Department"} Review`;
+  }
+  return cycle.cycle === "monthly" ? "Monthly Review" : "Annual Review";
 }
 
 function formatStatusLabel(status: SalaryReviewProposalRecord["status"]) {
@@ -859,7 +868,7 @@ export function ReviewCycleListCard({
               )}
             >
               <div>
-                <p className="text-sm font-semibold text-[#1F2430]">{formatCycleLabel(cycle.cycle)}</p>
+                <p className="text-sm font-semibold text-[#1F2430]">{formatCycleLabel(cycle)}</p>
                 <p className="mt-1 text-xs text-[#8A90A0]">
                   Effective {cycle.effective_date} • {cycle.summary.selectedEmployees} employees
                 </p>
@@ -888,6 +897,7 @@ export function SalaryReviewOverview({
   onReset,
   onSelectCycle,
   initialQueryState,
+  showCycleList = true,
 }: SalaryReviewOverviewProps) {
   const [selectedEmployee, setSelectedEmployee] = useState<ReviewEmployee | null>(null);
 
@@ -925,12 +935,14 @@ export function SalaryReviewOverview({
           <SalaryReviewTable onSelectEmployee={setSelectedEmployee} />
         </div>
       </Card>
-      <ReviewCycleListCard
-        cycles={cycles}
-        activeCycleId={activeCycle?.id ?? null}
-        onStartWizard={onPrimaryAction}
-        onSelectCycle={onSelectCycle}
-      />
+      {showCycleList ? (
+        <ReviewCycleListCard
+          cycles={cycles}
+          activeCycleId={activeCycle?.id ?? null}
+          onStartWizard={onPrimaryAction}
+          onSelectCycle={onSelectCycle}
+        />
+      ) : null}
       <EmployeeDrawer employee={selectedEmployee} onClose={() => setSelectedEmployee(null)} />
     </div>
   );

@@ -2,6 +2,7 @@
 // Covering GCC markets with realistic compensation data
 
 import type { BenchmarkTrustMetadata } from "@/lib/benchmarks/trust";
+import type { BenchmarkPayPeriod } from "@/lib/benchmarks/pay-period";
 
 export type Currency = "AED" | "SAR" | "QAR" | "BHD" | "KWD" | "OMR" | "GBP";
 
@@ -50,6 +51,10 @@ export type SalaryBenchmark = {
   locationId: string;
   levelId: string;
   currency: Currency;
+  /** Percentiles are normalized to this pay period in app-facing benchmark payloads. */
+  payPeriod?: BenchmarkPayPeriod;
+  /** Captures the original row period before normalization. */
+  sourcePayPeriod?: BenchmarkPayPeriod;
   percentiles: PercentileData;
   sampleSize: number;
   confidence: "High" | "Medium" | "Low";

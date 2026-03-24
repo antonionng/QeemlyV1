@@ -28,7 +28,9 @@ function createEmployee(overrides: Partial<EmployeeCompRow> = {}): EmployeeCompR
   };
 }
 
-function createMarketBenchmark(overrides: Partial<MarketBenchmark> = {}): MarketBenchmark {
+function createMarketBenchmark(
+  overrides: Partial<MarketBenchmark> & { pay_period?: "monthly" | "annual" } = {},
+): MarketBenchmark & { pay_period?: "monthly" | "annual" } {
   return {
     role_id: "swe",
     location_id: "dubai",
@@ -43,11 +45,14 @@ function createMarketBenchmark(overrides: Partial<MarketBenchmark> = {}): Market
     p90: 20_000,
     sample_size: 12,
     source: "market",
+    pay_period: "monthly",
     ...overrides,
   };
 }
 
-function createWorkspaceBenchmark(overrides: Partial<DbBenchmark> = {}): DbBenchmark {
+function createWorkspaceBenchmark(
+  overrides: Partial<DbBenchmark> & { pay_period?: "monthly" | "annual" } = {},
+): DbBenchmark & { pay_period?: "monthly" | "annual" } {
   return {
     id: "bench-1",
     workspace_id: "ws-1",
@@ -67,6 +72,7 @@ function createWorkspaceBenchmark(overrides: Partial<DbBenchmark> = {}): DbBench
     created_at: "2026-03-12T00:00:00.000Z",
     industry: null,
     company_size: null,
+    pay_period: "monthly",
     ...overrides,
   };
 }
@@ -170,6 +176,35 @@ describe("getOrgPeerSummary", () => {
       bandHigh: null,
       matchingEmployeeCount: 1,
       inBandCount: 0,
+    });
+  });
+
+  it("matches peers across locations and does not annualize annual benchmark rows again", () => {
+    const result = getOrgPeerSummary({
+      employees: [
+        createEmployee({ id: "dubai-peer", location_id: "dubai", base_salary: 180_000 }),
+        createEmployee({ id: "riyadh-peer", location_id: "riyadh", base_salary: 175_000 }),
+        createEmployee({ id: "other-role", role_id: "pm", location_id: "riyadh", base_salary: 180_000 }),
+      ],
+      marketBenchmarks: [
+        createMarketBenchmark({
+          pay_period: "annual",
+          p25: 170_000,
+          p75: 190_000,
+        }),
+      ],
+      workspaceBenchmarks: [],
+      roleId: "swe",
+      locationId: "dubai",
+      levelId: "ic3",
+    });
+
+    expect(result).toMatchObject({
+      benchmarkSource: "market",
+      matchingEmployeeCount: 2,
+      inBandCount: 2,
+      bandLow: 170_000,
+      bandHigh: 190_000,
     });
   });
 });

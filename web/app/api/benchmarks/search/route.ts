@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { findMarketBenchmark } from "@/lib/benchmarks/platform-market";
 import { readMarketDataWithFallback } from "@/lib/benchmarks/market-read";
 import { getConfidenceFromSampleSize, type DbBenchmark } from "@/lib/benchmarks/data-service";
+import { normalizeBenchmarkPercentilesToAnnual } from "@/lib/benchmarks/pay-period";
 import type { Currency, SalaryBenchmark } from "@/lib/dashboard/dummy-data";
 import { LOCATIONS } from "@/lib/dashboard/dummy-data";
 import { createClient } from "@/lib/supabase/server";
@@ -96,6 +97,7 @@ function transformMarketBenchmark(marketBenchmark: {
   location_id: string;
   level_id: string;
   currency: string;
+  pay_period?: "monthly" | "annual" | null;
   industry?: string | null;
   company_size?: string | null;
   p10: number;
@@ -112,19 +114,25 @@ function transformMarketBenchmark(marketBenchmark: {
   const matchedIndustry = normalizeFilterValue(marketBenchmark.industry);
   const matchedCompanySize = normalizeFilterValue(marketBenchmark.company_size);
   const sampleSize = marketBenchmark.sample_size || 0;
-
-  return {
-    roleId: marketBenchmark.role_id,
-    locationId: marketBenchmark.location_id,
-    levelId: marketBenchmark.level_id,
-    currency,
-    percentiles: {
+  const normalized = normalizeBenchmarkPercentilesToAnnual(
+    {
       p10: marketBenchmark.p10,
       p25: marketBenchmark.p25,
       p50: marketBenchmark.p50,
       p75: marketBenchmark.p75,
       p90: marketBenchmark.p90,
     },
+    marketBenchmark.pay_period,
+  );
+
+  return {
+    roleId: marketBenchmark.role_id,
+    locationId: marketBenchmark.location_id,
+    levelId: marketBenchmark.level_id,
+    currency,
+    payPeriod: normalized.payPeriod,
+    sourcePayPeriod: normalized.sourcePayPeriod,
+    percentiles: normalized.percentiles,
     sampleSize,
     confidence: getConfidenceFromSampleSize(sampleSize),
     lastUpdated: new Date().toISOString(),
@@ -148,19 +156,25 @@ function transformMarketBenchmark(marketBenchmark: {
 function transformDbBenchmark(dbBenchmark: DbBenchmark): SalaryBenchmark {
   const location = LOCATIONS.find((entry) => entry.id === dbBenchmark.location_id);
   const currency = (location?.currency || dbBenchmark.currency || "AED") as Currency;
-
-  return {
-    roleId: dbBenchmark.role_id,
-    locationId: dbBenchmark.location_id,
-    levelId: dbBenchmark.level_id,
-    currency,
-    percentiles: {
+  const normalized = normalizeBenchmarkPercentilesToAnnual(
+    {
       p10: Number(dbBenchmark.p10),
       p25: Number(dbBenchmark.p25),
       p50: Number(dbBenchmark.p50),
       p75: Number(dbBenchmark.p75),
       p90: Number(dbBenchmark.p90),
     },
+    dbBenchmark.pay_period,
+  );
+
+  return {
+    roleId: dbBenchmark.role_id,
+    locationId: dbBenchmark.location_id,
+    levelId: dbBenchmark.level_id,
+    currency,
+    payPeriod: normalized.payPeriod,
+    sourcePayPeriod: normalized.sourcePayPeriod,
+    percentiles: normalized.percentiles,
     sampleSize: dbBenchmark.sample_size || 0,
     confidence: (dbBenchmark.confidence || "medium") as "High" | "Medium" | "Low",
     lastUpdated: dbBenchmark.created_at,

@@ -2,6 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { type BenchmarkResult } from "@/lib/benchmarks/benchmark-state";
+import {
+  annualizeBenchmarkValue,
+  applyBenchmarkViewMode,
+  resolveBenchmarkPayPeriod,
+} from "@/lib/benchmarks/pay-period";
 import { LEVELS } from "@/lib/dashboard/dummy-data";
 import { useSalaryView } from "@/lib/salary-view-store";
 import { getBenchmark } from "@/lib/benchmarks/data-service";
@@ -25,11 +30,18 @@ export function LevelTableView({ result }: LevelTableViewProps) {
     }>
   >([]);
   const { salaryView } = useSalaryView();
+  const benchmarkPayPeriod = resolveBenchmarkPayPeriod(
+    result.benchmark.payPeriod ?? result.benchmark.sourcePayPeriod,
+    result.benchmark.percentiles,
+  );
 
-  const convertValue = (value: number) =>
-    salaryView === "annual"
-      ? Math.round((value * 12) / 1000) * 1000
-      : Math.round(value / 100) * 100;
+  const convertValue = (value: number, payPeriod = benchmarkPayPeriod) => {
+    const annualValue = annualizeBenchmarkValue(value, payPeriod);
+    const viewValue = applyBenchmarkViewMode(annualValue, salaryView);
+    return salaryView === "annual"
+      ? Math.round(viewValue / 1000) * 1000
+      : Math.round(viewValue / 100) * 100;
+  };
 
   const formatAED = (value: number) => {
     if (value >= 1000) return `AED ${(value / 1000).toFixed(0)}k`;
@@ -106,11 +118,11 @@ export function LevelTableView({ result }: LevelTableViewProps) {
                     {row.level.name}
                   </span>
                 </td>
-                <td className="text-right">{formatAED(convertValue(row.p25))}</td>
-                <td className="text-right font-medium">{formatAED(convertValue(row.p50))}</td>
-                <td className="text-right">{formatAED(convertValue(row.p75))}</td>
-                <td className="text-right">{formatAED(convertValue(row.p85))}</td>
-                <td className="text-right">{formatAED(convertValue(row.p90))}</td>
+                <td className="text-right">{formatAED(convertValue(row.p25, "annual"))}</td>
+                <td className="text-right font-medium">{formatAED(convertValue(row.p50, "annual"))}</td>
+                <td className="text-right">{formatAED(convertValue(row.p75, "annual"))}</td>
+                <td className="text-right">{formatAED(convertValue(row.p85, "annual"))}</td>
+                <td className="text-right">{formatAED(convertValue(row.p90, "annual"))}</td>
               </tr>
             ))}
           </tbody>

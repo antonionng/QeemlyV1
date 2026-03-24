@@ -57,6 +57,7 @@ export function GeoView({ result }: GeoViewProps) {
       salaryView,
       sourceCurrency,
       targetCurrency,
+      payPeriod: bench.payPeriod,
     });
     const relativeMedianAed = convertCurrency(sourceMedian, sourceCurrency, "AED");
     

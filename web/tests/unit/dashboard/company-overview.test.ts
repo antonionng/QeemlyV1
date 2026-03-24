@@ -155,7 +155,7 @@ describe("buildCompanyOverviewSnapshot", () => {
           id: "outside-band",
           title: "2 of 3 benchmarked employees outside band",
           tone: "danger",
-          href: "/dashboard/salary-review?filter=outside-band",
+          href: "/dashboard/people?band=outside-band",
         }),
         expect.objectContaining({
           id: "coverage-gap",
@@ -193,7 +193,7 @@ describe("buildCompanyOverviewSnapshot", () => {
       id: "band-distribution-in-band",
       label: "In Band",
       action: "link",
-      href: "/dashboard/salary-review?cohort=in-band",
+      href: "/dashboard/people?band=in-band",
       tooltip: {
         title: "In Band",
         value: "34%",
@@ -204,7 +204,7 @@ describe("buildCompanyOverviewSnapshot", () => {
       id: "band-distribution-above-band",
       label: "Above Band",
       action: "link",
-      href: "/dashboard/salary-review?filter=above-band",
+      href: "/dashboard/people?band=above",
       tooltip: {
         title: "Above Band",
         value: "33%",
@@ -215,7 +215,7 @@ describe("buildCompanyOverviewSnapshot", () => {
       id: "band-distribution-below-band",
       label: "Below Band",
       action: "link",
-      href: "/dashboard/salary-review?filter=below-band",
+      href: "/dashboard/people?band=below",
       tooltip: {
         title: "Below Band",
         value: "33%",
@@ -456,13 +456,13 @@ describe("buildCompanyOverviewSnapshot", () => {
       "67% of benchmarked employees. 2 employees are currently above the target range.",
     );
     expect(interactionMap.bandDistribution.aboveBand.href).toBe(
-      "/dashboard/salary-review?filter=above-band",
+      "/dashboard/people?band=above",
     );
     expect(interactionMap.bandDistribution.belowBand.tooltip.description).toBe(
       "0% of benchmarked employees. 0 employees are currently below the target range.",
     );
     expect(interactionMap.bandDistribution.belowBand.href).toBe(
-      "/dashboard/salary-review?filter=below-band",
+      "/dashboard/people?band=below",
     );
   });
 });

@@ -36,6 +36,7 @@ export function AIInsightsView({ result }: AIInsightsViewProps) {
       salaryView,
       sourceCurrency: benchmark.currency,
       targetCurrency,
+      payPeriod: benchmark.payPeriod,
     });
   const formatValue = (value: number) => formatCurrency(value, targetCurrency);
 

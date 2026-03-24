@@ -113,6 +113,7 @@ body {
   color: var(--foreground);
   font-family: var(--font-poppins), system-ui, -apple-system, "Segoe UI", sans-serif;
   min-height: 100vh;
+  overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -149,19 +150,47 @@ body {
   padding-right: 1.25rem;
 }
 
+.responsive-page-shell {
+  width: 100%;
+  max-width: 96rem;
+  margin-left: auto;
+  margin-right: auto;
+  min-width: 0;
+}
+
+.responsive-page-gutters {
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+.responsive-page-shell > *,
+.responsive-content-safe,
+.responsive-content-safe > * {
+  min-width: 0;
+}
+
+.responsive-scroll-x {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
 /* Shared page typography and panel utilities */
 .page-title {
-  font-size: 2rem;
+  font-size: clamp(1.625rem, 1.35rem + 1.2vw, 2rem);
   font-weight: 600;
+  line-height: 1.1;
   letter-spacing: -0.02em;
   color: var(--text-primary);
+  overflow-wrap: anywhere;
 }
 
 .page-subtitle {
   margin-top: 0.375rem;
-  font-size: 0.8125rem;
+  font-size: clamp(0.8125rem, 0.78rem + 0.2vw, 0.9375rem);
   line-height: 1.5;
   color: var(--text-secondary);
+  overflow-wrap: anywhere;
 }
 
 .panel {
@@ -172,9 +201,10 @@ body {
 }
 
 .section-header {
-  font-size: 1.125rem;
+  font-size: clamp(1rem, 0.95rem + 0.45vw, 1.125rem);
   font-weight: 600;
   color: var(--text-primary);
+  overflow-wrap: anywhere;
 }
 
 .overview-section {
@@ -184,9 +214,10 @@ body {
 }
 
 .overview-section-title {
-  font-size: 1.328rem;
+  font-size: clamp(1.125rem, 1rem + 0.7vw, 1.328rem);
   font-weight: 600;
   color: #111233;
+  overflow-wrap: anywhere;
 }
 
 .overview-card-heading {
@@ -202,7 +233,7 @@ body {
 }
 
 .overview-primary-metric {
-  font-size: 2rem;
+  font-size: clamp(1.75rem, 1.4rem + 1.6vw, 2rem);
   line-height: 1;
   font-weight: 600;
   color: #111233;
@@ -233,10 +264,11 @@ body {
 }
 
 .overview-metric-card-value {
-  font-size: 44px;
-  line-height: 1;
+  font-size: clamp(2.5rem, 6vw, 3rem);
+  line-height: 0.95;
   font-weight: 700;
   color: #111233;
+  overflow-wrap: anywhere;
 }
 
 .table-head {
@@ -357,12 +389,22 @@ body {
     padding-left: 2rem;
     padding-right: 2rem;
   }
+
+  .responsive-page-gutters {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
 }
 
 @media (min-width: 1024px) {
   .shell {
     padding-left: 3rem;
     padding-right: 3rem;
+  }
+
+  .responsive-page-gutters {
+    padding-left: 2rem;
+    padding-right: 2rem;
   }
 }
 
@@ -450,6 +492,7 @@ body {
   border: 1px solid var(--color-border);
   border-radius: var(--dash-card-radius);
   box-shadow: var(--dash-card-shadow);
+  min-width: 0;
   padding: 1.5rem;
 }
 
@@ -495,6 +538,7 @@ body {
 
 .bench-table {
   width: 100%;
+  min-width: 100%;
   border-collapse: separate;
   border-spacing: 0;
 }
@@ -533,6 +577,7 @@ body {
   border: 1px solid var(--color-border);
   overflow: hidden;
   background: #ffffff;
+  max-width: 100%;
 }
 
 .bench-toggle button {
@@ -546,6 +591,17 @@ body {
   cursor: pointer;
   transition: all 0.15s;
   text-align: center;
+}
+
+@media (max-width: 639px) {
+  .bench-toggle {
+    display: flex;
+    width: 100%;
+  }
+
+  .bench-toggle button {
+    padding: 0.625rem 1rem;
+  }
 }
 
 .bench-toggle button[data-active="true"] {
@@ -758,6 +814,7 @@ body {
   margin-left: var(--sidebar-width);
   transition: margin-left var(--sidebar-transition);
   min-height: 100vh;
+  min-width: 0;
   background: var(--dash-main-bg);
 }
 
@@ -1141,5 +1198,21 @@ body {
 }
 
 .home-ticker-track {
-  animation: none;
+  flex-shrink: 0;
+}
+
+.home-ticker-seam {
+  margin-left: -0.125rem;
+}
+
+.home-ticker-marquee {
+  animation: homeTickerScroll 24s linear infinite;
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-ticker-marquee {
+    animation: none;
+    transform: translateX(0);
+  }
 }

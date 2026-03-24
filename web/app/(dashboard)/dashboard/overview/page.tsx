@@ -301,7 +301,7 @@ export default function CompanyOverviewPage() {
             </p>
           </div>
           <div
-            className="grid grid-cols-1 items-stretch gap-6 lg:grid-cols-[minmax(0,1.75fr)_minmax(22rem,1fr)]"
+            className="grid grid-cols-1 items-stretch gap-6 xl:grid-cols-[minmax(0,1.75fr)_minmax(24rem,1fr)]"
             data-testid="overview-metrics-grid"
           >
             <HealthScore
@@ -330,7 +330,7 @@ export default function CompanyOverviewPage() {
           <PayrollTrend metrics={metrics} />
         </section>
 
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid gap-6 xl:grid-cols-2">
           <BandDistributionChart
             metrics={metrics}
             benchmarkCoverage={benchmarkCoverage}

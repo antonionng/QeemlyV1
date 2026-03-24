@@ -1,57 +1,297 @@
 "use client";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { Suspense, useMemo, useState, type ReactNode } from "react";
+import { Suspense, useMemo, useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { InputPanel, RelocationFormData } from "@/components/dashboard/relocation/input-panel";
-import { ComparisonWidget } from "@/components/dashboard/relocation/widgets/comparison";
-import { ColIndexWidget } from "@/components/dashboard/relocation/widgets/col-index";
-import { PurchasingPowerWidget } from "@/components/dashboard/relocation/widgets/purchasing-power";
-import { RecommendedRangeWidget } from "@/components/dashboard/relocation/widgets/recommended-range";
-import { CostBreakdownWidget } from "@/components/dashboard/relocation/widgets/cost-breakdown";
-import { SummaryExportWidget } from "@/components/dashboard/relocation/widgets/summary-export";
-import { calculateRelocation } from "@/lib/relocation/calculator";
+import { ExternalLink } from "lucide-react";
+import {
+  InputPanel,
+  RelocationFormData,
+} from "@/components/dashboard/relocation/input-panel";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { ArrowRightLeft, Globe2 } from "lucide-react";
-import { setRelocationCities, type City } from "@/lib/relocation/col-data";
-import { useEffect } from "react";
+import {
+  calculateRelocation,
+  formatCurrency,
+  getApproachExplanation,
+} from "@/lib/relocation/calculator";
+import type { RelocationResult } from "@/lib/relocation/calculator";
+import {
+  setRelocationCities,
+  getTotalMonthlyCost,
+  type City,
+  type CostBreakdown,
+} from "@/lib/relocation/col-data";
 
 const DEFAULT_FORM_DATA: RelocationFormData = {
-  homeCityId: "dubai",
-  targetCityId: "london",
+  homeCityId: "london",
+  targetCityId: "dubai",
   baseSalary: 450000,
-  compApproach: "purchasing-power",
-  hybridCap: 120,
+  compApproach: "hybrid",
+  hybridCap: 110,
   rentOverride: undefined,
 };
 
-const COMP_APPROACH_LABELS: Record<RelocationFormData["compApproach"], string> = {
-  local: "Local Market Pay",
-  "purchasing-power": "Purchasing Power",
-  hybrid: "Hybrid Approach",
-};
+const COST_CATEGORIES: {
+  key: keyof CostBreakdown;
+  label: string;
+  dotClass: string;
+  barClass: string;
+}[] = [
+  {
+    key: "rent",
+    label: "Rent",
+    dotClass: "bg-[#a89bff]",
+    barClass: "bg-[#a89bff]",
+  },
+  {
+    key: "transport",
+    label: "Transport",
+    dotClass: "bg-[#28e7c5]",
+    barClass: "bg-[rgba(40,231,197,0.9)]",
+  },
+  {
+    key: "food",
+    label: "Food",
+    dotClass: "bg-[#111233]",
+    barClass: "bg-[#111233]",
+  },
+  {
+    key: "utilities",
+    label: "Utilities",
+    dotClass: "bg-[#111233]",
+    barClass: "bg-[#111233]",
+  },
+  {
+    key: "other",
+    label: "Other",
+    dotClass: "bg-[#111233]",
+    barClass: "bg-[#111233]",
+  },
+];
 
-function RelocationSectionCard({
-  title,
-  description,
-  children,
-  className = "",
-}: {
-  title: string;
-  description: string;
-  children: ReactNode;
-  className?: string;
-}) {
+function formatCompact(val: number): string {
+  if (val >= 1000) return `${Math.round(val / 1000)}k`;
+  return val.toLocaleString();
+}
+
+function CostBar({ breakdown }: { breakdown: CostBreakdown }) {
+  const total = getTotalMonthlyCost(breakdown);
+  const segments = COST_CATEGORIES.map(({ key, barClass }) => ({
+    key,
+    barClass,
+    width: (breakdown[key] / total) * 100,
+  }));
+
   return (
-    <Card
-      className={`dash-card overflow-hidden border border-accent-100 bg-[linear-gradient(180deg,rgba(255,255,255,0.98),rgba(250,250,252,0.94))] p-0 shadow-[0_10px_30px_rgba(17,24,39,0.04)] ${className}`.trim()}
-    >
-      <div className="border-b border-accent-100/80 px-6 py-4">
-        <h3 className="text-base font-semibold text-accent-950">{title}</h3>
-        <p className="mt-1 text-sm text-accent-600">{description}</p>
+    <div className="flex h-3 overflow-hidden rounded-full bg-accent-100">
+      {segments.map(({ key, barClass, width }) => (
+        <div
+          key={key}
+          className={`${barClass} transition-all`}
+          style={{ width: `${width}%` }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function CostDetails({ breakdown }: { breakdown: CostBreakdown }) {
+  return (
+    <div className="space-y-3">
+      {COST_CATEGORIES.map(({ key, label, dotClass }) => (
+        <div key={key} className="flex items-center gap-3">
+          <div className={`h-3 w-3 shrink-0 rounded-full ${dotClass}`} />
+          <span className="flex-1 text-sm font-medium text-accent-700">
+            {label}
+          </span>
+          <span className="w-16 text-right text-sm font-semibold text-accent-900">
+            {formatCompact(breakdown[key])}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ComparisonCard({ result }: { result: RelocationResult }) {
+  const targetBreakdown =
+    result.costBreakdown.targetWithOverride ?? result.costBreakdown.target;
+
+  return (
+    <Card className="panel p-6 sm:p-8">
+      <div className="space-y-6">
+        <div>
+          <h2 className="overview-section-title">Cost of living comparison</h2>
+          <p className="overview-supporting-text mt-1">
+            Compare current and destination monthly living costs side by side.
+          </p>
+        </div>
+
+        <div className="grid gap-4 rounded-2xl border border-border bg-accent-50/70 p-4 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white shadow-sm">
+              <span className="text-[32px] leading-none">
+                {result.homeCity.flag}
+              </span>
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-base font-semibold text-accent-900">
+                {result.homeCity.name}
+              </p>
+              <p className="text-sm text-accent-500">
+                {result.homeCity.country}
+              </p>
+            </div>
+          </div>
+
+          <div className="rounded-2xl bg-white px-5 py-4 text-center shadow-sm">
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-accent-500">
+              COL Index
+            </p>
+            <p className="mt-1 text-4xl font-semibold tracking-tight text-accent-900 sm:text-5xl">
+              {result.colRatio.toFixed(2)}x
+            </p>
+          </div>
+
+          <div className="flex min-w-0 items-center gap-3 sm:justify-end">
+            <div className="min-w-0 text-left sm:text-right">
+              <p className="truncate text-base font-semibold text-accent-900">
+                {result.targetCity.name}
+              </p>
+              <p className="text-sm text-accent-500">
+                {result.targetCity.country}
+              </p>
+            </div>
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white shadow-sm">
+              <span className="text-[32px] leading-none">
+                {result.targetCity.flag}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-2">
+          <div className="space-y-5 rounded-2xl border border-border bg-white p-5">
+            <div className="space-y-1">
+              <p className="overview-card-heading">Monthly estimated cost of living</p>
+              <p className="text-3xl font-semibold tracking-tight text-accent-900 sm:text-4xl">
+                {getTotalMonthlyCost(result.costBreakdown.home).toLocaleString()}
+              </p>
+            </div>
+            <CostBar breakdown={result.costBreakdown.home} />
+            <CostDetails breakdown={result.costBreakdown.home} />
+          </div>
+
+          <div className="space-y-5 rounded-2xl border border-border bg-white p-5">
+            <div className="space-y-1">
+              <p className="overview-card-heading">Monthly estimated cost of living</p>
+              <p className="text-3xl font-semibold tracking-tight text-accent-900 sm:text-4xl">
+                {getTotalMonthlyCost(targetBreakdown).toLocaleString()}
+              </p>
+            </div>
+            <CostBar breakdown={targetBreakdown} />
+            <CostDetails breakdown={targetBreakdown} />
+          </div>
+        </div>
       </div>
-      <div className="px-6 py-5">
-        {children}
+    </Card>
+  );
+}
+
+function RecommendationCard({
+  result,
+  compApproach,
+  hybridCap,
+}: {
+  result: RelocationResult;
+  compApproach: RelocationFormData["compApproach"];
+  hybridCap: number;
+}) {
+  const { min, max } = result.recommendedRange;
+  const target = result.recommendedSalary;
+
+  return (
+    <Card className="panel p-6 sm:p-8">
+      <div className="space-y-8">
+        <div>
+          <h2 className="overview-section-title">Recommended compensation</h2>
+          <p className="overview-supporting-text mt-1">
+            Use the current cost gap and pay approach to guide relocation offers.
+          </p>
+        </div>
+
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+          <div className="rounded-2xl border border-border bg-white p-5">
+            <div>
+              <h3 className="text-base font-semibold text-accent-900">
+                Recommended Salary Needed
+              </h3>
+              <p className="mt-1 text-sm text-accent-500">
+                Salary required in {result.targetCity.name} to maintain current
+                lifestyle.
+              </p>
+            </div>
+
+            <div className="mt-6 flex flex-wrap items-end gap-4">
+              <p className="text-3xl font-semibold tracking-tight text-accent-900 sm:text-5xl">
+                {Math.round(target).toLocaleString()}
+              </p>
+              <div className="rounded-xl bg-danger-soft px-3 py-2">
+                <p className="text-sm font-semibold text-danger">
+                  {result.colRatio.toFixed(2)}x
+                </p>
+                <p className="text-xs text-accent-600">current salary</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-border bg-white p-5">
+            <div>
+              <h3 className="text-base font-semibold text-accent-900">
+                Recommended Range
+              </h3>
+              <p className="mt-1 text-sm text-accent-500">
+                {getApproachExplanation(compApproach, hybridCap)}
+              </p>
+            </div>
+
+            <div className="relative mx-auto mt-8 h-[112px] w-full max-w-[calc(100%-32px)]">
+              <div className="absolute inset-x-0 top-9 h-3 rounded-full bg-accent-100" />
+              <div className="absolute left-[7%] right-[7%] top-9 h-3 rounded-full bg-[#a89bff]" />
+
+              <div className="absolute left-[7%] flex w-20 -translate-x-1/2 flex-col items-center gap-2">
+                <span className="text-xs font-semibold uppercase tracking-[0.08em] text-accent-500">
+                  -5%
+                </span>
+                <div className="h-8 w-px bg-accent-300" />
+                <span className="text-sm font-semibold text-accent-900">
+                  {formatCurrency(min, true)}
+                </span>
+              </div>
+
+              <div className="absolute left-1/2 flex w-24 -translate-x-1/2 flex-col items-center gap-2">
+                <span className="text-xs font-semibold uppercase tracking-[0.08em] text-brand-600">
+                  Target
+                </span>
+                <div className="h-8 w-0.5 bg-brand-500" />
+                <span className="text-sm font-semibold text-brand-700">
+                  {formatCurrency(target, true)}
+                </span>
+              </div>
+
+              <div className="absolute right-[7%] flex w-20 translate-x-1/2 flex-col items-center gap-2">
+                <span className="text-xs font-semibold uppercase tracking-[0.08em] text-accent-500">
+                  +5%
+                </span>
+                <div className="h-8 w-px bg-accent-300" />
+                <span className="text-sm font-semibold text-accent-900">
+                  {formatCurrency(max, true)}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </Card>
   );
@@ -95,7 +335,6 @@ function RelocationPageContent() {
     };
   }, []);
 
-  // Initialize from URL params if present
   const [formData, setFormData] = useState<RelocationFormData>(() => {
     const home = searchParams.get("home");
     const target = searchParams.get("target");
@@ -107,20 +346,23 @@ function RelocationPageContent() {
       homeCityId: home || DEFAULT_FORM_DATA.homeCityId,
       targetCityId: target || DEFAULT_FORM_DATA.targetCityId,
       baseSalary: salary ? Number(salary) : DEFAULT_FORM_DATA.baseSalary,
-      compApproach: (approach as RelocationFormData["compApproach"]) || DEFAULT_FORM_DATA.compApproach,
+      compApproach:
+        (approach as RelocationFormData["compApproach"]) ||
+        DEFAULT_FORM_DATA.compApproach,
       hybridCap: cap ? Number(cap) : DEFAULT_FORM_DATA.hybridCap,
       rentOverride: undefined,
     };
   });
 
-  // Calculate results whenever inputs change
   const result = useMemo(() => {
-    if (!formData.homeCityId || !formData.targetCityId || !formData.baseSalary) {
+    if (
+      !formData.homeCityId ||
+      !formData.targetCityId ||
+      !formData.baseSalary
+    ) {
       return null;
     }
-
     void citiesVersion;
-
     return calculateRelocation({
       homeCityId: formData.homeCityId,
       targetCityId: formData.targetCityId,
@@ -132,139 +374,48 @@ function RelocationPageContent() {
   }, [formData, citiesVersion]);
 
   return (
-    <div className="bench-results relative z-10 space-y-7">
-      <div className="relative">
-        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex flex-col gap-1.5">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-brand-700">
-              Relocation strategy workspace
-            </p>
-            <h1 className="page-title">Relocation Calculator</h1>
-            <p className="page-subtitle max-w-xl">
-              Calm, decision-ready guidance for every move.
-            </p>
-          </div>
-
-        </div>
-
-        {result && (
-          <Card className="mt-6 overflow-hidden border border-brand-100 bg-gradient-to-r from-brand-50 via-white to-accent-50/90 p-0">
-            <div className="flex flex-col gap-4 px-5 py-5 sm:px-6">
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="inline-flex items-center gap-2 rounded-full bg-white/90 px-3 py-1.5 text-sm font-medium text-accent-800 ring-1 ring-brand-100">
-                  <ArrowRightLeft className="h-4 w-4 text-brand-600" />
-                  {result.homeCity.name} {result.homeCity.flag} to {result.targetCity.name} {result.targetCity.flag}
-                </span>
-                <span className="rounded-full bg-white/90 px-3 py-1.5 text-sm font-medium text-accent-800 ring-1 ring-brand-100">
-                  CoL {result.colRatio.toFixed(2)}x
-                </span>
-                <span className="rounded-full bg-white/90 px-3 py-1.5 text-sm font-medium text-accent-800 ring-1 ring-brand-100">
-                  {COMP_APPROACH_LABELS[formData.compApproach]}
-                </span>
-              </div>
-
-              <div className="flex flex-col gap-2 lg:flex-row lg:items-end lg:justify-between">
-                <div>
-                  <h2 className="text-xl font-semibold text-accent-950 sm:text-2xl">
-                    Recommended midpoint: AED {Math.round(result.recommendedSalary).toLocaleString("en-US")}
-                  </h2>
-                  <p className="mt-1 text-sm text-accent-600">
-                    Calm, decision-ready guidance for every move.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-accent-600">
-                  <Globe2 className="h-4 w-4 text-brand-600" />
-                  <span>{result.targetCity.name} relative to {result.homeCity.name}</span>
-                </div>
-              </div>
-            </div>
-          </Card>
-        )}
+    <div className="bench-results relative z-10 space-y-8">
+      <div className="space-y-1">
+        <h1 className="page-title">Relocation Calculator</h1>
+        <p className="page-subtitle">
+          Compare cost of living, salary impact, and recommended compensation
+          for relocation decisions.
+        </p>
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
-        <div>
-          <div className="xl:sticky xl:top-24">
-            <InputPanel data={formData} onChange={setFormData} />
-          </div>
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(18rem,24rem)_minmax(0,1fr)]">
+        <div className="xl:sticky xl:top-24">
+          <InputPanel data={formData} onChange={setFormData} />
         </div>
 
         <div className="space-y-6">
-          <section className="overview-section">
-            <div>
-              <h2 className="overview-section-title">Decision summary</h2>
-              <p className="overview-supporting-text mt-1 max-w-2xl">
-                Review the route, headline recommendation, and share-ready summary in the same surface.
+          {result ? (
+            <>
+              <ComparisonCard result={result} />
+              <RecommendationCard
+                result={result}
+                compApproach={formData.compApproach}
+                hybridCap={formData.hybridCap}
+              />
+            </>
+          ) : (
+            <Card className="panel flex items-center justify-center px-8 py-16">
+              <p className="text-sm text-accent-500">
+                Select locations and enter a salary to see results.
               </p>
-            </div>
-            <div className="grid gap-6 2xl:grid-cols-[minmax(0,1.45fr)_minmax(20rem,0.85fr)]">
-              <RelocationSectionCard
-                title="Location comparison"
-                description="Compare both locations side by side before reviewing pay guidance."
-              >
-                <ComparisonWidget result={result} />
-              </RelocationSectionCard>
-              <RelocationSectionCard
-                title="Share analysis"
-                description="Leadership-ready summary for stakeholder review, approval, or handoff."
-              >
-                <SummaryExportWidget
-                  result={result}
-                  compApproach={formData.compApproach}
-                  hybridCap={formData.hybridCap}
-                />
-              </RelocationSectionCard>
-            </div>
-          </section>
-
-          <section className="overview-section">
-            <div>
-              <h2 className="overview-section-title">Key outputs</h2>
-              <p className="overview-supporting-text mt-1 max-w-2xl">
-                Highlight the cost ratio, equivalent pay, and recommended range in one branded grid.
-              </p>
-            </div>
-            <div className="grid gap-6 xl:grid-cols-3">
-              <RelocationSectionCard
-                title="Cost of living index"
-                description="See the relative market pressure between the two locations."
-              >
-                <ColIndexWidget result={result} />
-              </RelocationSectionCard>
-              <RelocationSectionCard
-                title="Purchasing power"
-                description="Translate the move into an equivalent salary target."
-              >
-                <PurchasingPowerWidget result={result} />
-              </RelocationSectionCard>
-              <RelocationSectionCard
-                title="Recommended range"
-                description="Frame the final offer range using the selected compensation policy."
-              >
-                <RecommendedRangeWidget
-                  result={result}
-                  compApproach={formData.compApproach}
-                  hybridCap={formData.hybridCap}
-                />
-              </RelocationSectionCard>
-            </div>
-          </section>
-
-          <section className="overview-section">
-            <div>
-              <h2 className="overview-section-title">Cost breakdown</h2>
-              <p className="overview-supporting-text mt-1 max-w-2xl">
-                Break down what is driving the difference across rent, transport, food, utilities, and other costs.
-              </p>
-            </div>
-            <RelocationSectionCard
-              title="Monthly cost drivers"
-              description="Use the category split below to explain where relocation pressure is really coming from."
-            >
-              <CostBreakdownWidget result={result} />
-            </RelocationSectionCard>
-          </section>
+            </Card>
+          )}
         </div>
+      </div>
+
+      <div className="flex justify-center py-4 sm:justify-end">
+        <Button
+          type="button"
+          className="h-11 rounded-full px-5 text-[13px] font-semibold"
+        >
+          <span>Export as PDF</span>
+          <ExternalLink className="h-4 w-4" />
+        </Button>
       </div>
     </div>
   );
@@ -277,7 +428,9 @@ export default function RelocationPage() {
         <div className="flex min-h-screen items-center justify-center bg-surface-2">
           <div className="text-center">
             <div className="h-10 w-10 animate-spin rounded-full border-4 border-brand-500 border-t-transparent" />
-            <p className="mt-4 text-sm font-bold text-brand-900 uppercase tracking-widest">Loading Calculator...</p>
+            <p className="mt-4 text-sm font-bold uppercase tracking-widest text-brand-900">
+              Loading Calculator...
+            </p>
           </div>
         </div>
       }

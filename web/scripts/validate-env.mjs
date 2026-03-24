@@ -3,6 +3,8 @@ const required = [
   "SUPABASE_SERVICE_ROLE_KEY",
   "CRON_SECRET",
   "OPENAI_API_KEY",
+  "RESEND_API_KEY",
+  "PILOT_APPLICATION_NOTIFY_EMAIL",
 ];
 const missing = required.filter((key) => !process.env[key]);
 

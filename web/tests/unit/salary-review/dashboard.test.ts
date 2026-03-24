@@ -61,9 +61,12 @@ describe("salary review dashboard model", () => {
 
     expect(dashboard.awaitingReview).toHaveLength(2);
     expect(dashboard.history).toHaveLength(2);
+    expect(dashboard.drafts).toHaveLength(1);
+    expect(dashboard.tabs.drafts.badge).toBe(1);
     expect(dashboard.tabs.approvals.badge).toBe(2);
     expect(dashboard.tabs.history.badge).toBe(2);
     expect(dashboard.tabs.overview.label).toBe("Overview");
+    expect(dashboard.tabs.drafts.label).toBe("Drafts");
     expect(dashboard.totalCycles).toBe(2);
     expect(dashboard.primaryAction).toBe("continue-draft");
   });
@@ -77,6 +80,7 @@ describe("salary review dashboard model", () => {
 
     expect(dashboard.primaryAction).toBe("start-cycle");
     expect(dashboard.hasDraft).toBe(false);
+    expect(dashboard.tabs.drafts.badge).toBe(0);
     expect(dashboard.tabs.overview.label).toBe("Overview");
   });
 

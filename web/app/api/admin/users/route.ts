@@ -11,7 +11,7 @@ export async function GET() {
     const supabase = createServiceClient();
     const { data: profiles, error } = await supabase
       .from("profiles")
-      .select("id, full_name, role, workspace_id, created_at")
+      .select("id, full_name, role, workspace_id")
       .limit(100);
 
     throwIfAdminQueryError(error, "Failed to load user profiles");
@@ -42,7 +42,7 @@ export async function GET() {
         full_name: p.full_name,
         role: p.role,
         email: authUser?.email ?? null,
-        created_at: p.created_at,
+        created_at: authUser?.created_at ?? null,
         last_sign_in_at: authUser?.last_sign_in_at ?? null,
         workspace_name: p.workspace_id ? workspaceById.get(p.workspace_id) ?? null : null,
       };

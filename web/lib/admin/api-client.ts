@@ -41,6 +41,7 @@ export function adminErrorResponse(message: string, options: AdminErrorResponseO
 }
 
 export function adminRouteErrorResponse(error: unknown) {
+  console.error("Admin route error:", error);
   if (
     error instanceof Error &&
     error.message.includes("SUPABASE_SERVICE_ROLE_KEY is required for service client usage.")

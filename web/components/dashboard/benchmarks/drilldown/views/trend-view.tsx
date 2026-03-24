@@ -5,6 +5,7 @@ import { TrendingUp, TrendingDown } from "lucide-react";
 import { AreaChart } from "@tremor/react";
 import clsx from "clsx";
 import { type BenchmarkResult } from "@/lib/benchmarks/benchmark-state";
+import { applyBenchmarkViewMode } from "@/lib/benchmarks/pay-period";
 import { useSalaryView } from "@/lib/salary-view-store";
 
 type TimeRange = "3m" | "6m" | "12m";
@@ -18,8 +19,12 @@ export function TrendView({ result }: TrendViewProps) {
   const [timeRange, setTimeRange] = useState<TimeRange>("12m");
   const { salaryView } = useSalaryView();
   
-  // Convert from monthly AED based on salary view mode
-  const convertValue = (value: number) => salaryView === "annual" ? Math.round(value * 12 / 1000) * 1000 : Math.round(value / 100) * 100;
+  const convertValue = (annualValue: number) => {
+    const viewValue = applyBenchmarkViewMode(annualValue, salaryView);
+    return salaryView === "annual"
+      ? Math.round(viewValue / 1000) * 1000
+      : Math.round(viewValue / 100) * 100;
+  };
   
   const formatAED = (value: number) => {
     if (value >= 1000) {

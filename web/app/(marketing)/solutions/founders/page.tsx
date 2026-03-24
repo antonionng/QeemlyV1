@@ -56,11 +56,11 @@ export default function FoundersSolutionPage() {
                   Talk to us <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>
-              <Link href="/pricing">
-                <Button variant="outline">See pricing</Button>
+              <Link href="/register">
+                <Button variant="outline">Request access</Button>
               </Link>
-              <Link href="/search" className="text-sm font-semibold text-brand-700 hover:text-brand-900">
-                Run a benchmark
+              <Link href="/home" className="text-sm font-semibold text-brand-700 hover:text-brand-900">
+                Back to home
               </Link>
             </div>
 
@@ -117,8 +117,8 @@ export default function FoundersSolutionPage() {
             <div className="text-xs font-bold uppercase tracking-wider text-brand-500">Before → After</div>
             <h2 className="text-2xl font-semibold text-brand-900">From gut feel to a fast, defensible offer band</h2>
           </div>
-          <Link href="/search" className="text-sm font-semibold text-brand-700 hover:text-brand-900">
-            Run a benchmark →
+          <Link href="/contact" className="text-sm font-semibold text-brand-700 hover:text-brand-900">
+            Book a demo →
           </Link>
         </div>
 
@@ -214,9 +214,9 @@ export default function FoundersSolutionPage() {
             <Link href="/contact" className="flex-1">
               <Button fullWidth>Talk to us</Button>
             </Link>
-            <Link href="/analytics" className="flex-1">
+            <Link href="/register" className="flex-1">
               <Button variant="outline" fullWidth>
-                Explore dashboard
+                Request access
               </Button>
             </Link>
           </div>
@@ -229,12 +229,12 @@ export default function FoundersSolutionPage() {
           {
             title: "Close critical hires",
             body: "Anchor an offer fast with a defensible range and confidence.",
-            link: { href: "/search", label: "Try Benchmark Search →" },
+            link: { href: "/contact", label: "Book a demo →" },
           },
           {
             title: "Align with finance",
             body: "Share consistent outputs so approvals don’t slip your timeline.",
-            link: { href: "/analytics", label: "Explore dashboard →" },
+            link: { href: "/register", label: "Request access →" },
           },
           {
             title: "Protect runway",
@@ -267,8 +267,8 @@ export default function FoundersSolutionPage() {
                   Talk to us <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>
-              <Link href="/pricing">
-                <Button variant="outline">See pricing</Button>
+              <Link href="/register">
+                <Button variant="outline">Request access</Button>
               </Link>
             </div>
           </div>

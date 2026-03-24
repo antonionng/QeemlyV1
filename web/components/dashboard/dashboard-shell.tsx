@@ -66,7 +66,7 @@ export function DashboardShell({ children }: DashboardShellProps) {
   }, []);
 
   return (
-    <div className="relative min-h-screen bg-surface-2 text-text-primary">
+    <div className="relative min-h-screen min-w-0 bg-surface-2 text-text-primary">
       {/* Fixed sidebar (desktop only via CSS) */}
       <aside className="dash-sidebar" data-collapsed={sidebarCollapsed}>
         <DashboardSidebar
@@ -76,15 +76,15 @@ export function DashboardShell({ children }: DashboardShellProps) {
       </aside>
 
       {/* Main content area with left margin for sidebar */}
-      <div className="dash-main" data-sidebar-collapsed={sidebarCollapsed}>
+      <div className="dash-main min-w-0" data-sidebar-collapsed={sidebarCollapsed}>
         <DashboardTopBar
           onMobileOpen={() => setMobileOpen(true)}
           onAIOpen={() => setAiOpen(true)}
           mobileTriggerRef={mobileTriggerRef}
         />
 
-        <main className="px-4 pb-12 pt-4 sm:px-6 sm:pt-5 lg:px-8 lg:pt-6">
-          <div className="mx-auto w-full max-w-[1600px]">
+        <main className="min-w-0 px-4 pb-12 pt-4 sm:px-6 sm:pt-5 lg:px-8 lg:pt-6">
+          <div className="responsive-page-shell min-w-0">
             <MarketRefreshBanner />
             {children}
           </div>

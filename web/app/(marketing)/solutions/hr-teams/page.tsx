@@ -56,11 +56,11 @@ export default function HrTeamsSolutionPage() {
                   Talk to us <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>
-              <Link href="/pricing">
-                <Button variant="outline">See pricing</Button>
+              <Link href="/register">
+                <Button variant="outline">Request access</Button>
               </Link>
-              <Link href="/search" className="text-sm font-semibold text-brand-700 hover:text-brand-900">
-                Try Benchmark Search
+              <Link href="/home" className="text-sm font-semibold text-brand-700 hover:text-brand-900">
+                Back to home
               </Link>
             </div>
 
@@ -231,9 +231,9 @@ export default function HrTeamsSolutionPage() {
             <Link href="/contact" className="flex-1">
               <Button fullWidth>Talk to us</Button>
             </Link>
-            <Link href="/analytics" className="flex-1">
+            <Link href="/register" className="flex-1">
               <Button variant="outline" fullWidth>
-                Explore dashboard
+                Request access
               </Button>
             </Link>
           </div>
@@ -246,12 +246,12 @@ export default function HrTeamsSolutionPage() {
           {
             title: "Create pay bands",
             body: "Define role/level bands with percentiles and confidence so teams stop reinventing offers.",
-            link: { href: "/analytics", label: "Explore dashboard →" },
+            link: { href: "/contact", label: "Book a demo →" },
           },
           {
             title: "Offer review",
             body: "Sanity-check offers with a defensible range and export-ready summary for quick approval.",
-            link: { href: "/search", label: "Try Benchmark Search →" },
+            link: { href: "/register", label: "Request access →" },
           },
           {
             title: "Parity checks",
@@ -284,8 +284,8 @@ export default function HrTeamsSolutionPage() {
                   Talk to us <ArrowRight className="h-4 w-4" />
                 </Button>
               </Link>
-              <Link href="/pricing">
-                <Button variant="outline">See pricing</Button>
+              <Link href="/register">
+                <Button variant="outline">Request access</Button>
               </Link>
             </div>
           </div>

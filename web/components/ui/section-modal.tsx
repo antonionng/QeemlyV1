@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode, useEffect, useId, useMemo, useRef, useState } from "react";
+import { ReactNode, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import clsx from "clsx";
 import { X } from "lucide-react";
@@ -10,6 +10,7 @@ type SectionModalProps = {
   subtitle?: string;
   triggerLabel: string;
   triggerVariant?: "link" | "button";
+  triggerClassName?: string;
   icon?: ReactNode;
   children: ReactNode;
   className?: string;
@@ -19,7 +20,7 @@ type SectionModalProps = {
 function usePrefersReducedMotion() {
   const [reduced, setReduced] = useState(false);
   useEffect(() => {
-    if (typeof window === "undefined" || !("matchMedia" in window)) return;
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
     const update = () => setReduced(Boolean(mq.matches));
     update();
@@ -34,6 +35,7 @@ export function SectionModal({
   subtitle,
   triggerLabel,
   triggerVariant = "link",
+  triggerClassName,
   icon,
   children,
   className,
@@ -42,8 +44,50 @@ export function SectionModal({
   const modalId = useId();
   const [open, setOpen] = useState(false);
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
   const prefersReducedMotion = usePrefersReducedMotion();
   const canPortal = typeof document !== "undefined";
+
+  const closeModal = useCallback(() => {
+    triggerRef.current?.focus();
+    setOpen(false);
+  }, []);
+
+  const trapFocus = useCallback((event: KeyboardEvent) => {
+    if (event.key !== "Tab") return;
+
+    const panel = panelRef.current;
+    if (!panel) return;
+
+    const focusableElements = Array.from(
+      panel.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      ),
+    ).filter((element) => !element.hasAttribute("disabled") && element.getAttribute("aria-hidden") !== "true");
+
+    if (focusableElements.length === 0) {
+      event.preventDefault();
+      panel.focus();
+      return;
+    }
+
+    const first = focusableElements[0];
+    const last = focusableElements[focusableElements.length - 1];
+    const activeElement = document.activeElement as HTMLElement | null;
+
+    if (event.shiftKey) {
+      if (activeElement === first || activeElement === panel) {
+        event.preventDefault();
+        last.focus();
+      }
+      return;
+    }
+
+    if (activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }, []);
 
   // Body scroll lock when modal is open
   useEffect(() => {
@@ -59,11 +103,17 @@ export function SectionModal({
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") {
+        e.preventDefault();
+        closeModal();
+        return;
+      }
+
+      trapFocus(e);
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [open]);
+  }, [closeModal, open, trapFocus]);
 
   // Initial focus
   useEffect(() => {
@@ -78,11 +128,14 @@ export function SectionModal({
     if (triggerVariant === "button") {
       return (
         <button
+          ref={triggerRef}
           type="button"
           onClick={() => setOpen(true)}
           className={clsx(
-            "inline-flex items-center justify-center rounded-full bg-brand-500 px-4 py-2 text-sm font-semibold text-white",
-            "hover:bg-brand-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-300",
+            "inline-flex cursor-pointer items-center justify-center rounded-full border border-brand-400/30 bg-brand-500 px-5 py-2.5 text-sm font-semibold text-white shadow-[0_12px_30px_rgba(92,69,253,0.28)]",
+            "transition-[transform,box-shadow,background-color] duration-200 ease-out hover:-translate-y-0.5 hover:bg-brand-600 hover:shadow-[0_16px_36px_rgba(92,69,253,0.34)] active:translate-y-px active:scale-[0.98]",
+            "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-300",
+            triggerClassName,
           )}
         >
           {triggerLabel}
@@ -92,17 +145,19 @@ export function SectionModal({
 
     return (
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setOpen(true)}
         className={clsx(
-          "inline-flex items-center gap-2 text-sm font-semibold text-brand-500",
+          "inline-flex cursor-pointer items-center gap-2 text-sm font-semibold text-brand-500",
           "hover:text-brand-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-300",
+          triggerClassName,
         )}
       >
         {triggerLabel}
       </button>
     );
-  }, [triggerLabel, triggerVariant]);
+  }, [triggerClassName, triggerLabel, triggerVariant]);
 
   return (
     <div className={clsx("inline-flex", className)}>
@@ -115,11 +170,12 @@ export function SectionModal({
               <button
                 type="button"
                 aria-label="Close modal"
+                tabIndex={-1}
                 className={clsx(
                   "absolute inset-0 bg-black/30 backdrop-blur-[2px]",
                   prefersReducedMotion ? "" : "animate-[fadeIn_180ms_ease-out]",
                 )}
-                onClick={() => setOpen(false)}
+                onClick={closeModal}
               />
 
               {/* Panel */}
@@ -128,6 +184,7 @@ export function SectionModal({
                   role="dialog"
                   aria-modal="true"
                   aria-labelledby={`${modalId}-title`}
+                  aria-describedby={subtitle ? `${modalId}-subtitle` : undefined}
                   tabIndex={-1}
                   ref={panelRef}
                   className={clsx(
@@ -157,14 +214,18 @@ export function SectionModal({
                             >
                               {title}
                             </h3>
-                            {subtitle ? <p className="mt-1 text-sm text-brand-600">{subtitle}</p> : null}
+                            {subtitle ? (
+                              <p id={`${modalId}-subtitle`} className="mt-1 text-sm text-brand-600">
+                                {subtitle}
+                              </p>
+                            ) : null}
                           </div>
                         </div>
                       </div>
 
                       <button
                         type="button"
-                        onClick={() => setOpen(false)}
+                        onClick={closeModal}
                         className={clsx(
                           "inline-flex h-10 w-10 items-center justify-center rounded-full",
                           "text-brand-600 hover:bg-muted hover:text-brand-900",

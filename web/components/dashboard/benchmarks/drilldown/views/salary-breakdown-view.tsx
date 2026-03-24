@@ -3,6 +3,11 @@
 import { useState } from "react";
 import { Sparkles, Wallet, Home } from "lucide-react";
 import { type BenchmarkResult } from "@/lib/benchmarks/benchmark-state";
+import {
+  annualizeBenchmarkValue,
+  applyBenchmarkViewMode,
+  resolveBenchmarkPayPeriod,
+} from "@/lib/benchmarks/pay-period";
 import { useSalaryView } from "@/lib/salary-view-store";
 
 interface SalaryBreakdownViewProps {
@@ -22,11 +27,18 @@ export function SalaryBreakdownView({ result }: SalaryBreakdownViewProps) {
   const { role, level, location, benchmark } = result;
   const [selectedPercentile, setSelectedPercentile] = useState<PercentileKey>("p50");
   const { salaryView } = useSalaryView();
+  const benchmarkPayPeriod = resolveBenchmarkPayPeriod(
+    benchmark.payPeriod ?? benchmark.sourcePayPeriod,
+    benchmark.percentiles,
+  );
 
-  const convertValue = (value: number) =>
-    salaryView === "annual"
-      ? Math.round((value * 12) / 1000) * 1000
-      : Math.round(value / 100) * 100;
+  const convertValue = (value: number, payPeriod = benchmarkPayPeriod) => {
+    const annualValue = annualizeBenchmarkValue(value, payPeriod);
+    const viewValue = applyBenchmarkViewMode(annualValue, salaryView);
+    return salaryView === "annual"
+      ? Math.round(viewValue / 1000) * 1000
+      : Math.round(viewValue / 100) * 100;
+  };
 
   const formatAED = (value: number) => {
     if (value >= 1000) return `AED ${(value / 1000).toFixed(0)}k`;
@@ -56,7 +68,7 @@ export function SalaryBreakdownView({ result }: SalaryBreakdownViewProps) {
       ? [
           {
             name: "Employer Contributions",
-            value: convertValue(employerContribMonthly),
+            value: convertValue(employerContribMonthly, "annual"),
             percent: contribPercent,
             icon: Home,
             ...COLORS[1],
@@ -66,7 +78,7 @@ export function SalaryBreakdownView({ result }: SalaryBreakdownViewProps) {
       : []),
   ];
 
-  const totalDisplay = convertValue(totalWithContrib);
+  const totalDisplay = convertValue(totalMonthly) + convertValue(employerContribMonthly, "annual");
 
   const percentileOptions: { key: PercentileKey; label: string }[] = [
     { key: "p25", label: "P25" },

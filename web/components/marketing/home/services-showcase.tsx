@@ -1,47 +1,59 @@
-import Image from "next/image";
-import { ArrowRight } from "lucide-react";
+"use client";
 
-const serviceItems = [
+import clsx from "clsx";
+import { ArrowRight, CheckCircle2 } from "lucide-react";
+import { useMemo, useState } from "react";
+
+import {
+  ServiceDemoModalContent,
+  ServiceDemoPreview,
+  type ServiceDemoId,
+} from "@/components/marketing/home/service-demo-modal-content";
+import { SectionModal } from "@/components/ui/section-modal";
+
+type ServiceItem = {
+  id: ServiceDemoId;
+  title: string;
+  body: string;
+  detailPoints: string[];
+  modalTitle: string;
+  modalSubtitle: string;
+};
+
+const serviceItems: ServiceItem[] = [
   {
+    id: "benchmarking",
     title: "Real-Time Salary Benchmarking",
     body: "Stop guessing market rates and start making competitive offers backed by actual market evidence.",
-    active: true,
+    detailPoints: ["Market-backed offer guidance", "Fresh UAE benchmark ranges", "Board-ready output"],
+    modalTitle: "Benchmark report",
+    modalSubtitle: "Live salary ranges and export-ready output, shown in a product-style benchmark surface.",
   },
   {
+    id: "salary-reviews",
     title: "Automated Salary Reviews",
     body: "Align managers, finance and HR around one source of truth for pay decisions.",
-    active: false,
+    detailPoints: ["Manager calibration workflows", "Confidence scoring on recommendations", "Clear approval-ready rationale"],
+    modalTitle: "AI Distribution Review",
+    modalSubtitle: "A static demo of the real salary review modal pattern used inside the product.",
   },
   {
+    id: "compliance-equity",
     title: "Localised Compliance & Equity",
     body: "Keep UAE-specific fairness signals visible before risks become cultural or retention issues.",
-    active: false,
+    detailPoints: ["Select default jurisdictions", "Pay-gap signals before escalation", "Transparent fairness guardrails"],
+    modalTitle: "Compliance settings workspace",
+    modalSubtitle: "A real app-inspired compliance flow showing localisation controls and follow-up context.",
   },
 ];
 
-function TableVisual() {
-  return (
-    <div className="relative min-h-[32rem] overflow-hidden rounded-bl-[2.5rem] rounded-tl-[2.5rem] bg-[radial-gradient(circle_at_26%_84%,_rgba(92,69,253,1),_rgba(92,69,253,0)_24%),linear-gradient(90deg,#a89bff_0%,#a89bff_100%)] pt-10 shadow-[0_24px_64px_rgba(17,18,51,0.12)] lg:min-h-[50rem]">
-      <div className="absolute left-0 top-0 h-[87.5%] w-full rounded-[2rem]" />
-      <Image
-        src="/images/marketing/home/services-table.png"
-        alt="Salary level table"
-        width={881}
-        height={328}
-        className="absolute left-[6.5%] top-[19.75%] z-10 h-auto w-[88%] max-w-[55.0625rem] shadow-[-8px_16px_31px_8px_rgba(17,18,51,0.3)]"
-      />
-      <Image
-        src="/images/marketing/home/services-chart.png"
-        alt="Box and whisker salary chart"
-        width={837}
-        height={238}
-        className="absolute left-[25%] top-[50.5%] z-20 h-auto w-[84%] max-w-[52.3125rem] shadow-[-8px_16px_31px_8px_rgba(17,18,51,0.3)]"
-      />
-    </div>
-  );
-}
-
 export function HomeServicesShowcase() {
+  const [activeServiceId, setActiveServiceId] = useState<ServiceDemoId>("benchmarking");
+  const activeService = useMemo(
+    () => serviceItems.find((service) => service.id === activeServiceId) ?? serviceItems[0],
+    [activeServiceId],
+  );
+
   return (
     <section className="bg-white py-24">
       <div className="mx-auto grid w-full max-w-[90rem] gap-10 px-6 sm:px-10 lg:grid-cols-[minmax(0,38.75rem)_minmax(0,44.25rem)] lg:px-20">
@@ -51,30 +63,80 @@ export function HomeServicesShowcase() {
           </div>
 
           <div className="border-y border-[rgba(150,151,153,0.2)]">
-            {serviceItems.map((item) => (
-              <article
-                key={item.title}
-                className={`border-b border-[rgba(150,151,153,0.2)] ${item.active ? "py-14" : "py-6"} last:border-b-0`}
-              >
-                <div className="flex items-start justify-between gap-4">
-                  <h3
-                    className={`max-w-[31.75rem] text-[2.25rem] leading-[1.2] ${
-                      item.active ? "font-semibold text-[#5c45fd]" : "font-medium text-[#111233]"
-                    }`}
+            {serviceItems.map((item) => {
+              const isActive = item.id === activeServiceId;
+              return (
+                <article
+                  key={item.id}
+                  className={clsx("border-b border-[rgba(150,151,153,0.2)] last:border-b-0", isActive ? "py-10" : "py-6")}
+                >
+                  <button
+                    id={`${item.id}-trigger`}
+                    type="button"
+                    aria-expanded={isActive}
+                    aria-controls={`${item.id}-panel`}
+                    className="flex w-full items-start justify-between gap-4 text-left"
+                    onClick={() => setActiveServiceId(item.id)}
                   >
-                    {item.title}
-                  </h3>
-                  <ArrowRight className={`mt-2 h-8 w-8 ${item.active ? "text-[#5c45fd]" : "text-[#111233]"}`} />
-                </div>
-                {item.active ? (
-                  <p className="mt-4 max-w-[20.625rem] text-base leading-[1.5] text-[#111233]">{item.body}</p>
-                ) : null}
-              </article>
-            ))}
+                    <span
+                      className={clsx(
+                        "max-w-[31.75rem] text-[2.25rem] leading-[1.2]",
+                        isActive ? "font-semibold text-[#5c45fd]" : "font-medium text-[#111233]",
+                      )}
+                    >
+                      {item.title}
+                    </span>
+                    <ArrowRight
+                      aria-hidden="true"
+                      className={clsx(
+                        "mt-2 h-8 w-8 transition-transform duration-200",
+                        isActive ? "translate-x-1 text-[#5c45fd]" : "text-[#111233]",
+                      )}
+                    />
+                  </button>
+                  <div
+                    id={`${item.id}-panel`}
+                    role="region"
+                    aria-labelledby={`${item.id}-trigger`}
+                    aria-label={`${item.title} details`}
+                    hidden={!isActive}
+                    className={isActive ? "pt-5" : undefined}
+                  >
+                    {isActive ? (
+                      <>
+                        <p className="max-w-[21.5rem] text-base leading-[1.5] text-[#111233]">{item.body}</p>
+                        <div className="mt-5 grid gap-3">
+                          {item.detailPoints.map((point) => (
+                            <div
+                              key={point}
+                              className="flex items-center gap-3 rounded-[1.25rem] border border-[rgba(92,69,253,0.12)] bg-[rgba(92,69,253,0.04)] px-4 py-3"
+                            >
+                              <CheckCircle2 aria-hidden="true" className="h-4 w-4 shrink-0 text-[#5c45fd]" />
+                              <span className="text-sm font-medium leading-[1.4] text-[#111233]">{point}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="mt-5">
+                          <SectionModal
+                            title={item.modalTitle}
+                            subtitle={item.modalSubtitle}
+                            triggerLabel="Get Early Access"
+                            triggerVariant="button"
+                            maxWidthClassName="max-w-5xl"
+                          >
+                            <ServiceDemoModalContent serviceId={item.id} />
+                          </SectionModal>
+                        </div>
+                      </>
+                    ) : null}
+                  </div>
+                </article>
+              );
+            })}
           </div>
         </div>
 
-        <TableVisual />
+        <ServiceDemoPreview serviceId={activeService.id} />
       </div>
     </section>
   );

@@ -28,10 +28,12 @@
     "lucide-react": "^0.560.0",
     "next": "16.0.8",
     "openai": "^6.25.0",
+    "pdf-parse": "^2.4.5",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "react-grid-layout": "^2.2.2",
     "recharts": "^3.8.0",
+    "resend": "^6.9.4",
     "xlsx": "^0.18.5",
     "zustand": "^5.0.11"
   },

@@ -56,11 +56,11 @@ describe("SiteNav", () => {
     const html = renderToStaticMarkup(React.createElement(SiteNav));
 
     expect(html).toContain("Home");
-    expect(html).toContain("Search");
-    expect(html).toContain("Pricing");
     expect(html).toContain("Contact");
     expect(html).toContain("Early access");
     expect(html).toContain("Log in");
+    expect(html).not.toContain("Search");
+    expect(html).not.toContain("Pricing");
     expect(html).not.toContain("Product");
     expect(html).not.toContain("Solutions");
     expect(html).not.toContain("Get Started");

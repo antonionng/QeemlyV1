@@ -1,6 +1,6 @@
 import Image from "next/image";
-import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { PilotApplicationModal } from "@/components/marketing/pilot-application-modal";
 
 type BentoCard = {
   title: string;
@@ -97,14 +97,10 @@ export function HomeBentoGrid() {
 
                 {card.tone === "cta" ? (
                   <div className="mt-10">
-                    <Link href="/register">
-                      <Button
-                        size="lg"
-                        className="h-16 rounded-full !bg-[#28e7c5] !px-10 !text-[1.125rem] !font-semibold !tracking-[0.02em] !text-[#111233] shadow-[0_0_52px_rgba(40,231,197,0.7),-8px_16px_31px_rgba(17,18,51,0.3)]"
-                      >
-                        Join pilot scheme
-                      </Button>
-                    </Link>
+                    <PilotApplicationModal
+                      sourceCta="bento"
+                      triggerClassName="h-16 rounded-full !bg-[#28e7c5] !px-10 !text-[1.125rem] !font-semibold !tracking-[0.02em] !text-[#111233] shadow-[0_0_52px_rgba(40,231,197,0.7),-8px_16px_31px_rgba(17,18,51,0.3)]"
+                    />
                   </div>
                 ) : null}
               </div>

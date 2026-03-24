@@ -2,10 +2,19 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AuthSplitShell, AUTH_PUBLIC_HERO_IMAGE_PATH } from "@/components/auth/auth-split-shell";
 import { signup } from "../login/actions";
+
+function InlineLegalLink({ href, children }: { href: string; children: ReactNode }) {
+  return (
+    <Link href={href} className="font-semibold text-brand-800 underline underline-offset-4">
+      {children}
+    </Link>
+  );
+}
 
 export default function RegisterPage() {
   const [isLoading, setIsLoading] = useState(false);
@@ -112,7 +121,8 @@ export default function RegisterPage() {
         </Button>
 
         <p className="text-xs leading-relaxed text-brand-700/70">
-          By signing up, you agree to our Terms of Service and Privacy Policy.
+          By signing up, you agree to our <InlineLegalLink href="/terms">Terms of Service</InlineLegalLink> and{" "}
+          <InlineLegalLink href="/privacy">Privacy Policy</InlineLegalLink>.
         </p>
       </form>
     </AuthSplitShell>
