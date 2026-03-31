@@ -20,15 +20,33 @@ describe("ProviderLogo", () => {
     container.remove();
   });
 
-  it("renders a neutral provider badge instead of an image logo", async () => {
+  it("renders a real brand logo for mapped providers", async () => {
     const root = createRoot(container);
 
     await act(async () => {
       root.render(React.createElement(ProviderLogo, { id: "slack", size: 44 }));
     });
 
+    const image = container.querySelector("img");
+
+    expect(image).not.toBeNull();
+    expect(image?.getAttribute("src")).toBe("/images/marketing/home/slack-logo.svg");
+    expect(container.textContent?.trim()).not.toContain("S");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("falls back to initials when no brand logo is mapped", async () => {
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(React.createElement(ProviderLogo, { id: "email_digest", label: "Email Digest", size: 44 }));
+    });
+
     expect(container.querySelector("img")).toBeNull();
-    expect(container.textContent?.trim()).toContain("S");
+    expect(container.textContent?.trim()).toContain("ED");
 
     await act(async () => {
       root.unmount();

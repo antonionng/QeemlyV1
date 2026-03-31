@@ -213,7 +213,7 @@ describe("admin inbox PDF pilot routes", () => {
         pay_period: "monthly",
         currency: "AED",
         location_hint: "Dubai",
-        level_hint: "Group Chief Information Officer (Group CIO)",
+        level_hint: "VP",
         salary_2026_min: 150_000,
         salary_2026_max: 200_000,
         review_status: "pending",

@@ -268,7 +268,36 @@ body {
   line-height: 0.95;
   font-weight: 700;
   color: #111233;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+  white-space: nowrap;
+}
+
+.overview-metric-card-value-group {
+  display: inline-flex;
+  max-width: 100%;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 0.28rem;
+  row-gap: 0.1rem;
+  font-weight: 700;
+}
+
+.overview-metric-card-value-currency {
+  font-size: clamp(1.9rem, 4vw, 2.55rem);
+  line-height: 0.95;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: #111233;
+  white-space: nowrap;
+}
+
+.overview-metric-card-value-amount {
+  font-size: clamp(2.15rem, 4.8vw, 3rem);
+  line-height: 0.95;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #111233;
+  white-space: nowrap;
 }
 
 .table-head {

@@ -47,10 +47,14 @@ export async function PATCH(
   try {
     const body = (await request.json()) as {
       rowId?: string;
+      rowIds?: string[];
       changes?: Record<string, unknown>;
     };
-    if (!body?.rowId || !body.changes || typeof body.changes !== "object") {
-      return adminErrorResponse("rowId and changes are required", { status: 400 });
+    const hasSingleRow = typeof body?.rowId === "string" && body.rowId.length > 0;
+    const bulkRowIds = Array.isArray(body?.rowIds) ? body.rowIds.filter((value) => typeof value === "string") : [];
+
+    if ((!hasSingleRow && bulkRowIds.length === 0) || !body.changes || typeof body.changes !== "object") {
+      return adminErrorResponse("rowId or rowIds and changes are required", { status: 400 });
     }
 
     const allowedKeys = new Set([
@@ -65,10 +69,21 @@ export async function PATCH(
     );
 
     const supabase = createServiceClient();
+    if (bulkRowIds.length > 0) {
+      const { data, error } = await supabase
+        .from("admin_market_research_pdf_rows")
+        .update(updatePayload)
+        .in("id", bulkRowIds)
+        .select(REVIEW_ROW_SELECT)
+        .order("row_index");
+      throwIfAdminQueryError(error, "Failed to update PDF review rows");
+      return NextResponse.json(data ?? []);
+    }
+
     const { data, error } = await supabase
       .from("admin_market_research_pdf_rows")
       .update(updatePayload)
-      .eq("id", body.rowId)
+      .eq("id", body.rowId as string)
       .select(REVIEW_ROW_SELECT)
       .single();
     throwIfAdminQueryError(error, "Failed to update PDF review row");

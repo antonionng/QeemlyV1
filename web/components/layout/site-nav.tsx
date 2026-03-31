@@ -6,9 +6,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Menu, X } from "lucide-react";
+import {
+  AuthenticatedUserMenuFromModel,
+  AuthenticatedUserMenuMobileItems,
+  useAuthenticatedUserMenuModel,
+} from "@/components/auth/authenticated-user-menu";
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
-import { createClient } from "@/lib/supabase/client";
 
 const navLinks = [
   { href: "/home", label: "Home" },
@@ -42,29 +46,8 @@ function NavLogo({ variant }: { variant: "light" | "dark" }) {
 export function SiteNav({ variant = "light" }: SiteNavProps) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
+  const account = useAuthenticatedUserMenuModel();
   const isDark = variant === "dark";
-
-  useEffect(() => {
-    const supabase = createClient();
-    let mounted = true;
-
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!mounted) return;
-      setIsAuthenticated(Boolean(user));
-    });
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
-      setIsAuthenticated(Boolean(session?.user));
-    });
-
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-    };
-  }, []);
 
   useEffect(() => {
     setMobileOpen(false);
@@ -108,20 +91,31 @@ export function SiteNav({ variant = "light" }: SiteNavProps) {
           </nav>
 
           <div className="flex items-center justify-end gap-2 sm:gap-3">
-            {isAuthenticated ? (
-              <Link href="/dashboard" className="hidden sm:inline-flex">
-                <Button
-                  size="sm"
+            {account.status === "loading" ? (
+              <div
+                aria-busy="true"
+                className="hidden sm:flex"
+              >
+                <div
                   className={clsx(
-                    "h-14 rounded-full px-8 text-[16px] font-semibold tracking-[0.02em]",
-                    isDark
-                      ? "!bg-[#28e7c5] !text-[#111233] shadow-[0_4px_16px_rgba(17,18,51,0.25)]"
-                      : "",
+                    "flex h-14 w-40 items-center justify-center rounded-full",
+                    isDark ? "bg-white/10 ring-1 ring-white/12" : "bg-brand-50 ring-1 ring-brand-100",
                   )}
                 >
-                  Dashboard
-                </Button>
-              </Link>
+                  <span className="sr-only">Loading account</span>
+                  <span
+                    aria-hidden="true"
+                    className={clsx(
+                      "h-2.5 w-20 rounded-full",
+                      isDark ? "bg-white/25" : "bg-brand-200",
+                    )}
+                  />
+                </div>
+              </div>
+            ) : account.status === "signed_in" ? (
+              <div className="hidden sm:block">
+                <AuthenticatedUserMenuFromModel variant="marketing" dark={isDark} model={account} />
+              </div>
             ) : (
               <>
                 <Link href="/register" className="hidden sm:inline-flex">
@@ -203,18 +197,18 @@ export function SiteNav({ variant = "light" }: SiteNavProps) {
                 isDark ? "border-white/10" : "border-border",
               )}
             >
-              {isAuthenticated ? (
-                <Link href="/dashboard">
-                  <Button
-                    size="sm"
-                    className={clsx(
-                      "h-12 w-full rounded-full text-sm font-semibold",
-                      isDark ? "!bg-[#28e7c5] !text-[#111233]" : "",
-                    )}
-                  >
-                    Dashboard
-                  </Button>
-                </Link>
+              {account.status === "signed_in" ? (
+                <AuthenticatedUserMenuMobileItems model={account} dark={isDark} />
+              ) : account.status === "loading" ? (
+                <div
+                  aria-busy="true"
+                  className={clsx(
+                    "rounded-[24px] px-4 py-3 text-sm",
+                    isDark ? "bg-white/5 text-white/80" : "bg-brand-50 text-brand-700",
+                  )}
+                >
+                  Loading account
+                </div>
               ) : (
                 <>
                   <Link href="/register">

@@ -192,11 +192,11 @@ export function CompensationHealthScoreCard({
 
   const gaugeContent = (
     <div
-      className="relative mx-auto h-[260px] w-full max-w-[460px]"
+      className="relative mx-auto h-[232px] w-full max-w-[460px] sm:h-[244px] lg:h-[252px]"
       data-testid="health-score-gauge"
     >
       <svg
-        className="h-[220px] w-full"
+        className="h-[194px] w-full sm:h-[204px] lg:h-[214px]"
         viewBox={`0 0 ${GAUGE_WIDTH} ${GAUGE_HEIGHT}`}
         fill="none"
         aria-hidden="true"
@@ -231,7 +231,7 @@ export function CompensationHealthScoreCard({
       </svg>
 
       <div
-        className="absolute inset-0 flex flex-col items-center justify-center pt-11 text-center"
+        className="absolute inset-0 flex flex-col items-center justify-center pt-8 text-center sm:pt-9"
         data-testid="health-score-center-stack"
       >
         <span className="text-[clamp(2.75rem,10vw,4rem)] font-semibold leading-none tracking-[-1px] text-[#111233]">
@@ -251,16 +251,16 @@ export function CompensationHealthScoreCard({
 
   return (
     <Card
-      className="flex h-full w-full min-h-[520px] flex-col justify-between rounded-[24px] border border-gray-200 bg-white px-5 py-6 shadow-sm sm:min-h-[620px] sm:px-8 sm:py-10"
+      className="flex h-full w-full min-h-[480px] flex-col rounded-[24px] border border-gray-200 bg-white px-5 py-6 shadow-sm sm:px-7 sm:py-8 lg:min-h-[540px] lg:px-8 lg:py-9"
       data-testid={cardTestId}
     >
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-2" data-testid="health-score-card-header">
         <h3 className="text-[21px] font-semibold leading-[1.2] text-[#111233]">Compensation Health Score</h3>
         <p className="text-[15px] leading-[1.3] text-[#969799]">Overall assessment of your compensation strategy</p>
       </div>
 
       <div
-        className="flex items-center justify-center py-2"
+        className="flex items-center justify-center py-1 sm:py-2"
         data-testid={gaugeShellTestId}
       >
         {gaugeInteraction ? (
@@ -278,7 +278,7 @@ export function CompensationHealthScoreCard({
         )}
       </div>
 
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-5 sm:gap-6" data-testid="health-score-factor-list">
         <MetricRow
           label={METRIC_CONFIG.bandAlignment.label}
           value={bandAlignment}

@@ -55,6 +55,7 @@ export default function AdminInboxPage() {
   const [loadingPdfRows, setLoadingPdfRows] = useState(false);
   const [extractingUploadId, setExtractingUploadId] = useState<string | null>(null);
   const [savingPdfRowId, setSavingPdfRowId] = useState<string | null>(null);
+  const [bulkUpdatingUploadId, setBulkUpdatingUploadId] = useState<string | null>(null);
   const [ingestingUploadId, setIngestingUploadId] = useState<string | null>(null);
   const [pdfRowEdits, setPdfRowEdits] = useState<
     Record<string, { role_title: string; location_hint: string; level_hint: string; review_notes: string }>
@@ -63,7 +64,11 @@ export default function AdminInboxPage() {
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<NormalizedAdminApiError | null>(null);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [message, setMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+    details?: string[];
+  } | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const loadUploads = async () => {
@@ -90,10 +95,12 @@ export default function AdminInboxPage() {
     [selectedPdfUploadId, uploads],
   );
   const approvedPdfRowCount = pdfRows.filter((row) => row.review_status === "approved").length;
+  const pendingPdfRowCount = pdfRows.filter((row) => row.review_status === "pending").length;
 
   const loadPdfRows = async (uploadId: string) => {
     setSelectedPdfUploadId(uploadId);
     setLoadingPdfRows(true);
+    setMessage(null);
     try {
       const payload = await fetchAdminJson<AdminInboxPdfRow[]>(`/api/admin/inbox/${uploadId}/rows`);
       const nextRows = Array.isArray(payload) ? payload : [];
@@ -173,18 +180,68 @@ export default function AdminInboxPage() {
     }
   };
 
+  const bulkUpdatePdfRows = async (
+    uploadId: string,
+    rowIds: string[],
+    reviewStatus: AdminInboxPdfReviewStatus,
+  ) => {
+    if (rowIds.length === 0) return;
+
+    setBulkUpdatingUploadId(uploadId);
+    setMessage(null);
+    try {
+      const updatedRows = await fetchAdminJson<AdminInboxPdfRow[]>(`/api/admin/inbox/${uploadId}/rows`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          rowIds,
+          changes: {
+            review_status: reviewStatus,
+          },
+        }),
+      });
+      const updatedRowMap = new Map(updatedRows.map((row) => [row.id, row]));
+      setPdfRows((current) => current.map((row) => updatedRowMap.get(row.id) ?? row));
+      setMessage({
+        type: "success",
+        text: `${updatedRows.length} PDF row${updatedRows.length === 1 ? "" : "s"} marked ${reviewStatus}.`,
+      });
+    } catch (err) {
+      setMessage({
+        type: "error",
+        text: err instanceof Error ? err.message : "Failed to update PDF row review status.",
+      });
+    } finally {
+      setBulkUpdatingUploadId(null);
+    }
+  };
+
   const ingestApprovedPdfRows = async (uploadId: string) => {
     setIngestingUploadId(uploadId);
     setMessage(null);
     try {
-      const payload = await fetchAdminJson<{ ingestedCount: number }>(`/api/admin/inbox/${uploadId}/ingest`, {
+      const payload = await fetchAdminJson<{
+        ingestedCount: number;
+        failedCount: number;
+        failures?: string[];
+      }>(`/api/admin/inbox/${uploadId}/ingest`, {
         method: "POST",
       });
       await loadUploads();
       await loadPdfRows(uploadId);
       setMessage({
-        type: "success",
-        text: `${payload.ingestedCount} approved PDF row${payload.ingestedCount === 1 ? "" : "s"} moved into market staging.`,
+        type: payload.failedCount > 0 ? "error" : "success",
+        text:
+          payload.failedCount > 0
+            ? `${payload.ingestedCount} approved PDF row${
+                payload.ingestedCount === 1 ? "" : "s"
+              } moved into market staging. ${payload.failedCount} approved row${
+                payload.failedCount === 1 ? "" : "s"
+              } still need fixes.`
+            : `${payload.ingestedCount} approved PDF row${
+                payload.ingestedCount === 1 ? "" : "s"
+              } moved into market staging.`,
+        details: payload.failedCount > 0 ? payload.failures ?? [] : undefined,
       });
     } catch (err) {
       setMessage({
@@ -272,8 +329,23 @@ export default function AdminInboxPage() {
               : "bg-rose-50 text-rose-700 ring-1 ring-rose-200"
           }`}
         >
-          {message.type === "success" ? <CheckCircle2 className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
-          {message.text}
+          <div className="flex items-start gap-2">
+            {message.type === "success" ? (
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+            ) : (
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            )}
+            <div>
+              <p>{message.text}</p>
+              {message.details && message.details.length > 0 ? (
+                <ul className="mt-2 list-disc space-y-1 pl-5 text-xs font-medium">
+                  {message.details.map((detail) => (
+                    <li key={detail}>{detail}</li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
+          </div>
         </div>
       ) : null}
 
@@ -476,13 +548,22 @@ export default function AdminInboxPage() {
                           </button>
                         ) : null}
                         {upload.ingestion_status !== "uploaded" ? (
-                          <button
-                            onClick={() => void loadPdfRows(upload.id)}
-                            disabled={loadingPdfRows && selectedPdfUploadId === upload.id}
-                            className="rounded-lg border border-brand-200 bg-white px-3 py-2 text-xs font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-50"
-                          >
-                            {loadingPdfRows && selectedPdfUploadId === upload.id ? "Loading..." : "Review Pilot Rows"}
-                          </button>
+                          <>
+                            <button
+                              onClick={() => void loadPdfRows(upload.id)}
+                              disabled={loadingPdfRows && selectedPdfUploadId === upload.id}
+                              className="rounded-lg border border-brand-200 bg-white px-3 py-2 text-xs font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-50"
+                            >
+                              {loadingPdfRows && selectedPdfUploadId === upload.id ? "Loading..." : "Review Pilot Rows"}
+                            </button>
+                            <button
+                              onClick={() => void extractPdfRows(upload.id)}
+                              disabled={extractingUploadId === upload.id}
+                              className="rounded-lg border border-brand-200 bg-white px-3 py-2 text-xs font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-50"
+                            >
+                              {extractingUploadId === upload.id ? "Extracting..." : "Re-extract Pilot Rows"}
+                            </button>
+                          </>
                         ) : null}
                       </div>
                     ) : (
@@ -513,15 +594,39 @@ export default function AdminInboxPage() {
                 .
               </p>
             </div>
-            {approvedPdfRowCount > 0 ? (
+            <div className="flex flex-wrap gap-2">
               <button
-                onClick={() => void ingestApprovedPdfRows(selectedPdfUpload.id)}
-                disabled={ingestingUploadId === selectedPdfUpload.id}
-                className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50"
+                onClick={() => void extractPdfRows(selectedPdfUpload.id)}
+                disabled={extractingUploadId === selectedPdfUpload.id}
+                className="rounded-lg border border-brand-200 bg-white px-4 py-2 text-sm font-medium text-brand-700 hover:bg-brand-50 disabled:opacity-50"
               >
-                {ingestingUploadId === selectedPdfUpload.id ? "Ingesting..." : "Ingest Approved Rows"}
+                {extractingUploadId === selectedPdfUpload.id ? "Extracting..." : "Re-extract Pilot Rows"}
               </button>
-            ) : null}
+              {pendingPdfRowCount > 0 ? (
+                <button
+                  onClick={() =>
+                    void bulkUpdatePdfRows(
+                      selectedPdfUpload.id,
+                      pdfRows.filter((row) => row.review_status === "pending").map((row) => row.id),
+                      "approved",
+                    )
+                  }
+                  disabled={bulkUpdatingUploadId === selectedPdfUpload.id}
+                  className="rounded-lg border border-emerald-200 bg-white px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50 disabled:opacity-50"
+                >
+                  {bulkUpdatingUploadId === selectedPdfUpload.id ? "Saving..." : "Approve All Pending"}
+                </button>
+              ) : null}
+              {approvedPdfRowCount > 0 ? (
+                <button
+                  onClick={() => void ingestApprovedPdfRows(selectedPdfUpload.id)}
+                  disabled={ingestingUploadId === selectedPdfUpload.id}
+                  className="rounded-lg bg-brand-500 px-4 py-2 text-sm font-medium text-white hover:bg-brand-600 disabled:opacity-50"
+                >
+                  {ingestingUploadId === selectedPdfUpload.id ? "Ingesting..." : "Ingest Approved Rows"}
+                </button>
+              ) : null}
+            </div>
           </div>
 
           {loadingPdfRows ? (

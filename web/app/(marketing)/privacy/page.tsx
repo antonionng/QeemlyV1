@@ -6,7 +6,11 @@ export const metadata: Metadata = {
   description: "How Qeemly collects, uses, stores, and protects personal data across the UAE and GCC.",
 };
 
-const sections = [
+const sections: ReadonlyArray<{
+  title: string;
+  paragraphs?: readonly string[];
+  bullets?: readonly string[];
+}> = [
   {
     title: "1. Scope",
     paragraphs: [

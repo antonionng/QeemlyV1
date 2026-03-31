@@ -135,6 +135,22 @@ describe("Compensation health score grid", () => {
     expect(html).toContain("background-color:#FF2056");
   });
 
+  it("keeps the health score card compact at medium dashboard widths", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(HealthScore, {
+        metrics,
+        interactions,
+      }),
+    );
+
+    expect(html).toContain("min-h-[480px]");
+    expect(html).toContain("lg:min-h-[540px]");
+    expect(html).toContain('data-testid="health-score-card-header"');
+    expect(html).toContain('data-testid="health-score-factor-list"');
+    expect(html).toContain("h-[232px]");
+    expect(html).toContain("lg:h-[252px]");
+  });
+
   it("renders the four metric cards with the exact chart treatments and without legacy chrome", () => {
     const html = renderToStaticMarkup(
       React.createElement(StatCards, {
@@ -160,7 +176,8 @@ describe("Compensation health score grid", () => {
     expect(html).toContain('data-testid="total-payroll-card-action"');
     expect(html).toContain('data-testid="total-payroll-card-tooltip"');
     expect(html).toContain('data-testid="total-payroll-card-chart"');
-    expect(html).toContain(">AED 68.6M<");
+    expect(html).toContain('data-testid="total-payroll-card-value-currency">AED<');
+    expect(html).toContain('data-testid="total-payroll-card-value-amount">68.6M<');
     expect(html).toContain(">Annual compensation<");
     expect(html).not.toContain("Monthly compensation");
     expect(html).toContain(">2023<");
@@ -187,6 +204,54 @@ describe("Compensation health score grid", () => {
     expect(html).toContain(">14<");
 
     expect(html).not.toContain("Coverage");
+  });
+
+  it("renders payroll headline values as separate currency and amount tokens for narrow cards", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(StatCards, {
+        metrics,
+        benchmarkCoverage,
+        interactions,
+      }),
+    );
+
+    expect(html).toContain('data-testid="total-payroll-card-value"');
+    expect(html).toContain('data-testid="total-payroll-card-value-currency">AED<');
+    expect(html).toContain('data-testid="total-payroll-card-value-amount">68.6M<');
+    expect(html).not.toContain(">AED 68.6M<");
+  });
+
+  it("uses shared header and visual slots to keep metric cards aligned on smaller screens", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(StatCards, {
+        metrics,
+        benchmarkCoverage,
+        interactions,
+      }),
+    );
+
+    expect(html).toContain('data-testid="active-employees-card-header"');
+    expect(html).toContain('data-testid="total-payroll-card-header"');
+    expect(html).toContain('data-testid="in-band-card-header"');
+    expect(html).toContain('data-testid="risk-flags-card-header"');
+    expect(html).toContain('data-testid="active-employees-card-visual-slot"');
+    expect(html).toContain('data-testid="total-payroll-card-visual-slot"');
+    expect(html).toContain('data-testid="in-band-card-visual-slot"');
+    expect(html).toContain('data-testid="risk-flags-card-visual-slot"');
+    expect(html).toContain("overview-metric-card-footer");
+  });
+
+  it("reserves enough header height to keep bottom-row metric values aligned", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(StatCards, {
+        metrics,
+        benchmarkCoverage,
+        interactions,
+      }),
+    );
+
+    expect(html).toContain("overview-metric-card-header min-h-[5.25rem]");
+    expect(html).toContain("overview-metric-card-description block min-h-[3rem]");
   });
 
   it("renders the band distribution card with row and donut interaction hooks", () => {

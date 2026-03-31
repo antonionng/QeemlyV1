@@ -6,7 +6,11 @@ export const metadata: Metadata = {
   description: "Commercial terms for using Qeemly's compensation intelligence platform across the UAE and GCC.",
 };
 
-const sections = [
+const sections: ReadonlyArray<{
+  title: string;
+  paragraphs?: readonly string[];
+  bullets?: readonly string[];
+}> = [
   {
     title: "1. Agreement and scope",
     paragraphs: [

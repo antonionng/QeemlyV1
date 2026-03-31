@@ -38,6 +38,89 @@ export type AdminResearchPdfRow = {
   review_notes: string | null;
 };
 
+function canonicalizeRobertWaltersRoleTitle(roleTitle: string) {
+  const normalizedTitle = roleTitle.trim().toLowerCase();
+
+  if (
+    normalizedTitle.includes("product design") ||
+    normalizedTitle.includes("product designer") ||
+    normalizedTitle.includes("ui/ux") ||
+    normalizedTitle.includes("ui ux") ||
+    normalizedTitle.includes("designer")
+  ) {
+    return "Product Designer";
+  }
+
+  if (
+    normalizedTitle.includes("machine learning") ||
+    normalizedTitle.includes("head of ai") ||
+    normalizedTitle.includes("chief ai officer")
+  ) {
+    return "ML Engineer";
+  }
+
+  if (normalizedTitle.includes("data scientist")) {
+    return "Data Scientist";
+  }
+
+  if (
+    normalizedTitle.includes("analytics") ||
+    normalizedTitle.includes("data analyst") ||
+    normalizedTitle.includes("business analyst") ||
+    normalizedTitle.includes("product analyst") ||
+    normalizedTitle.includes("chief data officer")
+  ) {
+    return "Data Analyst";
+  }
+
+  if (normalizedTitle.includes("security")) {
+    return "Security Engineer";
+  }
+
+  if (normalizedTitle.includes("cloud") || normalizedTitle.includes("infrastructure")) {
+    return "DevOps Engineer";
+  }
+
+  if (
+    normalizedTitle.includes("digital transformation") ||
+    normalizedTitle.includes("transformation") ||
+    normalizedTitle.includes("programme manager") ||
+    normalizedTitle.includes("program director") ||
+    normalizedTitle.includes("project manager") ||
+    normalizedTitle.includes("chief strategy officer")
+  ) {
+    return "Technical PM";
+  }
+
+  if (
+    normalizedTitle.includes("product") ||
+    normalizedTitle.includes("product owner") ||
+    normalizedTitle.includes("chief product officer")
+  ) {
+    return "Product Manager";
+  }
+
+  if (normalizedTitle.includes("data engineer")) {
+    return "Data Engineer";
+  }
+
+  if (
+    normalizedTitle.includes("software engineering") ||
+    normalizedTitle.includes("software engineer") ||
+    normalizedTitle.includes("engineering") ||
+    normalizedTitle.includes("development") ||
+    normalizedTitle.includes("technology officer") ||
+    normalizedTitle.includes("information officer") ||
+    normalizedTitle.includes("it ") ||
+    normalizedTitle.startsWith("it ") ||
+    normalizedTitle.includes("architect")
+  ) {
+    return "Software Engineer";
+  }
+
+  return roleTitle;
+}
+
 export function extractRobertWaltersReviewRows(text: string, uploadId: string) {
   return extractRobertWaltersBenchmarkRows(text).map((row) => buildReviewInsertRow(uploadId, row));
 }
@@ -79,7 +162,7 @@ export function toApprovedBenchmarkInput(row: Pick<
   const draft = toRobertWaltersNormalizationRow({
     rowIndex: 0,
     rawText: "",
-    roleTitle: row.role_title,
+    roleTitle: canonicalizeRobertWaltersRoleTitle(row.role_title),
     functionName: row.function_name,
     employmentType: null,
     payPeriod: row.pay_period,

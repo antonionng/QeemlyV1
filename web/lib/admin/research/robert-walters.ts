@@ -42,6 +42,67 @@ function normalizeInlineWhitespace(value: string) {
   return value.replace(/\s+/g, " ").trim();
 }
 
+const ROBERT_WALTERS_NOISE_PATTERNS = [
+  /^job title job group role type pay rate salary range/i,
+  /jump to key insights/i,
+  /download results/i,
+  /robert walters \| salary calculator results/i,
+  /engage\.robertwalters\.com/i,
+  /^--\s*\d+\s+of\s+\d+\s*--$/i,
+  /^showing \d+ to \d+ of \d+ entries$/i,
+  /^all salary packages are inclusive/i,
+  /^the cost of living differs/i,
+  /^roles based in kuwait, bahrain, qatar, and oman/i,
+  /^dev reset\b/i,
+  /\blocation\b.*\bregion\b.*\bspecialisation\b/i,
+  /\bsearch show \d+ entries\b/i,
+] as const;
+
+function isNoiseLine(line: string) {
+  const normalizedLine = normalizeInlineWhitespace(line);
+  if (!normalizedLine) return true;
+
+  return ROBERT_WALTERS_NOISE_PATTERNS.some((pattern) => pattern.test(normalizedLine));
+}
+
+function inferLevelHint(roleTitle: string) {
+  const normalizedTitle = normalizeInlineWhitespace(roleTitle).toLowerCase();
+
+  if (
+    normalizedTitle.includes("group chief") ||
+    normalizedTitle.startsWith("chief ") ||
+    normalizedTitle.includes(" chief ")
+  ) {
+    return "VP";
+  }
+  if (normalizedTitle.includes("vice president") || normalizedTitle.includes("vp")) {
+    return "VP";
+  }
+  if (normalizedTitle.includes("senior director")) {
+    return "Senior Director";
+  }
+  if (normalizedTitle.includes("head of") || normalizedTitle.includes("director")) {
+    return "Director";
+  }
+  if (normalizedTitle.includes("senior manager")) {
+    return "Senior Manager";
+  }
+  if (normalizedTitle.includes("manager")) {
+    return "Manager";
+  }
+  if (normalizedTitle.includes("principal") || normalizedTitle.includes("architect")) {
+    return "Principal";
+  }
+  if (normalizedTitle.includes("lead")) {
+    return "Lead";
+  }
+  if (normalizedTitle.includes("senior")) {
+    return "Senior";
+  }
+
+  return "Mid-Level";
+}
+
 function parseScaledAmount(rawNumber: string, rawSuffix: string) {
   const numeric = Number(rawNumber.replace(/,/g, ""));
   if (!Number.isFinite(numeric)) return null;
@@ -127,7 +188,7 @@ function buildRowFromBlock(block: string, rowIndex: number): RobertWaltersBenchm
     payPeriod,
     currency: primaryCurrency,
     locationHint: "Dubai",
-    levelHint: roleTitle,
+    levelHint: inferLevelHint(roleTitle),
     salaryRange2025: {
       min: annualOrMonthlyRanges[0].min,
       max: annualOrMonthlyRanges[0].max,
@@ -144,7 +205,8 @@ export function extractRobertWaltersBenchmarkRows(text: string): RobertWaltersBe
   const lines = text
     .split(/\r?\n/)
     .map((line) => line.trim())
-    .filter(Boolean);
+    .filter(Boolean)
+    .filter((line) => !isNoiseLine(line));
 
   const rows: RobertWaltersBenchmarkRow[] = [];
   let buffer: string[] = [];

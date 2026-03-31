@@ -82,6 +82,36 @@ function MetricDelta({ value }: { value: number }) {
   );
 }
 
+function PayrollMetricValue({ value }: { value: string }) {
+  const match = value.match(/^([A-Z]{3})\s+(.+)$/);
+
+  if (!match) {
+    return <span className="overview-metric-card-value shrink-0 whitespace-nowrap">{value}</span>;
+  }
+
+  const [, currency, amount] = match;
+
+  return (
+    <span
+      className="overview-metric-card-value-group"
+      data-testid="total-payroll-card-value"
+    >
+      <span
+        className="overview-metric-card-value-currency"
+        data-testid="total-payroll-card-value-currency"
+      >
+        {currency}
+      </span>
+      <span
+        className="overview-metric-card-value-amount"
+        data-testid="total-payroll-card-value-amount"
+      >
+        {amount}
+      </span>
+    </span>
+  );
+}
+
 function ActiveEmployeesSparkline({ trend }: { trend: TrendDataPoint[] }) {
   const width = 220;
   const height = 96;
@@ -90,7 +120,7 @@ function ActiveEmployeesSparkline({ trend }: { trend: TrendDataPoint[] }) {
   const areaPath = buildAreaPath(points, width, height);
 
   return (
-    <div className="mt-6" data-testid="active-employees-card-chart">
+    <div className="w-full" data-testid="active-employees-card-chart">
       <div data-testid="active-employees-sparkline">
       <svg className="h-[96px] w-full" viewBox={`0 0 ${width} ${height}`} fill="none" aria-hidden="true">
         <defs>
@@ -118,7 +148,7 @@ function TotalPayrollBars({ trend }: { trend: TrendDataPoint[] }) {
   const max = Math.max(...series.map((item) => item.value), 1);
 
   return (
-    <div className="mt-6" data-testid="total-payroll-card-chart">
+    <div className="w-full" data-testid="total-payroll-card-chart">
       <div
         className="grid min-w-0 grid-cols-4 items-end gap-2 overflow-hidden sm:gap-3"
         data-testid="total-payroll-bars-grid"
@@ -148,7 +178,7 @@ function InBandDistribution({
   return (
     <>
       <div
-        className="mt-6 flex h-14 overflow-hidden rounded-[12px]"
+        className="flex h-14 w-full overflow-hidden rounded-[12px]"
         data-testid="in-band-card-chart"
       >
         <div
@@ -175,7 +205,7 @@ function RiskFlagsIndicator({
 
   return (
     <>
-      <div className="mt-6" data-testid="risk-flags-card-chart">
+      <div className="w-full" data-testid="risk-flags-card-chart">
         <div className="h-14 rounded-[12px] bg-[rgba(150,151,153,0.2)] p-2">
         <div
           className="h-full rounded-[10px]"
@@ -193,6 +223,14 @@ function RiskFlagsIndicator({
 }
 
 export function StatCards({ metrics, interactions, onInteract }: StatCardsProps) {
+  const metricHeaderClassName =
+    "overview-metric-card-header min-h-[5.25rem] sm:min-h-[5rem]";
+  const metricVisualSlotClassName =
+    "overview-metric-card-visual-slot mt-4 flex min-h-[7.5rem] items-start sm:mt-6 sm:min-h-[8.25rem]";
+  const metricFooterClassName =
+    "overview-metric-card-footer mt-auto flex min-h-[4.5rem] flex-col items-start gap-2 pt-4 sm:flex-row sm:flex-wrap sm:items-end sm:justify-between sm:gap-3 sm:pt-6";
+  const metricValueClassName = "overview-metric-card-value shrink-0 whitespace-nowrap";
+
   return (
     <div className="grid h-full min-w-0 auto-rows-fr gap-6 xl:grid-cols-1 2xl:grid-cols-2" data-testid="overview-stat-card-grid">
       {interactions?.statCards.activeEmployees ? (
@@ -207,11 +245,15 @@ export function StatCards({ metrics, interactions, onInteract }: StatCardsProps)
             data-testid="active-employees-card"
           >
             <div className="flex h-full flex-col">
-              <h3 className="overview-metric-card-title">Active Employees</h3>
-              <p className="overview-metric-card-description">{metrics.totalEmployees} total</p>
-              <ActiveEmployeesSparkline trend={metrics.headcountTrend} />
-              <div className="mt-auto flex flex-col items-start gap-3 pt-6 sm:flex-row sm:items-end sm:justify-between">
-                <span className="overview-metric-card-value break-words">{metrics.activeEmployees}</span>
+              <div className={metricHeaderClassName} data-testid="active-employees-card-header">
+                <h3 className="overview-metric-card-title">Active Employees</h3>
+                <p className="overview-metric-card-description block min-h-[3rem]">{metrics.totalEmployees} total</p>
+              </div>
+              <div className={metricVisualSlotClassName} data-testid="active-employees-card-visual-slot">
+                <ActiveEmployeesSparkline trend={metrics.headcountTrend} />
+              </div>
+              <div className={metricFooterClassName}>
+                <span className={metricValueClassName}>{metrics.activeEmployees}</span>
                 <MetricDelta value={metrics.headcountChange} />
               </div>
             </div>
@@ -223,11 +265,15 @@ export function StatCards({ metrics, interactions, onInteract }: StatCardsProps)
           data-testid="active-employees-card"
         >
           <div className="flex h-full flex-col">
-            <h3 className="overview-metric-card-title">Active Employees</h3>
-            <p className="overview-metric-card-description">{metrics.totalEmployees} total</p>
-            <ActiveEmployeesSparkline trend={metrics.headcountTrend} />
-            <div className="mt-auto flex flex-col items-start gap-3 pt-6 sm:flex-row sm:items-end sm:justify-between">
-              <span className="overview-metric-card-value break-words">{metrics.activeEmployees}</span>
+            <div className={metricHeaderClassName} data-testid="active-employees-card-header">
+              <h3 className="overview-metric-card-title">Active Employees</h3>
+              <p className="overview-metric-card-description block min-h-[3rem]">{metrics.totalEmployees} total</p>
+            </div>
+            <div className={metricVisualSlotClassName} data-testid="active-employees-card-visual-slot">
+              <ActiveEmployeesSparkline trend={metrics.headcountTrend} />
+            </div>
+            <div className={metricFooterClassName}>
+              <span className={metricValueClassName}>{metrics.activeEmployees}</span>
               <MetricDelta value={metrics.headcountChange} />
             </div>
           </div>
@@ -246,11 +292,15 @@ export function StatCards({ metrics, interactions, onInteract }: StatCardsProps)
             data-testid="total-payroll-card"
           >
             <div className="flex h-full flex-col">
-              <h3 className="overview-metric-card-title">Total Payroll</h3>
-              <p className="overview-metric-card-description">Annual compensation</p>
-              <TotalPayrollBars trend={metrics.payrollTrend} />
-              <div className="mt-auto flex flex-col items-start gap-3 pt-6 sm:flex-row sm:items-end sm:justify-between">
-                <span className="overview-metric-card-value break-words">{formatAEDCompact(metrics.totalPayroll)}</span>
+              <div className={metricHeaderClassName} data-testid="total-payroll-card-header">
+                <h3 className="overview-metric-card-title">Total Payroll</h3>
+                <p className="overview-metric-card-description block min-h-[3rem]">Annual compensation</p>
+              </div>
+              <div className={metricVisualSlotClassName} data-testid="total-payroll-card-visual-slot">
+                <TotalPayrollBars trend={metrics.payrollTrend} />
+              </div>
+              <div className={metricFooterClassName}>
+                <PayrollMetricValue value={formatAEDCompact(metrics.totalPayroll)} />
                 <MetricDelta value={metrics.payrollChange} />
               </div>
             </div>
@@ -262,11 +312,15 @@ export function StatCards({ metrics, interactions, onInteract }: StatCardsProps)
           data-testid="total-payroll-card"
         >
           <div className="flex h-full flex-col">
-            <h3 className="overview-metric-card-title">Total Payroll</h3>
-            <p className="overview-metric-card-description">Annual compensation</p>
-            <TotalPayrollBars trend={metrics.payrollTrend} />
-            <div className="mt-auto flex flex-col items-start gap-3 pt-6 sm:flex-row sm:items-end sm:justify-between">
-              <span className="overview-metric-card-value break-words">{formatAEDCompact(metrics.totalPayroll)}</span>
+            <div className={metricHeaderClassName} data-testid="total-payroll-card-header">
+              <h3 className="overview-metric-card-title">Total Payroll</h3>
+              <p className="overview-metric-card-description block min-h-[3rem]">Annual compensation</p>
+            </div>
+            <div className={metricVisualSlotClassName} data-testid="total-payroll-card-visual-slot">
+              <TotalPayrollBars trend={metrics.payrollTrend} />
+            </div>
+            <div className={metricFooterClassName}>
+              <PayrollMetricValue value={formatAEDCompact(metrics.totalPayroll)} />
               <MetricDelta value={metrics.payrollChange} />
             </div>
           </div>
@@ -285,13 +339,17 @@ export function StatCards({ metrics, interactions, onInteract }: StatCardsProps)
             data-testid="in-band-card"
           >
             <div className="flex h-full flex-col">
-              <h3 className="overview-metric-card-title">In Band</h3>
-              <p className="overview-metric-card-description">{metrics.outOfBandPercentage}% outside band</p>
-              <InBandDistribution
-                segments={metrics.bandDistribution}
-              />
-              <div className="mt-auto flex flex-col items-start gap-3 pt-6 sm:flex-row sm:items-end sm:justify-between">
-                <span className="overview-metric-card-value break-words">{metrics.inBandPercentage}%</span>
+              <div className={metricHeaderClassName} data-testid="in-band-card-header">
+                <h3 className="overview-metric-card-title">In Band</h3>
+                <p className="overview-metric-card-description block min-h-[3rem]">{metrics.outOfBandPercentage}% outside band</p>
+              </div>
+              <div className={metricVisualSlotClassName} data-testid="in-band-card-visual-slot">
+                <InBandDistribution
+                  segments={metrics.bandDistribution}
+                />
+              </div>
+              <div className={metricFooterClassName}>
+                <span className={metricValueClassName}>{metrics.inBandPercentage}%</span>
                 <MetricDelta value={metrics.inBandChange} />
               </div>
             </div>
@@ -303,13 +361,17 @@ export function StatCards({ metrics, interactions, onInteract }: StatCardsProps)
           data-testid="in-band-card"
         >
           <div className="flex h-full flex-col">
-            <h3 className="overview-metric-card-title">In Band</h3>
-            <p className="overview-metric-card-description">{metrics.outOfBandPercentage}% outside band</p>
-            <InBandDistribution
-              segments={metrics.bandDistribution}
-            />
-            <div className="mt-auto flex flex-col items-start gap-3 pt-6 sm:flex-row sm:items-end sm:justify-between">
-              <span className="overview-metric-card-value break-words">{metrics.inBandPercentage}%</span>
+            <div className={metricHeaderClassName} data-testid="in-band-card-header">
+              <h3 className="overview-metric-card-title">In Band</h3>
+              <p className="overview-metric-card-description block min-h-[3rem]">{metrics.outOfBandPercentage}% outside band</p>
+            </div>
+            <div className={metricVisualSlotClassName} data-testid="in-band-card-visual-slot">
+              <InBandDistribution
+                segments={metrics.bandDistribution}
+              />
+            </div>
+            <div className={metricFooterClassName}>
+              <span className={metricValueClassName}>{metrics.inBandPercentage}%</span>
               <MetricDelta value={metrics.inBandChange} />
             </div>
           </div>
@@ -328,16 +390,20 @@ export function StatCards({ metrics, interactions, onInteract }: StatCardsProps)
             data-testid="risk-flags-card"
           >
             <div className="flex h-full flex-col">
-              <h3 className="overview-metric-card-title">Risk Flags</h3>
-              <p className="overview-metric-card-description">Above market employees</p>
-              <RiskFlagsIndicator
-                riskFlags={metrics.payrollRiskFlags}
-                benchmarkedEmployees={Number(
-                  ("benchmarkedEmployees" in metrics ? metrics.benchmarkedEmployees : metrics.activeEmployees) ?? 0,
-                )}
-              />
-              <div className="mt-auto flex flex-col items-start gap-3 pt-6 sm:flex-row sm:items-end sm:justify-between">
-                <span className="overview-metric-card-value break-words">{metrics.payrollRiskFlags}</span>
+              <div className={metricHeaderClassName} data-testid="risk-flags-card-header">
+                <h3 className="overview-metric-card-title">Risk Flags</h3>
+                <p className="overview-metric-card-description block min-h-[3rem]">Above market employees</p>
+              </div>
+              <div className={metricVisualSlotClassName} data-testid="risk-flags-card-visual-slot">
+                <RiskFlagsIndicator
+                  riskFlags={metrics.payrollRiskFlags}
+                  benchmarkedEmployees={Number(
+                    ("benchmarkedEmployees" in metrics ? metrics.benchmarkedEmployees : metrics.activeEmployees) ?? 0,
+                  )}
+                />
+              </div>
+              <div className={metricFooterClassName}>
+                <span className={metricValueClassName}>{metrics.payrollRiskFlags}</span>
               </div>
             </div>
           </Card>
@@ -348,16 +414,20 @@ export function StatCards({ metrics, interactions, onInteract }: StatCardsProps)
           data-testid="risk-flags-card"
         >
           <div className="flex h-full flex-col">
-            <h3 className="overview-metric-card-title">Risk Flags</h3>
-            <p className="overview-metric-card-description">Above market employees</p>
-            <RiskFlagsIndicator
-              riskFlags={metrics.payrollRiskFlags}
-              benchmarkedEmployees={Number(
-                ("benchmarkedEmployees" in metrics ? metrics.benchmarkedEmployees : metrics.activeEmployees) ?? 0,
-              )}
-            />
-            <div className="mt-auto flex flex-col items-start gap-3 pt-6 sm:flex-row sm:items-end sm:justify-between">
-              <span className="overview-metric-card-value break-words">{metrics.payrollRiskFlags}</span>
+            <div className={metricHeaderClassName} data-testid="risk-flags-card-header">
+              <h3 className="overview-metric-card-title">Risk Flags</h3>
+              <p className="overview-metric-card-description block min-h-[3rem]">Above market employees</p>
+            </div>
+            <div className={metricVisualSlotClassName} data-testid="risk-flags-card-visual-slot">
+              <RiskFlagsIndicator
+                riskFlags={metrics.payrollRiskFlags}
+                benchmarkedEmployees={Number(
+                  ("benchmarkedEmployees" in metrics ? metrics.benchmarkedEmployees : metrics.activeEmployees) ?? 0,
+                )}
+              />
+            </div>
+            <div className={metricFooterClassName}>
+              <span className={metricValueClassName}>{metrics.payrollRiskFlags}</span>
             </div>
           </div>
         </Card>
