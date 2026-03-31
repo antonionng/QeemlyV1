@@ -395,8 +395,8 @@ export function SalaryReviewWizard({
         <>
           <PayrollSummaryCards />
           <Card className="rounded-2xl border-[#E6E8F0] bg-white p-6 shadow-none">
-            <div className="grid gap-6 xl:grid-cols-[1fr_320px]">
-              <div className="space-y-4">
+            <div className="grid gap-6 2xl:grid-cols-[minmax(0,1fr)_320px]">
+              <div className="min-w-0 space-y-4">
                 <SalaryReviewFilters
                   actions={<ColumnVisibilityPanel />}
                   scopeDepartment={scopedDepartment}
@@ -413,7 +413,7 @@ export function SalaryReviewWizard({
                   }}
                 />
               </div>
-              <Card className="rounded-2xl border-[#E6E8F0] bg-[#F7F8FC] p-5 shadow-none">
+              <Card className="rounded-2xl border-[#E6E8F0] bg-[#F7F8FC] p-5 shadow-none 2xl:sticky 2xl:top-6">
                 <h3 className="text-lg font-semibold text-[#1F2430]">AI Recommendation Panel</h3>
                 <p className="mt-2 text-sm text-[#8A90A0]">
                   Re-run the AI draft against the current budget and selected employees at any point in planning.

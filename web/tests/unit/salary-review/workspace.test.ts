@@ -474,6 +474,31 @@ describe("Department-scoped draft workspace", () => {
     });
   });
 
+  it("wraps filter controls and status text cleanly in scoped drafts", async () => {
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        React.createElement(SalaryReviewFilters, {
+          scopeDepartment: "Engineering",
+          showEntireTeam: false,
+          onToggleEntireTeam: vi.fn(),
+        }),
+      );
+    });
+
+    const filterShell = container.firstElementChild as HTMLDivElement | null;
+    const toolbarRow = filterShell?.children.item(0) as HTMLDivElement | null;
+    const statusRow = filterShell?.children.item(1) as HTMLDivElement | null;
+
+    expect(toolbarRow?.className).toContain("items-start");
+    expect(statusRow?.className).toContain("flex-wrap");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("shows only the scoped department by default and can expand to the full team", async () => {
     const root = createRoot(container);
 

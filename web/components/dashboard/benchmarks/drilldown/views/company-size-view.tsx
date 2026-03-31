@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { type BenchmarkResult } from "@/lib/benchmarks/benchmark-state";
 import { useCompanySettings } from "@/lib/company";
-import { getBenchmark } from "@/lib/benchmarks/data-service";
+import { getBenchmarksBatch, makeBenchmarkLookupKey } from "@/lib/benchmarks/data-service";
 import { COMPANY_SIZES, type SalaryBenchmark } from "@/lib/dashboard/dummy-data";
 import { formatBenchmarkCompact, toBenchmarkDisplayValue } from "@/lib/utils/currency";
 import { useSalaryView } from "@/lib/salary-view-store";
@@ -48,12 +48,23 @@ export function CompanySizeView({ result }: CompanySizeViewProps) {
     }
 
     const run = async () => {
-      const entries = await Promise.all(
-        sizesToLoad.map(async (size) => {
-          const nextBenchmark = await getBenchmark(role.id, location.id, level.id, {
+      const batchResults = await getBenchmarksBatch(
+        sizesToLoad.map((size) => ({
+          roleId: role.id,
+          locationId: location.id,
+          levelId: level.id,
+          industry: result.formData.industry,
+          companySize: size,
+        })),
+      );
+      const entries = sizesToLoad.map((size) => {
+          const nextBenchmark = batchResults[makeBenchmarkLookupKey({
+            roleId: role.id,
+            locationId: location.id,
+            levelId: level.id,
             industry: result.formData.industry,
             companySize: size,
-          });
+          })];
           if (!nextBenchmark) return null;
           if (
             nextBenchmark.benchmarkSegmentation?.matchedCompanySize &&
@@ -67,8 +78,7 @@ export function CompanySizeView({ result }: CompanySizeViewProps) {
           }
 
           return null;
-        }),
-      );
+        });
 
       const next: Record<string, SalaryBenchmark> = {};
       let nextFallback: SalaryBenchmark | null = null;

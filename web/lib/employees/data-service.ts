@@ -20,14 +20,14 @@ export async function hasDbEmployees(): Promise<boolean> {
   }
 
   try {
-    const response = await fetch("/api/people", { method: "GET", cache: "no-store" });
+    const response = await fetch("/api/people/exists", { method: "GET", cache: "no-store" });
     if (!response.ok) {
       hasDbEmployeesCache = false;
       cacheTimestamp = Date.now();
       return false;
     }
-    const payload = (await response.json()) as { employees?: unknown[] };
-    hasDbEmployeesCache = (payload.employees || []).length > 0;
+    const payload = (await response.json()) as { hasEmployees?: boolean };
+    hasDbEmployeesCache = payload.hasEmployees === true;
     cacheTimestamp = Date.now();
     return hasDbEmployeesCache;
   } catch {

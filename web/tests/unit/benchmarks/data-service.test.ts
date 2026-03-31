@@ -18,7 +18,11 @@ vi.mock("@/lib/benchmarks/platform-market", () => ({
   findMarketBenchmark: findMarketBenchmarkMock,
 }));
 
-import { getBenchmark } from "@/lib/benchmarks/data-service";
+import {
+  getBenchmark,
+  getBenchmarkEnriched,
+  getBenchmarksBatch,
+} from "@/lib/benchmarks/data-service";
 
 describe("getBenchmark", () => {
   const responseBenchmark: SalaryBenchmark = {
@@ -62,7 +66,7 @@ describe("getBenchmark", () => {
     const result = await getBenchmark("swe-devops", "dubai", "ic2");
 
     expect(global.fetch).toHaveBeenCalledWith(
-      "/api/benchmarks/search?roleId=swe-devops&locationId=dubai&levelId=ic2",
+      "/api/benchmarks/lookup?roleId=swe-devops&locationId=dubai&levelId=ic2",
       { cache: "no-store" },
     );
     expect(result).toEqual(responseBenchmark);
@@ -75,7 +79,7 @@ describe("getBenchmark", () => {
     });
 
     expect(global.fetch).toHaveBeenCalledWith(
-      "/api/benchmarks/search?roleId=swe-devops&locationId=dubai&levelId=ic2&industry=Fintech&companySize=201-500",
+      "/api/benchmarks/lookup?roleId=swe-devops&locationId=dubai&levelId=ic2&industry=Fintech&companySize=201-500",
       { cache: "no-store" },
     );
   });
@@ -104,6 +108,54 @@ describe("getBenchmark", () => {
       locationId: "dubai",
       levelId: "ic2",
       benchmarkSource: "market",
+    });
+  });
+
+  it("keeps the enriched helper on the AI-backed search route", async () => {
+    await getBenchmarkEnriched("swe-devops", "dubai", "ic2", {
+      industry: "Fintech",
+      companySize: "201-500",
+    });
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      "/api/benchmarks/search?roleId=swe-devops&locationId=dubai&levelId=ic2&industry=Fintech&companySize=201-500",
+      { cache: "no-store" },
+    );
+  });
+
+  it("uses the batch lookup API for multi-entry market-backed requests", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({
+        benchmarks: {
+          "swe-devops::dubai::ic2::::": responseBenchmark,
+          "swe-devops::dubai::ic3::::": {
+            ...responseBenchmark,
+            levelId: "ic3",
+          },
+        },
+      }),
+    }) as unknown as typeof fetch;
+
+    const result = await getBenchmarksBatch([
+      { roleId: "swe-devops", locationId: "dubai", levelId: "ic2" },
+      { roleId: "swe-devops", locationId: "dubai", levelId: "ic3" },
+    ]);
+
+    expect(global.fetch).toHaveBeenCalledWith("/api/benchmarks/lookup-batch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+      body: JSON.stringify({
+        entries: [
+          { roleId: "swe-devops", locationId: "dubai", levelId: "ic2" },
+          { roleId: "swe-devops", locationId: "dubai", levelId: "ic3" },
+        ],
+      }),
+    });
+    expect(result["swe-devops::dubai::ic2::::"]).toEqual(responseBenchmark);
+    expect(result["swe-devops::dubai::ic3::::"]).toMatchObject({
+      levelId: "ic3",
     });
   });
 });

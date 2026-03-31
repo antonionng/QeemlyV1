@@ -1,9 +1,8 @@
-import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 
-type SessionSupabaseClient = Awaited<ReturnType<typeof createClient>>;
-type ServiceSupabaseClient = ReturnType<typeof createServiceClient>;
-type MarketSupabaseClient = SessionSupabaseClient | ServiceSupabaseClient;
+type MarketSupabaseClient = {
+  from: (table: string) => unknown;
+};
 
 export type MarketReadDiagnostics = {
   readMode: "service" | "session";
@@ -16,11 +15,11 @@ export async function readMarketDataWithFallback<T>({
   diagnostics,
   read,
 }: {
-  sessionClient: SessionSupabaseClient;
+  sessionClient: MarketSupabaseClient;
   diagnostics: MarketReadDiagnostics;
   read: (client: MarketSupabaseClient) => Promise<T>;
 }): Promise<T> {
-  let serviceClient: ServiceSupabaseClient | null = null;
+  let serviceClient: MarketSupabaseClient | null = null;
 
   try {
     serviceClient = createServiceClient();

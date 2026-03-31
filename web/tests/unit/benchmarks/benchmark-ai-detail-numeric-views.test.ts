@@ -12,12 +12,14 @@ const {
   fetchDbEmployeesMock,
   createOfferMock,
   getBenchmarkMock,
+  getBenchmarksBatchMock,
 } = vi.hoisted(() => ({
   useCompanySettingsMock: vi.fn(),
   useSalaryViewMock: vi.fn(),
   fetchDbEmployeesMock: vi.fn(),
   createOfferMock: vi.fn(),
   getBenchmarkMock: vi.fn(),
+  getBenchmarksBatchMock: vi.fn(),
 }));
 
 vi.mock("@/lib/company", () => ({
@@ -41,6 +43,20 @@ vi.mock("@/lib/offers/store", () => ({
 
 vi.mock("@/lib/benchmarks/data-service", () => ({
   getBenchmark: getBenchmarkMock,
+  getBenchmarksBatch: getBenchmarksBatchMock,
+  makeBenchmarkLookupKey: ({
+    roleId,
+    locationId,
+    levelId,
+    industry,
+    companySize,
+  }: {
+    roleId: string;
+    locationId: string;
+    levelId: string;
+    industry?: string | null;
+    companySize?: string | null;
+  }) => [roleId, locationId, levelId, industry ?? "", companySize ?? ""].join("::"),
 }));
 
 vi.mock("@/lib/utils/currency", () => ({
@@ -289,6 +305,7 @@ describe("benchmark AI detail numeric views", () => {
     fetchDbEmployeesMock.mockResolvedValue([]);
     createOfferMock.mockResolvedValue(null);
     getBenchmarkMock.mockResolvedValue(baseBenchmark);
+    getBenchmarksBatchMock.mockResolvedValue({});
   });
 
   it("uses AI level bands for the level table instead of fetching comparison rows", async () => {
@@ -482,6 +499,75 @@ describe("benchmark AI detail numeric views", () => {
     });
 
     expect(container.textContent).toContain("AI-derived adjacent-level anchors are being used for this market view.");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("uses batched benchmark lookups when fallback numeric views need live market rows", async () => {
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    const resultWithoutAiComparisons: BenchmarkResult = {
+      ...makeResult(),
+      aiDetailBriefing: {
+        ...aiDetailBriefing,
+        views: {
+          ...aiDetailBriefing.views,
+          levelTable: {
+            ...aiDetailBriefing.views.levelTable,
+            levelBands: null,
+          },
+          industry: {
+            ...aiDetailBriefing.views.industry,
+            comparisonPoints: null,
+          },
+          companySize: {
+            ...aiDetailBriefing.views.companySize,
+            comparisonPoints: null,
+          },
+          geoComparison: {
+            ...aiDetailBriefing.views.geoComparison,
+            comparisonPoints: null,
+          },
+          offerBuilder: {
+            ...aiDetailBriefing.views.offerBuilder,
+            levelBands: null,
+          },
+        },
+      },
+    };
+
+    getBenchmarksBatchMock.mockImplementation(async (entries: Array<{ roleId: string; locationId: string; levelId: string; industry?: string | null; companySize?: string | null }>) =>
+      Object.fromEntries(
+        entries.map((entry) => [
+          `${entry.roleId}::${entry.locationId}::${entry.levelId}::${entry.industry ?? ""}::${entry.companySize ?? ""}`,
+          {
+            ...baseBenchmark,
+            locationId: entry.locationId,
+            levelId: entry.levelId,
+          },
+        ]),
+      ),
+    );
+
+    await act(async () => {
+      root.render(
+        React.createElement("div", null,
+          React.createElement(LevelTableView, { result: resultWithoutAiComparisons }),
+          React.createElement(IndustryView, { result: resultWithoutAiComparisons }),
+          React.createElement(CompanySizeView, { result: resultWithoutAiComparisons }),
+          React.createElement(GeoView, { result: resultWithoutAiComparisons }),
+          React.createElement(OfferBuilderView, { result: resultWithoutAiComparisons }),
+        ),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(getBenchmarksBatchMock).toHaveBeenCalled();
+    expect(getBenchmarkMock).not.toHaveBeenCalled();
 
     await act(async () => {
       root.unmount();

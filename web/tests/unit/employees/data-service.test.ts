@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { __internal } from "@/lib/employees/data-service";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { __internal, hasDbEmployees, invalidateEmployeeCache } from "@/lib/employees/data-service";
 
 describe("mapRowsToEmployees", () => {
   it("prefers market benchmarks over workspace bands for employee positioning", () => {
@@ -190,5 +190,38 @@ describe("mapRowsToEmployees", () => {
       matchType: "location_fallback",
       matchedBenchmarkId: "market-country",
     });
+  });
+});
+
+describe("hasDbEmployees", () => {
+  beforeEach(() => {
+    invalidateEmployeeCache();
+    vi.restoreAllMocks();
+  });
+
+  it("uses the lightweight employee existence endpoint", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({ hasEmployees: true }),
+    }) as unknown as typeof fetch;
+
+    const result = await hasDbEmployees();
+
+    expect(result).toBe(true);
+    expect(global.fetch).toHaveBeenCalledWith("/api/people/exists", {
+      method: "GET",
+      cache: "no-store",
+    });
+  });
+
+  it("returns false when the existence endpoint says there are no employees", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: vi.fn().mockResolvedValue({ hasEmployees: false }),
+    }) as unknown as typeof fetch;
+
+    const result = await hasDbEmployees();
+
+    expect(result).toBe(false);
   });
 });

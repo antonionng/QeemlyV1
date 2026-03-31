@@ -473,6 +473,9 @@ describe("GET /api/benchmarks/search", () => {
     expect(payload.aiDetailBriefing).toEqual(aiDetailBriefing);
     expect(payload.diagnostics.ai.called).toBe(true);
     expect(payload.diagnostics.ai.error).toBeNull();
+    expect(payload.diagnostics.ai.durationMs).toEqual(expect.any(Number));
+    expect(payload.diagnostics.market.durationMs).toEqual(expect.any(Number));
+    expect(payload.diagnostics.request.totalDurationMs).toEqual(expect.any(Number));
   });
 
   it("replaces weak market data with AI as primary (no separate panel)", async () => {

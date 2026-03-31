@@ -9,7 +9,7 @@ import {
 } from "@/lib/benchmarks/pay-period";
 import { LEVELS } from "@/lib/dashboard/dummy-data";
 import { useSalaryView } from "@/lib/salary-view-store";
-import { getBenchmark } from "@/lib/benchmarks/data-service";
+import { getBenchmarksBatch, makeBenchmarkLookupKey } from "@/lib/benchmarks/data-service";
 import { SharedAiCallout } from "../shared-ai-callout";
 
 interface LevelTableViewProps {
@@ -80,30 +80,36 @@ export function LevelTableView({ result }: LevelTableViewProps) {
       const sourceLocationId =
         location.id === "london" || location.id === "manchester" ? "dubai" : location.id;
       const targetLevels = LEVELS.filter((l) => l.category === "IC" || l.category === "Manager").slice(0, 6);
-      const benchmarks = await Promise.all(
-        targetLevels.map(async (lvl) => ({
-          level: lvl,
-          benchmark: await getBenchmark(role.id, sourceLocationId, lvl.id, {
+      const batchEntries = targetLevels.map((lvl) => ({
+        roleId: role.id,
+        locationId: sourceLocationId,
+        levelId: lvl.id,
+        industry: result.formData.industry,
+        companySize: result.formData.companySize,
+      }));
+      const benchmarks = await getBenchmarksBatch(batchEntries);
+      const nextRows = targetLevels
+        .map((entry) => {
+          const benchmark = benchmarks[makeBenchmarkLookupKey({
+            roleId: role.id,
+            locationId: sourceLocationId,
+            levelId: entry.id,
             industry: result.formData.industry,
             companySize: result.formData.companySize,
-          }),
-        })),
-      );
-      const nextRows = benchmarks
-        .filter((entry) => entry.benchmark)
-        .map((entry) => {
-          const benchmark = entry.benchmark!;
+          })];
+          if (!benchmark) return null;
           const p85 = benchmark.percentiles.p75 + (benchmark.percentiles.p90 - benchmark.percentiles.p75) * 0.5;
           return {
-            level: entry.level,
+            level: entry,
             p25: benchmark.percentiles.p25,
             p50: benchmark.percentiles.p50,
             p75: benchmark.percentiles.p75,
             p85,
             p90: benchmark.percentiles.p90,
-            isSelected: entry.level.id === level.id,
+            isSelected: entry.id === level.id,
           };
-        });
+        })
+        .filter(Boolean) as typeof rows;
       setRows(nextRows);
     };
     void run();

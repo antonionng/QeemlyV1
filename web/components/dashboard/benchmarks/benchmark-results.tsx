@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -14,6 +14,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { BenchmarkAdvisoryLoading } from "@/components/dashboard/benchmarks/benchmark-advisory-loading";
 import { RolePickerModal } from "@/components/dashboard/benchmarks/role-picker-modal";
 import { BenchmarkSourceBadge } from "@/components/ui/benchmark-source-badge";
 import type { OrgPeerSummary } from "@/lib/benchmarks/org-peer-summary";
@@ -23,7 +24,12 @@ import {
   type BenchmarkResult,
 } from "@/lib/benchmarks/benchmark-state";
 import type { BenchmarkDetailAiBriefing } from "@/lib/benchmarks/detail-ai";
-import { getBenchmark, getBenchmarkEnriched, type AiAdvisoryPayload, type AiInsights } from "@/lib/benchmarks/data-service";
+import {
+  getBenchmarksBatch,
+  getBenchmarkEnriched,
+  type AiAdvisoryPayload,
+  type AiInsights,
+} from "@/lib/benchmarks/data-service";
 import { getRoleDescription } from "@/lib/benchmarks/role-descriptions";
 import {
   getBenchmarkMarkerLabel,
@@ -108,6 +114,7 @@ export function BenchmarkResults({ result, hasCompanyData = true }: BenchmarkRes
   const [orgPeerSummariesByLevel, setOrgPeerSummariesByLevel] = useState<Record<string, OrgPeerSummary>>({});
   const [orgPeerSummaryLoadingByLevel, setOrgPeerSummaryLoadingByLevel] = useState<Record<string, boolean>>({});
   const [orgPeerSummaryErrorsByLevel, setOrgPeerSummaryErrorsByLevel] = useState<Record<string, string | null>>({});
+  const lastOrgPeerRequestKey = useRef<string | null>(null);
   const targetPercentile = stateFormData.targetPercentile || companySettings.targetPercentile;
   const roleDescription = getRoleDescription(role.id);
   const selectedRole = ROLES.find((entry) => entry.id === (stateFormData.roleId || resultFormData.roleId)) ?? role;
@@ -170,32 +177,43 @@ export function BenchmarkResults({ result, hasCompanyData = true }: BenchmarkRes
     };
 
     const loadLevelBenchmarks = async () => {
-      const entries = await Promise.all(
-        LEVELS.map(async (nextLevel) => {
-          if (nextLevel.id === level.id) {
-            // For the primary level, use the enriched call to get AI advisory too
-            const enriched = await getBenchmarkEnriched(role.id, location.id, nextLevel.id, filters);
-            if (enriched.aiAdvisory) setAiAdvisory(enriched.aiAdvisory);
-            if (enriched.aiInsights) setAiInsights(enriched.aiInsights);
-            persistAiDetailBriefing(
-              enriched.aiDetailBriefing,
-              enriched.aiDetailBriefing ? "ready" : "unavailable",
-            );
-            return enriched.benchmark
-              ? { levelId: nextLevel.id, benchmark: enriched.benchmark }
-              : null;
-          }
-          const nextBenchmark = await getBenchmark(role.id, location.id, nextLevel.id, filters);
-          return nextBenchmark
-            ? { levelId: nextLevel.id, benchmark: nextBenchmark }
-            : null;
-        }),
+      const [enriched, batchBenchmarks] = await Promise.all([
+        getBenchmarkEnriched(role.id, location.id, level.id, filters),
+        getBenchmarksBatch(
+          LEVELS.filter((nextLevel) => nextLevel.id !== level.id).map((nextLevel) => ({
+            roleId: role.id,
+            locationId: location.id,
+            levelId: nextLevel.id,
+            industry: filters.industry ?? null,
+            companySize: filters.companySize ?? null,
+          })),
+        ),
+      ]);
+
+      if (enriched.aiAdvisory) setAiAdvisory(enriched.aiAdvisory);
+      if (enriched.aiInsights) setAiInsights(enriched.aiInsights);
+      persistAiDetailBriefing(
+        enriched.aiDetailBriefing,
+        enriched.aiDetailBriefing ? "ready" : "unavailable",
       );
 
       const next: Record<string, SalaryBenchmark> = { [level.id]: benchmark };
-      for (const entry of entries) {
-        if (!entry) continue;
-        next[entry.levelId] = entry.benchmark;
+      if (enriched.benchmark) {
+        next[level.id] = enriched.benchmark;
+      }
+      for (const nextLevel of LEVELS) {
+        if (nextLevel.id === level.id) continue;
+        const batchKey = [
+          role.id,
+          location.id,
+          nextLevel.id,
+          filters.industry ?? "",
+          filters.companySize ?? "",
+        ].join("::");
+        const nextBenchmark = batchBenchmarks[batchKey];
+        if (nextBenchmark) {
+          next[nextLevel.id] = nextBenchmark;
+        }
       }
       setLevelBenchmarks(next);
     };
@@ -275,6 +293,7 @@ export function BenchmarkResults({ result, hasCompanyData = true }: BenchmarkRes
 
   useEffect(() => {
     if (!hasCompanyData) {
+      lastOrgPeerRequestKey.current = null;
       setOrgPeerSummariesByLevel({});
       setOrgPeerSummaryLoadingByLevel({});
       setOrgPeerSummaryErrorsByLevel({});
@@ -282,6 +301,19 @@ export function BenchmarkResults({ result, hasCompanyData = true }: BenchmarkRes
     }
 
     if (shownRows.length === 0) return;
+
+    const orgPeerRequestKey = [
+      role.id,
+      location.id,
+      shownRowIdsKey,
+      stateFormData.industry || resultFormData.industry || "",
+      stateFormData.companySize || resultFormData.companySize || "",
+    ].join("::");
+
+    if (lastOrgPeerRequestKey.current === orgPeerRequestKey) {
+      return;
+    }
+    lastOrgPeerRequestKey.current = orgPeerRequestKey;
 
     let isCancelled = false;
     const loadingState = Object.fromEntries(shownRows.map((row) => [row.id, true]));
@@ -291,41 +323,50 @@ export function BenchmarkResults({ result, hasCompanyData = true }: BenchmarkRes
     setOrgPeerSummaryErrorsByLevel((prev) => ({ ...prev, ...clearedErrorState }));
 
     const loadOrgPeerSummaries = async () => {
-      const results = await Promise.all(
-        shownRows.map(async (row) => {
-          const params = new URLSearchParams({
-            roleId: role.id,
-            locationId: location.id,
+      const entries = shownRows.map((row) => ({
+        roleId: role.id,
+        locationId: location.id,
+        levelId: row.id,
+        industry: stateFormData.industry || resultFormData.industry || "",
+        companySize: stateFormData.companySize || resultFormData.companySize || "",
+      }));
+
+      let results: Array<{ levelId: string; summary: OrgPeerSummary | null; error: string | null }>;
+      try {
+        const response = await fetch("/api/benchmarks/org-peer-summary-batch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ entries }),
+        });
+        if (!response.ok) {
+          const payload = (await response.json().catch(() => null)) as { error?: string } | null;
+          throw new Error(payload?.error || "Failed to load org peer summaries");
+        }
+
+        const payload = (await response.json()) as {
+          summaries?: Record<string, OrgPeerSummary>;
+        };
+        results = shownRows.map((row) => {
+          const key = [
+            role.id,
+            location.id,
+            row.id,
+            stateFormData.industry || resultFormData.industry || "",
+            stateFormData.companySize || resultFormData.companySize || "",
+          ].join("::");
+          return {
             levelId: row.id,
-          });
-          if (stateFormData.industry || resultFormData.industry) {
-            params.set("industry", stateFormData.industry || resultFormData.industry || "");
-          }
-          if (stateFormData.companySize || resultFormData.companySize) {
-            params.set(
-              "companySize",
-              stateFormData.companySize || resultFormData.companySize || "",
-            );
-          }
-
-          try {
-            const response = await fetch(`/api/benchmarks/org-peer-summary?${params.toString()}`);
-            if (!response.ok) {
-              const payload = (await response.json().catch(() => null)) as { error?: string } | null;
-              throw new Error(payload?.error || "Failed to load org peer summary");
-            }
-
-            const payload = (await response.json()) as OrgPeerSummary;
-            return { levelId: row.id, summary: payload, error: null };
-          } catch (error) {
-            return {
-              levelId: row.id,
-              summary: null,
-              error: error instanceof Error ? error.message : "Failed to load org peer summary",
-            };
-          }
-        }),
-      );
+            summary: payload.summaries?.[key] ?? null,
+            error: null,
+          };
+        });
+      } catch (error) {
+        results = shownRows.map((row) => ({
+          levelId: row.id,
+          summary: null,
+          error: error instanceof Error ? error.message : "Failed to load org peer summary",
+        }));
+      }
 
       if (isCancelled) return;
 
@@ -390,6 +431,8 @@ export function BenchmarkResults({ result, hasCompanyData = true }: BenchmarkRes
           Back
         </button>
       </div>
+
+      {isSubmitting ? <BenchmarkAdvisoryLoading variant="refresh" /> : null}
 
       <div className="bench-section space-y-4" data-testid="benchmark-results-editable-filters">
         <div className="space-y-1">

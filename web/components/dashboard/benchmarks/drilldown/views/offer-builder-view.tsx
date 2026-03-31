@@ -15,7 +15,7 @@ import { useSalaryView } from "@/lib/salary-view-store";
 import { LEVELS, type SalaryBenchmark } from "@/lib/dashboard/dummy-data";
 import { useOffersStore } from "@/lib/offers/store";
 import type { OfferExportPayload } from "@/lib/offers/types";
-import { getBenchmark } from "@/lib/benchmarks/data-service";
+import { getBenchmarksBatch, makeBenchmarkLookupKey } from "@/lib/benchmarks/data-service";
 import { normalizeAiBreakdown } from "@/lib/benchmarks/detail-ai";
 import { SharedAiCallout } from "../shared-ai-callout";
 
@@ -176,19 +176,27 @@ export function OfferBuilderView({ result }: OfferBuilderViewProps) {
     }
 
     const run = async () => {
-      const entries = await Promise.all(
-        shownLevels.map(async (lvl) => {
-          const bm = await getBenchmark(role.id, location.id, lvl.id, {
-            industry: result.formData.industry,
-            companySize: result.formData.companySize,
-          });
-          return bm ? { levelId: lvl.id, benchmark: bm } : null;
-        }),
+      const benchmarks = await getBenchmarksBatch(
+        shownLevels.map((lvl) => ({
+          roleId: role.id,
+          locationId: location.id,
+          levelId: lvl.id,
+          industry: result.formData.industry,
+          companySize: result.formData.companySize,
+        })),
       );
       const next: Record<string, SalaryBenchmark> = {};
-      for (const entry of entries) {
-        if (!entry) continue;
-        next[entry.levelId] = entry.benchmark;
+      for (const lvl of shownLevels) {
+        const benchmarkEntry = benchmarks[makeBenchmarkLookupKey({
+          roleId: role.id,
+          locationId: location.id,
+          levelId: lvl.id,
+          industry: result.formData.industry,
+          companySize: result.formData.companySize,
+        })];
+        if (benchmarkEntry) {
+          next[lvl.id] = benchmarkEntry;
+        }
       }
       setLevelBenchmarks(next);
     };

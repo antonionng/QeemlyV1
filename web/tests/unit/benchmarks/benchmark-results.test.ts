@@ -8,12 +8,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const {
   useBenchmarkStateMock,
   getBenchmarkMock,
+  getBenchmarksBatchMock,
   getBenchmarkEnrichedMock,
   useCompanySettingsMock,
   useSalaryViewMock,
 } = vi.hoisted(() => ({
   useBenchmarkStateMock: vi.fn(),
   getBenchmarkMock: vi.fn(),
+  getBenchmarksBatchMock: vi.fn(),
   getBenchmarkEnrichedMock: vi.fn(),
   useCompanySettingsMock: vi.fn(),
   useSalaryViewMock: vi.fn(),
@@ -45,7 +47,21 @@ vi.mock("@/lib/benchmarks/benchmark-state", () => ({
 
 vi.mock("@/lib/benchmarks/data-service", () => ({
   getBenchmark: getBenchmarkMock,
+  getBenchmarksBatch: getBenchmarksBatchMock,
   getBenchmarkEnriched: getBenchmarkEnrichedMock,
+  makeBenchmarkLookupKey: ({
+    roleId,
+    locationId,
+    levelId,
+    industry,
+    companySize,
+  }: {
+    roleId: string;
+    locationId: string;
+    levelId: string;
+    industry?: string | null;
+    companySize?: string | null;
+  }) => [roleId, locationId, levelId, industry ?? "", companySize ?? ""].join("::"),
 }));
 
 vi.mock("@/lib/company", () => ({
@@ -157,6 +173,14 @@ describe("BenchmarkResults", () => {
       ...baseBenchmark,
       levelId,
     }));
+    getBenchmarksBatchMock.mockImplementation(async (entries: Array<{ roleId: string; locationId: string; levelId: string }>) =>
+      Object.fromEntries(
+        entries.map((entry) => [
+          `${entry.roleId}::${entry.locationId}::${entry.levelId}::::`,
+          { ...baseBenchmark, levelId: entry.levelId },
+        ]),
+      ),
+    );
     getBenchmarkEnrichedMock.mockImplementation(async (_roleId: string, _locationId: string, levelId: string) => ({
       benchmark: { ...baseBenchmark, levelId },
       aiAdvisory: null,
@@ -346,24 +370,141 @@ describe("BenchmarkResults", () => {
     vi.unstubAllGlobals();
   });
 
+  it("uses one batched benchmark lookup for the comparison level rows", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          summaries: {
+            "pm::riyadh::ic2::Fintech::1-50": {
+              benchmarkSource: "market",
+              bandLow: 120000,
+              bandHigh: 180000,
+              matchingEmployeeCount: 0,
+              inBandCount: 0,
+            },
+            "pm::riyadh::ic3::Fintech::1-50": {
+              benchmarkSource: "market",
+              bandLow: 120000,
+              bandHigh: 180000,
+              matchingEmployeeCount: 0,
+              inBandCount: 0,
+            },
+            "pm::riyadh::ic4::Fintech::1-50": {
+              benchmarkSource: "market",
+              bandLow: 120000,
+              bandHigh: 180000,
+              matchingEmployeeCount: 0,
+              inBandCount: 0,
+            },
+          },
+        }),
+      })),
+    );
+
+    const container = document.createElement("div");
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        React.createElement(BenchmarkResults, {
+          result: {
+            formData: {
+              context: "existing",
+              roleId: "pm",
+              levelId: "ic3",
+              locationId: "riyadh",
+              employmentType: "national",
+              currentSalaryLow: null,
+              currentSalaryHigh: null,
+              industry: "Fintech",
+              companySize: "1-50",
+              fundingStage: null,
+              targetPercentile: 50,
+            },
+            benchmark: baseBenchmark,
+            role: {
+              id: "pm",
+              title: "Product Manager",
+              family: "Product",
+              icon: "PM",
+            },
+            level: {
+              id: "ic3",
+              name: "Senior (IC3)",
+              category: "IC",
+            },
+            location: {
+              id: "riyadh",
+              city: "Riyadh",
+              country: "Saudi Arabia",
+              countryCode: "SA",
+              currency: "AED",
+              flag: "SA",
+            },
+            isOverridden: false,
+            createdAt: new Date("2026-03-12T00:00:00.000Z"),
+          },
+        }),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(getBenchmarksBatchMock).toHaveBeenCalledTimes(1);
+    const batchEntries = getBenchmarksBatchMock.mock.calls[0]?.[0] as Array<{
+      roleId: string;
+      locationId: string;
+      levelId: string;
+    }>;
+    expect(batchEntries).toHaveLength(9);
+    expect(batchEntries[0]).toMatchObject({
+      roleId: "pm",
+      locationId: "riyadh",
+    });
+
+    root.unmount();
+    vi.unstubAllGlobals();
+  });
+
   it("loads org peer summaries once per visible row without retriggering forever", async () => {
     let fetchCalls = 0;
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => {
         fetchCalls += 1;
-        if (fetchCalls > 4) {
+        if (fetchCalls > 1) {
           throw new Error(`org peer effect looped unexpectedly (${fetchCalls} fetches)`);
         }
 
         return {
           ok: true,
           json: async () => ({
-            benchmarkSource: "market",
-            bandLow: 120000,
-            bandHigh: 180000,
-            matchingEmployeeCount: 0,
-            inBandCount: 0,
+            summaries: {
+              "pm::riyadh::ic2::Fintech::1-50": {
+                benchmarkSource: "market",
+                bandLow: 120000,
+                bandHigh: 180000,
+                matchingEmployeeCount: 0,
+                inBandCount: 0,
+              },
+              "pm::riyadh::ic3::Fintech::1-50": {
+                benchmarkSource: "market",
+                bandLow: 120000,
+                bandHigh: 180000,
+                matchingEmployeeCount: 0,
+                inBandCount: 0,
+              },
+              "pm::riyadh::ic4::Fintech::1-50": {
+                benchmarkSource: "market",
+                bandLow: 120000,
+                bandHigh: 180000,
+                matchingEmployeeCount: 0,
+                inBandCount: 0,
+              },
+            },
           }),
         };
       }),
@@ -419,14 +560,14 @@ describe("BenchmarkResults", () => {
       await Promise.resolve();
     });
 
-    expect(fetchCalls).toBe(4);
+    expect(fetchCalls).toBe(1);
 
     await act(async () => {
       await Promise.resolve();
       await Promise.resolve();
     });
 
-    expect(fetchCalls).toBe(4);
+    expect(fetchCalls).toBe(1);
 
     root.unmount();
     vi.unstubAllGlobals();
@@ -805,6 +946,84 @@ describe("BenchmarkResults", () => {
     expect(container.innerHTML).toContain("2xl:grid-cols-[repeat(4,minmax(0,1fr))_auto_auto]");
     expect(container.innerHTML).toContain("data-testid=\"benchmark-results-boxplot-scroller\"");
     expect(container.innerHTML).toContain("min-w-[720px]");
+
+    root.unmount();
+    vi.unstubAllGlobals();
+  });
+
+  it("shows the advisory loading experience while a search refresh is running", async () => {
+    vi.stubGlobal("fetch", vi.fn());
+    useBenchmarkStateMock.mockReturnValue({
+      clearResult: vi.fn(),
+      goToStep: vi.fn(),
+      saveCurrentFilter: vi.fn(),
+      formData: {
+        roleId: "pm",
+        levelId: "ic3",
+        locationId: "riyadh",
+        employmentType: "national",
+        industry: "Fintech",
+        companySize: "1-50",
+        fundingStage: null,
+        targetPercentile: 50,
+      },
+      updateFormField: vi.fn(),
+      runBenchmark: vi.fn(),
+      isSubmitting: true,
+    });
+
+    const container = document.createElement("div");
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        React.createElement(BenchmarkResults, {
+          result: {
+            formData: {
+              context: "existing",
+              roleId: "pm",
+              levelId: "ic3",
+              locationId: "riyadh",
+              employmentType: "national",
+              currentSalaryLow: null,
+              currentSalaryHigh: null,
+              industry: "Fintech",
+              companySize: "1-50",
+              fundingStage: null,
+              targetPercentile: 50,
+            },
+            benchmark: baseBenchmark,
+            role: {
+              id: "pm",
+              title: "Product Manager",
+              family: "Product",
+              icon: "PM",
+            },
+            level: {
+              id: "ic3",
+              name: "Senior (IC3)",
+              category: "IC",
+            },
+            location: {
+              id: "riyadh",
+              city: "Riyadh",
+              country: "Saudi Arabia",
+              countryCode: "SA",
+              currency: "AED",
+              flag: "SA",
+            },
+            isOverridden: false,
+            createdAt: new Date("2026-03-12T00:00:00.000Z"),
+          },
+        }),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain("Qeemly Advisory AI");
+    expect(container.textContent).toContain("Refreshing the benchmark with your latest filters");
+    expect(container.textContent).toContain("Comparing market cohorts and preparing the advisory");
 
     root.unmount();
     vi.unstubAllGlobals();

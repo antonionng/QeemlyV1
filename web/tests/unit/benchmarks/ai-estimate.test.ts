@@ -2,6 +2,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { invalidateAiBenchmarkCache } from "@/lib/benchmarks/ai-estimate";
 
 const mockCreate = vi.fn();
+const { unstableCacheMock } = vi.hoisted(() => ({
+  unstableCacheMock: vi.fn((fn: (...args: unknown[]) => unknown) => fn),
+}));
 
 vi.mock("@/lib/ai/openai", () => ({
   getOpenAIClient: () => ({
@@ -12,6 +15,10 @@ vi.mock("@/lib/ai/openai", () => ({
     },
   }),
   getBenchmarkModel: () => "gpt-5.4",
+}));
+
+vi.mock("next/cache", () => ({
+  unstable_cache: unstableCacheMock,
 }));
 
 import {
@@ -70,6 +77,37 @@ describe("AI benchmark advisory", () => {
     expect(mockCreate).toHaveBeenCalledTimes(1);
     expect(result!.level.levelId).toBe("ic2");
     expect(result!.level.p50).toBe(250000);
+  });
+
+  it("deduplicates concurrent calls for the same advisory key", async () => {
+    let resolveCall: ((value: { choices: Array<{ message: { content: string } }> }) => void) | null = null;
+    mockCreate.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveCall = resolve;
+        }),
+    );
+
+    const first = getAiBenchmarkForLevel("swe", "abu-dhabi", "ic3", {
+      industry: "Fintech",
+      companySize: "201-500",
+    });
+    const second = getAiBenchmarkForLevel("swe", "abu-dhabi", "ic2", {
+      industry: "Fintech",
+      companySize: "201-500",
+    });
+
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+
+    resolveCall?.({
+      choices: [{ message: { content: JSON.stringify(MOCK_ADVISORY) } }],
+    });
+
+    const [firstResult, secondResult] = await Promise.all([first, second]);
+
+    expect(firstResult?.level.levelId).toBe("ic3");
+    expect(secondResult?.level.levelId).toBe("ic2");
+    expect(mockCreate).toHaveBeenCalledTimes(1);
   });
 
   it("makes separate calls for different filter combinations", async () => {

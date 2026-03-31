@@ -14,7 +14,8 @@ vi.mock("@/components/ui/button", () => ({
 }));
 
 vi.mock("@/components/ui/card", () => ({
-  Card: ({ children }: { children: React.ReactNode }) => React.createElement("div", null, children),
+  Card: ({ children, className }: { children: React.ReactNode; className?: string }) =>
+    React.createElement("div", { className }, children),
 }));
 
 vi.mock("@/components/dashboard/salary-review", () => ({
@@ -180,6 +181,39 @@ describe("SalaryReviewWizard", () => {
     expect(container.textContent).toContain("SalaryReviewFilters:Engineering:scoped");
     expect(container.textContent).toContain("SalaryReviewTable:Engineering:scoped");
     expect(container.textContent).not.toContain("Choose how this salary review should run");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("keeps the AI recommendation rail stacked until very wide layouts", async () => {
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        React.createElement(SalaryReviewWizard, {
+          onBack: vi.fn(),
+          onImport: vi.fn(),
+          onExport: vi.fn(),
+          onReset: vi.fn(),
+          onSubmitSuccess: vi.fn(),
+          resumeRequestedProposal: true,
+        }),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const draftGrid = Array.from(container.querySelectorAll("div")).find(
+      (element) =>
+        element.className.includes("grid") &&
+        element.textContent?.includes("AI Recommendation Panel"),
+    );
+    const mainColumn = draftGrid?.children.item(0) as HTMLDivElement | null;
+
+    expect(draftGrid?.className).toContain("2xl:grid-cols-[minmax(0,1fr)_320px]");
+    expect(mainColumn?.className).toContain("min-w-0");
 
     await act(async () => {
       root.unmount();

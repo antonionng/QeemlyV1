@@ -62,4 +62,15 @@ describe("BenchmarkForm feedback", () => {
 
     expect(html).toContain("No published benchmark matched this role, level, and location yet. Try another selection.");
   });
+
+  it("shows the advisory loading experience while a benchmark search is running", () => {
+    benchmarkStateMock.isSubmitting = true;
+    benchmarkStateMock.submissionError = null;
+
+    const html = renderToStaticMarkup(React.createElement(BenchmarkForm));
+
+    expect(html).toContain("Qeemly Advisory AI");
+    expect(html).toContain("Validating role, level, and market filters");
+    expect(html).toContain("Pulling the strongest market benchmark for your request");
+  });
 });

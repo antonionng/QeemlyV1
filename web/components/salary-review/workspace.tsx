@@ -510,8 +510,8 @@ export function SalaryReviewFilters({
 
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative min-w-[220px] flex-1">
+      <div className="flex flex-wrap items-start gap-3">
+        <div className="relative w-full min-w-0 sm:min-w-[220px] sm:flex-1">
           <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9AA0AE]" />
           <Input
             value={filters.search}
@@ -525,7 +525,7 @@ export function SalaryReviewFilters({
           value={effectiveQuery.department}
           onChange={(event) => updateFilters({ department: event.target.value })}
           disabled={Boolean(scopeDepartment && !showEntireTeam)}
-          className="h-10 min-w-[170px] rounded-full border border-[#E6E8F0] bg-white px-4 text-sm text-[#2E3440] outline-none"
+          className="h-10 w-full rounded-full border border-[#E6E8F0] bg-white px-4 text-sm text-[#2E3440] outline-none sm:min-w-[170px] sm:w-auto"
         >
           <option value="all">All Departments</option>
           {Array.from(new Set(useSalaryReview.getState().employees.map((employee) => employee.department))).map((department) => (
@@ -537,7 +537,7 @@ export function SalaryReviewFilters({
         <select
           value={filters.location}
           onChange={(event) => updateFilters({ location: event.target.value })}
-          className="h-10 min-w-[170px] rounded-full border border-[#E6E8F0] bg-white px-4 text-sm text-[#2E3440] outline-none"
+          className="h-10 w-full rounded-full border border-[#E6E8F0] bg-white px-4 text-sm text-[#2E3440] outline-none sm:min-w-[170px] sm:w-auto"
         >
           <option value="all">All Locations</option>
           {Array.from(new Set(useSalaryReview.getState().employees.map((employee) => employee.location.city))).map((location) => (
@@ -549,18 +549,18 @@ export function SalaryReviewFilters({
         <select
           value={filters.pool}
           onChange={(event) => updateFilters({ pool: event.target.value as typeof filters.pool })}
-          className="h-10 min-w-[160px] rounded-full border border-[#E6E8F0] bg-white px-4 text-sm text-[#2E3440] outline-none"
+          className="h-10 w-full rounded-full border border-[#E6E8F0] bg-white px-4 text-sm text-[#2E3440] outline-none sm:min-w-[160px] sm:w-auto"
         >
           <option value="all">All Pools</option>
           <option value="general">General</option>
           <option value="leadership">Leadership</option>
         </select>
-        <div className="relative">
+        <div className="relative w-full sm:w-auto">
           <Input
             type="date"
             value={settings.effectiveDate}
             onChange={(event) => useSalaryReview.getState().updateSettings({ effectiveDate: event.target.value })}
-            className="h-10 min-w-[180px] rounded-full border-[#E6E8F0] pr-10"
+            className="h-10 w-full rounded-full border-[#E6E8F0] pr-10 sm:min-w-[180px]"
           />
           <Calendar className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9AA0AE]" />
         </div>
@@ -582,7 +582,7 @@ export function SalaryReviewFilters({
           Clear
         </button>
       </div>
-      <div className="flex items-center justify-between px-1">
+      <div className="flex flex-wrap items-center justify-between gap-2 px-1">
         <span className="text-xs text-[#8A90A0]">
           {filteredCount} of {scopeDepartment && !showEntireTeam ? scopedEmployeeCount : employees.length} employees shown
         </span>

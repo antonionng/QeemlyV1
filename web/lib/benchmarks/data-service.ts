@@ -18,6 +18,14 @@ export type BenchmarkLookupFilters = {
   companySize?: string | null;
 };
 
+export type BenchmarkLookupEntry = {
+  roleId: string;
+  locationId: string;
+  levelId: string;
+  industry?: string | null;
+  companySize?: string | null;
+};
+
 function normalizeFilterValue(value: string | null | undefined): string | null {
   const normalized = value?.trim();
   return normalized ? normalized : null;
@@ -288,6 +296,16 @@ export type EnrichedBenchmarkResult = {
   aiDetailBriefing: BenchmarkDetailAiBriefing | null;
 };
 
+export function makeBenchmarkLookupKey(entry: BenchmarkLookupEntry): string {
+  return [
+    entry.roleId,
+    entry.locationId,
+    entry.levelId,
+    entry.industry ?? "",
+    entry.companySize ?? "",
+  ].join("::");
+}
+
 /**
  * Get benchmark for a specific role/location/level combination.
  * Market data is checked first, then workspace bands.
@@ -361,8 +379,62 @@ export async function getBenchmark(
   levelId: string,
   filters: BenchmarkLookupFilters = {},
 ): Promise<SalaryBenchmark | null> {
+  try {
+    const params = new URLSearchParams({ roleId, locationId, levelId });
+    if (filters.industry) params.set("industry", filters.industry);
+    if (filters.companySize) params.set("companySize", filters.companySize);
+    const response = await fetch(`/api/benchmarks/lookup?${params.toString()}`, {
+      cache: "no-store",
+    });
+
+    if (response.ok) {
+      const payload = (await response.json()) as {
+        benchmark: SalaryBenchmark | null;
+      };
+      return payload.benchmark ?? null;
+    }
+  } catch {
+    // Fall back to direct reads if the API is unavailable in the current context.
+  }
+
   const { benchmark } = await getBenchmarkEnriched(roleId, locationId, levelId, filters);
   return benchmark;
+}
+
+export async function getBenchmarksBatch(
+  entries: BenchmarkLookupEntry[],
+): Promise<Record<string, SalaryBenchmark | null>> {
+  if (entries.length === 0) return {};
+
+  try {
+    const response = await fetch("/api/benchmarks/lookup-batch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      cache: "no-store",
+      body: JSON.stringify({ entries }),
+    });
+
+    if (response.ok) {
+      const payload = (await response.json()) as {
+        benchmarks: Record<string, SalaryBenchmark | null>;
+      };
+      return payload.benchmarks ?? {};
+    }
+  } catch {
+    // Fall back to per-entry reads if the batch API is unavailable.
+  }
+
+  const results = await Promise.all(
+    entries.map(async (entry) => [
+      makeBenchmarkLookupKey(entry),
+      await getBenchmark(entry.roleId, entry.locationId, entry.levelId, {
+        industry: entry.industry ?? null,
+        companySize: entry.companySize ?? null,
+      }),
+    ] as const),
+  );
+
+  return Object.fromEntries(results);
 }
 
 /**

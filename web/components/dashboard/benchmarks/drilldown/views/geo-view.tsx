@@ -6,7 +6,7 @@ import { LOCATIONS, type SalaryBenchmark } from "@/lib/dashboard/dummy-data";
 import { useCompanySettings, getCompanyInitials } from "@/lib/company";
 import { convertCurrency, formatBenchmarkCompact, toBenchmarkDisplayValue } from "@/lib/utils/currency";
 import { useSalaryView } from "@/lib/salary-view-store";
-import { getBenchmark } from "@/lib/benchmarks/data-service";
+import { getBenchmarksBatch, makeBenchmarkLookupKey } from "@/lib/benchmarks/data-service";
 import { SharedAiCallout } from "../shared-ai-callout";
 
 interface GeoViewProps {
@@ -60,19 +60,27 @@ export function GeoView({ result }: GeoViewProps) {
     }
 
     const run = async () => {
-      const entries = await Promise.all(
-        ALL_LOCATIONS.map(async (loc) => {
-          const benchmark = await getBenchmark(role.id, loc.id, level.id, {
-            industry: result.formData.industry,
-            companySize: result.formData.companySize,
-          });
-          return benchmark ? { locationId: loc.id, benchmark } : null;
-        }),
+      const benchmarks = await getBenchmarksBatch(
+        ALL_LOCATIONS.map((loc) => ({
+          roleId: role.id,
+          locationId: loc.id,
+          levelId: level.id,
+          industry: result.formData.industry,
+          companySize: result.formData.companySize,
+        })),
       );
       const next: Record<string, SalaryBenchmark> = {};
-      for (const entry of entries) {
-        if (!entry) continue;
-        next[entry.locationId] = entry.benchmark;
+      for (const loc of ALL_LOCATIONS) {
+        const benchmark = benchmarks[makeBenchmarkLookupKey({
+          roleId: role.id,
+          locationId: loc.id,
+          levelId: level.id,
+          industry: result.formData.industry,
+          companySize: result.formData.companySize,
+        })];
+        if (benchmark) {
+          next[loc.id] = benchmark;
+        }
       }
       setBenchmarksByLocation(next);
     };

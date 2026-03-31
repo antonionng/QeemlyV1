@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { type BenchmarkResult } from "@/lib/benchmarks/benchmark-state";
 import { useCompanySettings } from "@/lib/company";
-import { getBenchmark } from "@/lib/benchmarks/data-service";
+import { getBenchmarksBatch, makeBenchmarkLookupKey } from "@/lib/benchmarks/data-service";
 import { INDUSTRIES, type SalaryBenchmark } from "@/lib/dashboard/dummy-data";
 import { formatBenchmarkCompact, toBenchmarkDisplayValue } from "@/lib/utils/currency";
 import { useSalaryView } from "@/lib/salary-view-store";
@@ -48,12 +48,23 @@ export function IndustryView({ result }: IndustryViewProps) {
     }
 
     const run = async () => {
-      const entries = await Promise.all(
-        industriesToLoad.map(async (industry) => {
-          const nextBenchmark = await getBenchmark(role.id, location.id, level.id, {
+      const batchResults = await getBenchmarksBatch(
+        industriesToLoad.map((industry) => ({
+          roleId: role.id,
+          locationId: location.id,
+          levelId: level.id,
+          industry,
+          companySize: result.formData.companySize,
+        })),
+      );
+      const entries = industriesToLoad.map((industry) => {
+          const nextBenchmark = batchResults[makeBenchmarkLookupKey({
+            roleId: role.id,
+            locationId: location.id,
+            levelId: level.id,
             industry,
             companySize: result.formData.companySize,
-          });
+          })];
           if (!nextBenchmark) return null;
           if (
             nextBenchmark.benchmarkSegmentation?.matchedIndustry &&
@@ -67,8 +78,7 @@ export function IndustryView({ result }: IndustryViewProps) {
           }
 
           return null;
-        }),
-      );
+        });
 
       const next: Record<string, SalaryBenchmark> = {};
       let nextFallback: SalaryBenchmark | null = null;

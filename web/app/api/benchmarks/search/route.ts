@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { findMarketBenchmark } from "@/lib/benchmarks/platform-market";
-import { readMarketDataWithFallback } from "@/lib/benchmarks/market-read";
-import { getConfidenceFromSampleSize, type DbBenchmark } from "@/lib/benchmarks/data-service";
 import type { BenchmarkDetailAiBriefing } from "@/lib/benchmarks/detail-ai";
-import { normalizeBenchmarkPercentilesToAnnual } from "@/lib/benchmarks/pay-period";
 import { getAiBenchmarkForLevel, type AiLevelEstimate } from "@/lib/benchmarks/ai-estimate";
 import type { Currency, SalaryBenchmark } from "@/lib/dashboard/dummy-data";
 import { LOCATIONS } from "@/lib/dashboard/dummy-data";
+import {
+  resolveBenchmarkLookup,
+  type BenchmarkLookupClient,
+} from "@/lib/benchmarks/lookup-service";
 import { createClient } from "@/lib/supabase/server";
 
 export type AiAdvisoryPayload = {
@@ -55,17 +55,53 @@ export async function GET(request: NextRequest) {
       readMode: "session" as "service" | "session",
       clientWarning: null as string | null,
       error: null as string | null,
+      durationMs: null as number | null,
     },
     ai: {
       called: false,
       error: null as string | null,
+      durationMs: null as number | null,
+    },
+    request: {
+      totalDurationMs: null as number | null,
     },
   };
 
+  const requestStartedAt = Date.now();
+
   // Run market lookup and AI advisory in parallel
   const [marketResult, aiResult] = await Promise.allSettled([
-    resolveMarketBenchmark(supabase, roleId, locationId, levelId, industry, companySize, diagnostics),
-    resolveAiAdvisory(roleId, locationId, levelId, industry, companySize, diagnostics),
+    (async () => {
+      const startedAt = Date.now();
+      try {
+        return await resolveMarketBenchmark(
+          supabase,
+          roleId,
+          locationId,
+          levelId,
+          industry,
+          companySize,
+          diagnostics,
+        );
+      } finally {
+        diagnostics.market.durationMs = Date.now() - startedAt;
+      }
+    })(),
+    (async () => {
+      const startedAt = Date.now();
+      try {
+        return await resolveAiAdvisory(
+          roleId,
+          locationId,
+          levelId,
+          industry,
+          companySize,
+          diagnostics,
+        );
+      } finally {
+        diagnostics.ai.durationMs = Date.now() - startedAt;
+      }
+    })(),
   ]);
 
   const marketBenchmark = marketResult.status === "fulfilled" ? marketResult.value : null;
@@ -98,6 +134,7 @@ export async function GET(request: NextRequest) {
       }
     : null;
   const aiDetailBriefing: AiDetailBriefing | null = aiAdvisory?.detailBriefing ?? null;
+  diagnostics.request.totalDurationMs = Date.now() - requestStartedAt;
 
   return NextResponse.json({
     benchmark: primaryBenchmark,
@@ -117,48 +154,15 @@ async function resolveMarketBenchmark(
   companySize: string | null,
   diagnostics: { market: { readMode: "service" | "session"; clientWarning: string | null; error: string | null } },
 ): Promise<SalaryBenchmark | null> {
-  try {
-    const marketBenchmark = await readMarketDataWithFallback({
-      sessionClient: supabase,
-      diagnostics: diagnostics.market,
-      read: (marketClient) =>
-        findMarketBenchmark(marketClient, roleId, locationId, levelId, {
-          industry,
-          companySize,
-        }),
-    });
-    if (marketBenchmark) {
-      return transformMarketBenchmark(marketBenchmark, { industry, companySize });
-    }
-  } catch (error) {
-    diagnostics.market.error = getErrorMessage(error);
-  }
-
-  // Workspace bands fallback
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return null;
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("workspace_id")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile?.workspace_id) return null;
-
-  const { data: benchmarks, error: benchmarkError } = await supabase
-    .from("salary_benchmarks")
-    .select("*")
-    .eq("workspace_id", profile.workspace_id)
-    .eq("role_id", roleId)
-    .eq("location_id", locationId)
-    .eq("level_id", levelId)
-    .order("created_at", { ascending: false })
-    .limit(1);
-
-  if (benchmarkError || !benchmarks?.[0]) return null;
-
-  return transformDbBenchmark(benchmarks[0] as DbBenchmark);
+  return resolveBenchmarkLookup(
+    supabase as unknown as BenchmarkLookupClient,
+    roleId,
+    locationId,
+    levelId,
+    industry,
+    companySize,
+    diagnostics,
+  );
 }
 
 async function resolveAiAdvisory(
@@ -225,104 +229,6 @@ function buildAiBenchmark(
     yoyChange: 0,
     trend: [],
     benchmarkSource: "ai-estimated",
-  };
-}
-
-function normalizeFilterValue(value: string | null | undefined): string | null {
-  const normalized = value?.trim();
-  return normalized ? normalized : null;
-}
-
-function transformMarketBenchmark(marketBenchmark: {
-  role_id: string;
-  location_id: string;
-  level_id: string;
-  currency: string;
-  pay_period?: "monthly" | "annual" | null;
-  industry?: string | null;
-  company_size?: string | null;
-  p10: number;
-  p25: number;
-  p50: number;
-  p75: number;
-  p90: number;
-  sample_size: number | null;
-}, filters: { industry?: string | null; companySize?: string | null } = {}): SalaryBenchmark {
-  const location = LOCATIONS.find((entry) => entry.id === marketBenchmark.location_id);
-  const currency = (location?.currency || marketBenchmark.currency || "AED") as Currency;
-  const requestedIndustry = normalizeFilterValue(filters.industry);
-  const requestedCompanySize = normalizeFilterValue(filters.companySize);
-  const matchedIndustry = normalizeFilterValue(marketBenchmark.industry);
-  const matchedCompanySize = normalizeFilterValue(marketBenchmark.company_size);
-  const sampleSize = marketBenchmark.sample_size || 0;
-  const normalized = normalizeBenchmarkPercentilesToAnnual(
-    {
-      p10: marketBenchmark.p10,
-      p25: marketBenchmark.p25,
-      p50: marketBenchmark.p50,
-      p75: marketBenchmark.p75,
-      p90: marketBenchmark.p90,
-    },
-    marketBenchmark.pay_period,
-  );
-
-  return {
-    roleId: marketBenchmark.role_id,
-    locationId: marketBenchmark.location_id,
-    levelId: marketBenchmark.level_id,
-    currency,
-    payPeriod: normalized.payPeriod,
-    sourcePayPeriod: normalized.sourcePayPeriod,
-    percentiles: normalized.percentiles,
-    sampleSize,
-    confidence: getConfidenceFromSampleSize(sampleSize),
-    lastUpdated: new Date().toISOString(),
-    momChange: 0,
-    yoyChange: 0,
-    trend: [],
-    benchmarkSource: "market",
-    benchmarkSegmentation: {
-      requestedIndustry,
-      requestedCompanySize,
-      matchedIndustry,
-      matchedCompanySize,
-      isSegmented: Boolean(matchedIndustry || matchedCompanySize),
-      isFallback:
-        (!!requestedIndustry && requestedIndustry !== matchedIndustry) ||
-        (!!requestedCompanySize && requestedCompanySize !== matchedCompanySize),
-    },
-  };
-}
-
-function transformDbBenchmark(dbBenchmark: DbBenchmark): SalaryBenchmark {
-  const location = LOCATIONS.find((entry) => entry.id === dbBenchmark.location_id);
-  const currency = (location?.currency || dbBenchmark.currency || "AED") as Currency;
-  const normalized = normalizeBenchmarkPercentilesToAnnual(
-    {
-      p10: Number(dbBenchmark.p10),
-      p25: Number(dbBenchmark.p25),
-      p50: Number(dbBenchmark.p50),
-      p75: Number(dbBenchmark.p75),
-      p90: Number(dbBenchmark.p90),
-    },
-    dbBenchmark.pay_period,
-  );
-
-  return {
-    roleId: dbBenchmark.role_id,
-    locationId: dbBenchmark.location_id,
-    levelId: dbBenchmark.level_id,
-    currency,
-    payPeriod: normalized.payPeriod,
-    sourcePayPeriod: normalized.sourcePayPeriod,
-    percentiles: normalized.percentiles,
-    sampleSize: dbBenchmark.sample_size || 0,
-    confidence: (dbBenchmark.confidence || "medium") as "High" | "Medium" | "Low",
-    lastUpdated: dbBenchmark.created_at,
-    momChange: 0,
-    yoyChange: 0,
-    trend: [],
-    benchmarkSource: "uploaded",
   };
 }
 

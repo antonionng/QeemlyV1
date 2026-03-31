@@ -8,6 +8,7 @@
  */
 
 import { getOpenAIClient, getBenchmarkModel } from "@/lib/ai/openai";
+import { unstable_cache } from "next/cache";
 import type { BenchmarkDetailAiBriefing } from "@/lib/benchmarks/detail-ai";
 import { LEVELS, LOCATIONS, ROLES } from "@/lib/dashboard/dummy-data";
 
@@ -44,8 +45,21 @@ export type AiBenchmarkAdvisory = {
 type CacheEntry = { data: AiBenchmarkAdvisory; createdAt: number };
 
 const cache = new Map<string, CacheEntry>();
+const inFlight = new Map<string, Promise<AiBenchmarkAdvisory | null>>();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const SHARED_CACHE_TTL_SECONDS = 5 * 60;
 const AI_ADVISORY_SCHEMA_VERSION = "detail-numbers-v2";
+
+const getSharedAiBenchmarkAdvisory = unstable_cache(
+  async (
+    roleId: string,
+    locationId: string,
+    industry: string | null,
+    companySize: string | null,
+  ) => callGpt(roleId, locationId, industry, companySize),
+  [AI_ADVISORY_SCHEMA_VERSION, "shared"],
+  { revalidate: SHARED_CACHE_TTL_SECONDS },
+);
 
 function cacheKey(
   roleId: string,
@@ -58,6 +72,7 @@ function cacheKey(
 
 export function invalidateAiBenchmarkCache(): void {
   cache.clear();
+  inFlight.clear();
 }
 
 // ---------------------------------------------------------------------------
@@ -104,14 +119,31 @@ export async function getAiBenchmarkAdvisory(
     return cached.data;
   }
 
-  try {
-    const advisory = await callGpt(roleId, locationId, industry, companySize);
-    cache.set(key, { data: advisory, createdAt: Date.now() });
-    return advisory;
-  } catch (error) {
-    console.error("[ai-estimate] GPT benchmark call failed:", error);
-    return null;
+  const inFlightRequest = inFlight.get(key);
+  if (inFlightRequest) {
+    return inFlightRequest;
   }
+
+  const request = (async () => {
+    try {
+      const advisory = await getSharedAiBenchmarkAdvisory(
+        roleId,
+        locationId,
+        industry,
+        companySize,
+      );
+      cache.set(key, { data: advisory, createdAt: Date.now() });
+      return advisory;
+    } catch (error) {
+      console.error("[ai-estimate] GPT benchmark call failed:", error);
+      return null;
+    } finally {
+      inFlight.delete(key);
+    }
+  })();
+
+  inFlight.set(key, request);
+  return request;
 }
 
 // ---------------------------------------------------------------------------

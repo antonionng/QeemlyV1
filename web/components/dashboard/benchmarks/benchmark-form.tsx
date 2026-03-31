@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { Search, ChevronDown, ArrowRight, Loader2 } from "lucide-react";
+import { BenchmarkAdvisoryLoading } from "@/components/dashboard/benchmarks/benchmark-advisory-loading";
 import { RolePickerModal } from "@/components/dashboard/benchmarks/role-picker-modal";
 import {
   useBenchmarkState,
@@ -190,6 +191,8 @@ export function BenchmarkForm() {
           </div>
         </div>
       </div>
+
+      {isSubmitting ? <BenchmarkAdvisoryLoading variant="search" /> : null}
 
       {/* ── CTA ── */}
       <button type="submit" disabled={!isFormComplete || isSubmitting} className="bench-cta">
