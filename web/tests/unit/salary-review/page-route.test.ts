@@ -9,11 +9,13 @@ const {
   pushMock,
   searchParamsMock,
   salaryReviewOverviewPropsMock,
+  reviewCycleListPropsMock,
 } = vi.hoisted(() => ({
   replaceMock: vi.fn(),
   pushMock: vi.fn(),
   searchParamsMock: { value: "tab=review&filter=outside-band" },
   salaryReviewOverviewPropsMock: vi.fn(),
+  reviewCycleListPropsMock: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -70,6 +72,20 @@ vi.mock("@/components/salary-review", () => ({
       "div",
       null,
       `SalaryReviewOverview:${props.actionLabel}:${props.initialQueryState.bandFilter}`,
+    );
+  },
+  ReviewCycleListCard: (props: {
+    cycles: Array<{ id: string }>;
+    onSelectCycle: (proposalId: string) => void;
+  }) => {
+    reviewCycleListPropsMock(props);
+    return React.createElement(
+      "button",
+      {
+        type: "button",
+        onClick: () => props.onSelectCycle(props.cycles[0]?.id ?? "proposal-1"),
+      },
+      "Open Draft Cycle",
     );
   },
 }));
@@ -198,7 +214,36 @@ vi.mock("@/lib/salary-review", async () => {
       resetReview: vi.fn(),
       loadEmployeesFromDb: vi.fn().mockResolvedValue(undefined),
       loadCycles: vi.fn().mockResolvedValue(undefined),
-      cycles: [],
+      cycles: [
+        {
+          id: "proposal-1",
+          workspace_id: "workspace-1",
+          created_by: "user-1",
+          source: "manual",
+          review_mode: "company_wide",
+          review_scope: "company_wide",
+          parent_cycle_id: null,
+          department: null,
+          allocation_method: null,
+          allocation_status: null,
+          cycle: "annual",
+          budget_type: "percentage",
+          budget_percentage: 5,
+          budget_absolute: 0,
+          effective_date: "2026-04-01",
+          status: "draft",
+          summary: {
+            selectedEmployees: 1,
+            proposedEmployees: 0,
+            totalCurrentPayroll: 120000,
+            totalIncrease: 0,
+            totalProposedPayroll: 120000,
+            maxIncreasePercentage: 0,
+          },
+          created_at: "2026-03-12T00:00:00.000Z",
+          updated_at: "2026-03-12T00:00:00.000Z",
+        },
+      ],
       activeProposal: null,
       departmentAllocations: [],
       childCycles: [],
@@ -237,6 +282,7 @@ describe("SalaryReviewPage", () => {
     replaceMock.mockReset();
     pushMock.mockReset();
     salaryReviewOverviewPropsMock.mockReset();
+    reviewCycleListPropsMock.mockReset();
   });
 
   afterEach(() => {
@@ -275,6 +321,31 @@ describe("SalaryReviewPage", () => {
     });
 
     expect(replaceMock).toHaveBeenCalledWith("/dashboard/salary-review/new");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("opens a selected draft cycle in the wizard route", async () => {
+    searchParamsMock.value = "tab=drafts";
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(React.createElement(SalaryReviewPage));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const button = container.querySelector("button");
+    expect(button?.textContent).toBe("Open Draft Cycle");
+
+    await act(async () => {
+      button?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(pushMock).toHaveBeenCalledWith("/dashboard/salary-review/new?proposalId=proposal-1");
 
     await act(async () => {
       root.unmount();

@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { type BenchmarkResult } from "@/lib/benchmarks/benchmark-state";
 import { LOCATIONS, type SalaryBenchmark } from "@/lib/dashboard/dummy-data";
 import { useCompanySettings, getCompanyInitials } from "@/lib/company";
 import { convertCurrency, formatBenchmarkCompact, toBenchmarkDisplayValue } from "@/lib/utils/currency";
 import { useSalaryView } from "@/lib/salary-view-store";
 import { getBenchmark } from "@/lib/benchmarks/data-service";
+import { SharedAiCallout } from "../shared-ai-callout";
 
 interface GeoViewProps {
   result: BenchmarkResult;
@@ -19,12 +20,45 @@ export function GeoView({ result }: GeoViewProps) {
   const companySettings = useCompanySettings();
   const { salaryView } = useSalaryView();
   const [benchmarksByLocation, setBenchmarksByLocation] = useState<Record<string, SalaryBenchmark>>({});
+  const aiComparisonPoints = result.aiDetailBriefing?.views.geoComparison.comparisonPoints ?? null;
   
   // Company branding
   const hasCompanyLogo = !!companySettings.companyLogo;
   const companyInitials = getCompanyInitials(companySettings.companyName);
+
+  const aiLocationData = useMemo(
+    () =>
+      aiComparisonPoints?.map((point) => {
+        const matchedLocation = ALL_LOCATIONS.find((entry) => entry.id === point.id);
+        if (!matchedLocation) return null;
+
+        return {
+          location: matchedLocation,
+          median: point.median,
+          relativeMedianAed: point.relativeValue ?? point.median,
+          currency: point.currency || matchedLocation.currency,
+          yoyChange: point.yoyChange ?? 0,
+          sampleSize: point.sampleSize ?? 0,
+          isSelected: matchedLocation.id === location.id,
+        };
+      }).filter(Boolean) as Array<{
+        location: (typeof ALL_LOCATIONS)[number];
+        median: number;
+        relativeMedianAed: number;
+        currency: string;
+        yoyChange: number;
+        sampleSize: number;
+        isSelected: boolean;
+      }> ?? [],
+    [aiComparisonPoints, location.id],
+  );
   
   useEffect(() => {
+    if (aiLocationData.length > 0) {
+      setBenchmarksByLocation({});
+      return;
+    }
+
     const run = async () => {
       const entries = await Promise.all(
         ALL_LOCATIONS.map(async (loc) => {
@@ -43,15 +77,17 @@ export function GeoView({ result }: GeoViewProps) {
       setBenchmarksByLocation(next);
     };
     void run();
-  }, [level.id, result.formData.companySize, result.formData.industry, role.id]);
+  }, [aiLocationData.length, level.id, result.formData.companySize, result.formData.industry, role.id]);
 
   // Build comparison data for locations where real rows exist
-  const locationData = ALL_LOCATIONS.map((loc) => {
+  const locationData = aiLocationData.length > 0
+    ? [...aiLocationData].sort((a, b) => b.relativeMedianAed - a.relativeMedianAed)
+    : ALL_LOCATIONS.map((loc) => {
     const bench = benchmarksByLocation[loc.id];
     if (!bench) return null;
     const sourceCurrency = bench.currency;
     const targetCurrency = loc.currency;
-    let sourceMedian = bench.percentiles.p50;
+    const sourceMedian = bench.percentiles.p50;
     
     const median = toBenchmarkDisplayValue(sourceMedian, {
       salaryView,
@@ -170,6 +206,8 @@ export function GeoView({ result }: GeoViewProps) {
       <p className="mt-4 text-xs text-brand-500">
         Location premiums reflect cost of living and local talent competition.
       </p>
+
+      <SharedAiCallout section={result.aiDetailBriefing?.views.geoComparison} />
     </div>
   );
 }

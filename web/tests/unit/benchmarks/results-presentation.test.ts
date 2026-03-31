@@ -18,7 +18,7 @@ describe("benchmark results presentation", () => {
   it("uses the simpler March 6 confidence labels", () => {
     expect(getBenchmarkConfidenceLabel("High")).toBe("Very High Confidence");
     expect(getBenchmarkConfidenceLabel("Medium")).toBe("Medium Confidence");
-    expect(getBenchmarkConfidenceLabel("Low")).toBe("AI Estimated");
+    expect(getBenchmarkConfidenceLabel("Low")).toBe("Low Confidence");
   });
 
   it("restores the March 6 summary insight copy", () => {

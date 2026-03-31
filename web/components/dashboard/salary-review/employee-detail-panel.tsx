@@ -129,6 +129,7 @@ export function EmployeeDetailPanel({ employee, onClose }: EmployeeDetailPanelPr
     updateEmployeeWorkflow,
     applySuggestedIncrease,
     activeProposal,
+    proposalItemsByEmployee,
     approvalSteps,
     proposalNotes,
   } = useSalaryReview();
@@ -143,6 +144,8 @@ export function EmployeeDetailPanel({ employee, onClose }: EmployeeDetailPanelPr
   const [liveHistory, setLiveHistory] = useState<PanelHistoryEntry[] | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
+  const [liveAiRationale, setLiveAiRationale] = useState<string | null>(null);
+  const [loadingAiRationale, setLoadingAiRationale] = useState(false);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -263,6 +266,8 @@ export function EmployeeDetailPanel({ employee, onClose }: EmployeeDetailPanelPr
     employee.proposedIncrease > 0 ? employee.proposedIncrease : suggestedIncrease;
   const proposedOrSuggestedSalary =
     employee.proposedIncrease > 0 ? employee.newSalary : employee.baseSalary + suggestedIncrease;
+  const savedAiRationale = proposalItemsByEmployee[employee.id]?.reason_summary?.trim() || null;
+  const effectiveAiRationale = savedAiRationale ?? liveAiRationale;
   const historySourceLabel =
     loadingHistory ? "Loading live history" : historyError ? "Generated timeline" : "Live timeline";
   const employeeNotes = proposalNotes.filter(
@@ -273,6 +278,94 @@ export function EmployeeDetailPanel({ employee, onClose }: EmployeeDetailPanelPr
   const RiskIcon = riskCfg.icon;
   const toggleSection = (key: SectionKey) =>
     setSections((prev) => ({ ...prev, [key]: !prev[key] }));
+
+  useEffect(() => {
+    if (savedAiRationale) {
+      setLiveAiRationale(null);
+      setLoadingAiRationale(false);
+      return;
+    }
+
+    let isMounted = true;
+    setLoadingAiRationale(true);
+    setLiveAiRationale(null);
+
+    const run = async () => {
+      try {
+        const response = await fetch("/api/salary-review/employee-advisory", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            employee: {
+              id: employee.id,
+              firstName: employee.firstName,
+              lastName: employee.lastName,
+              roleName: employee.role.title,
+              levelName: employee.level.name,
+              locationName: `${employee.location.city}, ${employee.location.country}`,
+              department: employee.department,
+              baseSalary: employee.baseSalary,
+              bandPosition: employee.bandPosition,
+              bandPercentile: employee.bandPercentile,
+              marketComparison: employee.marketComparison,
+              performanceRating: employee.performanceRating ?? null,
+              tenureLabel: tenure.label,
+              proposedIncrease: proposedOrSuggestedIncrease,
+              benchmark: {
+                source: benchmarkTrust?.sourceLabel ?? null,
+                matchQuality: benchmarkTrust?.matchLabel ?? null,
+                confidence: benchmarkTrust?.confidenceLabel ?? null,
+              },
+            },
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error("Failed to load employee AI advisory");
+        }
+
+        const payload = (await response.json()) as { summary?: string | null };
+        if (isMounted) {
+          setLiveAiRationale(payload.summary?.trim() || null);
+        }
+      } catch {
+        if (isMounted) {
+          setLiveAiRationale(null);
+        }
+      } finally {
+        if (isMounted) {
+          setLoadingAiRationale(false);
+        }
+      }
+    };
+
+    void run();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [
+    benchmarkTrust?.confidenceLabel,
+    benchmarkTrust?.matchLabel,
+    benchmarkTrust?.sourceLabel,
+    employee.bandPercentile,
+    employee.bandPosition,
+    employee.baseSalary,
+    employee.department,
+    employee.firstName,
+    employee.id,
+    employee.lastName,
+    employee.level.name,
+    employee.location.city,
+    employee.location.country,
+    employee.marketComparison,
+    employee.performanceRating,
+    employee.role.title,
+    proposedOrSuggestedIncrease,
+    savedAiRationale,
+    tenure.label,
+  ]);
+
   const askEmployeeQuestion = () => {
     const prompt = question.trim();
     if (!prompt) return;
@@ -679,7 +772,13 @@ export function EmployeeDetailPanel({ employee, onClose }: EmployeeDetailPanelPr
                   Qeemly Advisory
                 </h3>
                 <p className="mt-1 text-xs text-accent-500 text-left">
-                  Confidence {advisory.confidence_score}/100
+                  {savedAiRationale
+                    ? "Current proposal narrative"
+                    : effectiveAiRationale
+                      ? "Live AI advisory"
+                      : loadingAiRationale
+                        ? "Loading AI advisory"
+                        : `Confidence ${advisory.confidence_score}/100`}
                 </p>
               </div>
               <ChevronDown
@@ -691,27 +790,41 @@ export function EmployeeDetailPanel({ employee, onClose }: EmployeeDetailPanelPr
             {sections.advisory && (
               <div className="space-y-3 border-t border-border/40 px-4 py-4">
                 <div className="rounded-lg bg-brand-50 px-3 py-2">
-                  <p className="text-sm text-brand-900">{advisory.recommendation_summary}</p>
+                  <p className="text-sm leading-relaxed text-brand-900">
+                    {effectiveAiRationale ?? advisory.recommendation_summary}
+                  </p>
                 </div>
-                <div className="h-2 rounded-full bg-accent-100">
-                  <div
-                    className={`h-full rounded-full ${
-                      advisory.confidence_score >= 80
-                        ? "bg-emerald-500"
-                        : advisory.confidence_score >= 60
-                          ? "bg-amber-500"
-                          : "bg-red-500"
-                    }`}
-                    style={{ width: `${advisory.confidence_score}%` }}
-                  />
-                </div>
-                <div className="space-y-1">
-                  {advisory.rationale.slice(0, 2).map((item, idx) => (
-                    <p key={idx} className="text-xs text-accent-600">
-                      • {item.point}
-                    </p>
-                  ))}
-                </div>
+                {savedAiRationale ? (
+                  <p className="text-xs text-accent-500">
+                    Saved from the current AI-generated salary review draft.
+                  </p>
+                ) : effectiveAiRationale ? (
+                  <p className="text-xs text-accent-500">
+                    Generated on demand with cached AI advisory for this employee.
+                  </p>
+                ) : (
+                  <>
+                    <div className="h-2 rounded-full bg-accent-100">
+                      <div
+                        className={`h-full rounded-full ${
+                          advisory.confidence_score >= 80
+                            ? "bg-emerald-500"
+                            : advisory.confidence_score >= 60
+                              ? "bg-amber-500"
+                              : "bg-red-500"
+                        }`}
+                        style={{ width: `${advisory.confidence_score}%` }}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      {advisory.rationale.slice(0, 2).map((item, idx) => (
+                        <p key={idx} className="text-xs text-accent-600">
+                          • {item.point}
+                        </p>
+                      ))}
+                    </div>
+                  </>
+                )}
               </div>
             )}
           </section>

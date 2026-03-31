@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AdminPageError } from "@/components/admin/admin-page-error";
 import { fetchAdminJson, normalizeAdminApiError, type NormalizedAdminApiError } from "@/lib/admin/api-client";
 import {
@@ -57,7 +58,13 @@ function isRunnableSource(source: Source): boolean {
   return source.enabled && source.approved_for_commercial && !source.needs_review;
 }
 
-export default function AdminRunsPage() {
+export function AdminRunsPageContent({
+  embedded = false,
+  showRecentRuns = true,
+}: {
+  embedded?: boolean;
+  showRecentRuns?: boolean;
+}) {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [sources, setSources] = useState<Source[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
@@ -169,12 +176,21 @@ export default function AdminRunsPage() {
       ) : null}
 
       <div className="mb-6 flex items-center justify-between gap-4">
-        <div>
-          <h1 className="page-title">Runs</h1>
-          <p className="page-subtitle">
-            Trigger source ingestion and inspect recent run outcomes inside the market data workbench.
-          </p>
-        </div>
+        {!embedded ? (
+          <div>
+            <h1 className="page-title">Runs</h1>
+            <p className="page-subtitle">
+              Trigger source ingestion and inspect recent run outcomes inside the market data workbench.
+            </p>
+          </div>
+        ) : (
+          <div>
+            <h2 className="section-header">Automation Controls</h2>
+            <p className="mt-1 text-sm text-text-secondary">
+              Trigger approved sources and monitor automation health from this tab.
+            </p>
+          </div>
+        )}
         <button
           onClick={() => loadData()}
           disabled={loading}
@@ -272,86 +288,101 @@ export default function AdminRunsPage() {
         </div>
       </div>
 
-      <div className="panel overflow-hidden">
-        <div className="flex items-center justify-between border-b border-border px-5 py-4">
-          <h2 className="section-header">Recent Runs</h2>
-          <span className="text-xs text-text-secondary">Last 50 ingestion jobs</span>
-        </div>
-        {loading && jobs.length === 0 ? (
-          <div className="p-8 text-center">
-            <RefreshCw className="mx-auto h-6 w-6 animate-spin text-brand-500" />
+      {showRecentRuns ? (
+        <div className="panel overflow-hidden">
+          <div className="flex items-center justify-between border-b border-border px-5 py-4">
+            <h2 className="section-header">Recent Runs</h2>
+            <span className="text-xs text-text-secondary">Last 50 ingestion jobs</span>
           </div>
-        ) : jobs.length === 0 ? (
-          <div className="p-12 text-center">
-            <Clock3 className="mx-auto mb-3 h-10 w-10 text-brand-200" />
-            <p className="text-text-secondary">No runs yet</p>
-            <p className="mt-1 text-xs text-text-tertiary">Trigger a source to create the first run.</p>
-          </div>
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border bg-surface-2">
-                <th className="table-head px-5 py-3 text-left">Started</th>
-                <th className="table-head px-5 py-3 text-left">Completed</th>
-                <th className="table-head px-5 py-3 text-left">Source</th>
-                <th className="table-head px-5 py-3 text-left">Status</th>
-                <th className="table-head px-5 py-3 text-left">Records</th>
-                <th className="table-head px-5 py-3 text-left">Error</th>
-              </tr>
-            </thead>
-            <tbody>
-              {jobs.map((job) => {
-                const source = sourceMap.get(job.source_id);
-                return (
-                  <tr key={job.id} className="border-b border-border/50 hover:bg-surface-2">
-                    <td className="px-5 py-3 text-text-secondary">{getRelativeTime(job.created_at)}</td>
-                    <td className="px-5 py-3 text-text-secondary">
-                      {job.completed_at ? getRelativeTime(job.completed_at) : "Running"}
-                    </td>
-                    <td className="px-5 py-3">
-                      <p className="font-medium text-text-primary">{source?.name ?? "Unknown"}</p>
-                      <p className="font-mono text-xs text-text-tertiary">{source?.slug ?? job.source_id}</p>
-                    </td>
-                    <td className="px-5 py-3">
-                      <span
-                        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
-                          job.status === "success"
-                            ? "bg-emerald-50 text-emerald-700"
-                            : job.status === "failed"
-                              ? "bg-rose-50 text-rose-700"
-                              : job.status === "partial"
-                                ? "bg-amber-50 text-amber-700"
-                                : "bg-blue-50 text-blue-700"
-                        }`}
+          {loading && jobs.length === 0 ? (
+            <div className="p-8 text-center">
+              <RefreshCw className="mx-auto h-6 w-6 animate-spin text-brand-500" />
+            </div>
+          ) : jobs.length === 0 ? (
+            <div className="p-12 text-center">
+              <Clock3 className="mx-auto mb-3 h-10 w-10 text-brand-200" />
+              <p className="text-text-secondary">No runs yet</p>
+              <p className="mt-1 text-xs text-text-tertiary">Trigger a source to create the first run.</p>
+            </div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-border bg-surface-2">
+                  <th className="table-head px-5 py-3 text-left">Started</th>
+                  <th className="table-head px-5 py-3 text-left">Completed</th>
+                  <th className="table-head px-5 py-3 text-left">Source</th>
+                  <th className="table-head px-5 py-3 text-left">Status</th>
+                  <th className="table-head px-5 py-3 text-left">Records</th>
+                  <th className="table-head px-5 py-3 text-left">Error</th>
+                </tr>
+              </thead>
+              <tbody>
+                {jobs.map((job) => {
+                  const source = sourceMap.get(job.source_id);
+                  return (
+                    <tr key={job.id} className="border-b border-border/50 hover:bg-surface-2">
+                      <td className="px-5 py-3 text-text-secondary">{getRelativeTime(job.created_at)}</td>
+                      <td className="px-5 py-3 text-text-secondary">
+                        {job.completed_at ? getRelativeTime(job.completed_at) : "Running"}
+                      </td>
+                      <td className="px-5 py-3">
+                        <p className="font-medium text-text-primary">{source?.name ?? "Unknown"}</p>
+                        <p className="font-mono text-xs text-text-tertiary">{source?.slug ?? job.source_id}</p>
+                      </td>
+                      <td className="px-5 py-3">
+                        <span
+                          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${
+                            job.status === "success"
+                              ? "bg-emerald-50 text-emerald-700"
+                              : job.status === "failed"
+                                ? "bg-rose-50 text-rose-700"
+                                : job.status === "partial"
+                                  ? "bg-amber-50 text-amber-700"
+                                  : "bg-blue-50 text-blue-700"
+                          }`}
+                        >
+                          {job.status === "success" ? (
+                            <CheckCircle className="h-3 w-3" />
+                          ) : job.status === "failed" ? (
+                            <XCircle className="h-3 w-3" />
+                          ) : job.status === "partial" ? (
+                            <AlertTriangle className="h-3 w-3" />
+                          ) : (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          )}
+                          {job.status}
+                        </span>
+                      </td>
+                      <td className="px-5 py-3 text-text-secondary">
+                        <span className="text-emerald-600">{job.records_created}</span>
+                        {job.records_failed > 0 ? (
+                          <span className="ml-2 text-rose-600">-{job.records_failed}</span>
+                        ) : null}
+                      </td>
+                      <td
+                        className="max-w-xs truncate px-5 py-3 text-xs text-text-tertiary"
+                        title={job.error_message ?? ""}
                       >
-                        {job.status === "success" ? (
-                          <CheckCircle className="h-3 w-3" />
-                        ) : job.status === "failed" ? (
-                          <XCircle className="h-3 w-3" />
-                        ) : job.status === "partial" ? (
-                          <AlertTriangle className="h-3 w-3" />
-                        ) : (
-                          <Loader2 className="h-3 w-3 animate-spin" />
-                        )}
-                        {job.status}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3 text-text-secondary">
-                      <span className="text-emerald-600">{job.records_created}</span>
-                      {job.records_failed > 0 ? (
-                        <span className="ml-2 text-rose-600">-{job.records_failed}</span>
-                      ) : null}
-                    </td>
-                    <td className="max-w-xs truncate px-5 py-3 text-xs text-text-tertiary" title={job.error_message ?? ""}>
-                      {job.error_message ?? "None"}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
+                        {job.error_message ?? "None"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      ) : null}
     </div>
   );
+}
+
+export default function AdminRunsPage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    router.replace("/admin/intake");
+  }, [router]);
+
+  return null;
 }

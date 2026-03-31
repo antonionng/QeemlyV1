@@ -40,6 +40,11 @@ vi.mock("@/components/ui/ai-explain-tooltip", () => ({
     React.createElement("span", { "data-testid": "ai-tooltip" }, label),
 }));
 
+vi.mock("@/components/auth/authenticated-user-menu", () => ({
+  AuthenticatedUserMenu: ({ variant }: { variant: "compact" | "marketing" }) =>
+    React.createElement("div", { "data-testid": `authenticated-user-menu-${variant}` }, variant),
+}));
+
 import MarketingLayout from "@/app/(marketing)/layout";
 import AdminDashboardLayout from "@/app/admin/(dashboard)/layout";
 import { WidgetWrapper } from "@/components/dashboard/widget-wrapper";
@@ -79,6 +84,8 @@ describe("responsive shells", () => {
     expect(html).toContain("lg:w-60");
     expect(html).toContain("min-w-0 flex-1");
     expect(html).toContain("responsive-page-gutters");
+    expect(html).toContain('data-testid="authenticated-user-menu-compact"');
+    expect(html).toContain('data-testid="authenticated-user-menu-marketing"');
   });
 
   it("wraps widget chrome before it can overlap the title", () => {

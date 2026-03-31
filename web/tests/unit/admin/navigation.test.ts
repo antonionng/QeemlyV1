@@ -22,17 +22,7 @@ describe("admin navigation", () => {
       },
       {
         heading: "Market Data Workbench",
-        labels: [
-          "Workbench Home",
-          "Sources",
-          "Runs",
-          "Inbox",
-          "Snapshots",
-          "Review & Normalize",
-          "Freshness & Quality",
-          "Benchmarks",
-          "Publish",
-        ],
+        labels: ["Data Intake", "Market Overview"],
       },
     ]);
   });
@@ -40,7 +30,7 @@ describe("admin navigation", () => {
   it("demotes legacy top-level routes that no longer belong in the primary nav", () => {
     expect(LEGACY_ADMIN_ROUTE_REDIRECTS).toEqual({
       "/admin/insights": "/admin",
-      "/admin/pipeline": "/admin/workbench",
+      "/admin/pipeline": "/admin/market",
     });
 
     const labels = ADMIN_NAV_GROUPS.flatMap((group) => group.items.map((item) => item.label));

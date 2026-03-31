@@ -58,6 +58,20 @@ const ROBERT_WALTERS_NOISE_PATTERNS = [
   /\bsearch show \d+ entries\b/i,
 ] as const;
 
+const DOCUMENT_FUNCTION_PATTERN = new RegExp(
+  `(${ROBERT_WALTERS_FUNCTIONS.map((value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})\\s+in\\s+middle\\s+east`,
+  "i",
+);
+
+const ROLE_TAIL_PATTERNS = [
+  /\bMid-\s*Management\b/i,
+  /\bPart-\s*qualified\/Newly-\s*qualified\b/i,
+  /\bManagement\b/i,
+] as const;
+
+const RANGE_START_PATTERN = /^[A-Z]{3}\s*[\d,.]+(?:[kKmM])?$/;
+const RANGE_END_PATTERN = /^-\s*[\d,.]+(?:[kKmM])?$/;
+
 function isNoiseLine(line: string) {
   const normalizedLine = normalizeInlineWhitespace(line);
   if (!normalizedLine) return true;
@@ -147,7 +161,63 @@ function resolveFunctionName(prefix: string) {
   return null;
 }
 
-function buildRowFromBlock(block: string, rowIndex: number): RobertWaltersBenchmarkRow | null {
+function resolveDocumentFunctionName(text: string) {
+  const match = normalizeInlineWhitespace(text).match(DOCUMENT_FUNCTION_PATTERN);
+  return match?.[1] ?? null;
+}
+
+function stripRoleTail(value: string) {
+  let normalizedValue = normalizeInlineWhitespace(value).replace(/\b\d+(?:-\d+)?\+?\s*Years?\b.*$/i, "").trim();
+
+  for (const pattern of ROLE_TAIL_PATTERNS) {
+    const match = normalizedValue.match(pattern);
+    if (!match?.index) continue;
+
+    const candidate = normalizedValue.slice(0, match.index).trim();
+    if (candidate) {
+      normalizedValue = candidate;
+      break;
+    }
+  }
+
+  return normalizedValue;
+}
+
+function mergeSplitRangeLines(lines: string[]) {
+  const merged: string[] = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const current = lines[index];
+    const next = lines[index + 1];
+    const third = lines[index + 2];
+    const fourth = lines[index + 3];
+
+    if (
+      current &&
+      next &&
+      third &&
+      fourth &&
+      RANGE_START_PATTERN.test(current) &&
+      RANGE_END_PATTERN.test(next) &&
+      RANGE_START_PATTERN.test(third) &&
+      RANGE_END_PATTERN.test(fourth)
+    ) {
+      merged.push(`${current} ${next} ${third} ${fourth}`);
+      index += 3;
+      continue;
+    }
+
+    merged.push(current);
+  }
+
+  return merged;
+}
+
+function buildRowFromBlock(
+  block: string,
+  rowIndex: number,
+  defaultFunctionName: string | null,
+): RobertWaltersBenchmarkRow | null {
   const normalizedBlock = normalizeInlineWhitespace(block);
   const payPeriod = resolvePayPeriod(normalizedBlock);
   const employmentType = resolveEmploymentType(normalizedBlock);
@@ -167,10 +237,17 @@ function buildRowFromBlock(block: string, rowIndex: number): RobertWaltersBenchm
     .replace(new RegExp(`\\b${employmentType}\\b`, "i"), "")
     .replace(/\bper\s+(month|annum|year)\b/i, "")
     .trim();
-  const functionName = resolveFunctionName(roleAndFunction);
-  const roleTitle = functionName
-    ? roleAndFunction.slice(0, roleAndFunction.length - functionName.length).trim()
-    : roleAndFunction;
+  const roleAndFunctionWithoutHeader =
+    defaultFunctionName != null
+      ? roleAndFunction.replace(new RegExp(`^${defaultFunctionName}\\s+in\\s+middle\\s+east\\s+`, "i"), "").trim()
+      : roleAndFunction;
+  const inlineFunctionName = resolveFunctionName(roleAndFunction);
+  const functionName = inlineFunctionName ?? defaultFunctionName;
+  const roleTitle = inlineFunctionName
+    ? roleAndFunctionWithoutHeader
+        .slice(0, roleAndFunctionWithoutHeader.length - inlineFunctionName.length)
+        .trim()
+    : stripRoleTail(roleAndFunctionWithoutHeader);
 
   if (!roleTitle) {
     return null;
@@ -202,11 +279,14 @@ function buildRowFromBlock(block: string, rowIndex: number): RobertWaltersBenchm
 }
 
 export function extractRobertWaltersBenchmarkRows(text: string): RobertWaltersBenchmarkRow[] {
-  const lines = text
+  const documentFunctionName = resolveDocumentFunctionName(text);
+  const lines = mergeSplitRangeLines(
+    text
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean)
-    .filter((line) => !isNoiseLine(line));
+    .filter((line) => !isNoiseLine(line)),
+  );
 
   const rows: RobertWaltersBenchmarkRow[] = [];
   let buffer: string[] = [];
@@ -219,7 +299,7 @@ export function extractRobertWaltersBenchmarkRows(text: string): RobertWaltersBe
     }
     RANGE_PATTERN.lastIndex = 0;
 
-    const row = buildRowFromBlock(buffer.join(" "), rows.length + 1);
+    const row = buildRowFromBlock(buffer.join(" "), rows.length + 1, documentFunctionName);
     if (row) {
       rows.push(row);
     }

@@ -3,7 +3,9 @@
 import { useState, useMemo, useRef, useEffect } from "react";
 import clsx from "clsx";
 import { ChevronDown, Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { LEVELS, ROLES } from "@/lib/dashboard/dummy-data";
 import {
   getRelocationCities,
   City,
@@ -20,11 +22,16 @@ export interface RelocationFormData {
   compApproach: CompApproach;
   hybridCap: number;
   rentOverride?: number;
+  roleId: string;
+  levelId: string;
 }
 
 interface InputPanelProps {
   data: RelocationFormData;
   onChange: (data: RelocationFormData) => void;
+  onRunAnalysis: () => void;
+  isAnalysisPending: boolean;
+  isAnalyzing: boolean;
   className?: string;
 }
 
@@ -180,7 +187,14 @@ const COMP_APPROACHES: { id: CompApproach; label: string }[] = [
   { id: "hybrid", label: "Hybrid" },
 ];
 
-export function InputPanel({ data, onChange, className }: InputPanelProps) {
+export function InputPanel({
+  data,
+  onChange,
+  onRunAnalysis,
+  isAnalysisPending,
+  isAnalyzing,
+  className,
+}: InputPanelProps) {
   const [isApproachOpen, setIsApproachOpen] = useState(false);
   const approachRef = useRef<HTMLDivElement>(null);
 
@@ -240,6 +254,40 @@ export function InputPanel({ data, onChange, className }: InputPanelProps) {
             onChange={(id) => updateField("targetCityId", id)}
             excludeId={data.homeCityId}
           />
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="relative">
+            <p className={FIELD_LABEL_CLASSES}>Role</p>
+            <select
+              value={data.roleId}
+              onChange={(e) => updateField("roleId", e.target.value)}
+              className="w-full appearance-none rounded-2xl border border-border bg-white px-4 py-3 text-sm font-semibold text-accent-900 shadow-sm transition-all hover:border-brand-200 focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-500/10"
+            >
+              {ROLES.map((role) => (
+                <option key={role.id} value={role.id}>
+                  {role.title}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-4 top-[46px] h-5 w-5 text-accent-400" />
+          </div>
+
+          <div className="relative">
+            <p className={FIELD_LABEL_CLASSES}>Level</p>
+            <select
+              value={data.levelId}
+              onChange={(e) => updateField("levelId", e.target.value)}
+              className="w-full appearance-none rounded-2xl border border-border bg-white px-4 py-3 text-sm font-semibold text-accent-900 shadow-sm transition-all hover:border-brand-200 focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-500/10"
+            >
+              {LEVELS.map((level) => (
+                <option key={level.id} value={level.id}>
+                  {level.name}
+                </option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-4 top-[46px] h-5 w-5 text-accent-400" />
+          </div>
         </div>
 
         {/* Salary Input */}
@@ -350,6 +398,26 @@ export function InputPanel({ data, onChange, className }: InputPanelProps) {
             </div>
           </div>
         )}
+
+        <div className="space-y-3">
+          {isAnalysisPending ? (
+            <p className="text-sm font-medium text-amber-700">
+              Inputs changed. Run analysis to refresh the figures and AI recommendation.
+            </p>
+          ) : (
+            <p className="text-sm text-accent-500">
+              Analysis is up to date with the current inputs.
+            </p>
+          )}
+          <Button
+            type="button"
+            className="h-11 w-full rounded-2xl text-sm font-semibold"
+            onClick={onRunAnalysis}
+            disabled={isAnalyzing}
+          >
+            {isAnalyzing ? "Running analysis..." : isAnalysisPending ? "Refresh analysis" : "Run analysis"}
+          </Button>
+        </div>
       </div>
     </Card>
   );

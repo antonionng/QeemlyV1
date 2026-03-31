@@ -13,15 +13,25 @@ const { fetchAdminJsonMock, normalizeAdminApiErrorMock } = vi.hoisted(() => ({
   })),
 }));
 
-vi.mock("lucide-react", () => ({
-  AlertTriangle: () => React.createElement("svg"),
-  CheckCircle: () => React.createElement("svg"),
-  Clock3: () => React.createElement("svg"),
-  Loader2: () => React.createElement("svg"),
-  Play: () => React.createElement("svg"),
-  RefreshCw: () => React.createElement("svg"),
-  XCircle: () => React.createElement("svg"),
-}));
+vi.mock("lucide-react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("lucide-react")>();
+  return {
+    ...actual,
+    AlertTriangle: () => React.createElement("svg"),
+    AlertCircle: () => React.createElement("svg"),
+    CheckCircle: () => React.createElement("svg"),
+    CheckCircle2: () => React.createElement("svg"),
+    Clock3: () => React.createElement("svg"),
+    FileSpreadsheet: () => React.createElement("svg"),
+    FileText: () => React.createElement("svg"),
+    FolderInput: () => React.createElement("svg"),
+    Loader2: () => React.createElement("svg"),
+    Play: () => React.createElement("svg"),
+    RefreshCw: () => React.createElement("svg"),
+    Upload: () => React.createElement("svg"),
+    XCircle: () => React.createElement("svg"),
+  };
+});
 
 vi.mock("@/components/admin/admin-page-error", () => ({
   AdminPageError: ({ error }: { error: { title: string } | null }) =>
@@ -33,11 +43,40 @@ vi.mock("@/lib/admin/api-client", () => ({
   normalizeAdminApiError: normalizeAdminApiErrorMock,
 }));
 
-import AdminRunsPage from "@/app/admin/(dashboard)/runs/page";
+import AdminIntakePage from "@/app/admin/(dashboard)/intake/page";
 
-const jobsPayload: Array<Record<string, unknown>> = [];
+const uploadsPayload = [
+  {
+    id: "upload-1",
+    file_name: "Robert Walters Tech Guide.pdf",
+    file_path: "uploads/2026-03-24/robert-walters-tech.pdf",
+    file_size: 128,
+    mime_type: "application/pdf",
+    file_kind: "pdf",
+    ingest_queue: "Document review",
+    ingestion_status: "reviewing",
+    ingestion_notes: "Extracted 2 Robert Walters pilot rows.",
+    uploaded_by: "admin-1",
+    created_at: "2026-03-24T12:00:00.000Z",
+    updated_at: "2026-03-24T12:00:00.000Z",
+  },
+];
+
+const jobsPayload: Array<Record<string, unknown>> = [
+  {
+    id: "job-queued",
+    status: "queued",
+    source_id: "source-allowed",
+    records_created: 0,
+    records_updated: 0,
+    records_failed: 0,
+    created_at: "2026-03-24T12:10:00.000Z",
+    completed_at: null,
+    error_message: null,
+  },
+];
 const statsPayload = {
-  jobs_24h: { total: 0, success: 0, failed: 0, running: 0, partial: 0 },
+  jobs_24h: { total: 1, success: 0, failed: 0, running: 1, partial: 0 },
 };
 
 const sourcesPayload = [
@@ -61,7 +100,7 @@ const sourcesPayload = [
   },
 ];
 
-describe("AdminRunsPage", () => {
+describe("AdminIntakePage recent activity", () => {
   let container: HTMLDivElement;
   const fetchMock = vi.fn();
 
@@ -70,10 +109,14 @@ describe("AdminRunsPage", () => {
     container = document.createElement("div");
     document.body.appendChild(container);
 
-    fetchAdminJsonMock
-      .mockResolvedValueOnce(jobsPayload)
-      .mockResolvedValueOnce(sourcesPayload)
-      .mockResolvedValueOnce(statsPayload);
+    fetchAdminJsonMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/admin/inbox") return uploadsPayload;
+      if (url === "/api/admin/jobs") return jobsPayload;
+      if (url === "/api/admin/sources") return sourcesPayload;
+      if (url === "/api/admin/stats") return statsPayload;
+      throw new Error(`Unexpected fetchAdminJson call: ${url}`);
+    });
 
     fetchMock.mockResolvedValue({
       ok: true,
@@ -96,11 +139,29 @@ describe("AdminRunsPage", () => {
     container.remove();
   });
 
-  it("only shows runnable sources and excludes blocked sources from run-all", async () => {
+  it("shows tabbed intake sections and keeps automated controls under the automated tab", async () => {
     const root = createRoot(container);
 
     await act(async () => {
-      root.render(React.createElement(AdminRunsPage));
+      root.render(React.createElement(AdminIntakePage));
+    });
+
+    expect(container.textContent).toContain("Manual Uploads");
+    expect(container.textContent).toContain("Automated Sources");
+    expect(container.textContent).toContain("Recent Activity");
+    expect(container.textContent).not.toContain("Run Selected Source");
+    expect(container.textContent).toContain("Manual Uploads1");
+    expect(container.textContent).toContain("Automated Sources2");
+    expect(container.textContent).toContain("Recent Activity2");
+    expect(container.querySelector('[data-testid="intake-tab-bar"]')?.className).toContain("sticky");
+
+    const automatedTab = Array.from(container.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("Automated Sources"),
+    );
+    expect(automatedTab).toBeDefined();
+
+    await act(async () => {
+      automatedTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     const select = container.querySelector("select");
@@ -128,6 +189,35 @@ describe("AdminRunsPage", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ source_id: "source-allowed" }),
     });
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("makes recent activity explicit about manual uploads versus automated ingestion jobs", async () => {
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(React.createElement(AdminIntakePage));
+    });
+
+    const activityTab = Array.from(container.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("Recent Activity"),
+    );
+    expect(activityTab).toBeDefined();
+
+    await act(async () => {
+      activityTab?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain("Recent Manual Uploads");
+    expect(container.textContent).toContain("Automated Ingestion Jobs");
+    expect(container.textContent).toContain("Robert Walters Tech Guide.pdf");
+    expect(container.textContent).toContain("Manual upload");
+    expect(container.textContent).toContain("Qatar Wages");
+    expect(container.textContent).toContain("Automated source");
+    expect(container.textContent).toContain("queued");
 
     await act(async () => {
       root.unmount();

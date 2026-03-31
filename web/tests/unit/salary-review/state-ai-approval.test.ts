@@ -54,6 +54,8 @@ describe("salary review AI approval gate", () => {
       budgetRemaining: 5_000,
       settings: {
         cycle: "annual",
+        reviewMode: "company_wide",
+        allocationMethod: "direct",
         budgetType: "absolute",
         budgetPercentage: 0,
         budgetAbsolute: 5_000,
@@ -64,6 +66,7 @@ describe("salary review AI approval gate", () => {
 
     const proposal: SalaryReviewAiPlanResponse = {
       generatedAt: "2026-03-05T10:00:00.000Z",
+      strategicSummary: null,
       summary: {
         mode: "assistive",
         budget: 5_000,
@@ -85,6 +88,7 @@ describe("salary review AI approval gate", () => {
           proposedPercentage: 5,
           confidence: 88,
           rationale: ["Benchmark aligned increase."],
+          aiRationale: null,
           factors: [],
           benchmark: {
             provenance: "workspace",

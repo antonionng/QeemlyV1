@@ -8,11 +8,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const {
   useBenchmarkStateMock,
   getBenchmarkMock,
+  getBenchmarkEnrichedMock,
   useCompanySettingsMock,
   useSalaryViewMock,
 } = vi.hoisted(() => ({
   useBenchmarkStateMock: vi.fn(),
   getBenchmarkMock: vi.fn(),
+  getBenchmarkEnrichedMock: vi.fn(),
   useCompanySettingsMock: vi.fn(),
   useSalaryViewMock: vi.fn(),
 }));
@@ -43,6 +45,7 @@ vi.mock("@/lib/benchmarks/benchmark-state", () => ({
 
 vi.mock("@/lib/benchmarks/data-service", () => ({
   getBenchmark: getBenchmarkMock,
+  getBenchmarkEnriched: getBenchmarkEnrichedMock,
 }));
 
 vi.mock("@/lib/company", () => ({
@@ -101,9 +104,27 @@ const baseBenchmark = {
   benchmarkSource: "market" as const,
 };
 
+const aiDetailBriefing = {
+  executiveBriefing: "Shared AI executive market view.",
+  hiringSignal: "Hiring remains competitive for this role.",
+  negotiationPosture: "Keep room for upward movement in late-stage offers.",
+  views: {
+    levelTable: { summary: "Levels stay tightly clustered until IC4.", action: "Use IC3 to IC4 spacing as your calibration guardrail." },
+    aiInsights: { summary: "Position the role slightly above median to stay credible.", action: "Target a package near your selected percentile." },
+    trend: { summary: "Momentum is positive over the latest quarters.", action: "Avoid waiting for the market to cool." },
+    salaryBreakdown: { summary: "Cash remains the clearest anchor in this market.", action: "Keep the package structure easy to explain." },
+    industry: { summary: "Fintech continues to command a premium.", action: "Expect candidate references to skew upward." },
+    companySize: { summary: "Mid-sized employers can still compete with focused offers.", action: "Trade complexity for clarity and speed." },
+    geoComparison: { summary: "Regional pay gaps remain meaningful across GCC hubs.", action: "Use location differentials carefully when relocating talent." },
+    compMix: { summary: "Most value is still concentrated in fixed cash.", action: "Do not overcomplicate allowances without a policy reason." },
+    offerBuilder: { summary: "Candidates respond best to a crisp core package.", action: "Lead with certainty, then use flexibility selectively." },
+  },
+};
+
 describe("BenchmarkResults", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useBenchmarkStateMock.setState = vi.fn();
     useBenchmarkStateMock.mockReturnValue({
       clearResult: vi.fn(),
       goToStep: vi.fn(),
@@ -136,6 +157,193 @@ describe("BenchmarkResults", () => {
       ...baseBenchmark,
       levelId,
     }));
+    getBenchmarkEnrichedMock.mockImplementation(async (_roleId: string, _locationId: string, levelId: string) => ({
+      benchmark: { ...baseBenchmark, levelId },
+      aiAdvisory: null,
+      aiInsights: null,
+      aiDetailBriefing: null,
+    }));
+  });
+
+  it("preloads the shared detail briefing into benchmark state after the results page renders", async () => {
+    getBenchmarkEnrichedMock.mockImplementation(async (_roleId: string, _locationId: string, levelId: string) => ({
+      benchmark: { ...baseBenchmark, levelId },
+      aiAdvisory: null,
+      aiInsights: null,
+      aiDetailBriefing,
+    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          benchmarkSource: "market",
+          bandLow: 120000,
+          bandHigh: 180000,
+          matchingEmployeeCount: 0,
+          inBandCount: 0,
+        }),
+      })),
+    );
+
+    const container = document.createElement("div");
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        React.createElement(BenchmarkResults, {
+          result: {
+            formData: {
+              context: "existing",
+              roleId: "pm",
+              levelId: "ic3",
+              locationId: "riyadh",
+              employmentType: "national",
+              currentSalaryLow: null,
+              currentSalaryHigh: null,
+              industry: "Fintech",
+              companySize: "1-50",
+              fundingStage: null,
+              targetPercentile: 50,
+            },
+            benchmark: baseBenchmark,
+            role: {
+              id: "pm",
+              title: "Product Manager",
+              family: "Product",
+              icon: "PM",
+            },
+            level: {
+              id: "ic3",
+              name: "Senior (IC3)",
+              category: "IC",
+            },
+            location: {
+              id: "riyadh",
+              city: "Riyadh",
+              country: "Saudi Arabia",
+              countryCode: "SA",
+              currency: "AED",
+              flag: "SA",
+            },
+            isOverridden: false,
+            createdAt: new Date("2026-03-12T00:00:00.000Z"),
+          },
+        }),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(useBenchmarkStateMock.setState).toHaveBeenCalled();
+    const updaterCalls = (useBenchmarkStateMock.setState as ReturnType<typeof vi.fn>).mock.calls
+      .map(([arg]) => arg)
+      .filter((arg): arg is (state: { currentResult: Record<string, unknown> | null; recentResults: Array<Record<string, unknown>> }) => unknown => typeof arg === "function");
+    const updater = updaterCalls.at(-1);
+
+    expect(updater).toBeTypeOf("function");
+    const nextState = updater?.({
+      currentResult: {
+        role: { id: "pm" },
+        level: { id: "ic3" },
+        location: { id: "riyadh" },
+        createdAt: new Date("2026-03-12T00:00:00.000Z"),
+      },
+      recentResults: [],
+    }) as { currentResult: { aiDetailBriefing: typeof aiDetailBriefing; aiDetailBriefingStatus: string } };
+
+    expect(nextState.currentResult.aiDetailBriefing).toEqual(aiDetailBriefing);
+    expect(nextState.currentResult.aiDetailBriefingStatus).toBe("ready");
+
+    root.unmount();
+    vi.unstubAllGlobals();
+  });
+
+  it("does not re-fetch the enriched benchmark when only AI preload state changes", async () => {
+    getBenchmarkEnrichedMock.mockImplementation(async (_roleId: string, _locationId: string, levelId: string) => ({
+      benchmark: { ...baseBenchmark, levelId },
+      aiAdvisory: null,
+      aiInsights: null,
+      aiDetailBriefing,
+    }));
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          benchmarkSource: "market",
+          bandLow: 120000,
+          bandHigh: 180000,
+          matchingEmployeeCount: 0,
+          inBandCount: 0,
+        }),
+      })),
+    );
+
+    const container = document.createElement("div");
+    const root = createRoot(container);
+    const sharedFormData = {
+      context: "existing" as const,
+      roleId: "pm",
+      levelId: "ic3",
+      locationId: "riyadh",
+      employmentType: "national" as const,
+      currentSalaryLow: null,
+      currentSalaryHigh: null,
+      industry: "Fintech",
+      companySize: "1-50",
+      fundingStage: null,
+      targetPercentile: 50 as const,
+    };
+    const sharedRole = {
+      id: "pm",
+      title: "Product Manager",
+      family: "Product",
+      icon: "PM",
+    };
+    const sharedLevel = {
+      id: "ic3",
+      name: "Senior (IC3)",
+      category: "IC",
+    };
+    const sharedLocation = {
+      id: "riyadh",
+      city: "Riyadh",
+      country: "Saudi Arabia",
+      countryCode: "SA",
+      currency: "AED",
+      flag: "SA",
+    };
+    const sharedCreatedAt = new Date("2026-03-12T00:00:00.000Z");
+    const makeResult = (status?: "idle" | "loading" | "ready" | "unavailable") => ({
+      formData: sharedFormData,
+      benchmark: baseBenchmark,
+      role: sharedRole,
+      level: sharedLevel,
+      location: sharedLocation,
+      isOverridden: false,
+      aiDetailBriefing: status === "ready" ? aiDetailBriefing : null,
+      aiDetailBriefingStatus: status,
+      createdAt: sharedCreatedAt,
+    });
+
+    await act(async () => {
+      root.render(React.createElement(BenchmarkResults, { result: makeResult("idle") }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      root.render(React.createElement(BenchmarkResults, { result: makeResult("loading") }));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(getBenchmarkEnrichedMock).toHaveBeenCalledTimes(1);
+
+    root.unmount();
+    vi.unstubAllGlobals();
   });
 
   it("loads org peer summaries once per visible row without retriggering forever", async () => {

@@ -234,4 +234,29 @@ describe("SiteNav", () => {
     expect(container.textContent).toContain("Sign Out");
     expect(container.textContent).not.toContain("Dashboard");
   });
+
+  it("swaps Super Admin for Dashboard when the user is already in admin", async () => {
+    usePathnameMock.mockReturnValue("/admin");
+    createClientMock.mockReturnValue(
+      createSupabaseClient({
+        user: { id: "user-1", email: "ada@qeemly.com" },
+        profile: { full_name: "Ada Lovelace", avatar_url: null },
+      }),
+    );
+
+    const { container } = renderNav({ variant: "dark" });
+
+    await flushEffects();
+
+    const accountTrigger = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.getAttribute("aria-haspopup") === "true",
+    );
+
+    await act(async () => {
+      accountTrigger?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain("Dashboard");
+    expect(container.textContent).not.toContain("Super Admin");
+  });
 });

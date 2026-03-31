@@ -7,6 +7,7 @@ import { type BenchmarkResult } from "@/lib/benchmarks/benchmark-state";
 import { useCompanySettings, getCompanyInitials } from "@/lib/company";
 import { formatCurrency, toBenchmarkDisplayValue } from "@/lib/utils/currency";
 import { useSalaryView } from "@/lib/salary-view-store";
+import { SharedAiCallout } from "../shared-ai-callout";
 
 interface AIInsightsViewProps {
   result: BenchmarkResult;
@@ -24,6 +25,7 @@ export function AIInsightsView({ result }: AIInsightsViewProps) {
   const { benchmark, role, location, formData } = result;
   const companySettings = useCompanySettings();
   const { salaryView } = useSalaryView();
+  const sharedBriefing = result.aiDetailBriefing;
   const targetPercentile = formData.targetPercentile || companySettings.targetPercentile;
   const targetCurrency = location.currency;
 
@@ -220,6 +222,31 @@ export function AIInsightsView({ result }: AIInsightsViewProps) {
           Target <strong>{formatValue(convertToMarket(targetValue))}</strong> (P{targetPercentile}) for {role.title} in {location.city}.
         </p>
       </div>
+
+      {sharedBriefing ? (
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
+          <div className="rounded-xl border border-violet-200 bg-violet-50 p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-700">Executive Briefing</p>
+            <p className="mt-2 text-sm leading-relaxed text-brand-800">
+              {sharedBriefing.executiveBriefing}
+            </p>
+          </div>
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">Hiring Signal</p>
+            <p className="mt-2 text-sm leading-relaxed text-brand-800">
+              {sharedBriefing.hiringSignal}
+            </p>
+          </div>
+          <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Negotiation Posture</p>
+            <p className="mt-2 text-sm leading-relaxed text-brand-800">
+              {sharedBriefing.negotiationPosture}
+            </p>
+          </div>
+        </div>
+      ) : null}
+
+      <SharedAiCallout section={sharedBriefing?.views.aiInsights} />
     </div>
   );
 }

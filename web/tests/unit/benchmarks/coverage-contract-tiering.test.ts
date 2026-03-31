@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { summarizePublishedBenchmarkCoverage } from "@/lib/benchmarks/coverage-contract";
+import { ROLES, LEVELS, LOCATIONS } from "@/lib/dashboard/dummy-data";
+
+const TOTAL_TRIPLES = ROLES.length * LEVELS.length * LOCATIONS.length;
 
 describe("summarizePublishedBenchmarkCoverage tier reporting", () => {
   it("separates official exact coverage from proxy-backed exact coverage", () => {
@@ -19,11 +22,11 @@ describe("summarizePublishedBenchmarkCoverage tier reporting", () => {
     ]);
 
     expect(summary).toMatchObject({
-      supportedExactTriples: 1200,
+      supportedExactTriples: TOTAL_TRIPLES,
       coveredExactTriples: 2,
       officialCoveredExactTriples: 1,
       proxyBackedExactTriples: 1,
-      missingExactTriples: 1198,
+      missingExactTriples: TOTAL_TRIPLES - 2,
     });
   });
 });

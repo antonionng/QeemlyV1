@@ -40,6 +40,7 @@ export type SalaryReviewAiProposalItem = {
   proposedPercentage: number;
   confidence: number;
   rationale: string[];
+  aiRationale: string | null;
   factors: SalaryReviewAiProposalFactor[];
   benchmark: {
     provenance: BenchmarkProvenance;
@@ -70,6 +71,7 @@ export type SalaryReviewAiPlanSummary = {
 
 export type SalaryReviewAiPlanResponse = {
   generatedAt: string;
+  strategicSummary: string | null;
   summary: SalaryReviewAiPlanSummary;
   items: SalaryReviewAiProposalItem[];
   warnings: string[];

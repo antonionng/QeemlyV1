@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Search, ChevronDown, ArrowRight, Loader2 } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { RolePickerModal } from "@/components/dashboard/benchmarks/role-picker-modal";
 import {
   useBenchmarkState,
   BENCHMARK_LOCATIONS,
@@ -23,13 +23,7 @@ export function BenchmarkForm() {
 
   const companySettings = useCompanySettings();
   const { salaryView, setSalaryView } = useSalaryView();
-  const [roleSearch, setRoleSearch] = useState("");
-
-  const filteredRoles = ROLES.filter(
-    (role) =>
-      role.title.toLowerCase().includes(roleSearch.toLowerCase()) ||
-      role.family.toLowerCase().includes(roleSearch.toLowerCase()),
-  );
+  const [isRolePickerOpen, setIsRolePickerOpen] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -44,45 +38,24 @@ export function BenchmarkForm() {
       <div className="bench-section">
         <h3 className="bench-section-header">Role Details</h3>
 
-        {/* Role search */}
         <div className="relative mb-5">
-          <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-400" />
-          <Input
-            type="text"
-            placeholder="Role title"
-            value={roleSearch || selectedRole?.title || ""}
-            onChange={(e) => {
-              const nextValue = e.target.value;
-              setRoleSearch(nextValue);
-              if (!nextValue || nextValue !== selectedRole?.title) {
-                updateFormField("roleId", null);
-              }
-            }}
-            className="w-full pl-11"
-            fullWidth
-          />
-          {roleSearch && (
-            <div className="absolute z-20 mt-1 max-h-56 w-full overflow-y-auto rounded-2xl border border-border bg-white shadow-lg">
-              {filteredRoles.length === 0 ? (
-                <div className="px-4 py-3 text-sm text-brand-400">No roles found</div>
-              ) : (
-                filteredRoles.map((role) => (
-                  <button
-                    key={role.id}
-                    type="button"
-                    onClick={() => {
-                      updateFormField("roleId", role.id);
-                      setRoleSearch("");
-                    }}
-                    className="w-full px-4 py-2.5 text-left text-sm transition-colors hover:bg-brand-50 first:rounded-t-2xl last:rounded-b-2xl"
-                  >
-                    <span className="font-medium text-brand-900">{role.title}</span>
-                    <span className="ml-2 text-xs text-brand-400">{role.family}</span>
-                  </button>
-                ))
-              )}
-            </div>
-          )}
+          <Search className="pointer-events-none absolute left-4 top-1/2 z-[1] h-4 w-4 -translate-y-1/2 text-brand-400" />
+          <button
+            type="button"
+            onClick={() => setIsRolePickerOpen(true)}
+            aria-haspopup="dialog"
+            data-testid="benchmark-role-picker-trigger"
+            className="bench-role-trigger w-full pl-11 text-left"
+          >
+            <span className={selectedRole ? "text-text-primary" : "text-text-tertiary"}>
+              {selectedRole?.title || "Role title"}
+            </span>
+            {selectedRole ? (
+              <span className="ml-3 rounded-full bg-brand-50 px-2.5 py-1 text-[11px] font-semibold text-brand-600">
+                {selectedRole.family}
+              </span>
+            ) : null}
+          </button>
         </div>
 
         {/* Pill selects row */}
@@ -235,6 +208,12 @@ export function BenchmarkForm() {
           {submissionError}
         </p>
       ) : null}
+      <RolePickerModal
+        open={isRolePickerOpen}
+        selectedRoleId={formData.roleId}
+        onClose={() => setIsRolePickerOpen(false)}
+        onSelect={(roleId) => updateFormField("roleId", roleId)}
+      />
     </form>
   );
 }

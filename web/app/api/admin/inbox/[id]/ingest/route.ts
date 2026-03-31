@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { adminErrorResponse, adminRouteErrorResponse, throwIfAdminQueryError } from "@/lib/admin/api-client";
 import { requireSuperAdmin } from "@/lib/admin/auth";
-import { refreshPlatformMarketPoolBestEffort } from "@/lib/benchmarks/platform-market-sync";
+import { invalidateMarketBenchmarkCache } from "@/lib/benchmarks/platform-market";
+import { MARKET_PUBLISH_SUMMARY, MARKET_PUBLISH_TITLE } from "@/lib/benchmarks/market-publish";
+import { refreshPlatformMarketPool } from "@/lib/benchmarks/platform-market-pool";
 import { buildManualAdminBenchmarkPayload, type AdminResearchPdfRow } from "@/lib/admin/research/pilot-workflow";
 import { createServiceClient } from "@/lib/supabase/service";
 
@@ -55,6 +57,7 @@ export async function POST(
 
     let ingestedCount = 0;
     const failures: string[] = [];
+    const publishedRowIds: string[] = [];
 
     for (const row of approvedRows) {
       const payload = buildManualAdminBenchmarkPayload(row, workspaceId);
@@ -73,23 +76,46 @@ export async function POST(
         continue;
       }
 
-      const { error: rowUpdateError } = await supabase
-        .from("admin_market_research_pdf_rows")
-        .update({
-          review_status: "ingested",
-          review_notes: row.review_notes ?? "Ingested into shared market staging.",
-        })
-        .eq("id", row.id);
-      throwIfAdminQueryError(rowUpdateError, "Failed to update ingested review row");
+      publishedRowIds.push(row.id);
       ingestedCount += 1;
     }
 
     const failedCount = failures.length;
-    const nextUploadStatus = failedCount === 0 ? "ingested" : "reviewing";
+    if (ingestedCount > 0) {
+      const poolResult = await refreshPlatformMarketPool();
+      invalidateMarketBenchmarkCache();
+
+      const { error: publishEventError } = await supabase
+        .from("market_publish_events")
+        .insert({
+          title: MARKET_PUBLISH_TITLE,
+          summary: MARKET_PUBLISH_SUMMARY,
+          row_count: poolResult.rowCount,
+          tenant_visible: true,
+          published_by: auth.user.id,
+          published_at: new Date().toISOString(),
+        });
+      throwIfAdminQueryError(publishEventError, "Failed to record market publish event");
+
+      for (const row of approvedRows) {
+        if (!publishedRowIds.includes(row.id)) continue;
+
+        const { error: rowUpdateError } = await supabase
+          .from("admin_market_research_pdf_rows")
+          .update({
+            review_status: "published",
+            review_notes: row.review_notes ?? "Published to the live market dataset.",
+          })
+          .eq("id", row.id);
+        throwIfAdminQueryError(rowUpdateError, "Failed to update published review row");
+      }
+    }
+
+    const nextUploadStatus = failedCount === 0 ? "published" : "reviewing";
     const nextUploadNotes =
       failedCount === 0
-        ? `Ingested ${ingestedCount} approved Robert Walters rows.`
-        : `Ingested ${ingestedCount} Robert Walters rows. ${failedCount} rows still need review.`;
+        ? `Published ${ingestedCount} Robert Walters rows to the live market dataset.`
+        : `Published ${ingestedCount} Robert Walters rows to the live market dataset. ${failedCount} rows still need review.`;
 
     const { error: uploadUpdateError } = await supabase
       .from("admin_market_research_uploads")
@@ -100,13 +126,9 @@ export async function POST(
       .eq("id", id);
     throwIfAdminQueryError(uploadUpdateError, "Failed to update upload ingestion status");
 
-    if (ingestedCount > 0) {
-      await refreshPlatformMarketPoolBestEffort();
-    }
-
     return NextResponse.json({
       ok: failedCount === 0,
-      ingestedCount,
+      publishedCount: ingestedCount,
       failedCount,
       failures: failedCount > 0 ? failures : undefined,
     });

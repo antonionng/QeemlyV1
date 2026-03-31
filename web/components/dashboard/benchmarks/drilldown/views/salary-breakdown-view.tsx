@@ -1,14 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { Sparkles, Wallet, Home } from "lucide-react";
+import { Wallet, Home, Building2, Car, PiggyBank } from "lucide-react";
 import { type BenchmarkResult } from "@/lib/benchmarks/benchmark-state";
+import { normalizeAiBreakdown } from "@/lib/benchmarks/detail-ai";
 import {
   annualizeBenchmarkValue,
   applyBenchmarkViewMode,
   resolveBenchmarkPayPeriod,
 } from "@/lib/benchmarks/pay-period";
 import { useSalaryView } from "@/lib/salary-view-store";
+import { SharedAiCallout } from "../shared-ai-callout";
 
 interface SalaryBreakdownViewProps {
   result: BenchmarkResult;
@@ -48,6 +50,12 @@ export function SalaryBreakdownView({ result }: SalaryBreakdownViewProps) {
   const getPercentileValue = (key: PercentileKey): number => benchmark.percentiles[key];
 
   const totalMonthly = getPercentileValue(selectedPercentile);
+  const aiPackageBreakdown = normalizeAiBreakdown(
+    result.aiDetailBriefing?.views.salaryBreakdown.packageBreakdown
+      ?? result.aiDetailBriefing?.views.offerBuilder.packageBreakdown
+      ?? result.aiDetailBriefing?.views.compMix.compensationMix
+      ?? null,
+  );
   const employerContribMonthly =
     (benchmark.nationalsCostBreakdown?.gpssaAmount || 0) + (benchmark.nationalsCostBreakdown?.nafisAmount || 0);
   const hasBreakdown = employerContribMonthly > 0;
@@ -55,10 +63,52 @@ export function SalaryBreakdownView({ result }: SalaryBreakdownViewProps) {
   const basePercent = hasBreakdown ? Math.round((totalMonthly / totalWithContrib) * 100) : 100;
   const contribPercent = 100 - basePercent;
 
-  const breakdownData = [
+  const totalValue = convertValue(totalMonthly);
+  const aiBreakdownData = aiPackageBreakdown
+    ? [
+        {
+          name: "Basic Salary",
+          value: Math.round((totalValue * aiPackageBreakdown.basicSalaryPct) / 100),
+          percent: aiPackageBreakdown.basicSalaryPct,
+          icon: Wallet,
+          ...COLORS[0],
+          range: null as { min: number; max: number } | null,
+        },
+        {
+          name: "Housing",
+          value: Math.round((totalValue * aiPackageBreakdown.housingPct) / 100),
+          percent: aiPackageBreakdown.housingPct,
+          icon: Building2,
+          ...COLORS[1],
+          range: null as { min: number; max: number } | null,
+        },
+        {
+          name: "Transport",
+          value: Math.round((totalValue * aiPackageBreakdown.transportPct) / 100),
+          percent: aiPackageBreakdown.transportPct,
+          icon: Car,
+          ...COLORS[2],
+          range: null as { min: number; max: number } | null,
+        },
+        {
+          name: "Other Allowances",
+          value:
+            totalValue
+            - Math.round((totalValue * aiPackageBreakdown.basicSalaryPct) / 100)
+            - Math.round((totalValue * aiPackageBreakdown.housingPct) / 100)
+            - Math.round((totalValue * aiPackageBreakdown.transportPct) / 100),
+          percent: aiPackageBreakdown.otherAllowancesPct,
+          icon: PiggyBank,
+          ...COLORS[3],
+          range: null as { min: number; max: number } | null,
+        },
+      ]
+    : null;
+
+  const benchmarkBreakdownData = [
     {
       name: "Cash Compensation",
-      value: convertValue(totalMonthly),
+      value: totalValue,
       percent: basePercent,
       icon: Wallet,
       ...COLORS[0],
@@ -77,8 +127,9 @@ export function SalaryBreakdownView({ result }: SalaryBreakdownViewProps) {
         ]
       : []),
   ];
+  const breakdownData = aiBreakdownData ?? benchmarkBreakdownData;
 
-  const totalDisplay = convertValue(totalMonthly) + convertValue(employerContribMonthly, "annual");
+  const totalDisplay = breakdownData.reduce((sum, item) => sum + item.value, 0);
 
   const percentileOptions: { key: PercentileKey; label: string }[] = [
     { key: "p25", label: "P25" },
@@ -134,7 +185,11 @@ export function SalaryBreakdownView({ result }: SalaryBreakdownViewProps) {
                 <div>
                   <span className="text-sm font-medium text-brand-700">{item.name}</span>
                   <div className="text-[10px] text-brand-400">
-                    {item.range ? `Market range: ${item.range.min}–${item.range.max}%` : "Live data from selected benchmark row"}
+                    {item.range
+                      ? `Market range: ${item.range.min} to ${item.range.max}%`
+                      : aiPackageBreakdown
+                        ? "AI-derived package split for the selected percentile"
+                        : "Live data from selected benchmark row"}
                   </div>
                 </div>
               </div>
@@ -159,23 +214,7 @@ export function SalaryBreakdownView({ result }: SalaryBreakdownViewProps) {
         <span className="text-lg font-bold text-brand-900">{formatAED(totalDisplay)}</span>
       </div>
 
-      {/* AI Insight */}
-      <div className="mt-4 p-4 rounded-xl bg-gradient-to-r from-brand-50 to-blue-50 border border-brand-100">
-        <div className="flex items-start gap-3">
-          <div className="p-2 rounded-lg bg-brand-100">
-            <Sparkles className="h-4 w-4 text-brand-600" />
-          </div>
-          <div className="flex-1">
-            <p className="text-xs font-semibold text-brand-800 mb-1">AI Market Insight</p>
-            <p className="text-xs text-brand-600 leading-relaxed">
-              At {selectedPercentile.toUpperCase()} for {role.title} ({level.name}) in {location.city}, compensation is shown from real benchmark rows.
-              {hasBreakdown
-                ? ` Employer contribution overlays are included (${benchmark.nationalsCostBreakdown?.gpssaPct || 0}% GPSSA and ${benchmark.nationalsCostBreakdown?.nafisPct || 0}% NAFIS where applicable).`
-                : " Detailed component-level split is not available in this workspace yet."}
-            </p>
-          </div>
-        </div>
-      </div>
+      <SharedAiCallout section={result.aiDetailBriefing?.views.salaryBreakdown} />
     </div>
   );
 }

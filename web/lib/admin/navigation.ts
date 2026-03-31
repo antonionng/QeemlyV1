@@ -1,14 +1,9 @@
 import type { LucideIcon } from "lucide-react";
 import {
   Activity,
-  BarChart3,
   Building2,
-  CheckCircle2,
-  Clock3,
   Database,
-  FileJson,
   FolderInput,
-  GitBranch,
   ShieldCheck,
   Users,
 } from "lucide-react";
@@ -58,58 +53,16 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
     heading: "Market Data Workbench",
     items: [
       {
-        href: "/admin/workbench",
-        label: "Workbench Home",
-        icon: Activity,
-        description: "Queues, coverage, and next actions",
-      },
-      {
-        href: "/admin/sources",
-        label: "Sources",
-        icon: Database,
-        description: "Source configuration and health",
-      },
-      {
-        href: "/admin/runs",
-        label: "Runs",
-        icon: GitBranch,
-        description: "Ingestion runs and operator controls",
-      },
-      {
-        href: "/admin/inbox",
-        label: "Inbox",
+        href: "/admin/intake",
+        label: "Data Intake",
         icon: FolderInput,
-        description: "Manual CSV and PDF research intake",
+        description: "Manual uploads, automated sources, and recent activity",
       },
       {
-        href: "/admin/snapshots",
-        label: "Snapshots",
-        icon: FileJson,
-        description: "Raw source payload staging",
-      },
-      {
-        href: "/admin/review",
-        label: "Review & Normalize",
-        icon: CheckCircle2,
-        description: "Mapping, confidence, and governance",
-      },
-      {
-        href: "/admin/freshness",
-        label: "Freshness & Quality",
-        icon: Clock3,
-        description: "Coverage strength, confidence, and staleness",
-      },
-      {
-        href: "/admin/benchmarks",
-        label: "Benchmarks",
-        icon: BarChart3,
-        description: "Published shared-market benchmark rows",
-      },
-      {
-        href: "/admin/publish",
-        label: "Publish",
-        icon: ShieldCheck,
-        description: "Promote reviewed data into the live market layer",
+        href: "/admin/market",
+        label: "Market Overview",
+        icon: Database,
+        description: "Live coverage, freshness, benchmarks, and advanced controls",
       },
     ],
   },
@@ -117,5 +70,5 @@ export const ADMIN_NAV_GROUPS: AdminNavGroup[] = [
 
 export const LEGACY_ADMIN_ROUTE_REDIRECTS: Record<string, string> = {
   "/admin/insights": "/admin",
-  "/admin/pipeline": "/admin/workbench",
+  "/admin/pipeline": "/admin/market",
 };

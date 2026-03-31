@@ -4,12 +4,14 @@ const {
   requireSuperAdminMock,
   createServiceClientMock,
   extractTextFromPdfBufferMock,
-  refreshPlatformMarketPoolBestEffortMock,
+  refreshPlatformMarketPoolMock,
+  invalidateMarketBenchmarkCacheMock,
 } = vi.hoisted(() => ({
   requireSuperAdminMock: vi.fn(),
   createServiceClientMock: vi.fn(),
   extractTextFromPdfBufferMock: vi.fn(),
-  refreshPlatformMarketPoolBestEffortMock: vi.fn(),
+  refreshPlatformMarketPoolMock: vi.fn(),
+  invalidateMarketBenchmarkCacheMock: vi.fn(),
 }));
 
 vi.mock("@/lib/admin/auth", () => ({
@@ -24,8 +26,12 @@ vi.mock("@/lib/admin/research/pdf-text", () => ({
   extractTextFromPdfBuffer: extractTextFromPdfBufferMock,
 }));
 
-vi.mock("@/lib/benchmarks/platform-market-sync", () => ({
-  refreshPlatformMarketPoolBestEffort: refreshPlatformMarketPoolBestEffortMock,
+vi.mock("@/lib/benchmarks/platform-market-pool", () => ({
+  refreshPlatformMarketPool: refreshPlatformMarketPoolMock,
+}));
+
+vi.mock("@/lib/benchmarks/platform-market", () => ({
+  invalidateMarketBenchmarkCache: invalidateMarketBenchmarkCacheMock,
 }));
 
 type UploadRow = {
@@ -33,13 +39,13 @@ type UploadRow = {
   file_name: string;
   file_path: string;
   file_kind: "pdf";
-  ingestion_status: "uploaded" | "reviewing" | "ingested";
+  ingestion_status: "uploaded" | "reviewing" | "published";
 };
 
 type ReviewRow = Record<string, unknown> & {
   id: string;
   upload_id: string;
-  review_status: "pending" | "approved" | "rejected" | "ingested";
+  review_status: "pending" | "approved" | "rejected" | "published";
 };
 
 function createPilotSupabase() {
@@ -165,6 +171,29 @@ function createPilotSupabase() {
           };
         }
 
+        if (table === "market_publish_events") {
+          return {
+            insert(payload: Record<string, unknown>) {
+              return {
+                select() {
+                  return {
+                    single() {
+                      return Promise.resolve({
+                        data: {
+                          id: "publish-1",
+                          ...payload,
+                          published_at: "2026-03-17T10:00:00.000Z",
+                        },
+                        error: null,
+                      });
+                    },
+                  };
+                },
+              };
+            },
+          };
+        }
+
         throw new Error(`Unexpected table: ${table}`);
       },
     },
@@ -182,7 +211,7 @@ describe("admin inbox PDF pilot routes", () => {
     vi.clearAllMocks();
     requireSuperAdminMock.mockResolvedValue({ user: { id: "admin-1" } });
     extractTextFromPdfBufferMock.mockResolvedValue(EXTRACTED_TEXT);
-    refreshPlatformMarketPoolBestEffortMock.mockResolvedValue(undefined);
+    refreshPlatformMarketPoolMock.mockResolvedValue({ rowCount: 1 });
     vi.stubEnv("PLATFORM_WORKSPACE_ID", "platform-workspace");
   });
 
@@ -262,7 +291,7 @@ describe("admin inbox PDF pilot routes", () => {
     expect(response.status).toBe(200);
     expect(payload).toEqual({
       ok: true,
-      ingestedCount: 1,
+      publishedCount: 1,
       failedCount: 0,
     });
     expect(supabase.state.salaryBenchmarks).toEqual([
@@ -281,8 +310,12 @@ describe("admin inbox PDF pilot routes", () => {
         p75: 45_000,
       }),
     ]);
-    expect(supabase.state.reviewRows[0]?.review_status).toBe("ingested");
-    expect(supabase.state.uploads.get("upload-1")?.ingestion_status).toBe("ingested");
-    expect(refreshPlatformMarketPoolBestEffortMock).toHaveBeenCalledTimes(1);
+    expect(supabase.state.reviewRows[0]?.review_status).toBe("published");
+    expect(supabase.state.uploads.get("upload-1")?.ingestion_status).toBe("published");
+    expect(supabase.state.uploads.get("upload-1")?.ingestion_notes).toBe(
+      "Published 1 Robert Walters rows to the live market dataset.",
+    );
+    expect(refreshPlatformMarketPoolMock).toHaveBeenCalledTimes(1);
+    expect(invalidateMarketBenchmarkCacheMock).toHaveBeenCalledTimes(1);
   });
 });

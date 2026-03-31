@@ -16,7 +16,7 @@ export type AdminInboxPdfReviewStatus =
   | "pending"
   | "approved"
   | "rejected"
-  | "ingested";
+  | "published";
 
 export type AdminInboxUpload = {
   id: string;

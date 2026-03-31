@@ -16,6 +16,8 @@ import { LEVELS, type SalaryBenchmark } from "@/lib/dashboard/dummy-data";
 import { useOffersStore } from "@/lib/offers/store";
 import type { OfferExportPayload } from "@/lib/offers/types";
 import { getBenchmark } from "@/lib/benchmarks/data-service";
+import { normalizeAiBreakdown } from "@/lib/benchmarks/detail-ai";
+import { SharedAiCallout } from "../shared-ai-callout";
 
 interface OfferBuilderViewProps {
   result: BenchmarkResult;
@@ -50,8 +52,9 @@ export function OfferBuilderView({ result }: OfferBuilderViewProps) {
   const [lastExportPayload, setLastExportPayload] = useState<OfferExportPayload | null>(null);
   const [lastOfferId, setLastOfferId] = useState<string | null>(null);
   const [levelBenchmarks, setLevelBenchmarks] = useState<Record<string, SalaryBenchmark>>({});
-
-  const [basicPercent] = useState<number>(100);
+  const aiLevelBands = result.aiDetailBriefing?.views.offerBuilder.levelBands
+    ?? result.aiDetailBriefing?.views.levelTable.levelBands
+    ?? null;
 
   useEffect(() => {
     const loadEmployees = async () => {
@@ -107,10 +110,15 @@ export function OfferBuilderView({ result }: OfferBuilderViewProps) {
   };
 
   /* Salary breakdown */
-  const remainingPercent = 100 - basicPercent;
-  const housingPercent = Math.round(remainingPercent * 0.6);
-  const transportPercent = Math.round(remainingPercent * 0.25);
-  const otherPercent = remainingPercent - housingPercent - transportPercent;
+  const aiPackageBreakdown = normalizeAiBreakdown(
+    result.aiDetailBriefing?.views.offerBuilder.packageBreakdown
+      ?? result.aiDetailBriefing?.views.compMix.compensationMix
+      ?? null,
+  );
+  const basicPercent = aiPackageBreakdown?.basicSalaryPct ?? 100;
+  const housingPercent = aiPackageBreakdown?.housingPct ?? 0;
+  const transportPercent = aiPackageBreakdown?.transportPct ?? 0;
+  const otherPercent = aiPackageBreakdown?.otherAllowancesPct ?? 0;
 
   const breakdownItems = [
     { ...BREAKDOWN_COLORS[0], percent: basicPercent, amount: Math.round((offerValue * basicPercent) / 100) },
@@ -127,7 +135,46 @@ export function OfferBuilderView({ result }: OfferBuilderViewProps) {
     return LEVELS.slice(start, end);
   }, [level.id]);
 
+  const aiLevelBenchmarks = useMemo(
+    () =>
+      Object.fromEntries(
+        (aiLevelBands ?? [])
+          .filter((band) => shownLevels.some((entry) => entry.id === band.levelId))
+          .map((band) => [
+            band.levelId,
+            {
+              roleId: role.id,
+              locationId: location.id,
+              levelId: band.levelId,
+              currency: benchmark.currency,
+              payPeriod: "annual" as const,
+              sourcePayPeriod: "annual" as const,
+              percentiles: {
+                p10: band.p10,
+                p25: band.p25,
+                p50: band.p50,
+                p75: band.p75,
+                p90: band.p90,
+              },
+              sampleSize: 0,
+              confidence: "Medium" as const,
+              lastUpdated: benchmark.lastUpdated,
+              momChange: 0,
+              yoyChange: 0,
+              trend: [],
+              benchmarkSource: "ai-estimated" as const,
+            },
+          ]),
+      ) as Record<string, SalaryBenchmark>,
+    [aiLevelBands, benchmark.currency, benchmark.lastUpdated, location.id, role.id, shownLevels],
+  );
+
   useEffect(() => {
+    if (Object.keys(aiLevelBenchmarks).length > 0) {
+      setLevelBenchmarks(aiLevelBenchmarks);
+      return;
+    }
+
     const run = async () => {
       const entries = await Promise.all(
         shownLevels.map(async (lvl) => {
@@ -146,7 +193,7 @@ export function OfferBuilderView({ result }: OfferBuilderViewProps) {
       setLevelBenchmarks(next);
     };
     void run();
-  }, [location.id, result.formData.companySize, result.formData.industry, role.id, shownLevels]);
+  }, [aiLevelBenchmarks, location.id, result.formData.companySize, result.formData.industry, role.id, shownLevels]);
 
   const downloadExportPayload = (payload: OfferExportPayload, offerId: string) => {
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
@@ -435,6 +482,11 @@ export function OfferBuilderView({ result }: OfferBuilderViewProps) {
           <p className="mt-2 text-sm text-brand-600">
             Check the proposed package against nearby seniority levels before sending the offer.
           </p>
+          <p className="mt-2 text-xs text-brand-500">
+            {Object.keys(aiLevelBenchmarks).length > 0
+              ? "AI-derived adjacent-level anchors are being used for this market view."
+              : "Anchors are being loaded from segmented market benchmark rows for adjacent levels."}
+          </p>
         </div>
         <div className="space-y-8">
           {shownLevels.map((lvl) => {
@@ -499,6 +551,8 @@ export function OfferBuilderView({ result }: OfferBuilderViewProps) {
           })}
         </div>
       </div>
+
+      <SharedAiCallout section={result.aiDetailBriefing?.views.offerBuilder} />
     </div>
   );
 }

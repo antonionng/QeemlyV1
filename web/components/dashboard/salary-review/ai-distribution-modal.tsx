@@ -201,7 +201,7 @@ export function AiDistributionModal({ isOpen, onClose, request, onApprove }: AiD
                       Review the policy, budget impact, and benchmark rationale before applying any proposal.
                     </h3>
                     <p className="mt-2 text-sm leading-relaxed text-accent-700">
-                      {budgetModel?.policyLabel} {budgetModel?.allocationLabel}
+                      {state.plan.strategicSummary ?? `${budgetModel?.policyLabel} ${budgetModel?.allocationLabel}`}
                     </p>
                   </div>
                   <div className="rounded-2xl border border-accent-200 bg-white px-4 py-3 shadow-sm">
@@ -216,6 +216,24 @@ export function AiDistributionModal({ isOpen, onClose, request, onApprove }: AiD
                   </div>
                 </div>
               </div>
+
+              {state.plan.strategicSummary && (
+                <div className="rounded-2xl border border-violet-200 bg-violet-50/70 p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-100 text-violet-700">
+                      <Sparkles className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-violet-700">
+                        Analyst briefing
+                      </p>
+                      <p className="mt-2 text-sm leading-relaxed text-violet-950">
+                        {state.plan.strategicSummary}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="rounded-2xl border border-border bg-accent-50/40 p-4">
@@ -308,15 +326,17 @@ export function AiDistributionModal({ isOpen, onClose, request, onApprove }: AiD
                               Why AI suggested this
                             </summary>
                             <div className="mt-2 space-y-2 text-xs text-accent-600">
-                              {item.rationale.map((reason) => (
-                                <p key={reason}>{reason}</p>
-                              ))}
-                              <div className="space-y-1 pt-1">
+                              <p className="text-sm leading-relaxed text-accent-700">
+                                {item.aiRationale ?? item.rationale.join(" ")}
+                              </p>
+                              <div className="flex flex-wrap gap-2 pt-1">
                                 {item.factors.map((factor) => (
-                                  <div key={factor.key} className="flex items-center justify-between gap-2">
-                                    <span>{factor.label}: {factor.value}</span>
-                                    <span className="text-accent-500">w {factor.weight.toFixed(2)}</span>
-                                  </div>
+                                  <span
+                                    key={factor.key}
+                                    className="rounded-full border border-accent-200 bg-white px-2.5 py-1 text-[11px] font-medium text-accent-700"
+                                  >
+                                    {factor.label}: {factor.value}
+                                  </span>
                                 ))}
                               </div>
                             </div>

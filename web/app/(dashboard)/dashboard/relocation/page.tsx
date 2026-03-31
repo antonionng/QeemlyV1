@@ -22,6 +22,7 @@ import {
   type City,
   type CostBreakdown,
 } from "@/lib/relocation/col-data";
+import type { RelocationAiAdvisory } from "@/lib/relocation/ai-advisory";
 
 const DEFAULT_FORM_DATA: RelocationFormData = {
   homeCityId: "london",
@@ -30,6 +31,20 @@ const DEFAULT_FORM_DATA: RelocationFormData = {
   compApproach: "hybrid",
   hybridCap: 110,
   rentOverride: undefined,
+  roleId: "swe",
+  levelId: "ic3",
+};
+
+type RelocationAdvisoryState = {
+  deterministicResult: {
+    recommendedSalary: number;
+    recommendedRange: RelocationResult["recommendedRange"];
+  };
+  aiAdvisory: RelocationAiAdvisory | null;
+  recommendedResult: {
+    recommendedSalary: number;
+    recommendedRange: RelocationResult["recommendedRange"];
+  };
 };
 
 const COST_CATEGORIES: {
@@ -201,41 +216,110 @@ function ComparisonCard({ result }: { result: RelocationResult }) {
 
 function RecommendationCard({
   result,
+  deterministicResult,
   compApproach,
   hybridCap,
+  aiAdvisory,
+  advisoryStatus,
 }: {
   result: RelocationResult;
+  deterministicResult: RelocationResult;
   compApproach: RelocationFormData["compApproach"];
   hybridCap: number;
+  aiAdvisory: RelocationAiAdvisory | null;
+  advisoryStatus: "idle" | "loading" | "ready" | "unavailable";
 }) {
   const { min, max } = result.recommendedRange;
   const target = result.recommendedSalary;
+  const isAiPrimary = Boolean(aiAdvisory);
+  const risks = aiAdvisory?.risks ?? [];
+  const policyNotes = aiAdvisory?.policyNotes ?? [];
+  const supportSuggestions = aiAdvisory?.supportSuggestions ?? [];
 
   return (
     <Card className="panel p-6 sm:p-8">
       <div className="space-y-8">
-        <div>
+        <div className="space-y-3">
           <h2 className="overview-section-title">Recommended compensation</h2>
           <p className="overview-supporting-text mt-1">
             Use the current cost gap and pay approach to guide relocation offers.
           </p>
+          {advisoryStatus === "loading" ? (
+            <p className="text-sm font-medium text-brand-600">
+              Loading Qeemly AI relocation advisory...
+            </p>
+          ) : null}
+          {aiAdvisory ? (
+            <div className="rounded-2xl border border-brand-200 bg-brand-50/80 p-4">
+              <p className="text-sm font-semibold text-brand-700">
+                {aiAdvisory.recommendationHeadline}
+              </p>
+              <p className="mt-2 text-sm text-accent-700">{aiAdvisory.summary}</p>
+              <p className="mt-3 text-sm font-medium text-accent-800">
+                {aiAdvisory.rationale}
+              </p>
+              {risks.length > 0 ? (
+                <div className="mt-3 space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-accent-500">
+                    Risks
+                  </p>
+                  {risks.map((risk) => (
+                    <p key={risk} className="text-sm text-accent-700">
+                      {risk}
+                    </p>
+                  ))}
+                </div>
+              ) : null}
+              {policyNotes.length > 0 ? (
+                <div className="mt-3 space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-accent-500">
+                    Policy notes
+                  </p>
+                  {policyNotes.map((note) => (
+                    <p key={note} className="text-sm text-accent-700">
+                      {note}
+                    </p>
+                  ))}
+                </div>
+              ) : null}
+              {supportSuggestions.length > 0 ? (
+                <div className="mt-3 space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-[0.08em] text-accent-500">
+                    Support suggestions
+                  </p>
+                  {supportSuggestions.map((suggestion) => (
+                    <p key={suggestion} className="text-sm text-accent-700">
+                      {suggestion}
+                    </p>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : advisoryStatus === "unavailable" ? (
+            <div className="rounded-2xl border border-border bg-accent-50/70 p-4">
+              <p className="text-sm font-medium text-accent-700">
+                Qeemly AI advisory is unavailable right now. Showing the deterministic relocation recommendation instead.
+              </p>
+            </div>
+          ) : null}
         </div>
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
           <div className="rounded-2xl border border-border bg-white p-5">
             <div>
               <h3 className="text-base font-semibold text-accent-900">
-                Recommended Salary Needed
+                {isAiPrimary ? "AI Recommended Salary" : "Recommended Salary Needed"}
               </h3>
               <p className="mt-1 text-sm text-accent-500">
-                Salary required in {result.targetCity.name} to maintain current
-                lifestyle.
+                {isAiPrimary
+                  ? `AI-adjusted relocation recommendation for ${result.targetCity.name}, grounded in market and policy context.`
+                  : `Salary required in ${result.targetCity.name} to maintain current lifestyle.`}
               </p>
             </div>
 
-            <div className="mt-6 flex flex-wrap items-end gap-4">
+            <div className="mt-6 flex flex-wrap items-start gap-4">
               <p className="text-3xl font-semibold tracking-tight text-accent-900 sm:text-5xl">
-                {Math.round(target).toLocaleString()}
+                {formatCurrency(target)}
               </p>
               <div className="rounded-xl bg-danger-soft px-3 py-2">
                 <p className="text-sm font-semibold text-danger">
@@ -244,6 +328,11 @@ function RecommendationCard({
                 <p className="text-xs text-accent-600">current salary</p>
               </div>
             </div>
+            {isAiPrimary ? (
+              <p className="mt-4 text-sm text-accent-600">
+                Deterministic baseline: {formatCurrency(deterministicResult.recommendedSalary)}
+              </p>
+            ) : null}
           </div>
 
           <div className="rounded-2xl border border-border bg-white p-5">
@@ -300,6 +389,10 @@ function RecommendationCard({
 function RelocationPageContent() {
   const searchParams = useSearchParams();
   const [citiesVersion, setCitiesVersion] = useState(0);
+  const [advisoryStatus, setAdvisoryStatus] = useState<
+    "idle" | "loading" | "ready" | "unavailable"
+  >("idle");
+  const [advisory, setAdvisory] = useState<RelocationAdvisoryState | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -351,27 +444,117 @@ function RelocationPageContent() {
         DEFAULT_FORM_DATA.compApproach,
       hybridCap: cap ? Number(cap) : DEFAULT_FORM_DATA.hybridCap,
       rentOverride: undefined,
+      roleId: searchParams.get("role") || DEFAULT_FORM_DATA.roleId,
+      levelId: searchParams.get("level") || DEFAULT_FORM_DATA.levelId,
+    };
+  });
+
+  const [analysisFormData, setAnalysisFormData] = useState<RelocationFormData>(() => {
+    const home = searchParams.get("home");
+    const target = searchParams.get("target");
+    const salary = searchParams.get("salary");
+    const approach = searchParams.get("approach");
+    const cap = searchParams.get("cap");
+
+    return {
+      homeCityId: home || DEFAULT_FORM_DATA.homeCityId,
+      targetCityId: target || DEFAULT_FORM_DATA.targetCityId,
+      baseSalary: salary ? Number(salary) : DEFAULT_FORM_DATA.baseSalary,
+      compApproach:
+        (approach as RelocationFormData["compApproach"]) ||
+        DEFAULT_FORM_DATA.compApproach,
+      hybridCap: cap ? Number(cap) : DEFAULT_FORM_DATA.hybridCap,
+      rentOverride: undefined,
+      roleId: searchParams.get("role") || DEFAULT_FORM_DATA.roleId,
+      levelId: searchParams.get("level") || DEFAULT_FORM_DATA.levelId,
     };
   });
 
   const result = useMemo(() => {
     if (
-      !formData.homeCityId ||
-      !formData.targetCityId ||
-      !formData.baseSalary
+      !analysisFormData.homeCityId ||
+      !analysisFormData.targetCityId ||
+      !analysisFormData.baseSalary
     ) {
       return null;
     }
     void citiesVersion;
     return calculateRelocation({
-      homeCityId: formData.homeCityId,
-      targetCityId: formData.targetCityId,
-      baseSalary: formData.baseSalary,
-      compApproach: formData.compApproach,
-      hybridCap: formData.hybridCap,
-      rentOverride: formData.rentOverride,
+      homeCityId: analysisFormData.homeCityId,
+      targetCityId: analysisFormData.targetCityId,
+      baseSalary: analysisFormData.baseSalary,
+      compApproach: analysisFormData.compApproach,
+      hybridCap: analysisFormData.hybridCap,
+      rentOverride: analysisFormData.rentOverride,
     });
-  }, [formData, citiesVersion]);
+  }, [analysisFormData, citiesVersion]);
+
+  const isAnalysisPending = useMemo(
+    () => JSON.stringify(formData) !== JSON.stringify(analysisFormData),
+    [analysisFormData, formData],
+  );
+
+  useEffect(() => {
+    if (!result || !analysisFormData.roleId || !analysisFormData.levelId) {
+      setAdvisory(null);
+      setAdvisoryStatus("idle");
+      return;
+    }
+
+    let isCancelled = false;
+    const controller = new AbortController();
+
+    async function loadAdvisory() {
+      setAdvisoryStatus("loading");
+
+      try {
+        const response = await fetch("/api/relocation/advisory", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            homeCityId: analysisFormData.homeCityId,
+            targetCityId: analysisFormData.targetCityId,
+            baseSalary: analysisFormData.baseSalary,
+            compApproach: analysisFormData.compApproach,
+            hybridCap: analysisFormData.hybridCap,
+            rentOverride: analysisFormData.rentOverride,
+            roleId: analysisFormData.roleId,
+            levelId: analysisFormData.levelId,
+          }),
+          signal: controller.signal,
+        });
+
+        if (!response.ok) {
+          throw new Error(`Relocation advisory failed with ${response.status}`);
+        }
+
+        const payload = (await response.json()) as RelocationAdvisoryState;
+        if (isCancelled) return;
+
+        setAdvisory(payload);
+        setAdvisoryStatus(payload.aiAdvisory ? "ready" : "unavailable");
+      } catch {
+        if (isCancelled) return;
+        setAdvisory(null);
+        setAdvisoryStatus("unavailable");
+      }
+    }
+
+    void loadAdvisory();
+
+    return () => {
+      isCancelled = true;
+      controller.abort();
+    };
+  }, [analysisFormData, result]);
+
+  const displayResult = advisory?.recommendedResult
+    ? {
+        ...result,
+        recommendedSalary: advisory.recommendedResult.recommendedSalary,
+        recommendedRange: advisory.recommendedResult.recommendedRange,
+      }
+    : result;
 
   return (
     <div className="bench-results relative z-10 space-y-8">
@@ -385,17 +568,28 @@ function RelocationPageContent() {
 
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(18rem,24rem)_minmax(0,1fr)]">
         <div className="xl:sticky xl:top-24">
-          <InputPanel data={formData} onChange={setFormData} />
+          <InputPanel
+            data={formData}
+            onChange={setFormData}
+            onRunAnalysis={() => {
+              setAnalysisFormData(formData);
+            }}
+            isAnalysisPending={isAnalysisPending}
+            isAnalyzing={advisoryStatus === "loading"}
+          />
         </div>
 
         <div className="space-y-6">
-          {result ? (
+          {displayResult ? (
             <>
-              <ComparisonCard result={result} />
+              <ComparisonCard result={displayResult} />
               <RecommendationCard
-                result={result}
+                result={displayResult}
+                deterministicResult={result}
                 compApproach={formData.compApproach}
                 hybridCap={formData.hybridCap}
+                aiAdvisory={advisory?.aiAdvisory ?? null}
+                advisoryStatus={advisoryStatus}
               />
             </>
           ) : (

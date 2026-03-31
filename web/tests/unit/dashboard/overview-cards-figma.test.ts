@@ -98,7 +98,8 @@ describe("Compensation health score grid", () => {
 
     expect(source).toContain('data-testid="overview-metrics-grid"');
     expect(source).not.toContain("lg:[grid-template-columns:2fr_1fr_1fr]");
-    expect(source).toContain("lg:grid-cols-[minmax(0,1.75fr)_minmax(22rem,1fr)]");
+    expect(source).toContain("items-start");
+    expect(source).toContain("2xl:grid-cols-[minmax(0,1.75fr)_minmax(24rem,1fr)]");
     expect(source).toContain("<HealthScore");
     expect(source).toContain("interactions={interactionMap}");
     expect(source).toContain("onInteract={handleOverviewInteraction}");
@@ -161,6 +162,7 @@ describe("Compensation health score grid", () => {
     );
 
     expect(html).toContain('data-testid="overview-stat-card-grid"');
+    expect(html).toContain("md:grid-cols-2");
     expect(html).toContain('data-testid="active-employees-card"');
     expect(html).toContain('data-testid="active-employees-card-action"');
     expect(html).toContain('data-testid="active-employees-card-tooltip"');

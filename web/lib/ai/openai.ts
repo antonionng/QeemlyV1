@@ -1,8 +1,9 @@
 import OpenAI from "openai";
 
 let openaiClient: OpenAI | null = null;
-const DEFAULT_CHAT_MODEL = "gpt-5-mini";
-const DEFAULT_ADVISORY_MODEL = "gpt-5.2";
+const DEFAULT_CHAT_MODEL = "gpt-5.4-mini";
+const DEFAULT_ADVISORY_MODEL = "gpt-5.4";
+const DEFAULT_BENCHMARK_MODEL = "gpt-5.4";
 
 export function getOpenAIClient(): OpenAI {
   if (!process.env.OPENAI_API_KEY) {
@@ -28,4 +29,8 @@ export function getChatModel(): string {
 
 export function getComplianceScoringModel(): string {
   return process.env.OPENAI_COMPLIANCE_SCORING_MODEL || getAdvisoryModel();
+}
+
+export function getBenchmarkModel(): string {
+  return process.env.OPENAI_BENCHMARK_MODEL || DEFAULT_BENCHMARK_MODEL;
 }

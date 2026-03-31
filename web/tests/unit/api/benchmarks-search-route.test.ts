@@ -4,9 +4,11 @@ import { invalidateMarketBenchmarkCache } from "@/lib/benchmarks/platform-market
 const {
   createClientMock,
   createServiceClientMock,
+  getAiBenchmarkForLevelMock,
 } = vi.hoisted(() => ({
   createClientMock: vi.fn(),
   createServiceClientMock: vi.fn(),
+  getAiBenchmarkForLevelMock: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -17,7 +19,28 @@ vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: createServiceClientMock,
 }));
 
+vi.mock("@/lib/benchmarks/ai-estimate", () => ({
+  getAiBenchmarkForLevel: getAiBenchmarkForLevelMock,
+}));
+
 import { GET } from "@/app/api/benchmarks/search/route";
+
+const aiDetailBriefing = {
+  executiveBriefing: "Shared AI executive market view.",
+  hiringSignal: "Hiring remains competitive for this role.",
+  negotiationPosture: "Keep room for negotiation at final offer stage.",
+  views: {
+    levelTable: { summary: "Level spacing remains healthy through IC4.", action: "Use the selected band as the anchor." },
+    aiInsights: { summary: "Above-median positioning will improve close rates.", action: "Stay disciplined around the target percentile." },
+    trend: { summary: "Momentum remains positive in the latest data window.", action: "Avoid assuming near-term cooling." },
+    salaryBreakdown: { summary: "Candidates react best to a clear cash-led package.", action: "Keep allowances easy to explain." },
+    industry: { summary: "Fintech keeps a persistent premium in this market.", action: "Expect comp references above general market norms." },
+    companySize: { summary: "Structured mid-market bands are still competitive.", action: "Use policy clarity as a differentiator." },
+    geoComparison: { summary: "Regional market gaps remain meaningful.", action: "Benchmark relocation cases separately." },
+    compMix: { summary: "Most value is concentrated in fixed cash.", action: "Avoid unnecessary package complexity." },
+    offerBuilder: { summary: "A decisive first offer still matters.", action: "Hold a small negotiation buffer in reserve." },
+  },
+};
 
 function createSessionSupabase(
   workspaceId = "workspace-1",
@@ -146,6 +169,7 @@ describe("GET /api/benchmarks/search", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     invalidateMarketBenchmarkCache();
+    getAiBenchmarkForLevelMock.mockResolvedValue(null);
   });
 
   it("returns the market benchmark through the real platform-market helper", async () => {
@@ -381,5 +405,110 @@ describe("GET /api/benchmarks/search", () => {
     expect(payload.diagnostics.market.readMode).toBe("session");
     expect(payload.diagnostics.market.error).toBeNull();
     expect(payload.diagnostics.market.clientWarning).toBeNull();
+  });
+
+  it("shows AI advisory alongside market data when market is strong", async () => {
+    createClientMock.mockResolvedValue(createSessionSupabase());
+    createServiceClientMock.mockReturnValue({
+      from: vi.fn((table: string) => {
+        if (table === "platform_market_benchmarks") {
+          return {
+            select: vi.fn().mockReturnThis(),
+            eq: vi.fn().mockReturnThis(),
+            order: vi.fn().mockReturnThis(),
+            range: vi.fn().mockResolvedValue({
+              data: [{
+                role_id: "swe-devops",
+                location_id: "dubai",
+                level_id: "ic2",
+                currency: "AED",
+                pay_period: "monthly",
+                p10: 12000,
+                p25: 14500,
+                p50: 16247,
+                p75: 19000,
+                p90: 21500,
+                sample_size: 18,
+                contributor_count: 18,
+                provenance: "blended",
+                industry: null,
+                company_size: null,
+              }],
+            }),
+          };
+        }
+        return createMarketSupabase().from(table);
+      }),
+    });
+    getAiBenchmarkForLevelMock.mockResolvedValue({
+      advisory: {
+        levels: [
+          { levelId: "ic2", levelName: "Mid-Level (IC2)", p10: 180000, p25: 200000, p50: 240000, p75: 280000, p90: 320000 },
+        ],
+        currency: "AED",
+        payPeriod: "annual",
+        reasoning: "Strong demand for DevOps in Dubai.",
+        marketContext: "UAE tech market is competitive.",
+        confidenceNote: "AI advisory based on regional patterns.",
+        industryInsight: null,
+        companySizeInsight: null,
+        detailBriefing: aiDetailBriefing,
+      },
+      level: { levelId: "ic2", levelName: "Mid-Level (IC2)", p10: 180000, p25: 200000, p50: 240000, p75: 280000, p90: 320000 },
+    });
+
+    const request = new Request(
+      "http://localhost/api/benchmarks/search?roleId=swe-devops&locationId=dubai&levelId=ic2",
+    ) as unknown as Parameters<typeof GET>[0];
+
+    const response = await GET(request);
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.benchmark).toMatchObject({ benchmarkSource: "market" });
+    expect(payload.aiAdvisory).toMatchObject({
+      levelEstimate: { levelId: "ic2", p50: 240000 },
+      reasoning: "Strong demand for DevOps in Dubai.",
+    });
+    expect(payload.aiDetailBriefing).toEqual(aiDetailBriefing);
+    expect(payload.diagnostics.ai.called).toBe(true);
+    expect(payload.diagnostics.ai.error).toBeNull();
+  });
+
+  it("replaces weak market data with AI as primary (no separate panel)", async () => {
+    createClientMock.mockResolvedValue(createSessionSupabase());
+    createServiceClientMock.mockReturnValue(createMarketSupabase());
+    getAiBenchmarkForLevelMock.mockResolvedValue({
+      advisory: {
+        levels: [
+          { levelId: "ic2", levelName: "Mid-Level (IC2)", p10: 180000, p25: 200000, p50: 240000, p75: 280000, p90: 320000 },
+        ],
+        currency: "AED",
+        payPeriod: "annual",
+        reasoning: "Based on GCC market patterns.",
+        marketContext: "UAE competitive market.",
+        confidenceNote: "AI advisory.",
+        industryInsight: null,
+        companySizeInsight: null,
+        detailBriefing: aiDetailBriefing,
+      },
+      level: { levelId: "ic2", levelName: "Mid-Level (IC2)", p10: 180000, p25: 200000, p50: 240000, p75: 280000, p90: 320000 },
+    });
+
+    const request = new Request(
+      "http://localhost/api/benchmarks/search?roleId=swe-devops&locationId=dubai&levelId=ic2",
+    ) as unknown as Parameters<typeof GET>[0];
+
+    const response = await GET(request);
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.benchmark).toMatchObject({
+      benchmarkSource: "ai-estimated",
+      percentiles: { p50: 240000 },
+    });
+    // AI data is folded into primary, no separate panel
+    expect(payload.aiAdvisory).toBeNull();
+    expect(payload.aiDetailBriefing).toEqual(aiDetailBriefing);
   });
 });

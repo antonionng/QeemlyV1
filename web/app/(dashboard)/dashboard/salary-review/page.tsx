@@ -303,12 +303,24 @@ function SalaryReviewPageContent() {
     handleTabChange(tab, null);
   };
 
+  const openDraftCycle = (proposalId: string) => {
+    const nextParams = new URLSearchParams();
+    nextParams.set("proposalId", proposalId);
+    router.push(`/dashboard/salary-review/new?${nextParams.toString()}`);
+  };
+
   const handleStartNewCycle = async () => {
     router.push("/dashboard/salary-review/new");
   };
 
   const handleContinueDraft = () => {
-    router.push("/dashboard/salary-review/new");
+    const activeProposalId = activeProposal?.id;
+    if (!activeProposalId) {
+      router.push("/dashboard/salary-review/new");
+      return;
+    }
+
+    openDraftCycle(activeProposalId);
   };
 
   const handleStartWithAiDraft = async () => {
@@ -690,7 +702,7 @@ function SalaryReviewPageContent() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => void selectCycle(cycle.id)}
+                        onClick={() => openDraftCycle(cycle.id)}
                         className="h-9 rounded-full border-border bg-white px-5 text-accent-700 hover:bg-accent-50"
                       >
                         Open Department Review
@@ -706,10 +718,11 @@ function SalaryReviewPageContent() {
             activeCycle={activeProposal}
             actionLabel={dashboardModel.hasDraft ? "Continue Draft" : "Start Review Cycle"}
             onPrimaryAction={dashboardModel.hasDraft ? handleContinueDraft : () => void handleStartNewCycle()}
+            onAiDraft={() => setShowAiModal(true)}
             onImport={() => setShowUploadModal(true)}
             onExport={handleExport}
             onReset={resetReview}
-            onSelectCycle={(proposalId) => void selectCycle(proposalId)}
+            onSelectCycle={openDraftCycle}
             initialQueryState={initialQueryState}
             showCycleList={false}
           />
@@ -721,7 +734,7 @@ function SalaryReviewPageContent() {
           cycles={dashboardModel.drafts}
           activeCycleId={activeProposal?.status === "draft" ? activeProposal.id : null}
           onStartWizard={() => void handleStartNewCycle()}
-          onSelectCycle={(proposalId) => void selectCycle(proposalId)}
+          onSelectCycle={openDraftCycle}
         />
       )}
 

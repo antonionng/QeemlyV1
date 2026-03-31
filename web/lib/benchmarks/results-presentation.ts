@@ -55,7 +55,7 @@ export function getBenchmarkPageTitle(step: BenchmarkPageStep): string {
 export function getBenchmarkConfidenceLabel(confidence: BenchmarkConfidence): string {
   if (confidence === "High") return "Very High Confidence";
   if (confidence === "Medium") return "Medium Confidence";
-  return "AI Estimated";
+  return "Low Confidence";
 }
 
 export function getBenchmarkResultsInsights({

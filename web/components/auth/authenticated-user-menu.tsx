@@ -2,7 +2,7 @@
 
 import clsx from "clsx";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   ChevronDown,
@@ -76,7 +76,7 @@ async function fetchAdminAccess(): Promise<boolean> {
   }
 }
 
-function buildMenuDefinitions(model: AuthenticatedMenuModel): MenuDefinition[] {
+function buildMenuDefinitions(model: AuthenticatedMenuModel, pathname: string | null): MenuDefinition[] {
   const items: MenuDefinition[] = [
     {
       key: "profile",
@@ -117,10 +117,11 @@ function buildMenuDefinitions(model: AuthenticatedMenuModel): MenuDefinition[] {
   );
 
   if (model.canAccessAdmin) {
+    const isInAdmin = pathname?.startsWith("/admin") ?? false;
     items.push({
       key: "super-admin",
-      label: "Super Admin",
-      href: "/admin",
+      label: isInAdmin ? "Dashboard" : "Super Admin",
+      href: isInAdmin ? "/dashboard" : "/admin",
       icon: <Shield className="h-4 w-4" />,
     });
   }
@@ -267,11 +268,13 @@ function AuthenticatedUserMenuContent({
   dark = false,
   model,
 }: AuthenticatedUserMenuContentProps) {
+  const pathname = usePathname();
+
   if (model.status !== "signed_in") {
     return null;
   }
 
-  const menuDefinitions = buildMenuDefinitions(model);
+  const menuDefinitions = buildMenuDefinitions(model, pathname);
 
   return (
     <DropdownMenu
@@ -340,7 +343,8 @@ export function AuthenticatedUserMenuMobileItems({
   model,
   dark = false,
 }: AuthenticatedUserMenuMobileItemsProps) {
-  const menuDefinitions = buildMenuDefinitions(model);
+  const pathname = usePathname();
+  const menuDefinitions = buildMenuDefinitions(model, pathname);
 
   return (
     <div className="flex flex-col gap-2">

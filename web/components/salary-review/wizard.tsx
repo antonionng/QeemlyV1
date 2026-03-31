@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -24,6 +24,7 @@ type SalaryReviewWizardProps = {
   onExport: () => void;
   onReset: () => void;
   onSubmitSuccess: (proposalId: string | null) => void;
+  resumeRequestedProposal?: boolean;
 };
 
 type WizardStep = "setup" | "draft" | "final";
@@ -85,6 +86,7 @@ export function SalaryReviewWizard({
   onExport,
   onReset,
   onSubmitSuccess,
+  resumeRequestedProposal = false,
 }: SalaryReviewWizardProps) {
   const {
     settings,
@@ -103,10 +105,28 @@ export function SalaryReviewWizard({
     updateDepartmentAllocation,
   } = useSalaryReview();
   const [activeStep, setActiveStep] = useState<WizardStep>("setup");
+  const [hasInitializedResumeStep, setHasInitializedResumeStep] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
   const [showAiModal, setShowAiModal] = useState(false);
+  const [showEntireTeamComparison, setShowEntireTeamComparison] = useState(false);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState<string | null>(null);
-  const isSplitReview = settings.reviewMode === "department_split";
+  const isDepartmentChildReview =
+    activeProposal?.review_mode === "department_split" && activeProposal.review_scope === "department";
+  const isSplitMasterReview = settings.reviewMode === "department_split" && !isDepartmentChildReview;
+  const scopedDepartment = isDepartmentChildReview ? activeProposal?.department ?? null : null;
+
+  useEffect(() => {
+    if (!resumeRequestedProposal || !activeProposal || hasInitializedResumeStep) {
+      return;
+    }
+
+    setActiveStep(activeProposal.review_scope === "master" ? "setup" : "draft");
+    setHasInitializedResumeStep(true);
+  }, [activeProposal, hasInitializedResumeStep, resumeRequestedProposal]);
+
+  useEffect(() => {
+    setShowEntireTeamComparison(false);
+  }, [scopedDepartment]);
 
   const aiPlanRequest: SalaryReviewAiPlanRequest = useMemo(
     () => ({
@@ -188,7 +208,13 @@ export function SalaryReviewWizard({
 
       <WizardStepBar
         activeStep={activeStep}
-        steps={isSplitReview ? ["setup"] : ["setup", "draft", "final"]}
+        steps={
+          isSplitMasterReview
+            ? ["setup"]
+            : isDepartmentChildReview
+              ? ["draft", "final"]
+              : ["setup", "draft", "final"]
+        }
         onStepChange={setActiveStep}
       />
 
@@ -222,7 +248,7 @@ export function SalaryReviewWizard({
                   })
                 }
                 className={`rounded-2xl border p-4 text-left ${
-                  !isSplitReview ? "border-[#6E56CF] bg-[#F7F5FF]" : "border-[#E6E8F0] bg-white"
+                  !isSplitMasterReview ? "border-[#6E56CF] bg-[#F7F5FF]" : "border-[#E6E8F0] bg-white"
                 }`}
               >
                 <p className="text-sm font-semibold text-[#1F2430]">Run Full Company Review</p>
@@ -237,7 +263,7 @@ export function SalaryReviewWizard({
                   syncDepartmentAllocations();
                 }}
                 className={`rounded-2xl border p-4 text-left ${
-                  isSplitReview ? "border-[#6E56CF] bg-[#F7F5FF]" : "border-[#E6E8F0] bg-white"
+                  isSplitMasterReview ? "border-[#6E56CF] bg-[#F7F5FF]" : "border-[#E6E8F0] bg-white"
                 }`}
               >
                 <p className="text-sm font-semibold text-[#1F2430]">Split By Department</p>
@@ -247,7 +273,7 @@ export function SalaryReviewWizard({
               </button>
             </div>
           </Card>
-          {isSplitReview ? (
+          {isSplitMasterReview ? (
             <Card className="rounded-2xl border-[#E6E8F0] bg-white p-6 shadow-none">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
@@ -330,7 +356,7 @@ export function SalaryReviewWizard({
               </div>
             </Card>
           ) : null}
-          {!isSplitReview ? (
+          {!isSplitMasterReview ? (
             <div className="flex flex-wrap gap-3">
             <Button
               type="button"
@@ -365,14 +391,23 @@ export function SalaryReviewWizard({
         </>
       ) : null}
 
-      {!isSplitReview && activeStep === "draft" ? (
+      {!isSplitMasterReview && activeStep === "draft" ? (
         <>
           <PayrollSummaryCards />
           <Card className="rounded-2xl border-[#E6E8F0] bg-white p-6 shadow-none">
             <div className="grid gap-6 xl:grid-cols-[1fr_320px]">
               <div className="space-y-4">
-                <SalaryReviewFilters actions={<ColumnVisibilityPanel />} />
+                <SalaryReviewFilters
+                  actions={<ColumnVisibilityPanel />}
+                  scopeDepartment={scopedDepartment}
+                  showEntireTeam={showEntireTeamComparison}
+                  onToggleEntireTeam={() =>
+                    setShowEntireTeamComparison((current) => !current)
+                  }
+                />
                 <SalaryReviewTable
+                  scopeDepartment={scopedDepartment}
+                  showEntireTeam={showEntireTeamComparison}
                   onSelectEmployee={(employee) => {
                     setSelectedEmployeeId(employee.id);
                   }}
@@ -443,7 +478,7 @@ export function SalaryReviewWizard({
         </>
       ) : null}
 
-      {!isSplitReview && activeStep === "final" ? (
+      {!isSplitMasterReview && activeStep === "final" ? (
         <>
           <PayrollSummaryCards />
           <BudgetUsageBar />

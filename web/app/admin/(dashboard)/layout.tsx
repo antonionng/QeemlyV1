@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Shield } from "lucide-react";
+import { AuthenticatedUserMenu } from "@/components/auth/authenticated-user-menu";
 import { Logo } from "@/components/logo";
 import { ADMIN_NAV_GROUPS } from "@/lib/admin/navigation";
 
@@ -71,14 +72,24 @@ export default function AdminDashboardLayout({
         </nav>
 
         {/* Footer */}
-        <div className="border-t border-border p-4">
+        <div className="border-t border-border space-y-3 p-4">
+          <div className="min-w-0">
+            <AuthenticatedUserMenu variant="marketing" />
+          </div>
           <p className="text-xs text-text-tertiary">Platform Administration</p>
         </div>
       </aside>
 
       {/* Main content */}
-      <main className="responsive-page-gutters min-w-0 flex-1 py-4 sm:py-6 lg:py-8">
-        <div className="responsive-page-shell min-w-0">{children}</div>
+      <main className="min-w-0 flex-1">
+        <header className="responsive-page-gutters sticky top-0 z-10 border-b border-border bg-surface-2/95 py-3 backdrop-blur supports-[backdrop-filter]:bg-surface-2/85">
+          <div className="responsive-page-shell flex min-w-0 items-center justify-end">
+            <AuthenticatedUserMenu variant="compact" />
+          </div>
+        </header>
+        <div className="responsive-page-gutters py-4 sm:py-6 lg:py-8">
+          <div className="responsive-page-shell min-w-0">{children}</div>
+        </div>
       </main>
     </div>
   );

@@ -3,7 +3,12 @@
 import React, { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ReviewCycleListCard, SalaryReviewOverview } from "@/components/salary-review/workspace";
+import {
+  ReviewCycleListCard,
+  SalaryReviewFilters,
+  SalaryReviewOverview,
+  SalaryReviewTable,
+} from "@/components/salary-review/workspace";
 import { useSalaryReview, type ReviewEmployee } from "@/lib/salary-review";
 import type { SalaryReviewProposalRecord } from "@/lib/salary-review/proposal-types";
 import type { SalaryReviewQueryState } from "@/lib/salary-review/url-state";
@@ -12,6 +17,7 @@ vi.mock("lucide-react", () => ({
   Calendar: () => React.createElement("svg"),
   ChevronDown: () => React.createElement("svg"),
   Download: () => React.createElement("svg"),
+  Sparkles: () => React.createElement("svg"),
   Search: () => React.createElement("svg"),
   Settings2: () => React.createElement("svg"),
   TrendingUp: () => React.createElement("svg"),
@@ -40,6 +46,21 @@ vi.mock("@/lib/benchmarks/trust", () => ({
     matchLabel: "Exact match",
     confidenceLabel: "High confidence",
   }),
+}));
+
+vi.mock("@/components/dashboard/salary-review/employee-detail-panel", () => ({
+  EmployeeDetailPanel: ({
+    employee,
+    onClose: _onClose,
+  }: {
+    employee: { firstName: string; lastName: string };
+    onClose: () => void;
+  }) =>
+    React.createElement(
+      "div",
+      { "data-testid": "employee-detail-panel" },
+      `AI detail for ${employee.firstName} ${employee.lastName}`,
+    ),
 }));
 
 function makeEmployee(overrides: Partial<ReviewEmployee> = {}): ReviewEmployee {
@@ -192,6 +213,7 @@ describe("SalaryReviewOverview", () => {
 
   it("shows the employee workspace first and keeps review-cycle setup behind an explicit action", async () => {
     const root = createRoot(container);
+    const onAiDraft = vi.fn();
 
     await act(async () => {
       root.render(
@@ -200,6 +222,7 @@ describe("SalaryReviewOverview", () => {
           activeCycle: null,
           actionLabel: "Start Review Cycle",
           onPrimaryAction: vi.fn(),
+          onAiDraft,
           onImport: vi.fn(),
           onExport: vi.fn(),
           onReset: vi.fn(),
@@ -211,6 +234,7 @@ describe("SalaryReviewOverview", () => {
     expect(container.textContent).toContain("Salary Review");
     expect(container.textContent).toContain("Ava Stone");
     expect(container.textContent).toContain("Start Review Cycle");
+    expect(container.textContent).toContain("AI Draft");
     expect(container.textContent).toContain("1 of 1 employees shown");
     expect(container.textContent).not.toContain("Review Settings");
 
@@ -252,6 +276,7 @@ describe("SalaryReviewOverview", () => {
           activeCycle: null,
           actionLabel: "Start Review Cycle",
           onPrimaryAction: vi.fn(),
+          onAiDraft: vi.fn(),
           onImport: vi.fn(),
           onExport: vi.fn(),
           onReset: vi.fn(),
@@ -263,6 +288,42 @@ describe("SalaryReviewOverview", () => {
     });
 
     expect(container.textContent).toContain("1 of 2 employees shown");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("opens the AI-capable employee detail panel from the overview table", async () => {
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        React.createElement(SalaryReviewOverview, {
+          cycles: [makeCycle()],
+          activeCycle: null,
+          actionLabel: "Start Review Cycle",
+          onPrimaryAction: vi.fn(),
+          onAiDraft: vi.fn(),
+          onImport: vi.fn(),
+          onExport: vi.fn(),
+          onReset: vi.fn(),
+          onSelectCycle: vi.fn(),
+        }),
+      );
+    });
+
+    const employeeButton = Array.from(container.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("Ava Stone"),
+    );
+
+    expect(employeeButton).toBeTruthy();
+
+    await act(async () => {
+      employeeButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(container.textContent).toContain("AI detail for Ava Stone");
 
     await act(async () => {
       root.unmount();
@@ -309,6 +370,138 @@ describe("ReviewCycleListCard", () => {
 
     expect(container.textContent).toContain("Engineering Review");
     expect(container.textContent).not.toContain("Annual Review");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+});
+
+describe("Department-scoped draft workspace", () => {
+  let container: HTMLDivElement;
+
+  beforeEach(() => {
+    (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+    container = document.createElement("div");
+    document.body.appendChild(container);
+
+    useSalaryReview.setState({
+      settings: {
+        cycle: "annual",
+        reviewMode: "department_split",
+        allocationMethod: "direct",
+        budgetType: "percentage",
+        budgetPercentage: 5,
+        budgetAbsolute: 0,
+        effectiveDate: "2026-04-01",
+        includeBonus: false,
+      },
+      employees: [
+        makeEmployee({ id: "eng-1", firstName: "Ava", department: "Engineering" }),
+        makeEmployee({ id: "data-1", firstName: "Lina", department: "Data" }),
+      ],
+      totalCurrentPayroll: 240_000,
+      totalProposedPayroll: 240_000,
+      totalIncrease: 0,
+      budgetUsed: 0,
+      budgetRemaining: 12_000,
+      filters: {
+        department: "all",
+        location: "all",
+        pool: "all",
+        benchmarkStatus: "all",
+        workflowStatus: "all",
+        bandFilter: "all",
+        performance: "all",
+        search: "",
+      },
+      visibleColumns: ["name", "role", "department", "location", "current", "proposed", "increase", "band", "performance"],
+      activeProposal: null,
+      cycles: [],
+      workflowByEmployee: {},
+      isLoading: false,
+      isUsingMockData: false,
+      departmentAllocations: [],
+      childCycles: [],
+      proposalItemsByEmployee: {},
+      approvalSteps: [],
+      proposalNotes: [],
+      proposalAuditEvents: [],
+      isProposalLoading: false,
+      approvalQueue: [],
+      selectedApprovalProposalId: null,
+      selectedApprovalProposal: null,
+      selectedApprovalDepartmentAllocations: [],
+      selectedApprovalChildCycles: [],
+      selectedApprovalItemsByEmployee: {},
+      selectedApprovalSteps: [],
+      selectedApprovalNotes: [],
+      selectedApprovalAuditEvents: [],
+      isApprovalQueueLoading: false,
+      isApprovalDetailLoading: false,
+      draftChanges: {},
+    });
+  });
+
+  afterEach(() => {
+    delete (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT;
+    vi.restoreAllMocks();
+    container.remove();
+  });
+
+  it("defaults department drafts to the scoped roster and exposes a compare action", async () => {
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        React.createElement(SalaryReviewFilters, {
+          scopeDepartment: "Engineering",
+          showEntireTeam: false,
+          onToggleEntireTeam: vi.fn(),
+        }),
+      );
+    });
+
+    expect(container.textContent).toContain("Show Entire Team");
+    expect(container.textContent).toContain("1 of 1 employees shown");
+    expect(container.textContent).toContain("Engineering roster");
+
+    const departmentSelect = container.querySelector("select");
+    expect(departmentSelect?.getAttribute("disabled")).not.toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("shows only the scoped department by default and can expand to the full team", async () => {
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        React.createElement(SalaryReviewTable, {
+          onSelectEmployee: vi.fn(),
+          scopeDepartment: "Engineering",
+          showEntireTeam: false,
+        }),
+      );
+    });
+
+    expect(container.textContent).toContain("Ava Stone");
+    expect(container.textContent).not.toContain("Lina Stone");
+
+    await act(async () => {
+      root.render(
+        React.createElement(SalaryReviewTable, {
+          onSelectEmployee: vi.fn(),
+          scopeDepartment: "Engineering",
+          showEntireTeam: true,
+        }),
+      );
+    });
+
+    expect(container.textContent).toContain("Ava Stone");
+    expect(container.textContent).toContain("Lina Stone");
 
     await act(async () => {
       root.unmount();

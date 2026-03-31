@@ -301,7 +301,7 @@ export default function CompanyOverviewPage() {
             </p>
           </div>
           <div
-            className="grid grid-cols-1 items-stretch gap-6 xl:grid-cols-[minmax(0,1.75fr)_minmax(24rem,1fr)]"
+            className="grid grid-cols-1 items-start gap-6 2xl:grid-cols-[minmax(0,1.75fr)_minmax(24rem,1fr)]"
             data-testid="overview-metrics-grid"
           >
             <HealthScore

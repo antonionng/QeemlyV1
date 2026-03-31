@@ -232,7 +232,7 @@ export function StatCards({ metrics, interactions, onInteract }: StatCardsProps)
   const metricValueClassName = "overview-metric-card-value shrink-0 whitespace-nowrap";
 
   return (
-    <div className="grid h-full min-w-0 auto-rows-fr gap-6 xl:grid-cols-1 2xl:grid-cols-2" data-testid="overview-stat-card-grid">
+    <div className="grid h-full min-w-0 auto-rows-fr gap-6 md:grid-cols-2" data-testid="overview-stat-card-grid">
       {interactions?.statCards.activeEmployees ? (
         <OverviewInteractiveSurface
           target={interactions.statCards.activeEmployees}

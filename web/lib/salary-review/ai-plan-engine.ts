@@ -382,6 +382,7 @@ export function buildSalaryReviewAiPlan(args: {
       proposedPercentage,
       confidence: entry.confidence,
       rationale: entry.rationale,
+      aiRationale: null,
       factors: entry.factors,
       benchmark: {
         provenance: entry.benchmark?.provenance ?? "none",
@@ -410,6 +411,7 @@ export function buildSalaryReviewAiPlan(args: {
 
   return {
     generatedAt: new Date().toISOString(),
+    strategicSummary: null,
     summary: {
       mode: "assistive",
       budget,

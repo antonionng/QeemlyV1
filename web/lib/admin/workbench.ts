@@ -8,9 +8,9 @@ export const ADMIN_DATA_OWNERSHIP = {
   superAdminWorkbench: [
     "Shared market source ingestion",
     "Manual CSV and PDF research intake",
-    "Normalization review",
-    "Data quality and freshness governance",
-    "Benchmark publishing",
+    "Live market freshness and quality monitoring",
+    "Published benchmark coverage review",
+    "Advanced market refresh diagnostics",
   ],
 } as const;
 
@@ -38,40 +38,22 @@ export function getWorkbenchCoverageSummary(input: {
 }) {
   return {
     sourceCoverageLabel: `${input.enabledSources} of ${input.totalSources} sources enabled`,
-    benchmarkCoverageLabel: `${input.totalBenchmarks} shared market rows ready for review`,
-    publishStatusLabel: `Publish status ${input.freshnessScore}`,
+    benchmarkCoverageLabel: `${input.totalBenchmarks} shared market rows live`,
+    publishStatusLabel: `Freshness status ${input.freshnessScore}`,
   };
 }
 
 export const WORKBENCH_STAGES = [
   {
     id: "intake",
-    label: "Inbox",
-    description: "Collect manual CSV and PDF research inputs before they affect the market dataset.",
-    href: "/admin/inbox",
+    label: "Data Intake",
+    description: "Manage manual uploads, automated sources, and recent ingestion activity in one operator workflow.",
+    href: "/admin/intake",
   },
   {
-    id: "snapshot",
-    label: "Snapshots",
-    description: "Inspect raw source payloads and staging records before normalization.",
-    href: "/admin/snapshots",
-  },
-  {
-    id: "review",
-    label: "Review & Normalize",
-    description: "Map roles, levels, locations, provenance, and confidence.",
-    href: "/admin/review",
-  },
-  {
-    id: "quality",
-    label: "Freshness & Quality",
-    description: "Monitor staleness, density, and confidence before publishing.",
-    href: "/admin/freshness",
-  },
-  {
-    id: "publish",
-    label: "Publish",
-    description: "Promote reviewed evidence into the live Qeemly market benchmark layer.",
-    href: "/admin/publish",
+    id: "market",
+    label: "Market Overview",
+    description: "See what is live now, monitor freshness, browse benchmarks, and open advanced diagnostics when needed.",
+    href: "/admin/market",
   },
 ] as const;

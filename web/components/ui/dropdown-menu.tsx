@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import clsx from "clsx";
 
 type DropdownMenuProps = {
@@ -17,7 +17,9 @@ export function DropdownMenu({
   className,
 }: DropdownMenuProps) {
   const [open, setOpen] = useState(false);
+  const [verticalAlign, setVerticalAlign] = useState<"down" | "up">("down");
   const containerRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   // Close on click outside
   useEffect(() => {
@@ -47,6 +49,37 @@ export function DropdownMenu({
     };
   }, [open]);
 
+  useLayoutEffect(() => {
+    if (!open || !containerRef.current || !menuRef.current) {
+      return;
+    }
+
+    const GAP_PX = 8;
+
+    function updateVerticalAlign() {
+      if (!containerRef.current || !menuRef.current) {
+        return;
+      }
+
+      const triggerRect = containerRef.current.getBoundingClientRect();
+      const menuRect = menuRef.current.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - triggerRect.bottom;
+      const spaceAbove = triggerRect.top;
+      const shouldOpenUp = spaceBelow < menuRect.height + GAP_PX && spaceAbove > spaceBelow;
+
+      setVerticalAlign(shouldOpenUp ? "up" : "down");
+    }
+
+    updateVerticalAlign();
+    window.addEventListener("resize", updateVerticalAlign);
+    window.addEventListener("scroll", updateVerticalAlign, true);
+
+    return () => {
+      window.removeEventListener("resize", updateVerticalAlign);
+      window.removeEventListener("scroll", updateVerticalAlign, true);
+    };
+  }, [open]);
+
   return (
     <div ref={containerRef} className={clsx("relative", className)}>
       <button
@@ -61,8 +94,10 @@ export function DropdownMenu({
 
       {open && (
         <div
+          ref={menuRef}
           className={clsx(
-            "dropdown-enter absolute top-full z-50 mt-2 min-w-[220px] rounded-xl border border-border/60 bg-white py-1.5 shadow-lg shadow-brand-900/10",
+            "dropdown-enter absolute z-50 min-w-[220px] rounded-xl border border-border/60 bg-white py-1.5 shadow-lg shadow-brand-900/10",
+            verticalAlign === "up" ? "bottom-full mb-2" : "top-full mt-2",
             align === "right" ? "right-0" : "left-0"
           )}
           role="menu"

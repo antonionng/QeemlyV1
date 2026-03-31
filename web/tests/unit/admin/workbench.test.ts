@@ -17,9 +17,9 @@ describe("admin workbench helpers", () => {
       superAdminWorkbench: [
         "Shared market source ingestion",
         "Manual CSV and PDF research intake",
-        "Normalization review",
-        "Data quality and freshness governance",
-        "Benchmark publishing",
+        "Live market freshness and quality monitoring",
+        "Published benchmark coverage review",
+        "Advanced market refresh diagnostics",
       ],
     });
   });
@@ -49,8 +49,8 @@ describe("admin workbench helpers", () => {
       }),
     ).toEqual({
       sourceCoverageLabel: "24 of 28 sources enabled",
-      benchmarkCoverageLabel: "720 shared market rows ready for review",
-      publishStatusLabel: "Publish status unknown",
+      benchmarkCoverageLabel: "720 shared market rows live",
+      publishStatusLabel: "Freshness status unknown",
     });
   });
 });

@@ -4,15 +4,15 @@ import React from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import AdminInboxPage from "@/app/admin/(dashboard)/inbox/page";
+import AdminIntakePage from "@/app/admin/(dashboard)/intake/page";
 
-describe("AdminInboxPage", () => {
+describe("AdminIntakePage", () => {
   let uploads: Array<Record<string, unknown>>;
   let reviewRows: Array<Record<string, unknown>>;
   let extractCount: number;
   let ingestResponse: {
     ok: boolean;
-    ingestedCount: number;
+    publishedCount: number;
     failedCount: number;
     failures?: string[];
   };
@@ -22,7 +22,7 @@ describe("AdminInboxPage", () => {
     uploads = [];
     reviewRows = [];
     extractCount = 0;
-    ingestResponse = { ok: true, ingestedCount: 1, failedCount: 0 };
+    ingestResponse = { ok: true, publishedCount: 1, failedCount: 0 };
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -166,12 +166,12 @@ describe("AdminInboxPage", () => {
         if (url === "/api/admin/inbox/upload-1/ingest" && init?.method === "POST") {
           const row = reviewRows[0];
           if (row) {
-            row.review_status = "ingested";
+            row.review_status = "published";
           }
           const upload = uploads[0];
           if (upload) {
-            upload.ingestion_status = "ingested";
-            upload.ingestion_notes = "Ingested 1 approved Robert Walters rows.";
+            upload.ingestion_status = "published";
+            upload.ingestion_notes = "Published 1 Robert Walters rows to the live market dataset.";
           }
           return new Response(JSON.stringify(ingestResponse), {
             status: 200,
@@ -196,7 +196,7 @@ describe("AdminInboxPage", () => {
     const root = createRoot(container);
 
     await act(async () => {
-      root.render(React.createElement(AdminInboxPage));
+      root.render(React.createElement(AdminIntakePage));
     });
 
     expect(container.textContent).toContain("No uploaded research assets yet");
@@ -260,7 +260,7 @@ describe("AdminInboxPage", () => {
     const root = createRoot(container);
 
     await act(async () => {
-      root.render(React.createElement(AdminInboxPage));
+      root.render(React.createElement(AdminIntakePage));
     });
 
     expect(container.textContent).toContain("Robert Walters Tech Guide.pdf");
@@ -298,8 +298,8 @@ describe("AdminInboxPage", () => {
       ingestButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    expect(container.textContent).toContain("1 approved PDF row moved into market staging.");
-    expect(container.textContent).toContain("ingested");
+    expect(container.textContent).toContain("1 approved PDF row published to the live market dataset.");
+    expect(container.textContent).toContain("published");
 
     await act(async () => {
       root.unmount();
@@ -344,7 +344,7 @@ describe("AdminInboxPage", () => {
     });
     ingestResponse = {
       ok: false,
-      ingestedCount: 1,
+      publishedCount: 1,
       failedCount: 2,
       failures: ["row-2: Unmapped level", "row-3: Unmapped role"],
     };
@@ -354,7 +354,7 @@ describe("AdminInboxPage", () => {
     const root = createRoot(container);
 
     await act(async () => {
-      root.render(React.createElement(AdminInboxPage));
+      root.render(React.createElement(AdminIntakePage));
     });
 
     const reviewButton = Array.from(container.querySelectorAll("button")).find((button) =>
@@ -375,7 +375,9 @@ describe("AdminInboxPage", () => {
       ingestButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    expect(container.textContent).toContain("1 approved PDF row moved into market staging. 2 approved rows still need fixes.");
+    expect(container.textContent).toContain(
+      "1 approved PDF row published to the live market dataset. 2 approved rows still need fixes.",
+    );
     expect(container.textContent).toContain("row-2: Unmapped level");
     expect(container.textContent).toContain("row-3: Unmapped role");
 
@@ -450,7 +452,7 @@ describe("AdminInboxPage", () => {
     const root = createRoot(container);
 
     await act(async () => {
-      root.render(React.createElement(AdminInboxPage));
+      root.render(React.createElement(AdminIntakePage));
     });
 
     const reviewButton = Array.from(container.querySelectorAll("button")).find((button) =>

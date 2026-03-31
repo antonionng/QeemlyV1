@@ -7,6 +7,7 @@ import { getBenchmark } from "@/lib/benchmarks/data-service";
 import { COMPANY_SIZES, type SalaryBenchmark } from "@/lib/dashboard/dummy-data";
 import { formatBenchmarkCompact, toBenchmarkDisplayValue } from "@/lib/utils/currency";
 import { useSalaryView } from "@/lib/salary-view-store";
+import { SharedAiCallout } from "../shared-ai-callout";
 
 interface CompanySizeViewProps {
   result: BenchmarkResult;
@@ -25,8 +26,27 @@ export function CompanySizeView({ result }: CompanySizeViewProps) {
     const ordered = [companySize, ...COMPANY_SIZES.filter((size) => size !== companySize)];
     return ordered.filter(Boolean).slice(0, 5);
   }, [companySize]);
+  const aiComparisonPoints = result.aiDetailBriefing?.views.companySize.comparisonPoints ?? null;
+
+  const aiCompanySizeData = useMemo(
+    () =>
+      aiComparisonPoints?.map((point) => ({
+        size: point.label,
+        median: point.median,
+        isCompanySize: point.id === companySize || point.label === companySize,
+        sampleSize: point.sampleSize,
+        isFallback: false,
+      })) ?? [],
+    [aiComparisonPoints, companySize],
+  );
 
   useEffect(() => {
+    if (aiCompanySizeData.length > 0) {
+      setCompanySizeBenchmarks({});
+      setFallbackBenchmark(null);
+      return;
+    }
+
     const run = async () => {
       const entries = await Promise.all(
         sizesToLoad.map(async (size) => {
@@ -65,9 +85,11 @@ export function CompanySizeView({ result }: CompanySizeViewProps) {
     };
 
     void run();
-  }, [level.id, location.id, result.formData.industry, role.id, sizesToLoad]);
+  }, [aiCompanySizeData.length, level.id, location.id, result.formData.industry, role.id, sizesToLoad]);
 
-  const companySizeData = sizesToLoad
+  const companySizeData = aiCompanySizeData.length > 0
+    ? aiCompanySizeData
+    : sizesToLoad
     .map((size) => {
       const nextBenchmark = companySizeBenchmarks[size];
       if (!nextBenchmark) return null;
@@ -90,8 +112,10 @@ export function CompanySizeView({ result }: CompanySizeViewProps) {
     sampleSize: number;
     isFallback?: boolean;
   }>;
+  const showSampleSize = (sampleSize: number | null | undefined) =>
+    typeof sampleSize === "number" && sampleSize > 0;
   const fallbackRow =
-    companySizeData.length === 0 && fallbackBenchmark
+    aiCompanySizeData.length === 0 && companySizeData.length === 0 && fallbackBenchmark
       ? {
           size: "Broader market",
           median: toBenchmarkDisplayValue(fallbackBenchmark.percentiles.p50, {
@@ -153,7 +177,7 @@ export function CompanySizeView({ result }: CompanySizeViewProps) {
                 {formatBenchmarkCompact(item.median, targetCurrency)}
               </div>
               <div className="w-16 text-right text-xs text-brand-500">
-                n={item.sampleSize}
+                {showSampleSize(item.sampleSize) ? `n=${item.sampleSize}` : "AI cohort"}
               </div>
             </div>
           );
@@ -169,9 +193,13 @@ export function CompanySizeView({ result }: CompanySizeViewProps) {
         </p>
       ) : (
         <p className="mt-4 text-xs text-brand-500">
-          Only cohorts with real segmented market matches are shown here. Missing cohorts fall back to the broader market row.
+          {aiCompanySizeData.length > 0
+            ? "Company-size medians are being shown from the shared Qeemly AI Advisory briefing."
+            : "Only cohorts with real segmented market matches are shown here. Missing cohorts fall back to the broader market row."}
         </p>
       )}
+
+      <SharedAiCallout section={result.aiDetailBriefing?.views.companySize} />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AdminPageError } from "@/components/admin/admin-page-error";
 import { fetchAdminJson, normalizeAdminApiError, type NormalizedAdminApiError } from "@/lib/admin/api-client";
 import {
@@ -63,7 +64,7 @@ function getRelativeTime(dateStr: string): string {
   return `${diffDays}d ago`;
 }
 
-export default function SourcesPage() {
+export function SourcesPageContent({ embedded = false }: { embedded?: boolean }) {
   const [sources, setSources] = useState<Source[]>([]);
   const [error, setError] = useState<NormalizedAdminApiError | null>(null);
   const [loading, setLoading] = useState(true);
@@ -163,13 +164,22 @@ export default function SourcesPage() {
       )}
 
       <AdminPageError error={error} onRetry={fetchSources} className="mb-6" />
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="page-title">Ingestion Sources</h1>
-          <p className="page-subtitle">
-            Manage data sources feeding into the benchmark pipeline
-          </p>
-        </div>
+      <div className="mb-6 flex items-center justify-between">
+        {!embedded ? (
+          <div>
+            <h1 className="page-title">Ingestion Sources</h1>
+            <p className="page-subtitle">
+              Manage data sources feeding into the benchmark pipeline
+            </p>
+          </div>
+        ) : (
+          <div>
+            <h2 className="section-header">Source Configuration</h2>
+            <p className="mt-1 text-sm text-text-secondary">
+              Enable, disable, and trigger benchmark feeds without leaving the intake workflow.
+            </p>
+          </div>
+        )}
         <button
           onClick={fetchSources}
           disabled={loading}
@@ -386,4 +396,14 @@ export default function SourcesPage() {
       </div>
     </div>
   );
+}
+
+export default function SourcesPage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    router.replace("/admin/intake");
+  }, [router]);
+
+  return null;
 }

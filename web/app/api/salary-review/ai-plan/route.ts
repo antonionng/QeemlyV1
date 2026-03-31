@@ -9,6 +9,7 @@ import {
   type SalaryReviewAiEmployeeInput,
   type SalaryReviewAiFreshnessInput,
 } from "@/lib/salary-review/ai-plan-engine";
+import { generateSalaryReviewAiRationale } from "@/lib/salary-review/ai-rationale";
 import { validateSalaryReviewAiPlanRequest } from "@/lib/salary-review";
 
 type EmployeeRow = {
@@ -52,6 +53,20 @@ type FreshnessRow = {
       }[]
     | null;
 };
+
+type WorkspaceSettingsRow = {
+  industry: string | null;
+  company_size: string | null;
+};
+
+function inferCompanySize(headcount: number): string | null {
+  if (headcount <= 0) return null;
+  if (headcount <= 50) return "1-50";
+  if (headcount <= 200) return "51-200";
+  if (headcount <= 500) return "201-500";
+  if (headcount <= 1000) return "501-1000";
+  return "1000+";
+}
 
 function toEmployeeInput(row: EmployeeRow): SalaryReviewAiEmployeeInput {
   return {
@@ -125,6 +140,18 @@ export async function POST(request: Request) {
   const filteredEmployees = validation.value.selectedEmployeeIds?.length
     ? employeeRows.filter((employee) => selectedSet.has(employee.id))
     : employeeRows;
+
+  let workspaceSettings: WorkspaceSettingsRow | null = null;
+  try {
+    const { data } = await serviceClient
+      .from("workspace_settings")
+      .select("industry, company_size")
+      .eq("workspace_id", workspace_id)
+      .maybeSingle();
+    workspaceSettings = (data as WorkspaceSettingsRow | null) ?? null;
+  } catch {
+    workspaceSettings = null;
+  }
 
   const roleIds = [...new Set(filteredEmployees.map((employee) => employee.role_id))];
   const levelIds = [...new Set(filteredEmployees.map((employee) => employee.level_id))];
@@ -218,6 +245,31 @@ export async function POST(request: Request) {
     freshness,
   });
 
-  return NextResponse.json(plan);
+  const aiRationale = await generateSalaryReviewAiRationale({
+    request: validation.value,
+    employees: filteredEmployees.map(toEmployeeInput),
+    plan,
+    reviewContext: {
+      industry: workspaceSettings?.industry ?? null,
+      companySize: workspaceSettings?.company_size ?? inferCompanySize(employeeRows.length),
+    },
+  });
+
+  if (!aiRationale) {
+    return NextResponse.json(plan);
+  }
+
+  const rationaleByEmployeeId = new Map(
+    aiRationale.items.map((item) => [item.employeeId, item.aiRationale]),
+  );
+
+  return NextResponse.json({
+    ...plan,
+    strategicSummary: aiRationale.strategicSummary,
+    items: plan.items.map((item) => ({
+      ...item,
+      aiRationale: rationaleByEmployeeId.get(item.employeeId) ?? null,
+    })),
+  });
 }
 

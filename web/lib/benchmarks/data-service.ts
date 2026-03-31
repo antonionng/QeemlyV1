@@ -3,6 +3,7 @@
 // Workspace benchmarks (company pay bands) are supplementary.
 
 import { createClient } from "@/lib/supabase/client";
+import type { BenchmarkDetailAiBriefing } from "@/lib/benchmarks/detail-ai";
 import type { SalaryBenchmark, Currency } from "@/lib/dashboard/dummy-data";
 import { LOCATIONS } from "@/lib/dashboard/dummy-data";
 import {
@@ -255,12 +256,49 @@ function transformDbBenchmark(db: DbBenchmark): SalaryBenchmark {
  * Get benchmark for a specific role/location/level combination.
  * Market data is checked first, then workspace bands.
  */
-export async function getBenchmark(
+export type AiAdvisoryPayload = {
+  levelEstimate: {
+    levelId: string;
+    levelName: string;
+    p10: number;
+    p25: number;
+    p50: number;
+    p75: number;
+    p90: number;
+  };
+  reasoning: string;
+  marketContext: string;
+  confidenceNote: string;
+  industryInsight: string | null;
+  companySizeInsight: string | null;
+};
+
+export type AiInsights = {
+  reasoning: string;
+  marketContext: string;
+  confidenceNote: string;
+  industryInsight: string | null;
+  companySizeInsight: string | null;
+};
+
+export type EnrichedBenchmarkResult = {
+  benchmark: SalaryBenchmark | null;
+  aiAdvisory: AiAdvisoryPayload | null;
+  aiInsights: AiInsights | null;
+  aiDetailBriefing: BenchmarkDetailAiBriefing | null;
+};
+
+/**
+ * Get benchmark for a specific role/location/level combination.
+ * Market data is checked first, then workspace bands.
+ * Returns the AI advisory alongside market data when available.
+ */
+export async function getBenchmarkEnriched(
   roleId: string,
   locationId: string,
   levelId: string,
   filters: BenchmarkLookupFilters = {},
-): Promise<SalaryBenchmark | null> {
+): Promise<EnrichedBenchmarkResult> {
   try {
     const params = new URLSearchParams({ roleId, locationId, levelId });
     if (filters.industry) params.set("industry", filters.industry);
@@ -270,10 +308,18 @@ export async function getBenchmark(
     });
 
     if (response.ok) {
-      const payload = (await response.json()) as { benchmark: SalaryBenchmark | null };
-      if (payload.benchmark) {
-        return payload.benchmark;
-      }
+      const payload = (await response.json()) as {
+        benchmark: SalaryBenchmark | null;
+        aiAdvisory: AiAdvisoryPayload | null;
+        aiInsights: AiInsights | null;
+        aiDetailBriefing: BenchmarkDetailAiBriefing | null;
+      };
+      return {
+        benchmark: payload.benchmark ?? null,
+        aiAdvisory: payload.aiAdvisory ?? null,
+        aiInsights: payload.aiInsights ?? null,
+        aiDetailBriefing: payload.aiDetailBriefing ?? null,
+      };
     }
   } catch {
     // Fall back to direct reads if the API is unavailable in the current context.
@@ -284,7 +330,14 @@ export async function getBenchmark(
   // Market data first (the product)
   try {
     const marketMatch = await findMarketBenchmark(supabase, roleId, locationId, levelId, filters);
-    if (marketMatch) return transformMarketBenchmark(marketMatch, filters);
+    if (marketMatch) {
+      return {
+        benchmark: transformMarketBenchmark(marketMatch, filters),
+        aiAdvisory: null,
+        aiInsights: null,
+        aiDetailBriefing: null,
+      };
+    }
   } catch {
     // Continue to workspace lookup
   }
@@ -294,7 +347,22 @@ export async function getBenchmark(
   const match = dbBenchmarks.find(
     (b) => b.role_id === roleId && b.location_id === locationId && b.level_id === levelId
   );
-  return match ? transformDbBenchmark(match) : null;
+  return {
+    benchmark: match ? transformDbBenchmark(match) : null,
+    aiAdvisory: null,
+    aiInsights: null,
+    aiDetailBriefing: null,
+  };
+}
+
+export async function getBenchmark(
+  roleId: string,
+  locationId: string,
+  levelId: string,
+  filters: BenchmarkLookupFilters = {},
+): Promise<SalaryBenchmark | null> {
+  const { benchmark } = await getBenchmarkEnriched(roleId, locationId, levelId, filters);
+  return benchmark;
 }
 
 /**

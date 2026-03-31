@@ -1,8 +1,10 @@
 "use client";
 
 import { type BenchmarkResult } from "@/lib/benchmarks/benchmark-state";
+import { normalizeAiBreakdown } from "@/lib/benchmarks/detail-ai";
 import { applyBenchmarkViewMode } from "@/lib/benchmarks/pay-period";
 import { useSalaryView } from "@/lib/salary-view-store";
+import { SharedAiCallout } from "../shared-ai-callout";
 
 interface CompMixViewProps {
   result: BenchmarkResult;
@@ -11,6 +13,11 @@ interface CompMixViewProps {
 export function CompMixView({ result }: CompMixViewProps) {
   const { level, benchmark } = result;
   const { salaryView } = useSalaryView();
+  const aiCompensationMix = normalizeAiBreakdown(
+    result.aiDetailBriefing?.views.compMix.compensationMix
+      ?? result.aiDetailBriefing?.views.offerBuilder.packageBreakdown
+      ?? null,
+  );
   
   const convertValue = (annualValue: number) => {
     const viewValue = applyBenchmarkViewMode(annualValue, salaryView);
@@ -31,22 +38,48 @@ export function CompMixView({ result }: CompMixViewProps) {
   };
 
   const hasEmployerCost = Boolean(benchmark.nationalsCostBreakdown);
-  const compMixData = hasEmployerCost
+  const compMixData = aiCompensationMix
     ? [
-        { name: "Cash Compensation", value: convertValue(benchmark.percentiles.p50), rawValue: benchmark.percentiles.p50 },
         {
-          name: "Employer Contributions",
-          value: convertValue((benchmark.nationalsCostBreakdown?.gpssaAmount || 0) + (benchmark.nationalsCostBreakdown?.nafisAmount || 0)),
-          rawValue: (benchmark.nationalsCostBreakdown?.gpssaAmount || 0) + (benchmark.nationalsCostBreakdown?.nafisAmount || 0),
+          name: "Basic Salary",
+          value: Math.round((convertValue(benchmark.percentiles.p50) * aiCompensationMix.basicSalaryPct) / 100),
+          rawValue: benchmark.percentiles.p50,
+        },
+        {
+          name: "Housing",
+          value: Math.round((convertValue(benchmark.percentiles.p50) * aiCompensationMix.housingPct) / 100),
+          rawValue: benchmark.percentiles.p50,
+        },
+        {
+          name: "Transport",
+          value: Math.round((convertValue(benchmark.percentiles.p50) * aiCompensationMix.transportPct) / 100),
+          rawValue: benchmark.percentiles.p50,
+        },
+        {
+          name: "Other Allowances",
+          value: Math.round((convertValue(benchmark.percentiles.p50) * aiCompensationMix.otherAllowancesPct) / 100),
+          rawValue: benchmark.percentiles.p50,
         },
       ]
-    : [{ name: "Cash Compensation", value: convertValue(benchmark.percentiles.p50), rawValue: benchmark.percentiles.p50 }];
+    : hasEmployerCost
+      ? [
+          { name: "Cash Compensation", value: convertValue(benchmark.percentiles.p50), rawValue: benchmark.percentiles.p50 },
+          {
+            name: "Employer Contributions",
+            value: convertValue((benchmark.nationalsCostBreakdown?.gpssaAmount || 0) + (benchmark.nationalsCostBreakdown?.nafisAmount || 0)),
+            rawValue: (benchmark.nationalsCostBreakdown?.gpssaAmount || 0) + (benchmark.nationalsCostBreakdown?.nafisAmount || 0),
+          },
+        ]
+      : [{ name: "Cash Compensation", value: convertValue(benchmark.percentiles.p50), rawValue: benchmark.percentiles.p50 }];
 
   const totalComp = compMixData.reduce((sum, item) => sum + item.value, 0);
 
   const getColor = (name: string) => {
     switch (name) {
-      case "Base": return "bg-brand-500";
+      case "Basic Salary": return "bg-brand-500";
+      case "Housing": return "bg-teal-400";
+      case "Transport": return "bg-amber-400";
+      case "Other Allowances": return "bg-pink-400";
       case "Employer Contributions": return "bg-emerald-500";
       default: return "bg-gray-500";
     }
@@ -54,7 +87,10 @@ export function CompMixView({ result }: CompMixViewProps) {
 
   const getColorLight = (name: string) => {
     switch (name) {
-      case "Base": return "bg-brand-100 text-brand-700";
+      case "Basic Salary": return "bg-brand-100 text-brand-700";
+      case "Housing": return "bg-teal-100 text-teal-700";
+      case "Transport": return "bg-amber-100 text-amber-700";
+      case "Other Allowances": return "bg-pink-100 text-pink-700";
       case "Employer Contributions": return "bg-emerald-100 text-emerald-700";
       default: return "bg-gray-100 text-gray-700";
     }
@@ -113,17 +149,19 @@ export function CompMixView({ result }: CompMixViewProps) {
       </div>
 
       {/* Equity note */}
-      {!hasEmployerCost && (
+      {!aiCompensationMix && !hasEmployerCost && (
         <div className="mt-4 p-3 rounded-xl bg-amber-50 text-xs text-amber-700">
           Detailed compensation component splits are not yet available for this workspace.
         </div>
       )}
 
-      {hasEmployerCost && (
+      {!aiCompensationMix && hasEmployerCost && (
         <div className="mt-4 p-3 rounded-xl bg-purple-50 text-xs text-purple-700">
           Employer contribution components are included where available for this benchmark row.
         </div>
       )}
+
+      <SharedAiCallout section={result.aiDetailBriefing?.views.compMix} />
     </div>
   );
 }

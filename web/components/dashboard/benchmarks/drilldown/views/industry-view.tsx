@@ -7,6 +7,7 @@ import { getBenchmark } from "@/lib/benchmarks/data-service";
 import { INDUSTRIES, type SalaryBenchmark } from "@/lib/dashboard/dummy-data";
 import { formatBenchmarkCompact, toBenchmarkDisplayValue } from "@/lib/utils/currency";
 import { useSalaryView } from "@/lib/salary-view-store";
+import { SharedAiCallout } from "../shared-ai-callout";
 
 interface IndustryViewProps {
   result: BenchmarkResult;
@@ -25,8 +26,27 @@ export function IndustryView({ result }: IndustryViewProps) {
     const ordered = [companyIndustry, ...INDUSTRIES.filter((industry) => industry !== companyIndustry)];
     return ordered.filter(Boolean).slice(0, 5);
   }, [companyIndustry]);
+  const aiComparisonPoints = result.aiDetailBriefing?.views.industry.comparisonPoints ?? null;
+
+  const aiIndustryData = useMemo(
+    () =>
+      aiComparisonPoints?.map((point) => ({
+        industry: point.label,
+        median: point.median,
+        isCompanyIndustry: point.id === companyIndustry || point.label === companyIndustry,
+        sampleSize: point.sampleSize ?? 0,
+        isFallback: false,
+      })) ?? [],
+    [aiComparisonPoints, companyIndustry],
+  );
 
   useEffect(() => {
+    if (aiIndustryData.length > 0) {
+      setIndustryBenchmarks({});
+      setFallbackBenchmark(null);
+      return;
+    }
+
     const run = async () => {
       const entries = await Promise.all(
         industriesToLoad.map(async (industry) => {
@@ -65,9 +85,11 @@ export function IndustryView({ result }: IndustryViewProps) {
     };
 
     void run();
-  }, [industriesToLoad, level.id, location.id, result.formData.companySize, role.id]);
+  }, [aiIndustryData.length, industriesToLoad, level.id, location.id, result.formData.companySize, role.id]);
 
-  const industryData = industriesToLoad
+  const industryData = aiIndustryData.length > 0
+    ? aiIndustryData
+    : industriesToLoad
     .map((industry) => {
       const nextBenchmark = industryBenchmarks[industry];
       if (!nextBenchmark) return null;
@@ -91,7 +113,7 @@ export function IndustryView({ result }: IndustryViewProps) {
     isFallback?: boolean;
   }>;
   const fallbackRow =
-    industryData.length === 0 && fallbackBenchmark
+    aiIndustryData.length === 0 && industryData.length === 0 && fallbackBenchmark
       ? {
           industry: "Broader market",
           median: toBenchmarkDisplayValue(fallbackBenchmark.percentiles.p50, {
@@ -171,9 +193,13 @@ export function IndustryView({ result }: IndustryViewProps) {
         </p>
       ) : (
         <p className="mt-4 text-xs text-brand-500">
-          Only cohorts with real segmented market matches are shown here. Missing cohorts fall back to the broader market row.
+          {aiIndustryData.length > 0
+            ? "Industry medians are being shown from the shared Qeemly AI Advisory briefing."
+            : "Only cohorts with real segmented market matches are shown here. Missing cohorts fall back to the broader market row."}
         </p>
       )}
+
+      <SharedAiCallout section={result.aiDetailBriefing?.views.industry} />
     </div>
   );
 }

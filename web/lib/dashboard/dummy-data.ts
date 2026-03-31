@@ -44,7 +44,7 @@ export type TrendPoint = {
   p75: number;
 };
 
-export type BenchmarkSource = "market" | "uploaded";
+export type BenchmarkSource = "market" | "uploaded" | "ai-estimated";
 
 export type SalaryBenchmark = {
   roleId: string;
@@ -193,6 +193,7 @@ export const LEVELS: Level[] = [
 ];
 
 export const ROLES: Role[] = [
+  // Engineering
   { id: "swe", title: "Software Engineer", family: "Engineering", icon: "SWE" },
   { id: "swe-fe", title: "Frontend Engineer", family: "Engineering", icon: "FE" },
   { id: "swe-be", title: "Backend Engineer", family: "Engineering", icon: "BE" },
@@ -200,14 +201,118 @@ export const ROLES: Role[] = [
   { id: "swe-devops", title: "DevOps Engineer", family: "Engineering", icon: "DEV" },
   { id: "swe-data", title: "Data Engineer", family: "Engineering", icon: "DE" },
   { id: "swe-ml", title: "ML Engineer", family: "Engineering", icon: "ML" },
-  { id: "pm", title: "Product Manager", family: "Product", icon: "PM" },
-  { id: "tpm", title: "Technical PM", family: "Product", icon: "TPM" },
-  { id: "designer", title: "Product Designer", family: "Design", icon: "UX" },
-  { id: "ux-researcher", title: "UX Researcher", family: "Design", icon: "UXR" },
-  { id: "data-scientist", title: "Data Scientist", family: "Data", icon: "DS" },
-  { id: "data-analyst", title: "Data Analyst", family: "Data", icon: "DA" },
+  { id: "swe-fullstack", title: "Full-Stack Engineer", family: "Engineering", icon: "FS" },
+  { id: "swe-platform", title: "Platform Engineer", family: "Engineering", icon: "PLT" },
+  { id: "swe-embedded", title: "Embedded Engineer", family: "Engineering", icon: "EMB" },
+  { id: "sre", title: "Site Reliability Engineer", family: "Engineering", icon: "SRE" },
   { id: "security", title: "Security Engineer", family: "Engineering", icon: "SEC" },
   { id: "qa", title: "QA Engineer", family: "Engineering", icon: "QA" },
+  { id: "qa-auto", title: "Automation Test Engineer", family: "Engineering", icon: "ATE" },
+  { id: "solutions-arch", title: "Solutions Architect", family: "Engineering", icon: "SA" },
+  { id: "cloud-eng", title: "Cloud Engineer", family: "Engineering", icon: "CLD" },
+  { id: "network-eng", title: "Network Engineer", family: "Engineering", icon: "NET" },
+  { id: "sys-admin", title: "Systems Administrator", family: "Engineering", icon: "SYS" },
+  { id: "eng-manager", title: "Engineering Manager", family: "Engineering", icon: "EM" },
+  { id: "vp-eng", title: "VP of Engineering", family: "Engineering", icon: "VPE" },
+  { id: "cto", title: "Chief Technology Officer", family: "Engineering", icon: "CTO" },
+
+  // AI & Machine Learning
+  { id: "ai-engineer", title: "AI Engineer", family: "AI & ML", icon: "AIE" },
+  { id: "ml-ops", title: "MLOps Engineer", family: "AI & ML", icon: "MLO" },
+  { id: "nlp-engineer", title: "NLP Engineer", family: "AI & ML", icon: "NLP" },
+  { id: "cv-engineer", title: "Computer Vision Engineer", family: "AI & ML", icon: "CV" },
+  { id: "ai-researcher", title: "AI Research Scientist", family: "AI & ML", icon: "AIR" },
+
+  // Data
+  { id: "data-scientist", title: "Data Scientist", family: "Data", icon: "DS" },
+  { id: "data-analyst", title: "Data Analyst", family: "Data", icon: "DA" },
+  { id: "bi-analyst", title: "BI Analyst", family: "Data", icon: "BI" },
+  { id: "analytics-eng", title: "Analytics Engineer", family: "Data", icon: "AE" },
+  { id: "data-arch", title: "Data Architect", family: "Data", icon: "DAR" },
+  { id: "head-data", title: "Head of Data", family: "Data", icon: "HD" },
+
+  // Product
+  { id: "pm", title: "Product Manager", family: "Product", icon: "PM" },
+  { id: "tpm", title: "Technical PM", family: "Product", icon: "TPM" },
+  { id: "product-analyst", title: "Product Analyst", family: "Product", icon: "PA" },
+  { id: "growth-pm", title: "Growth Product Manager", family: "Product", icon: "GPM" },
+  { id: "head-product", title: "Head of Product", family: "Product", icon: "HP" },
+  { id: "cpo", title: "Chief Product Officer", family: "Product", icon: "CPO" },
+
+  // Design
+  { id: "designer", title: "Product Designer", family: "Design", icon: "UX" },
+  { id: "ux-researcher", title: "UX Researcher", family: "Design", icon: "UXR" },
+  { id: "ui-designer", title: "UI Designer", family: "Design", icon: "UI" },
+  { id: "design-lead", title: "Design Lead", family: "Design", icon: "DL" },
+  { id: "brand-designer", title: "Brand Designer", family: "Design", icon: "BD" },
+  { id: "content-designer", title: "Content Designer", family: "Design", icon: "CD" },
+  { id: "head-design", title: "Head of Design", family: "Design", icon: "HoD" },
+
+  // Finance
+  { id: "financial-analyst", title: "Financial Analyst", family: "Finance", icon: "FA" },
+  { id: "accountant", title: "Accountant", family: "Finance", icon: "ACC" },
+  { id: "finance-manager", title: "Finance Manager", family: "Finance", icon: "FM" },
+  { id: "fp-a", title: "FP&A Analyst", family: "Finance", icon: "FPA" },
+  { id: "controller", title: "Financial Controller", family: "Finance", icon: "FC" },
+  { id: "treasury", title: "Treasury Analyst", family: "Finance", icon: "TRS" },
+  { id: "cfo", title: "Chief Financial Officer", family: "Finance", icon: "CFO" },
+
+  // HR & People
+  { id: "hr-generalist", title: "HR Generalist", family: "People", icon: "HR" },
+  { id: "hr-bp", title: "HR Business Partner", family: "People", icon: "HRBP" },
+  { id: "recruiter", title: "Recruiter", family: "People", icon: "REC" },
+  { id: "ta-lead", title: "Talent Acquisition Lead", family: "People", icon: "TAL" },
+  { id: "comp-ben", title: "Compensation & Benefits Analyst", family: "People", icon: "CB" },
+  { id: "people-ops", title: "People Operations Manager", family: "People", icon: "PO" },
+  { id: "l-d", title: "Learning & Development Specialist", family: "People", icon: "LD" },
+  { id: "chro", title: "Chief People Officer", family: "People", icon: "CPeO" },
+
+  // Marketing
+  { id: "marketing-manager", title: "Marketing Manager", family: "Marketing", icon: "MKT" },
+  { id: "digital-marketing", title: "Digital Marketing Specialist", family: "Marketing", icon: "DM" },
+  { id: "content-marketing", title: "Content Marketing Manager", family: "Marketing", icon: "CM" },
+  { id: "performance-marketing", title: "Performance Marketing Manager", family: "Marketing", icon: "PMK" },
+  { id: "seo-specialist", title: "SEO Specialist", family: "Marketing", icon: "SEO" },
+  { id: "social-media", title: "Social Media Manager", family: "Marketing", icon: "SM" },
+  { id: "brand-manager", title: "Brand Manager", family: "Marketing", icon: "BM" },
+  { id: "cmo", title: "Chief Marketing Officer", family: "Marketing", icon: "CMO" },
+
+  // Sales & Commercial
+  { id: "sales-exec", title: "Sales Executive", family: "Sales", icon: "SE" },
+  { id: "account-exec", title: "Account Executive", family: "Sales", icon: "AX" },
+  { id: "account-manager", title: "Account Manager", family: "Sales", icon: "AM" },
+  { id: "sales-manager", title: "Sales Manager", family: "Sales", icon: "SMG" },
+  { id: "bdr", title: "Business Development Representative", family: "Sales", icon: "BDR" },
+  { id: "bd-manager", title: "Business Development Manager", family: "Sales", icon: "BDM" },
+  { id: "pre-sales", title: "Pre-Sales Engineer", family: "Sales", icon: "PS" },
+  { id: "head-sales", title: "Head of Sales", family: "Sales", icon: "HoS" },
+  { id: "cro", title: "Chief Revenue Officer", family: "Sales", icon: "CRO" },
+
+  // Customer Success & Support
+  { id: "cs-manager", title: "Customer Success Manager", family: "Customer Success", icon: "CSM" },
+  { id: "cs-associate", title: "Customer Success Associate", family: "Customer Success", icon: "CSA" },
+  { id: "support-eng", title: "Technical Support Engineer", family: "Customer Success", icon: "TSE" },
+  { id: "head-cs", title: "Head of Customer Success", family: "Customer Success", icon: "HCS" },
+
+  // Operations
+  { id: "ops-manager", title: "Operations Manager", family: "Operations", icon: "OPS" },
+  { id: "project-manager", title: "Project Manager", family: "Operations", icon: "PJM" },
+  { id: "program-manager", title: "Program Manager", family: "Operations", icon: "PGM" },
+  { id: "scrum-master", title: "Scrum Master", family: "Operations", icon: "SCR" },
+  { id: "chief-of-staff", title: "Chief of Staff", family: "Operations", icon: "CoS" },
+  { id: "coo", title: "Chief Operating Officer", family: "Operations", icon: "COO" },
+
+  // Legal & Compliance
+  { id: "legal-counsel", title: "Legal Counsel", family: "Legal", icon: "LC" },
+  { id: "compliance-officer", title: "Compliance Officer", family: "Legal", icon: "CO" },
+  { id: "risk-analyst", title: "Risk Analyst", family: "Legal", icon: "RA" },
+  { id: "gc", title: "General Counsel", family: "Legal", icon: "GC" },
+
+  // Executive
+  { id: "ceo", title: "Chief Executive Officer", family: "Executive", icon: "CEO" },
+  { id: "coo-exec", title: "Chief Operating Officer", family: "Executive", icon: "COO" },
+  { id: "ciso", title: "Chief Information Security Officer", family: "Executive", icon: "CISO" },
+  { id: "cdo", title: "Chief Data Officer", family: "Executive", icon: "CDO" },
 ];
 
 // === HELPER FUNCTIONS ===

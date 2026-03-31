@@ -18,14 +18,22 @@ vi.mock("next/link", () => ({
     React.createElement("a", { href, ...props }, children),
 }));
 
-vi.mock("lucide-react", () => ({
-  ArrowRight: () => React.createElement("svg"),
-  CheckCircle2: () => React.createElement("svg"),
-  Database: () => React.createElement("svg"),
-  ShieldCheck: () => React.createElement("svg"),
-  LoaderCircle: () => React.createElement("svg"),
-  RefreshCw: () => React.createElement("svg"),
-}));
+vi.mock("lucide-react", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("lucide-react")>();
+  return {
+    ...actual,
+    ArrowDownToLine: () => React.createElement("svg"),
+    ArrowRight: () => React.createElement("svg"),
+    BarChart3: () => React.createElement("svg"),
+    CheckCircle2: () => React.createElement("svg"),
+    Database: () => React.createElement("svg"),
+    FileJson: () => React.createElement("svg"),
+    Filter: () => React.createElement("svg"),
+    RefreshCw: () => React.createElement("svg"),
+    ShieldCheck: () => React.createElement("svg"),
+    TableProperties: () => React.createElement("svg"),
+  };
+});
 
 vi.mock("@/components/admin/admin-page-error", () => ({
   AdminPageError: ({ error }: { error: { title: string } | null }) =>
@@ -42,7 +50,7 @@ vi.mock("@/lib/admin/api-client", () => ({
   normalizeAdminApiError: normalizeAdminApiErrorMock,
 }));
 
-import AdminPublishPage from "@/app/admin/(dashboard)/publish/page";
+import AdminMarketPage from "@/app/admin/(dashboard)/market/page";
 
 const statsPayload = {
   sources: { total: 4, enabled: 3 },
@@ -137,14 +145,83 @@ const topMissingExactTriplesPayload = [
   },
 ];
 
-describe("AdminPublishPage", () => {
+const latestPublishPayload = {
+  event: {
+    id: "publish-0",
+    title: "Qeemly Market Data Updated",
+    summary: "Fresh GCC benchmark coverage is now live across the platform.",
+    rowCount: 144,
+    publishedAt: "2026-03-17T09:00:00.000Z",
+  },
+};
+
+const freshnessPayload = [
+  {
+    id: "fresh-1",
+    source_id: "source-1",
+    metric_type: "benchmarks",
+    last_updated_at: "2026-03-17T08:00:00.000Z",
+    record_count: 188,
+    confidence: "high",
+    ingestion_sources: { slug: "uae_fcsc_workforce_comp", name: "UAE FCSC" },
+  },
+];
+
+const benchmarkMetaPayload = {
+  roles: ["swe"],
+  locations: ["dubai"],
+  levels: ["ic3"],
+  sources: ["market"],
+};
+
+const benchmarksPayload = {
+  data: [
+    {
+      id: "bench-1",
+      role_id: "swe",
+      location_id: "dubai",
+      level_id: "ic3",
+      currency: "AED",
+      p50: 40000,
+      p10: 30000,
+      p25: 35000,
+      p75: 45000,
+      p90: 50000,
+      sample_size: 12,
+      source: "market",
+      confidence: "medium",
+    },
+  ],
+  total: 1,
+};
+
+const snapshotsPayload = [
+  {
+    id: "snap-1",
+    fetched_at: "2026-03-17T08:00:00.000Z",
+    schema_version: "v1",
+    row_count: 100,
+    ingestion_sources: { slug: "uae_fcsc_workforce_comp", name: "UAE FCSC" },
+  },
+];
+
+describe("AdminMarketPage", () => {
   let container: HTMLDivElement;
 
   beforeEach(() => {
     (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
     container = document.createElement("div");
     document.body.appendChild(container);
-    fetchAdminJsonMock.mockResolvedValue(statsPayload);
+    fetchAdminJsonMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/admin/stats") return statsPayload;
+      if (url === "/api/market-publish/latest") return latestPublishPayload;
+      if (url === "/api/admin/freshness") return freshnessPayload;
+      if (url === "/api/admin/benchmarks/meta") return benchmarkMetaPayload;
+      if (url.startsWith("/api/admin/benchmarks?")) return benchmarksPayload;
+      if (url === "/api/admin/snapshots?limit=10") return snapshotsPayload;
+      throw new Error(`Unexpected fetchAdminJson call: ${url}`);
+    });
   });
 
   afterEach(() => {
@@ -172,10 +249,43 @@ describe("AdminPublishPage", () => {
         benchmarks: { total: 188 },
       });
 
+    fetchAdminJsonMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/admin/stats") return url === "/api/admin/stats" && init ? { ...statsPayload, benchmarks: { total: 188 } } : statsPayload;
+      if (url === "/api/market-publish/latest") return latestPublishPayload;
+      if (url === "/api/admin/freshness") return freshnessPayload;
+      if (url === "/api/admin/benchmarks/meta") return benchmarkMetaPayload;
+      if (url.startsWith("/api/admin/benchmarks?")) return benchmarksPayload;
+      if (url === "/api/admin/market-seed") {
+        return {
+          ok: true,
+          poolRows: 188,
+          selectedSourceSlugs: ["uae_fcsc_workforce_comp"],
+          coverage: partialCoveragePayload,
+          sourceCoverage: sourceCoveragePayload,
+          sourceDiagnostics: sourceDiagnosticsPayload,
+          contributionMix: contributionMixPayload,
+          missingCoverageGroups: missingCoverageGroupsPayload,
+          topMissingExactTriples: topMissingExactTriplesPayload,
+        };
+      }
+      if (url === "/api/admin/snapshots?limit=10") return snapshotsPayload;
+      throw new Error(`Unexpected fetchAdminJson call: ${url}`);
+    });
+
     const root = createRoot(container);
 
     await act(async () => {
-      root.render(React.createElement(AdminPublishPage));
+      root.render(React.createElement(AdminMarketPage));
+    });
+
+    const advancedButton = Array.from(container.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("Show"),
+    );
+    expect(advancedButton).toBeDefined();
+
+    await act(async () => {
+      advancedButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     const seedButton = Array.from(container.querySelectorAll("button")).find((button) =>
@@ -187,13 +297,12 @@ describe("AdminPublishPage", () => {
       seedButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    expect(fetchAdminJsonMock).toHaveBeenNthCalledWith(1, "/api/admin/stats");
-    expect(fetchAdminJsonMock).toHaveBeenNthCalledWith(2, "/api/admin/market-seed", {
+    expect(fetchAdminJsonMock).toHaveBeenCalledWith("/api/admin/market-seed", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({}),
     });
-    expect(fetchAdminJsonMock).toHaveBeenNthCalledWith(3, "/api/admin/stats");
+    expect(container.textContent).toContain("Market Overview");
     expect(container.textContent).toContain("Seeded shared market data. 188 pooled rows are now available.");
     expect(container.textContent).toContain("188 of 1200 exact benchmark rows are live");
     expect(container.textContent).toContain("Official exact coverage: 120");
@@ -240,10 +349,31 @@ describe("AdminPublishPage", () => {
         benchmarks: { total: 212 },
       });
 
+    fetchAdminJsonMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/admin/stats") return url === "/api/admin/stats" && init ? { ...statsPayload, benchmarks: { total: 212 } } : statsPayload;
+      if (url === "/api/market-publish/latest") return latestPublishPayload;
+      if (url === "/api/admin/freshness") return freshnessPayload;
+      if (url === "/api/admin/benchmarks/meta") return benchmarkMetaPayload;
+      if (url.startsWith("/api/admin/benchmarks?")) return benchmarksPayload;
+      if (url === "/api/benchmarks/market-pool/refresh") return { ok: true, rows: 212 };
+      if (url === "/api/admin/snapshots?limit=10") return snapshotsPayload;
+      throw new Error(`Unexpected fetchAdminJson call: ${url}`);
+    });
+
     const root = createRoot(container);
 
     await act(async () => {
-      root.render(React.createElement(AdminPublishPage));
+      root.render(React.createElement(AdminMarketPage));
+    });
+
+    const advancedButton = Array.from(container.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("Show"),
+    );
+    expect(advancedButton).toBeDefined();
+
+    await act(async () => {
+      advancedButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     const refreshButton = Array.from(container.querySelectorAll("button")).find((button) =>
@@ -255,11 +385,9 @@ describe("AdminPublishPage", () => {
       refreshButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    expect(fetchAdminJsonMock).toHaveBeenNthCalledWith(1, "/api/admin/stats");
-    expect(fetchAdminJsonMock).toHaveBeenNthCalledWith(2, "/api/benchmarks/market-pool/refresh", {
+    expect(fetchAdminJsonMock).toHaveBeenCalledWith("/api/benchmarks/market-pool/refresh", {
       method: "POST",
     });
-    expect(fetchAdminJsonMock).toHaveBeenNthCalledWith(3, "/api/admin/stats");
     expect(container.textContent).toContain("Rebuilt the published market pool. 212 shared rows are live.");
     expect(container.textContent).not.toContain("Raw source coverage");
 
@@ -286,14 +414,31 @@ describe("AdminPublishPage", () => {
       },
     );
 
-    fetchAdminJsonMock
-      .mockResolvedValueOnce(statsPayload)
-      .mockRejectedValueOnce(blockedPublishError);
+    fetchAdminJsonMock.mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/admin/stats") return statsPayload;
+      if (url === "/api/market-publish/latest") return latestPublishPayload;
+      if (url === "/api/admin/freshness") return freshnessPayload;
+      if (url === "/api/admin/benchmarks/meta") return benchmarkMetaPayload;
+      if (url.startsWith("/api/admin/benchmarks?")) return benchmarksPayload;
+      if (url === "/api/admin/market-publish") throw blockedPublishError;
+      if (url === "/api/admin/snapshots?limit=10") return snapshotsPayload;
+      throw new Error(`Unexpected fetchAdminJson call: ${url}`);
+    });
 
     const root = createRoot(container);
 
     await act(async () => {
-      root.render(React.createElement(AdminPublishPage));
+      root.render(React.createElement(AdminMarketPage));
+    });
+
+    const advancedButton = Array.from(container.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("Show"),
+    );
+    expect(advancedButton).toBeDefined();
+
+    await act(async () => {
+      advancedButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     const publishButton = Array.from(container.querySelectorAll("button")).find((button) =>
@@ -317,36 +462,51 @@ describe("AdminPublishPage", () => {
   });
 
   it("publishes the dataset and refreshes publish stats", async () => {
-    fetchAdminJsonMock
-      .mockResolvedValueOnce(statsPayload)
-      .mockResolvedValueOnce({
-        ok: true,
-        event: {
-          id: "publish-1",
-          title: "Qeemly Market Data Updated",
-          summary: "Fresh GCC benchmark coverage is now live across the platform.",
-          rowCount: 212,
-          publishedAt: "2026-03-17T10:00:00.000Z",
-        },
-        coverage: {
-          supportedExactTriples: 1200,
-          coveredExactTriples: 1200,
-          officialCoveredExactTriples: 1000,
-          proxyBackedExactTriples: 200,
-          missingExactTriples: 0,
-          coveragePercent: 100,
-          missingExamples: [],
-        },
-      })
-      .mockResolvedValueOnce({
-        ...statsPayload,
-        benchmarks: { total: 212 },
-      });
+    fetchAdminJsonMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/api/admin/stats") return url === "/api/admin/stats" && init ? { ...statsPayload, benchmarks: { total: 212 } } : statsPayload;
+      if (url === "/api/market-publish/latest") return latestPublishPayload;
+      if (url === "/api/admin/freshness") return freshnessPayload;
+      if (url === "/api/admin/benchmarks/meta") return benchmarkMetaPayload;
+      if (url.startsWith("/api/admin/benchmarks?")) return benchmarksPayload;
+      if (url === "/api/admin/market-publish") {
+        return {
+          ok: true,
+          event: {
+            id: "publish-1",
+            title: "Qeemly Market Data Updated",
+            summary: "Fresh GCC benchmark coverage is now live across the platform.",
+            rowCount: 212,
+            publishedAt: "2026-03-17T10:00:00.000Z",
+          },
+          coverage: {
+            supportedExactTriples: 1200,
+            coveredExactTriples: 1200,
+            officialCoveredExactTriples: 1000,
+            proxyBackedExactTriples: 200,
+            missingExactTriples: 0,
+            coveragePercent: 100,
+            missingExamples: [],
+          },
+        };
+      }
+      if (url === "/api/admin/snapshots?limit=10") return snapshotsPayload;
+      throw new Error(`Unexpected fetchAdminJson call: ${url}`);
+    });
 
     const root = createRoot(container);
 
     await act(async () => {
-      root.render(React.createElement(AdminPublishPage));
+      root.render(React.createElement(AdminMarketPage));
+    });
+
+    const advancedButton = Array.from(container.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("Show"),
+    );
+    expect(advancedButton).toBeDefined();
+
+    await act(async () => {
+      advancedButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     const publishButton = Array.from(container.querySelectorAll("button")).find((button) =>
@@ -358,11 +518,9 @@ describe("AdminPublishPage", () => {
       publishButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    expect(fetchAdminJsonMock).toHaveBeenNthCalledWith(1, "/api/admin/stats");
-    expect(fetchAdminJsonMock).toHaveBeenNthCalledWith(2, "/api/admin/market-publish", {
+    expect(fetchAdminJsonMock).toHaveBeenCalledWith("/api/admin/market-publish", {
       method: "POST",
     });
-    expect(fetchAdminJsonMock).toHaveBeenNthCalledWith(3, "/api/admin/stats");
     expect(container.textContent).toContain("Published the latest Qeemly market dataset for tenants.");
     expect(container.textContent).toContain("1200 of 1200 exact benchmark rows are live");
     expect(container.textContent).toContain("Exact coverage is complete");

@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { AdminPageError } from "@/components/admin/admin-page-error";
 import { Card } from "@/components/ui/card";
 import { fetchAdminJson, normalizeAdminApiError, type NormalizedAdminApiError } from "@/lib/admin/api-client";
@@ -48,7 +48,7 @@ function buildInitialRowEdits(rows: AdminInboxPdfRow[]) {
   );
 }
 
-export default function AdminInboxPage() {
+export function AdminInboxPageContent({ embedded = false }: { embedded?: boolean }) {
   const [uploads, setUploads] = useState<AdminInboxUpload[]>([]);
   const [pdfRows, setPdfRows] = useState<AdminInboxPdfRow[]>([]);
   const [selectedPdfUploadId, setSelectedPdfUploadId] = useState<string | null>(null);
@@ -221,7 +221,7 @@ export default function AdminInboxPage() {
     setMessage(null);
     try {
       const payload = await fetchAdminJson<{
-        ingestedCount: number;
+        publishedCount: number;
         failedCount: number;
         failures?: string[];
       }>(`/api/admin/inbox/${uploadId}/ingest`, {
@@ -233,14 +233,14 @@ export default function AdminInboxPage() {
         type: payload.failedCount > 0 ? "error" : "success",
         text:
           payload.failedCount > 0
-            ? `${payload.ingestedCount} approved PDF row${
-                payload.ingestedCount === 1 ? "" : "s"
-              } moved into market staging. ${payload.failedCount} approved row${
+            ? `${payload.publishedCount} approved PDF row${
+                payload.publishedCount === 1 ? "" : "s"
+              } published to the live market dataset. ${payload.failedCount} approved row${
                 payload.failedCount === 1 ? "" : "s"
               } still need fixes.`
-            : `${payload.ingestedCount} approved PDF row${
-                payload.ingestedCount === 1 ? "" : "s"
-              } moved into market staging.`,
+            : `${payload.publishedCount} approved PDF row${
+                payload.publishedCount === 1 ? "" : "s"
+              } published to the live market dataset.`,
         details: payload.failedCount > 0 ? payload.failures ?? [] : undefined,
       });
     } catch (err) {
@@ -314,12 +314,14 @@ export default function AdminInboxPage() {
     <div className="space-y-6">
       <AdminPageError error={error} onRetry={loadUploads} className="mb-6" />
 
-      <div>
-        <h1 className="page-title">Inbox</h1>
-        <p className="page-subtitle">
-          Stage shared-market research assets before review, normalization, and publish.
-        </p>
-      </div>
+      {!embedded ? (
+        <div>
+          <h1 className="page-title">Inbox</h1>
+          <p className="page-subtitle">
+            Stage shared-market research assets before review, normalization, and publish.
+          </p>
+        </div>
+      ) : null}
 
       {message ? (
         <div
@@ -587,11 +589,7 @@ export default function AdminInboxPage() {
               </p>
               <p className="mt-1 text-xs text-text-tertiary">{selectedPdfUpload.file_name}</p>
               <p className="mt-1 text-xs text-text-tertiary">
-                After ingestion, finish the operator workflow in{" "}
-                <Link href="/admin/publish" className="text-brand-600 underline">
-                  Publish
-                </Link>
-                .
+                Approved rows are published automatically once ingestion and pool refresh complete.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -762,6 +760,16 @@ export default function AdminInboxPage() {
   );
 }
 
+export default function AdminInboxPage() {
+  const router = useRouter();
+
+  useEffect(() => {
+    router.replace("/admin/intake");
+  }, [router]);
+
+  return null;
+}
+
 function StatusBadge({ status }: { status: AdminInboxStatus }) {
   const classes =
     status === "uploaded"
@@ -787,7 +795,7 @@ function PdfReviewStatusBadge({ status }: { status: AdminInboxPdfReviewStatus })
       ? "bg-emerald-50 text-emerald-700"
       : status === "rejected"
         ? "bg-rose-50 text-rose-700"
-        : status === "ingested"
+        : status === "published"
           ? "bg-blue-50 text-blue-700"
           : "bg-amber-50 text-amber-700";
 

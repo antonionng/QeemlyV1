@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { UploadModal } from "@/components/dashboard/upload";
 import { SalaryReviewWizard } from "@/components/salary-review";
@@ -10,7 +10,9 @@ import { useSalaryReview } from "@/lib/salary-review";
 
 function SalaryReviewWizardPageContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const requestedProposalId = searchParams.get("proposalId");
   const {
     employees,
     isLoading,
@@ -18,6 +20,7 @@ function SalaryReviewWizardPageContent() {
     loadCycles,
     loadLatestProposal,
     loadApprovalProposalList,
+    selectCycle,
     resetReview,
   } = useSalaryReview();
 
@@ -25,10 +28,22 @@ function SalaryReviewWizardPageContent() {
     void (async () => {
       await loadEmployeesFromDb();
       await loadCycles();
-      await loadLatestProposal();
       await loadApprovalProposalList();
+      if (requestedProposalId) {
+        await selectCycle(requestedProposalId);
+        return;
+      }
+
+      await loadLatestProposal();
     })();
-  }, [loadApprovalProposalList, loadCycles, loadEmployeesFromDb, loadLatestProposal]);
+  }, [
+    loadApprovalProposalList,
+    loadCycles,
+    loadEmployeesFromDb,
+    loadLatestProposal,
+    requestedProposalId,
+    selectCycle,
+  ]);
 
   const handleExport = () => {
     const csv = buildSalaryReviewCsv(employees);
@@ -64,6 +79,7 @@ function SalaryReviewWizardPageContent() {
         onImport={() => setShowUploadModal(true)}
         onExport={handleExport}
         onReset={resetReview}
+        resumeRequestedProposal={Boolean(requestedProposalId)}
         onSubmitSuccess={(proposalId) => {
           const nextUrl = proposalId
             ? `/dashboard/salary-review?tab=approvals&proposalId=${proposalId}`

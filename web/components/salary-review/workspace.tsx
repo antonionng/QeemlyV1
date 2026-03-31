@@ -6,6 +6,7 @@ import {
   Calendar,
   ChevronDown,
   Download,
+  Sparkles,
   Search,
   Settings2,
   TrendingUp,
@@ -34,10 +35,12 @@ import {
   formatAEDCompact,
   generateCompensationHistory,
 } from "@/lib/employees";
+import { EmployeeDetailPanel } from "@/components/dashboard/salary-review/employee-detail-panel";
 
 type SalaryReviewHeaderProps = {
   actionLabel: string;
   onPrimaryAction: () => void;
+  onAiDraft?: () => void;
   onImport: () => void;
   onExport: () => void;
   onReset: () => void;
@@ -50,10 +53,15 @@ type ReviewSettingsCardProps = {
 
 type SalaryReviewFiltersProps = {
   actions?: ReactNode;
+  scopeDepartment?: string | null;
+  showEntireTeam?: boolean;
+  onToggleEntireTeam?: () => void;
 };
 
 type SalaryReviewTableProps = {
   onSelectEmployee: (employee: ReviewEmployee) => void;
+  scopeDepartment?: string | null;
+  showEntireTeam?: boolean;
 };
 
 type ReviewCycleListCardProps = {
@@ -68,6 +76,7 @@ type SalaryReviewOverviewProps = {
   activeCycle: SalaryReviewProposalRecord | null;
   actionLabel: string;
   onPrimaryAction: () => void;
+  onAiDraft?: () => void;
   onImport: () => void;
   onExport: () => void;
   onReset: () => void;
@@ -88,6 +97,19 @@ const PERFORMANCE_STYLES: Record<string, string> = {
   meets: "bg-[#FFF7E6] text-[#B45309]",
   low: "bg-[#FFE4E6] text-[#BE123C]",
 };
+
+function buildScopedFilterQuery(
+  filters: typeof DEFAULT_SALARY_REVIEW_FILTERS,
+  scopeDepartment?: string | null,
+  showEntireTeam?: boolean
+): SalaryReviewQueryState {
+  return {
+    ...filters,
+    tab: "overview",
+    proposalId: null,
+    department: scopeDepartment && !showEntireTeam ? scopeDepartment : filters.department,
+  };
+}
 
 function deriveAllowanceBreakdown(currentSalary: number) {
   const basic = Math.round(currentSalary * 0.53);
@@ -151,6 +173,7 @@ function SummaryCard({
 export function SalaryReviewHeader({
   actionLabel,
   onPrimaryAction,
+  onAiDraft,
   onImport,
   onExport,
   onReset,
@@ -172,6 +195,17 @@ export function SalaryReviewHeader({
         >
           {actionLabel}
         </Button>
+        {onAiDraft ? (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onAiDraft}
+            className="h-10 rounded-[10px] border-[#D9D2FF] bg-[#F6F2FF] px-4 text-[#6E56CF]"
+          >
+            <Sparkles className="h-4 w-4" />
+            AI Draft
+          </Button>
+        ) : null}
         <Button
           variant="secondary"
           size="sm"
@@ -442,19 +476,30 @@ export function ColumnVisibilityPanel() {
   );
 }
 
-export function SalaryReviewFilters({ actions }: SalaryReviewFiltersProps) {
+export function SalaryReviewFilters({
+  actions,
+  scopeDepartment,
+  showEntireTeam = false,
+  onToggleEntireTeam,
+}: SalaryReviewFiltersProps) {
   const { employees, filters, updateFilters, resetFilters, settings } = useSalaryReview();
+  const effectiveQuery = useMemo(
+    () => buildScopedFilterQuery(filters, scopeDepartment, showEntireTeam),
+    [filters, scopeDepartment, showEntireTeam]
+  );
   const filteredCount = useMemo(
+    () => applySalaryReviewFilters(employees, effectiveQuery).length,
+    [effectiveQuery, employees]
+  );
+  const scopedEmployeeCount = useMemo(
     () =>
-      applySalaryReviewFilters(employees, {
-        ...filters,
-        tab: "overview",
-        proposalId: null,
-      }).length,
-    [employees, filters]
+      scopeDepartment
+        ? employees.filter((employee) => employee.department === scopeDepartment).length
+        : employees.length,
+    [employees, scopeDepartment]
   );
   const hasActiveFilters =
-    filters.department !== "all" ||
+    (scopeDepartment && !showEntireTeam ? false : filters.department !== "all") ||
     filters.location !== "all" ||
     filters.pool !== "all" ||
     filters.bandFilter !== "all" ||
@@ -477,8 +522,9 @@ export function SalaryReviewFilters({ actions }: SalaryReviewFiltersProps) {
           />
         </div>
         <select
-          value={filters.department}
+          value={effectiveQuery.department}
           onChange={(event) => updateFilters({ department: event.target.value })}
+          disabled={Boolean(scopeDepartment && !showEntireTeam)}
           className="h-10 min-w-[170px] rounded-full border border-[#E6E8F0] bg-white px-4 text-sm text-[#2E3440] outline-none"
         >
           <option value="all">All Departments</option>
@@ -519,6 +565,15 @@ export function SalaryReviewFilters({ actions }: SalaryReviewFiltersProps) {
           <Calendar className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9AA0AE]" />
         </div>
         {actions}
+        {scopeDepartment ? (
+          <button
+            type="button"
+            onClick={onToggleEntireTeam}
+            className="rounded-full border border-[#E6E8F0] bg-white px-4 py-2 text-sm font-medium text-[#6E56CF]"
+          >
+            {showEntireTeam ? `Show Only ${scopeDepartment}` : "Show Entire Team"}
+          </button>
+        ) : null}
         <button
           type="button"
           onClick={resetFilters}
@@ -529,9 +584,13 @@ export function SalaryReviewFilters({ actions }: SalaryReviewFiltersProps) {
       </div>
       <div className="flex items-center justify-between px-1">
         <span className="text-xs text-[#8A90A0]">
-          {filteredCount} of {employees.length} employees shown
+          {filteredCount} of {scopeDepartment && !showEntireTeam ? scopedEmployeeCount : employees.length} employees shown
         </span>
-        {hasActiveFilters ? (
+        {scopeDepartment && !showEntireTeam ? (
+          <span className="text-[11px] text-[#A0A6B4]">{scopeDepartment} roster</span>
+        ) : showEntireTeam && scopeDepartment ? (
+          <span className="text-[11px] text-[#A0A6B4]">Full team comparison</span>
+        ) : hasActiveFilters ? (
           <span className="text-[11px] text-[#A0A6B4]">Filtered view</span>
         ) : (
           <span className="text-[11px] text-[#A0A6B4]">Full roster</span>
@@ -640,7 +699,11 @@ export function EmployeeDrawer({
   );
 }
 
-export function SalaryReviewTable({ onSelectEmployee }: SalaryReviewTableProps) {
+export function SalaryReviewTable({
+  onSelectEmployee,
+  scopeDepartment,
+  showEntireTeam = false,
+}: SalaryReviewTableProps) {
   const {
     employees,
     filters,
@@ -654,7 +717,14 @@ export function SalaryReviewTable({ onSelectEmployee }: SalaryReviewTableProps) 
   const [sortDirection, setSortDirection] = useState<"asc" | "desc">("asc");
 
   const visibleSet = new Set(visibleColumns);
-  const filteredEmployees = useMemo(() => applySalaryReviewFilters(employees, { ...filters, tab: "overview", proposalId: null }), [employees, filters]);
+  const effectiveQuery = useMemo(
+    () => buildScopedFilterQuery(filters, scopeDepartment, showEntireTeam),
+    [filters, scopeDepartment, showEntireTeam]
+  );
+  const filteredEmployees = useMemo(
+    () => applySalaryReviewFilters(employees, effectiveQuery),
+    [effectiveQuery, employees]
+  );
   const sortedEmployees = useMemo(() => {
     return [...filteredEmployees].sort((left, right) => {
       const comparison = (() => {
@@ -892,6 +962,7 @@ export function SalaryReviewOverview({
   activeCycle,
   actionLabel,
   onPrimaryAction,
+  onAiDraft,
   onImport,
   onExport,
   onReset,
@@ -923,6 +994,7 @@ export function SalaryReviewOverview({
       <SalaryReviewHeader
         actionLabel={actionLabel}
         onPrimaryAction={onPrimaryAction}
+        onAiDraft={onAiDraft}
         onImport={onImport}
         onExport={onExport}
         onReset={onReset}
@@ -943,7 +1015,9 @@ export function SalaryReviewOverview({
           onSelectCycle={onSelectCycle}
         />
       ) : null}
-      <EmployeeDrawer employee={selectedEmployee} onClose={() => setSelectedEmployee(null)} />
+      {selectedEmployee ? (
+        <EmployeeDetailPanel employee={selectedEmployee} onClose={() => setSelectedEmployee(null)} />
+      ) : null}
     </div>
   );
 }

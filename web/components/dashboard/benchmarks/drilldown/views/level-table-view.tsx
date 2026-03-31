@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { type BenchmarkResult } from "@/lib/benchmarks/benchmark-state";
 import {
   annualizeBenchmarkValue,
@@ -10,6 +10,7 @@ import {
 import { LEVELS } from "@/lib/dashboard/dummy-data";
 import { useSalaryView } from "@/lib/salary-view-store";
 import { getBenchmark } from "@/lib/benchmarks/data-service";
+import { SharedAiCallout } from "../shared-ai-callout";
 
 interface LevelTableViewProps {
   result: BenchmarkResult;
@@ -20,7 +21,7 @@ export function LevelTableView({ result }: LevelTableViewProps) {
   const [showBasic, setShowBasic] = useState(false);
   const [rows, setRows] = useState<
     Array<{
-      level: (typeof LEVELS)[number];
+      level: Pick<(typeof LEVELS)[number], "id" | "name">;
       p25: number;
       p50: number;
       p75: number;
@@ -34,6 +35,7 @@ export function LevelTableView({ result }: LevelTableViewProps) {
     result.benchmark.payPeriod ?? result.benchmark.sourcePayPeriod,
     result.benchmark.percentiles,
   );
+  const aiLevelBands = result.aiDetailBriefing?.views.levelTable.levelBands ?? null;
 
   const convertValue = (value: number, payPeriod = benchmarkPayPeriod) => {
     const annualValue = annualizeBenchmarkValue(value, payPeriod);
@@ -48,7 +50,32 @@ export function LevelTableView({ result }: LevelTableViewProps) {
     return new Intl.NumberFormat("en-AE", { style: "currency", currency: "AED", maximumFractionDigits: 0 }).format(value);
   };
 
+  const aiRows = useMemo(
+    () =>
+      aiLevelBands?.map((band) => {
+        const p85 = band.p75 + (band.p90 - band.p75) * 0.5;
+        return {
+          level: {
+            id: band.levelId,
+            name: band.levelName,
+          },
+          p25: band.p25,
+          p50: band.p50,
+          p75: band.p75,
+          p85,
+          p90: band.p90,
+          isSelected: band.levelId === level.id,
+        };
+      }) ?? [],
+    [aiLevelBands, level.id],
+  );
+
   useEffect(() => {
+    if (aiRows.length > 0) {
+      setRows(aiRows);
+      return;
+    }
+
     const run = async () => {
       const sourceLocationId =
         location.id === "london" || location.id === "manchester" ? "dubai" : location.id;
@@ -80,7 +107,7 @@ export function LevelTableView({ result }: LevelTableViewProps) {
       setRows(nextRows);
     };
     void run();
-  }, [level.id, location.id, result.formData.companySize, result.formData.industry, role.id]);
+  }, [aiRows, level.id, location.id, result.formData.companySize, result.formData.industry, role.id]);
 
   return (
     <div className="bench-section p-0 overflow-hidden">
@@ -127,6 +154,10 @@ export function LevelTableView({ result }: LevelTableViewProps) {
             ))}
           </tbody>
         </table>
+      </div>
+
+      <div className="px-5 pb-5">
+        <SharedAiCallout section={result.aiDetailBriefing?.views.levelTable} />
       </div>
     </div>
   );
