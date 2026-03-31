@@ -232,6 +232,9 @@ export function OfferBuilderView({ result }: OfferBuilderViewProps) {
       total_compensation: offerValue,
     };
 
+    const snapshotBenchmarkSource =
+      benchmark.benchmarkSource === "uploaded" ? "uploaded" : "market";
+
     const created = await createOffer({
       employee_id: isEmployeeMode ? selectedEmployeeId : null,
       recipient_name: isEmployeeMode ? null : recipientName.trim(),
@@ -248,7 +251,7 @@ export function OfferBuilderView({ result }: OfferBuilderViewProps) {
       salary_breakdown: breakdownSnapshot,
       benchmark_snapshot: {
         benchmark_percentiles: benchmark.percentiles,
-        benchmark_source: benchmark.benchmarkSource || "market",
+        benchmark_source: snapshotBenchmarkSource,
         sample_size: benchmark.sampleSize,
         confidence: benchmark.confidence,
         last_updated: benchmark.lastUpdated,

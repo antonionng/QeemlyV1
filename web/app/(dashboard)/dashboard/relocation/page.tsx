@@ -548,13 +548,14 @@ function RelocationPageContent() {
     };
   }, [analysisFormData, result]);
 
-  const displayResult = advisory?.recommendedResult
-    ? {
-        ...result,
-        recommendedSalary: advisory.recommendedResult.recommendedSalary,
-        recommendedRange: advisory.recommendedResult.recommendedRange,
-      }
-    : result;
+  const displayResult: RelocationResult | null =
+    result && advisory?.recommendedResult
+      ? {
+          ...result,
+          recommendedSalary: advisory.recommendedResult.recommendedSalary,
+          recommendedRange: advisory.recommendedResult.recommendedRange,
+        }
+      : result;
 
   return (
     <div className="bench-results relative z-10 space-y-8">
@@ -585,7 +586,7 @@ function RelocationPageContent() {
               <ComparisonCard result={displayResult} />
               <RecommendationCard
                 result={displayResult}
-                deterministicResult={result}
+                deterministicResult={result ?? displayResult}
                 compApproach={formData.compApproach}
                 hybridCap={formData.hybridCap}
                 aiAdvisory={advisory?.aiAdvisory ?? null}
