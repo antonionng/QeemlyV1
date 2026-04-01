@@ -274,8 +274,8 @@ describe("Compensation health score grid", () => {
     expect(html).toContain('data-testid="band-distribution-in-band-segment-action"');
     expect(html).toContain('data-testid="band-distribution-above-band-segment-action"');
     expect(html).toContain('data-testid="band-distribution-below-band-segment-action"');
-    expect(html).toContain('data-overview-href="/dashboard/salary-review?cohort=in-band"');
-    expect(html).toContain('data-overview-href="/dashboard/salary-review?filter=above-band"');
-    expect(html).toContain('data-overview-href="/dashboard/salary-review?filter=below-band"');
+    expect(html).toContain('data-overview-href="/dashboard/people?band=in-band"');
+    expect(html).toContain('data-overview-href="/dashboard/people?band=above"');
+    expect(html).toContain('data-overview-href="/dashboard/people?band=below"');
   });
 });

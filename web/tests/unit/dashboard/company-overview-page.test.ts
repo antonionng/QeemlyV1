@@ -135,19 +135,21 @@ const snapshot = {
 
 describe("CompanyOverviewPage", () => {
   let container: HTMLDivElement;
+  let fetchMock: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true;
     container = document.createElement("div");
     document.body.appendChild(container);
+    fetchMock = vi.fn().mockImplementation(async () =>
+      new Response(JSON.stringify(snapshot), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      })
+    );
     vi.stubGlobal(
       "fetch",
-      vi.fn().mockResolvedValue(
-        new Response(JSON.stringify(snapshot), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        })
-      )
+      fetchMock
     );
   });
 
@@ -172,6 +174,10 @@ describe("CompanyOverviewPage", () => {
     expect(container.textContent).toContain("Company Overview");
     expect(container.textContent).toContain("StatCards");
     expect(container.textContent).not.toContain("Executive Summary");
+
+    await act(async () => {
+      root.unmount();
+    });
   });
 
   it("routes band distribution drilldowns through the shared overview interaction handler", async () => {
@@ -193,6 +199,41 @@ describe("CompanyOverviewPage", () => {
       bandAction?.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
     });
 
-    expect(pushMock).toHaveBeenCalledWith("/dashboard/salary-review?filter=below-band");
+    expect(pushMock).toHaveBeenCalledWith("/dashboard/people?band=below");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("re-loads the overview snapshot when the workspace changes", async () => {
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(React.createElement(CompanyOverviewPage));
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const callsBeforeWorkspaceChange = fetchMock.mock.calls.length;
+
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent("qeemly:workspace-changed", {
+          detail: { workspaceId: "ws-2", source: "override" },
+        }),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(fetchMock).toHaveBeenCalledTimes(callsBeforeWorkspaceChange + 1);
+
+    await act(async () => {
+      root.unmount();
+    });
   });
 });

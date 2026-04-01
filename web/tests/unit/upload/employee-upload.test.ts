@@ -315,7 +315,7 @@ describe("uploadEmployees", () => {
     expect(result.errors[0]).toContain("another workspace");
   });
 
-  it("creates pending role-mapping reviews and refreshes coverage after importing unresolved employees", async () => {
+  it("rejects unresolved employee roles before inserting null role ids", async () => {
     const profileQuery = {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
@@ -328,16 +328,8 @@ describe("uploadEmployees", () => {
       in: vi.fn().mockResolvedValue({ data: [], error: null }),
     };
 
-    const employeesQuery = {
-      insert: vi.fn().mockReturnValue({
-        select: vi.fn().mockResolvedValue({
-          data: [{ id: "emp-new", email: "ava@example.com" }],
-          error: null,
-        }),
-      }),
-    };
-
     const roleMappingReviewsInsert = vi.fn().mockResolvedValue({ error: null });
+    const employeesInsert = vi.fn();
 
     let employeeTableCall = 0;
 
@@ -349,7 +341,11 @@ describe("uploadEmployees", () => {
         if (table === "profiles") return profileQuery;
         if (table === "employees") {
           employeeTableCall += 1;
-          return employeeTableCall === 1 ? existingEmployeesQuery : employeesQuery;
+          return employeeTableCall === 1
+            ? existingEmployeesQuery
+            : {
+                insert: employeesInsert,
+              };
         }
         if (table === "role_mapping_reviews") {
           return { insert: roleMappingReviewsInsert };
@@ -407,20 +403,14 @@ describe("uploadEmployees", () => {
       },
     ]);
 
-    expect(result.success).toBe(true);
-    expect(roleMappingReviewsInsert).toHaveBeenCalledWith([
-      expect.objectContaining({
-        workspace_id: "ws-1",
-        subject_type: "employee",
-        subject_id: "emp-new",
-        original_role_text: "Founder's Associate",
-        status: "pending",
-      }),
+    expect(result.success).toBe(false);
+    expect(result.failedCount).toBe(1);
+    expect(result.errors).toEqual([
+      "Ava Stone (ava@example.com) could not be imported because the role title could not be mapped to a supported Qeemly role.",
     ]);
-    expect(fetchMock).toHaveBeenCalledWith(
-      "/api/benchmarks/coverage/refresh",
-      expect.objectContaining({ method: "POST" }),
-    );
+    expect(employeesInsert).not.toHaveBeenCalled();
+    expect(roleMappingReviewsInsert).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("applies approved workspace aliases before creating a new review", async () => {

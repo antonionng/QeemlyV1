@@ -2,6 +2,7 @@
 
 import type { ColumnMapping, UploadDataType, FieldDefinition } from "./column-detection";
 import { getFieldsForType } from "./column-detection";
+import { matchLevel, matchRole } from "./transformers";
 
 export type ValidationSeverity = "error" | "warning";
 
@@ -249,6 +250,39 @@ function validateBenchmarkRow(
   return issues;
 }
 
+function validateEmployeeRow(
+  data: Record<string, unknown>,
+  rowIndex: number
+): ValidationIssue[] {
+  const issues: ValidationIssue[] = [];
+
+  const roleValue = typeof data.role === "string" ? data.role.trim() : "";
+  if (roleValue && !matchRole(roleValue)) {
+    issues.push({
+      row: rowIndex,
+      column: "role",
+      field: "role",
+      value: roleValue,
+      message: "Role could not be mapped to a supported Qeemly job title",
+      severity: "error",
+    });
+  }
+
+  const levelValue = typeof data.level === "string" ? data.level.trim() : "";
+  if (levelValue && !matchLevel(levelValue)) {
+    issues.push({
+      row: rowIndex,
+      column: "level",
+      field: "level",
+      value: levelValue,
+      message: "Level could not be mapped to a supported Qeemly level",
+      severity: "warning",
+    });
+  }
+
+  return issues;
+}
+
 /**
  * Transform a value to the appropriate type
  */
@@ -308,6 +342,10 @@ export function validateData(
     if (dataType === "benchmarks") {
       const benchmarkIssues = validateBenchmarkRow(data, rowIndex + 1);
       rowIssues.push(...benchmarkIssues);
+    }
+    if (dataType === "employees") {
+      const employeeIssues = validateEmployeeRow(data, rowIndex + 1);
+      rowIssues.push(...employeeIssues);
     }
 
     const hasErrors = rowIssues.some((i) => i.severity === "error");

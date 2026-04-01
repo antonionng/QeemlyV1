@@ -1,6 +1,10 @@
+/** @vitest-environment jsdom */
+
 import React from "react";
+import { act } from "react";
+import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const benchmarkStateMock = vi.hoisted(() => ({
   formData: {
@@ -57,20 +61,41 @@ vi.mock("@/lib/salary-view-store", () => ({
 import { BenchmarkForm } from "@/components/dashboard/benchmarks/benchmark-form";
 
 describe("BenchmarkForm feedback", () => {
+  beforeEach(() => {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  });
+
+  afterEach(() => {
+    delete globalThis.IS_REACT_ACT_ENVIRONMENT;
+    document.body.innerHTML = "";
+  });
+
   it("renders the no-match message when the benchmark search returns no result", () => {
     const html = renderToStaticMarkup(React.createElement(BenchmarkForm));
 
     expect(html).toContain("No published benchmark matched this role, level, and location yet. Try another selection.");
   });
 
-  it("shows the advisory loading experience while a benchmark search is running", () => {
+  it("shows the advisory loading experience while a benchmark search is running", async () => {
     benchmarkStateMock.isSubmitting = true;
     benchmarkStateMock.submissionError = null;
 
-    const html = renderToStaticMarkup(React.createElement(BenchmarkForm));
+    const container = document.createElement("div");
+    document.body.appendChild(container);
+    const root = createRoot(container);
 
-    expect(html).toContain("Qeemly Advisory AI");
-    expect(html).toContain("Validating role, level, and market filters");
-    expect(html).toContain("Pulling the strongest market benchmark for your request");
+    await act(async () => {
+      root.render(React.createElement(BenchmarkForm));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(document.body.textContent).toContain("Qeemly Advisory AI");
+    expect(document.body.textContent).toContain("Validating role, level, and market filters");
+    expect(document.body.textContent).toContain("Pulling the strongest market benchmark for your request");
+
+    await act(async () => {
+      root.unmount();
+    });
   });
 });

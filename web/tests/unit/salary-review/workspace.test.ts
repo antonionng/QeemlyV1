@@ -104,6 +104,9 @@ function makeEmployee(overrides: Partial<ReviewEmployee> = {}): ReviewEmployee {
     newSalary:
       overrides.newSalary ?? (overrides.baseSalary ?? 120_000) + (overrides.proposedIncrease ?? 0),
     isSelected: overrides.isSelected ?? true,
+    changeReason: overrides.changeReason ?? null,
+    recommendedLevelId: overrides.recommendedLevelId ?? null,
+    recommendedLevelName: overrides.recommendedLevelName ?? null,
     guidance: overrides.guidance,
     avatar: overrides.avatar,
     visaExpiryDate: overrides.visaExpiryDate,

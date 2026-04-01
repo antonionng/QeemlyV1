@@ -17,6 +17,9 @@ const baseItems: SalaryReviewDraftItemInput[] = [
     proposedPercentage: 6,
     selected: true,
     reasonSummary: "Market adjustment",
+    changeReason: "market_adjustment",
+    recommendedLevelId: null,
+    recommendedLevelName: null,
     benchmarkSnapshot: {
       source: "market",
       matchQuality: "exact",
@@ -31,6 +34,9 @@ const baseItems: SalaryReviewDraftItemInput[] = [
     proposedPercentage: 0,
     selected: false,
     reasonSummary: "Not in this cycle",
+    changeReason: null,
+    recommendedLevelId: null,
+    recommendedLevelName: null,
     benchmarkSnapshot: null,
   },
 ];
@@ -114,6 +120,33 @@ describe("salary review proposal workflow", () => {
     expect(returned.proposalStatus).toBe("draft");
     expect(returned.steps[1].status).toBe("returned");
     expect(returned.steps[0].status).toBe("approved");
+  });
+
+  it("adds director review when a band upgrade recommendation is present", () => {
+    const chain = buildApprovalChain({
+      totalIncrease: 6_000,
+      maxIncreasePercentage: 6,
+      hasAboveBandIncreases: false,
+      hasBandUpgradeRecommendations: true,
+    });
+
+    expect(chain.map((step) => step.stepKey)).toEqual([
+      "manager",
+      "director",
+      "hr",
+    ]);
+    expect(chain[1].triggerReason).toContain("band upgrade");
+  });
+
+  it("skips director review when no escalation triggers are present", () => {
+    const chain = buildApprovalChain({
+      totalIncrease: 6_000,
+      maxIncreasePercentage: 6,
+      hasAboveBandIncreases: false,
+      hasBandUpgradeRecommendations: false,
+    });
+
+    expect(chain.map((step) => step.stepKey)).toEqual(["manager", "hr"]);
   });
 
   it("adds director review when an above-band increase is saved into a draft", () => {

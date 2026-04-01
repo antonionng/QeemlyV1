@@ -27,6 +27,23 @@ export type SalaryReviewProposalRecord = {
   updated_at?: string;
 };
 
+export type SalaryChangeReason =
+  | "annual_review"
+  | "promotion"
+  | "market_adjustment"
+  | "retention"
+  | "counter_offer"
+  | "equity_correction";
+
+export const SALARY_CHANGE_REASONS: { value: SalaryChangeReason; label: string }[] = [
+  { value: "annual_review", label: "Annual Review" },
+  { value: "promotion", label: "Promotion" },
+  { value: "market_adjustment", label: "Market Adjustment" },
+  { value: "retention", label: "Retention" },
+  { value: "counter_offer", label: "Counter-offer" },
+  { value: "equity_correction", label: "Equity Correction" },
+];
+
 export type SalaryReviewProposalItemRecord = {
   id: string;
   cycle_id: string;
@@ -38,6 +55,9 @@ export type SalaryReviewProposalItemRecord = {
   proposed_salary: number;
   proposed_percentage: number;
   reason_summary: string | null;
+  change_reason: SalaryChangeReason | null;
+  recommended_level_id: string | null;
+  recommended_level_name: string | null;
   benchmark_snapshot: Record<string, unknown>;
 };
 

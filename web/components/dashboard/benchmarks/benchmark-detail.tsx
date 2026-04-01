@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { ArrowLeft, ArrowRight, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useBenchmarkState, type BenchmarkResult } from "@/lib/benchmarks/benchmark-state";
@@ -9,6 +10,7 @@ import {
   getOrderedEnabledViews,
   type DrilldownViewId,
 } from "@/lib/benchmarks/drilldown-views";
+import { fetchAiBriefing } from "@/lib/benchmarks/data-service";
 import { ViewSelector } from "./drilldown/view-selector";
 import {
   LevelTableView,
@@ -51,6 +53,70 @@ export function BenchmarkDetail({ result, hasCompanyData = true }: BenchmarkDeta
     getOrderedEnabledViews(enabledViews, viewOrder),
     hasCompanyData,
   );
+
+  useEffect(() => {
+    if (result.aiDetailBriefing || result.aiDetailBriefingStatus === "loading") {
+      return;
+    }
+
+    let isCancelled = false;
+
+    useBenchmarkState.setState((state) => {
+      if (!state.currentResult) return state;
+      return {
+        ...state,
+        currentResult: {
+          ...state.currentResult,
+          aiDetailBriefingStatus: "loading",
+        },
+      };
+    });
+
+    const loadBriefing = async () => {
+      const briefing = await fetchAiBriefing(role.id, location.id, level.id, {
+        industry: result.formData.industry,
+        companySize: result.formData.companySize,
+      });
+
+      if (isCancelled) return;
+
+      useBenchmarkState.setState((state) => {
+        if (!state.currentResult) return state;
+        return {
+          ...state,
+          currentResult: {
+            ...state.currentResult,
+            aiDetailBriefing: briefing,
+            aiDetailBriefingStatus: briefing ? "ready" : "unavailable",
+          },
+          recentResults: state.recentResults.map((entry) =>
+            entry.createdAt === result.createdAt
+              ? {
+                  ...entry,
+                  aiDetailBriefing: briefing,
+                  aiDetailBriefingStatus: briefing ? "ready" : "unavailable",
+                }
+              : entry,
+          ),
+        };
+      });
+    };
+
+    void loadBriefing();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    level.id,
+    location.id,
+    result.aiDetailBriefing,
+    result.aiDetailBriefingStatus,
+    result.createdAt,
+    result.formData.companySize,
+    result.formData.industry,
+    role.id,
+  ]);
 
   return (
     <div className="flex flex-col gap-6 xl:flex-row">

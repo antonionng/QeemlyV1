@@ -35,12 +35,16 @@ export async function POST(
     );
   }
 
+  const draftItems = buildDraftItemsFromRecords(detail.items);
   const rebuilt = rebuildApprovalStepsForItems({
-    items: buildDraftItemsFromRecords(detail.items),
+    items: draftItems,
     hasAboveBandIncreases: detail.items.some(
       (item) =>
         Boolean(item.selected) &&
         (item.benchmark_snapshot as { bandPosition?: string } | null)?.bandPosition === "above"
+    ),
+    hasBandUpgradeRecommendations: draftItems.some(
+      (item) => item.selected && Boolean(item.recommendedLevelId)
     ),
   });
 

@@ -274,26 +274,12 @@ export type AiAdvisoryPayload = {
     p75: number;
     p90: number;
   };
-  reasoning: string;
-  marketContext: string;
-  confidenceNote: string;
-  industryInsight: string | null;
-  companySizeInsight: string | null;
-};
-
-export type AiInsights = {
-  reasoning: string;
-  marketContext: string;
-  confidenceNote: string;
-  industryInsight: string | null;
-  companySizeInsight: string | null;
+  summary: string;
 };
 
 export type EnrichedBenchmarkResult = {
   benchmark: SalaryBenchmark | null;
-  aiAdvisory: AiAdvisoryPayload | null;
-  aiInsights: AiInsights | null;
-  aiDetailBriefing: BenchmarkDetailAiBriefing | null;
+  aiSummary: string | null;
 };
 
 export function makeBenchmarkLookupKey(entry: BenchmarkLookupEntry): string {
@@ -328,15 +314,11 @@ export async function getBenchmarkEnriched(
     if (response.ok) {
       const payload = (await response.json()) as {
         benchmark: SalaryBenchmark | null;
-        aiAdvisory: AiAdvisoryPayload | null;
-        aiInsights: AiInsights | null;
-        aiDetailBriefing: BenchmarkDetailAiBriefing | null;
+        aiSummary: string | null;
       };
       return {
         benchmark: payload.benchmark ?? null,
-        aiAdvisory: payload.aiAdvisory ?? null,
-        aiInsights: payload.aiInsights ?? null,
-        aiDetailBriefing: payload.aiDetailBriefing ?? null,
+        aiSummary: payload.aiSummary ?? null,
       };
     }
   } catch {
@@ -351,9 +333,7 @@ export async function getBenchmarkEnriched(
     if (marketMatch) {
       return {
         benchmark: transformMarketBenchmark(marketMatch, filters),
-        aiAdvisory: null,
-        aiInsights: null,
-        aiDetailBriefing: null,
+        aiSummary: null,
       };
     }
   } catch {
@@ -367,10 +347,37 @@ export async function getBenchmarkEnriched(
   );
   return {
     benchmark: match ? transformDbBenchmark(match) : null,
-    aiAdvisory: null,
-    aiInsights: null,
-    aiDetailBriefing: null,
+    aiSummary: null,
   };
+}
+
+export async function fetchAiBriefing(
+  roleId: string,
+  locationId: string,
+  levelId: string,
+  filters: BenchmarkLookupFilters = {},
+): Promise<BenchmarkDetailAiBriefing | null> {
+  const params = new URLSearchParams({ roleId, locationId, levelId });
+  if (filters.industry) params.set("industry", filters.industry);
+  if (filters.companySize) params.set("companySize", filters.companySize);
+
+  try {
+    const response = await fetch(`/api/benchmarks/briefing?${params.toString()}`, {
+      cache: "no-store",
+    });
+
+    if (!response.ok) {
+      return null;
+    }
+
+    const payload = (await response.json()) as {
+      detailBriefing: BenchmarkDetailAiBriefing | null;
+    };
+
+    return payload.detailBriefing ?? null;
+  } catch {
+    return null;
+  }
 }
 
 export async function getBenchmark(
@@ -391,7 +398,9 @@ export async function getBenchmark(
       const payload = (await response.json()) as {
         benchmark: SalaryBenchmark | null;
       };
-      return payload.benchmark ?? null;
+      if (payload.benchmark) {
+        return payload.benchmark;
+      }
     }
   } catch {
     // Fall back to direct reads if the API is unavailable in the current context.

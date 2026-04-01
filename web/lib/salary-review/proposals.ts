@@ -72,6 +72,9 @@ function mapDraftItemToInsert(item: SalaryReviewDraftItemWithBand, cycleId: stri
     proposed_salary: item.proposedSalary,
     proposed_percentage: item.proposedPercentage,
     reason_summary: item.reasonSummary,
+    change_reason: item.changeReason ?? null,
+    recommended_level_id: item.recommendedLevelId ?? null,
+    recommended_level_name: item.recommendedLevelName ?? null,
     benchmark_snapshot: {
       ...(item.benchmarkSnapshot ?? {}),
       bandPosition: item.bandPosition ?? null,
@@ -85,6 +88,7 @@ function buildItemApprovalSteps(items: SalaryReviewDraftItemWithBand[]) {
     totalIncrease: summary.totalIncrease,
     maxIncreasePercentage: summary.maxIncreasePercentage,
     hasAboveBandIncreases: items.some((item) => item.bandPosition === "above" && item.selected),
+    hasBandUpgradeRecommendations: items.some((item) => item.recommendedLevelId && item.selected),
   });
 
   return {

@@ -327,6 +327,35 @@ describe("benchmark AI detail numeric views", () => {
     });
   });
 
+  it("switches the level table to estimated basic salary values when Basic is selected", async () => {
+    const container = document.createElement("div");
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(React.createElement(LevelTableView, { result: makeResult() }));
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain("AED 228k");
+    expect(container.textContent).not.toContain("AED 160k");
+
+    const basicButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Basic",
+    );
+
+    await act(async () => {
+      basicButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain("AED 160k");
+    expect(container.textContent).not.toContain("AED 228k");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
   it("uses AI package breakdown numbers in salary breakdown instead of the cash-only placeholder", async () => {
     const container = document.createElement("div");
     const root = createRoot(container);

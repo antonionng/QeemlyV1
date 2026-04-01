@@ -26,6 +26,7 @@ import {
   type SalaryReviewQueryState,
 } from "./url-state";
 import type {
+  SalaryChangeReason,
   SalaryReviewApprovalStepRecord,
   SalaryReviewAuditEventRecord,
   SalaryReviewDepartmentAllocationRecord,
@@ -61,6 +62,9 @@ export interface ReviewEmployee extends Employee {
   proposedPercentage: number; // % increase
   newSalary: number;
   isSelected: boolean;
+  changeReason: SalaryChangeReason | null;
+  recommendedLevelId: string | null;
+  recommendedLevelName: string | null;
   guidance?: {
     type: "promotion-signal" | "flag" | "standard" | "retention-risk";
     message: string;
@@ -77,6 +81,7 @@ export interface EmployeeWorkflowState {
 export type ColumnKey =
   | "name"
   | "role"
+  | "level"
   | "department"
   | "location"
   | "current"
@@ -86,6 +91,7 @@ export type ColumnKey =
   | "other"
   | "proposed"
   | "increase"
+  | "changeReason"
   | "band"
   | "performance"
   | "guidance";
@@ -93,6 +99,7 @@ export type ColumnKey =
 export const ALL_COLUMNS: { key: ColumnKey; label: string }[] = [
   { key: "name", label: "Name" },
   { key: "role", label: "Role" },
+  { key: "level", label: "Level" },
   { key: "department", label: "Department" },
   { key: "location", label: "Location" },
   { key: "current", label: "Current Salary" },
@@ -102,6 +109,7 @@ export const ALL_COLUMNS: { key: ColumnKey; label: string }[] = [
   { key: "other", label: "Other Allowances" },
   { key: "proposed", label: "Proposed" },
   { key: "increase", label: "Increase %" },
+  { key: "changeReason", label: "Change Reason" },
   { key: "band", label: "Band Position" },
   { key: "performance", label: "Performance" },
   { key: "guidance", label: "Guidance" },
@@ -110,11 +118,13 @@ export const ALL_COLUMNS: { key: ColumnKey; label: string }[] = [
 export const DEFAULT_VISIBLE_COLUMNS: ColumnKey[] = [
   "name",
   "role",
+  "level",
   "department",
   "location",
   "current",
   "proposed",
   "increase",
+  "changeReason",
   "band",
   "performance",
 ];
@@ -212,6 +222,9 @@ export interface SalaryReviewState {
     employeeId?: string | null,
     stepId?: string | null
   ) => Promise<void>;
+  updateEmployeeChangeReason: (employeeId: string, reason: SalaryChangeReason | null) => void;
+  updateEmployeeBandUpgrade: (employeeId: string, levelId: string | null, levelName: string | null) => void;
+  applyChangeReasonToSelected: (reason: SalaryChangeReason) => void;
   saveDraftProposal: (source?: "manual" | "ai") => Promise<void>;
   submitActiveProposal: () => Promise<void>;
   reviewActiveProposal: (action: "approve" | "reject" | "return", note?: string) => Promise<void>;
@@ -310,6 +323,9 @@ function clearReviewEmployees(employees: ReviewEmployee[]): ReviewEmployee[] {
     proposedPercentage: 0,
     newSalary: employee.baseSalary,
     isSelected: true,
+    changeReason: null,
+    recommendedLevelId: null,
+    recommendedLevelName: null,
   }));
 }
 
@@ -341,6 +357,9 @@ function applyProposalItemsToEmployees(
         proposedIncrease: 0,
         proposedPercentage: 0,
         newSalary: employee.baseSalary,
+        changeReason: null,
+        recommendedLevelId: null,
+        recommendedLevelName: null,
       };
     }
     return {
@@ -349,6 +368,9 @@ function applyProposalItemsToEmployees(
       proposedIncrease: Number(item.proposed_increase || 0),
       proposedPercentage: Number(item.proposed_percentage || 0),
       newSalary: Number(item.proposed_salary || employee.baseSalary),
+      changeReason: (item.change_reason as SalaryChangeReason) ?? null,
+      recommendedLevelId: item.recommended_level_id ?? null,
+      recommendedLevelName: item.recommended_level_name ?? null,
       guidance: item.reason_summary
         ? {
             type: employee.guidance?.type ?? "standard",
@@ -466,7 +488,17 @@ function readStoredVisibleColumnsPreference() {
     const validated = parsed.filter((value): value is ColumnKey =>
       ALL_COLUMNS.some((column) => column.key === value)
     );
-    return validated.length > 0 ? validated : DEFAULT_VISIBLE_COLUMNS;
+    if (validated.length === 0) return DEFAULT_VISIBLE_COLUMNS;
+
+    const storedSet = new Set(validated);
+    const newDefaults = DEFAULT_VISIBLE_COLUMNS.filter((col) => !storedSet.has(col));
+    if (newDefaults.length > 0) {
+      const merged = [...validated, ...newDefaults];
+      persistVisibleColumnsPreference(merged);
+      return merged;
+    }
+
+    return validated;
   } catch {
     return DEFAULT_VISIBLE_COLUMNS;
   }
@@ -524,6 +556,9 @@ function toDraftItems(employees: ReviewEmployee[]): Array<{
   proposedPercentage: number;
   selected: boolean;
   reasonSummary: string;
+  changeReason: string | null;
+  recommendedLevelId: string | null;
+  recommendedLevelName: string | null;
   benchmarkSnapshot: Record<string, unknown> | null;
   bandPosition: ReviewEmployee["bandPosition"];
 }> {
@@ -536,6 +571,9 @@ function toDraftItems(employees: ReviewEmployee[]): Array<{
     proposedPercentage: employee.proposedPercentage,
     selected: employee.isSelected,
     reasonSummary: employee.guidance?.message || "Salary review proposal",
+    changeReason: employee.changeReason,
+    recommendedLevelId: employee.recommendedLevelId,
+    recommendedLevelName: employee.recommendedLevelName,
     benchmarkSnapshot: serializeBenchmarkSnapshot(employee),
     bandPosition: employee.bandPosition,
   }));
@@ -722,6 +760,9 @@ function transformToReviewEmployees(employees: Employee[]): ReviewEmployee[] {
     proposedPercentage: 0,
     newSalary: employee.baseSalary,
     isSelected: true,
+    changeReason: null,
+    recommendedLevelId: null,
+    recommendedLevelName: null,
     guidance: generateGuidance(employee),
   }));
 }
@@ -1020,6 +1061,35 @@ export const useSalaryReview = create<SalaryReviewState>()(
             ...computeReviewTotals(employees, state.totalCurrentPayroll, state.settings),
           };
         }),
+
+        updateEmployeeChangeReason: (employeeId, reason) => set((state) => ({
+          employees: state.employees.map((emp) =>
+            emp.id === employeeId
+              ? { ...emp, changeReason: reason }
+              : emp
+          ),
+          draftChanges: { ...state.draftChanges, [employeeId]: state.draftChanges[employeeId] ?? 0 },
+        })),
+
+        updateEmployeeBandUpgrade: (employeeId, levelId, levelName) => set((state) => ({
+          employees: state.employees.map((emp) =>
+            emp.id === employeeId
+              ? {
+                  ...emp,
+                  recommendedLevelId: levelId,
+                  recommendedLevelName: levelName,
+                  changeReason: levelId ? "promotion" : emp.changeReason,
+                }
+              : emp
+          ),
+          draftChanges: { ...state.draftChanges, [employeeId]: state.draftChanges[employeeId] ?? 0 },
+        })),
+
+        applyChangeReasonToSelected: (reason) => set((state) => ({
+          employees: state.employees.map((emp) =>
+            emp.isSelected ? { ...emp, changeReason: reason } : emp
+          ),
+        })),
 
         applyAiProposal: (plan, selectedEmployeeIds) => set((state) => {
           const selectedSet =
@@ -1560,6 +1630,23 @@ export const useSalaryReview = create<SalaryReviewState>()(
         visibleColumns: state.visibleColumns,
         workflowByEmployee: state.workflowByEmployee,
       }),
+      merge: (persisted, current) => {
+        const stored = persisted as Partial<SalaryReviewState> | undefined;
+        if (!stored) return current;
+
+        let columns = stored.visibleColumns ?? current.visibleColumns;
+        const storedSet = new Set(columns);
+        const missing = DEFAULT_VISIBLE_COLUMNS.filter((col) => !storedSet.has(col));
+        if (missing.length > 0) {
+          columns = [...columns, ...missing];
+        }
+
+        return {
+          ...current,
+          ...stored,
+          visibleColumns: columns,
+        };
+      },
     }
   )
 );

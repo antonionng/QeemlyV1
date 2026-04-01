@@ -12,6 +12,7 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import { getCompanyInitials, useCompanySettings } from "@/lib/company";
+import { emitWorkspaceChange } from "@/lib/workspace-client";
 
 type Workspace = {
   id: string;
@@ -99,6 +100,7 @@ export function WorkspaceSwitcher({ collapsed = false }: Props) {
 
       if (res.ok) {
         setOverrideWorkspace(workspace);
+        emitWorkspaceChange({ workspaceId: workspace.id, source: "override" });
         setOpen(false);
         router.refresh();
       }
@@ -116,6 +118,7 @@ export function WorkspaceSwitcher({ collapsed = false }: Props) {
 
       if (res.ok) {
         setOverrideWorkspace(null);
+        emitWorkspaceChange({ workspaceId: currentWorkspaceId, source: "profile" });
         setOpen(false);
         router.refresh();
       }

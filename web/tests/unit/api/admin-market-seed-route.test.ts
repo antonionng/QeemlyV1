@@ -408,9 +408,8 @@ describe("POST /api/admin/market-seed", () => {
     const payload = await response.json();
 
     expect(response.status).toBe(200);
-    expect(runIngestionForJobMock).toHaveBeenCalledTimes(3);
+    expect(runIngestionForJobMock).toHaveBeenCalledTimes(2);
     expect(payload.selectedSourceSlugs).toEqual([
-      "uae_fcsc_workforce_comp",
       "qatar_wages",
       "kuwait_open_labor",
     ]);

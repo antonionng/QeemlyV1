@@ -13,6 +13,7 @@ import {
   ShieldAlert,
   Shield,
   ArrowUpRight,
+  ArrowUpCircle,
   Star,
   ChevronDown,
   CheckCircle2,
@@ -21,6 +22,8 @@ import {
   Send,
 } from "lucide-react";
 import { type ReviewEmployee, useSalaryReview } from "@/lib/salary-review";
+import { SALARY_CHANGE_REASONS, type SalaryChangeReason } from "@/lib/salary-review/proposal-types";
+import { LEVELS } from "@/lib/dashboard/dummy-data";
 import {
   formatAED,
   generateCompensationHistory,
@@ -127,6 +130,8 @@ export function EmployeeDetailPanel({ employee, onClose }: EmployeeDetailPanelPr
   const {
     workflowByEmployee,
     updateEmployeeWorkflow,
+    updateEmployeeChangeReason,
+    updateEmployeeBandUpgrade,
     applySuggestedIncrease,
     activeProposal,
     proposalItemsByEmployee,
@@ -543,6 +548,90 @@ export function EmployeeDetailPanel({ employee, onClose }: EmployeeDetailPanelPr
                   ? "This employee is already above the market range, so salary changes need stronger justification."
                   : "This employee sits inside the market range. Use performance and retention context to decide the final outcome."}
             </div>
+          </section>
+
+          {/* Band & Progression */}
+          <section className="rounded-xl border border-purple-100 bg-purple-50/30 px-4 py-4">
+            <h3 className="text-[11px] font-semibold uppercase tracking-widest text-purple-600">
+              Band & Progression
+            </h3>
+            <div className="mt-3 flex items-center justify-between">
+              <div>
+                <p className="text-xs text-accent-500">Current Level</p>
+                <p className="mt-1 text-sm font-semibold text-accent-900">{employee.level.name}</p>
+                <p className="text-xs text-accent-500 mt-0.5">{employee.level.category} track</p>
+              </div>
+              {employee.recommendedLevelName ? (
+                <div className="text-right">
+                  <p className="text-xs text-purple-600">Recommended</p>
+                  <p className="mt-1 text-sm font-semibold text-purple-700">{employee.recommendedLevelName}</p>
+                  <button
+                    type="button"
+                    onClick={() => updateEmployeeBandUpgrade(employee.id, null, null)}
+                    className="mt-1 text-[11px] text-accent-500 hover:text-red-600 underline"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 text-xs text-accent-400">
+                  <ArrowUpCircle className="h-3.5 w-3.5" />
+                  No upgrade recommended
+                </div>
+              )}
+            </div>
+
+            {!employee.recommendedLevelName && (
+              <div className="mt-3">
+                <label className="text-xs font-medium text-accent-600">Recommend band upgrade</label>
+                <select
+                  value=""
+                  onChange={(e) => {
+                    const level = LEVELS.find((l) => l.id === e.target.value);
+                    if (level) {
+                      updateEmployeeBandUpgrade(employee.id, level.id, level.name);
+                    }
+                  }}
+                  className="mt-1 w-full h-9 rounded-lg border border-purple-200 bg-white px-3 text-sm text-accent-700 focus:border-purple-400 focus:outline-none"
+                >
+                  <option value="">Select target level...</option>
+                  {LEVELS.filter((l) => l.id !== employee.level.id).map((l) => (
+                    <option key={l.id} value={l.id}>{l.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {employee.recommendedLevelName && (
+              <div className="mt-3 rounded-lg bg-purple-100/60 px-3 py-2 text-xs text-purple-800">
+                This upgrade recommendation will be included in the approval workflow and require Director review.
+              </div>
+            )}
+          </section>
+
+          {/* Change Reason */}
+          <section className="rounded-xl border border-border/50 bg-white px-4 py-4">
+            <h3 className="text-[11px] font-semibold uppercase tracking-widest text-accent-400">
+              Change Reason
+            </h3>
+            <p className="mt-1 text-xs text-accent-500">
+              {employee.changeReason
+                ? SALARY_CHANGE_REASONS.find((r) => r.value === employee.changeReason)?.label
+                : "No reason selected yet"}
+            </p>
+            <select
+              value={employee.changeReason ?? ""}
+              onChange={(e) => {
+                const value = e.target.value as SalaryChangeReason | "";
+                updateEmployeeChangeReason(employee.id, value || null);
+              }}
+              className="mt-2 w-full h-9 rounded-lg border border-border bg-white px-3 text-sm text-accent-700 focus:border-brand-300 focus:outline-none"
+            >
+              <option value="">Select reason...</option>
+              {SALARY_CHANGE_REASONS.map((r) => (
+                <option key={r.value} value={r.value}>{r.label}</option>
+              ))}
+            </select>
           </section>
 
           {shouldShowEmployeeApprovalContext(Boolean(activeProposal)) ? (

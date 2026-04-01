@@ -23,12 +23,9 @@ import {
   useBenchmarkState,
   type BenchmarkResult,
 } from "@/lib/benchmarks/benchmark-state";
-import type { BenchmarkDetailAiBriefing } from "@/lib/benchmarks/detail-ai";
 import {
   getBenchmarksBatch,
   getBenchmarkEnriched,
-  type AiAdvisoryPayload,
-  type AiInsights,
 } from "@/lib/benchmarks/data-service";
 import { getRoleDescription } from "@/lib/benchmarks/role-descriptions";
 import {
@@ -85,10 +82,6 @@ function PeerHoverTooltip({
   );
 }
 
-function getBenchmarkResultIdentity(result: BenchmarkResult) {
-  return `${result.role.id}::${result.level.id}::${result.location.id}::${new Date(result.createdAt).getTime()}`;
-}
-
 export function BenchmarkResults({ result, hasCompanyData = true }: BenchmarkResultsProps) {
   const {
     clearResult,
@@ -104,12 +97,13 @@ export function BenchmarkResults({ result, hasCompanyData = true }: BenchmarkRes
   const { salaryView, setSalaryView } = useSalaryView();
 
   const { benchmark, role, level, location, formData: resultFormData } = result;
+  const [selectedBenchmark, setSelectedBenchmark] = useState<SalaryBenchmark>(benchmark);
   const [levelBenchmarks, setLevelBenchmarks] = useState<Record<string, SalaryBenchmark>>({
     [level.id]: benchmark,
   });
+  const [isLoadingLevelBenchmarks, setIsLoadingLevelBenchmarks] = useState(true);
   const [showLevelOverrides, setShowLevelOverrides] = useState<Record<string, boolean>>({});
-  const [aiAdvisory, setAiAdvisory] = useState<AiAdvisoryPayload | null>(null);
-  const [aiInsights, setAiInsights] = useState<AiInsights | null>(null);
+  const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [isRolePickerOpen, setIsRolePickerOpen] = useState(false);
   const [orgPeerSummariesByLevel, setOrgPeerSummariesByLevel] = useState<Record<string, OrgPeerSummary>>({});
   const [orgPeerSummaryLoadingByLevel, setOrgPeerSummaryLoadingByLevel] = useState<Record<string, boolean>>({});
@@ -118,12 +112,11 @@ export function BenchmarkResults({ result, hasCompanyData = true }: BenchmarkRes
   const targetPercentile = stateFormData.targetPercentile || companySettings.targetPercentile;
   const roleDescription = getRoleDescription(role.id);
   const selectedRole = ROLES.find((entry) => entry.id === (stateFormData.roleId || resultFormData.roleId)) ?? role;
-  const resultIdentity = getBenchmarkResultIdentity(result);
 
   const convertAndRound = useCallback((
     sourceValue: number,
-    sourcePayPeriod = benchmark.payPeriod,
-    sourceCurrency = benchmark.currency || "AED",
+    sourcePayPeriod = selectedBenchmark.payPeriod,
+    sourceCurrency = selectedBenchmark.currency || "AED",
   ) => {
     return toBenchmarkDisplayValue(sourceValue, {
       salaryView,
@@ -131,7 +124,7 @@ export function BenchmarkResults({ result, hasCompanyData = true }: BenchmarkRes
       targetCurrency: currency.defaultCurrency,
       payPeriod: sourcePayPeriod,
     });
-  }, [benchmark.currency, benchmark.payPeriod, currency.defaultCurrency, salaryView]);
+  }, [currency.defaultCurrency, salaryView, selectedBenchmark.currency, selectedBenchmark.payPeriod]);
 
   const formatValue = (value: number) => currency.format(value);
   const formatShort = (value: number) => {
@@ -139,87 +132,54 @@ export function BenchmarkResults({ result, hasCompanyData = true }: BenchmarkRes
     return String(value);
   };
 
-  const persistAiDetailBriefing = useCallback(
-    (
-      briefing: BenchmarkDetailAiBriefing | null,
-      status: BenchmarkResult["aiDetailBriefingStatus"],
-    ) => {
-      useBenchmarkState.setState((state) => {
-        if (!state.currentResult || getBenchmarkResultIdentity(state.currentResult) !== resultIdentity) {
-          return state;
-        }
-
-        return {
-          currentResult: {
-            ...state.currentResult,
-            aiDetailBriefing: briefing,
-            aiDetailBriefingStatus: status,
-          },
-          recentResults: state.recentResults.map((entry) =>
-            getBenchmarkResultIdentity(entry) === resultIdentity
-              ? {
-                  ...entry,
-                  aiDetailBriefing: briefing,
-                  aiDetailBriefingStatus: status,
-                }
-              : entry,
-          ),
-        };
-      });
-    },
-    [resultIdentity],
-  );
-
   useEffect(() => {
     const filters = {
       industry: stateFormData.industry || resultFormData.industry,
       companySize: stateFormData.companySize || resultFormData.companySize,
     };
+    let isCancelled = false;
 
     const loadLevelBenchmarks = async () => {
-      const [enriched, batchBenchmarks] = await Promise.all([
-        getBenchmarkEnriched(role.id, location.id, level.id, filters),
-        getBenchmarksBatch(
-          LEVELS.filter((nextLevel) => nextLevel.id !== level.id).map((nextLevel) => ({
+      setIsLoadingLevelBenchmarks(true);
+      try {
+        const batchBenchmarks = await getBenchmarksBatch(
+          LEVELS.map((nextLevel) => ({
             roleId: role.id,
             locationId: location.id,
             levelId: nextLevel.id,
             industry: filters.industry ?? null,
             companySize: filters.companySize ?? null,
           })),
-        ),
-      ]);
+        );
 
-      if (enriched.aiAdvisory) setAiAdvisory(enriched.aiAdvisory);
-      if (enriched.aiInsights) setAiInsights(enriched.aiInsights);
-      persistAiDetailBriefing(
-        enriched.aiDetailBriefing,
-        enriched.aiDetailBriefing ? "ready" : "unavailable",
-      );
-
-      const next: Record<string, SalaryBenchmark> = { [level.id]: benchmark };
-      if (enriched.benchmark) {
-        next[level.id] = enriched.benchmark;
-      }
-      for (const nextLevel of LEVELS) {
-        if (nextLevel.id === level.id) continue;
-        const batchKey = [
-          role.id,
-          location.id,
-          nextLevel.id,
-          filters.industry ?? "",
-          filters.companySize ?? "",
-        ].join("::");
-        const nextBenchmark = batchBenchmarks[batchKey];
-        if (nextBenchmark) {
-          next[nextLevel.id] = nextBenchmark;
+        const next: Record<string, SalaryBenchmark> = { [level.id]: benchmark };
+        for (const nextLevel of LEVELS) {
+          const batchKey = [
+            role.id,
+            location.id,
+            nextLevel.id,
+            filters.industry ?? "",
+            filters.companySize ?? "",
+          ].join("::");
+          const nextBenchmark = batchBenchmarks[batchKey];
+          if (nextBenchmark) {
+            next[nextLevel.id] = nextBenchmark;
+          }
+        }
+        if (isCancelled) return;
+        setLevelBenchmarks(next);
+      } finally {
+        if (!isCancelled) {
+          setIsLoadingLevelBenchmarks(false);
         }
       }
-      setLevelBenchmarks(next);
     };
 
-    persistAiDetailBriefing(null, "loading");
     void loadLevelBenchmarks();
+
+    return () => {
+      isCancelled = true;
+    };
   }, [
     benchmark,
     level.id,
@@ -229,7 +189,46 @@ export function BenchmarkResults({ result, hasCompanyData = true }: BenchmarkRes
     role.id,
     stateFormData.companySize,
     stateFormData.industry,
-    persistAiDetailBriefing,
+  ]);
+
+  useEffect(() => {
+    const filters = {
+      industry: stateFormData.industry || resultFormData.industry,
+      companySize: stateFormData.companySize || resultFormData.companySize,
+    };
+    let isCancelled = false;
+
+    const loadAiSummary = async () => {
+      const enriched = await getBenchmarkEnriched(role.id, location.id, level.id, filters);
+      if (isCancelled) return;
+
+      if (enriched.benchmark) {
+        setSelectedBenchmark(enriched.benchmark);
+        setLevelBenchmarks((prev) => ({
+          ...prev,
+          [level.id]: enriched.benchmark!,
+        }));
+      }
+
+      setAiSummary(enriched.aiSummary ?? null);
+    };
+
+    setAiSummary(null);
+    setSelectedBenchmark(benchmark);
+    void loadAiSummary();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    benchmark,
+    level.id,
+    location.id,
+    resultFormData.companySize,
+    resultFormData.industry,
+    role.id,
+    stateFormData.companySize,
+    stateFormData.industry,
   ]);
 
   const levelRows: LevelRow[] = useMemo(() => {
@@ -402,17 +401,17 @@ export function BenchmarkResults({ result, hasCompanyData = true }: BenchmarkRes
   ]);
 
   const percentiles = {
-    p10: convertAndRound(benchmark.percentiles.p10),
-    p25: convertAndRound(benchmark.percentiles.p25),
-    p50: convertAndRound(benchmark.percentiles.p50),
-    p75: convertAndRound(benchmark.percentiles.p75),
-    p90: convertAndRound(benchmark.percentiles.p90),
+    p10: convertAndRound(selectedBenchmark.percentiles.p10),
+    p25: convertAndRound(selectedBenchmark.percentiles.p25),
+    p50: convertAndRound(selectedBenchmark.percentiles.p50),
+    p75: convertAndRound(selectedBenchmark.percentiles.p75),
+    p90: convertAndRound(selectedBenchmark.percentiles.p90),
   };
   const targetValue = percentiles[`p${targetPercentile}` as keyof typeof percentiles] || percentiles.p50;
   const insights = getBenchmarkResultsInsights({
     targetPercentile,
-    confidence: benchmark.confidence,
-    sampleSize: benchmark.sampleSize,
+    confidence: selectedBenchmark.confidence,
+    sampleSize: selectedBenchmark.sampleSize,
   });
 
   const confColor = (confidence: string) => {
@@ -638,7 +637,7 @@ export function BenchmarkResults({ result, hasCompanyData = true }: BenchmarkRes
         </div>
       )}
 
-      {benchmark.nationalsCostBreakdown && (
+      {selectedBenchmark.nationalsCostBreakdown && (
         <div className="bench-section">
           <h3 className="bench-section-header">Nationals Total Employer Cost</h3>
           <p className="mb-4 text-xs text-brand-500">
@@ -651,29 +650,29 @@ export function BenchmarkResults({ result, hasCompanyData = true }: BenchmarkRes
             </div>
             <div className="rounded-xl bg-amber-50 p-4 text-center">
               <div className="mb-1 text-xs text-amber-600">
-                GPSSA ({benchmark.nationalsCostBreakdown.gpssaPct}%)
+                GPSSA ({selectedBenchmark.nationalsCostBreakdown.gpssaPct}%)
               </div>
               <div className="text-lg font-bold text-amber-700">
                 {formatValue(
                   convertAndRound(
-                    benchmark.nationalsCostBreakdown.gpssaAmount,
+                    selectedBenchmark.nationalsCostBreakdown.gpssaAmount,
                     "annual",
-                    benchmark.currency,
+                    selectedBenchmark.currency,
                   ),
                 )}
               </div>
             </div>
-            {benchmark.nationalsCostBreakdown.nafisPct > 0 && (
+            {selectedBenchmark.nationalsCostBreakdown.nafisPct > 0 && (
               <div className="rounded-xl bg-emerald-50 p-4 text-center">
                 <div className="mb-1 text-xs text-emerald-600">
-                  Nafis ({benchmark.nationalsCostBreakdown.nafisPct}%)
+                  Nafis ({selectedBenchmark.nationalsCostBreakdown.nafisPct}%)
                 </div>
                 <div className="text-lg font-bold text-emerald-700">
                   {formatValue(
                     convertAndRound(
-                      benchmark.nationalsCostBreakdown.nafisAmount,
+                      selectedBenchmark.nationalsCostBreakdown.nafisAmount,
                       "annual",
-                      benchmark.currency,
+                      selectedBenchmark.currency,
                     ),
                   )}
                 </div>
@@ -684,20 +683,23 @@ export function BenchmarkResults({ result, hasCompanyData = true }: BenchmarkRes
               <div className="text-lg font-bold text-brand-900">
                 {formatValue(
                   convertAndRound(
-                    benchmark.nationalsCostBreakdown.totalEmployerCost,
+                    selectedBenchmark.nationalsCostBreakdown.totalEmployerCost,
                     "annual",
-                    benchmark.currency,
+                    selectedBenchmark.currency,
                   ),
                 )}
               </div>
               <div className="mt-0.5 text-[10px] text-brand-500">
-                {benchmark.nationalsCostBreakdown.totalCostMultiplier.toFixed(2)}x base
+                {selectedBenchmark.nationalsCostBreakdown.totalCostMultiplier.toFixed(2)}x base
               </div>
             </div>
           </div>
         </div>
       )}
 
+      {isLoadingLevelBenchmarks ? (
+        <BenchmarkAdvisoryLoading variant="search" />
+      ) : (
       <div className="bench-section p-0" data-testid="benchmark-results-level-table">
         <div className="responsive-scroll-x">
           <table className="bench-table min-w-[480px]">
@@ -748,8 +750,9 @@ export function BenchmarkResults({ result, hasCompanyData = true }: BenchmarkRes
           </table>
         </div>
       </div>
+      )}
 
-      {shownRows.length > 0 && (
+      {!isLoadingLevelBenchmarks && shownRows.length > 0 && (
         <div className="bench-section" data-testid="benchmark-results-boxplot-section">
           <div
             className="responsive-scroll-x"
@@ -886,48 +889,13 @@ export function BenchmarkResults({ result, hasCompanyData = true }: BenchmarkRes
       <div className="bench-section" data-testid="benchmark-results-summary">
         <h3 className="bench-section-header">Summary</h3>
 
-        {aiInsights ? (
-          <div className="space-y-4">
-            <div className="rounded-xl bg-gradient-to-br from-violet-50 to-brand-50 p-5 text-sm leading-relaxed text-brand-800">
-              <div className="flex items-center gap-2 mb-3">
-                <Sparkles className="h-4 w-4 text-violet-600" />
-                <span className="font-semibold text-brand-900">Market Analysis</span>
-              </div>
-              <p>{aiInsights.reasoning}</p>
+        {aiSummary ? (
+          <div className="rounded-xl bg-gradient-to-br from-violet-50 to-brand-50 p-5 text-sm leading-relaxed text-brand-800">
+            <div className="mb-3 flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-violet-600" />
+              <span className="font-semibold text-brand-900">Market Summary</span>
             </div>
-
-            <div className="rounded-xl bg-brand-50/60 p-5 text-sm leading-relaxed text-brand-800">
-              <div className="flex items-center gap-2 mb-3">
-                <Info className="h-4 w-4 text-brand-500" />
-                <span className="font-semibold text-brand-900">Market Context</span>
-              </div>
-              <p>{aiInsights.marketContext}</p>
-            </div>
-
-            {(aiInsights.industryInsight || aiInsights.companySizeInsight) && (
-              <div className="grid gap-3 sm:grid-cols-2">
-                {aiInsights.industryInsight && (
-                  <div className="rounded-xl bg-amber-50/60 p-4 text-sm leading-relaxed text-brand-800">
-                    <div className="flex items-center gap-2 mb-2">
-                      <AlertCircle className="h-4 w-4 text-amber-600" />
-                      <span className="font-semibold text-amber-900">Industry Insight</span>
-                    </div>
-                    <p>{aiInsights.industryInsight}</p>
-                  </div>
-                )}
-                {aiInsights.companySizeInsight && (
-                  <div className="rounded-xl bg-emerald-50/60 p-4 text-sm leading-relaxed text-brand-800">
-                    <div className="flex items-center gap-2 mb-2">
-                      <CheckCircle className="h-4 w-4 text-emerald-600" />
-                      <span className="font-semibold text-emerald-900">Company Size Insight</span>
-                    </div>
-                    <p>{aiInsights.companySizeInsight}</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            <p className="text-xs text-brand-400 italic">{aiInsights.confidenceNote}</p>
+            <p>{aiSummary}</p>
           </div>
         ) : (
           <div className="space-y-2">
@@ -956,85 +924,17 @@ export function BenchmarkResults({ result, hasCompanyData = true }: BenchmarkRes
         )}
 
         <div className="mt-3 flex items-center gap-3 text-xs text-brand-500">
-          <BenchmarkSourceBadge source={benchmark.benchmarkSource} />
-          {benchmark.benchmarkSource !== "ai-estimated" && (
+          <BenchmarkSourceBadge source={selectedBenchmark.benchmarkSource} />
+          {selectedBenchmark.benchmarkSource !== "ai-estimated" && (
             <>
               <span className="text-brand-300">·</span>
-              <span>{benchmark.sampleSize} data points</span>
+              <span>{selectedBenchmark.sampleSize} data points</span>
               <span className="text-brand-300">·</span>
-              <span>{benchmark.confidence} confidence</span>
+              <span>{selectedBenchmark.confidence} confidence</span>
             </>
           )}
         </div>
       </div>
-
-      {/* Supplementary AI Advisory - only when market data is strong and AI runs alongside */}
-      {aiAdvisory && (
-        <div className="bench-section" data-testid="benchmark-ai-advisory">
-          <div className="flex items-center gap-2 mb-4">
-            <Sparkles className="h-5 w-5 text-violet-600" />
-            <h3 className="bench-section-header pb-0">Qeemly AI Advisory</h3>
-          </div>
-
-          <div className="space-y-4">
-            <div className="grid grid-cols-5 gap-2">
-              {(["p10", "p25", "p50", "p75", "p90"] as const).map((key) => {
-                const aiValue = aiAdvisory.levelEstimate[key];
-                return (
-                  <div
-                    key={key}
-                    className={`rounded-xl p-3 text-center ${
-                      key === "p50"
-                        ? "bg-violet-50 ring-1 ring-violet-200"
-                        : "bg-brand-50/50"
-                    }`}
-                  >
-                    <div className="text-[10px] font-semibold uppercase tracking-wider text-brand-400">
-                      {key.toUpperCase()}
-                    </div>
-                    <div
-                      className={`mt-1 text-sm font-bold ${
-                        key === "p50" ? "text-violet-700" : "text-brand-900"
-                      }`}
-                    >
-                      {formatShort(aiValue)}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="rounded-xl bg-violet-50/50 p-4 text-sm leading-relaxed text-brand-700">
-              <p className="font-semibold text-brand-900 mb-1">Market Analysis</p>
-              <p>{aiAdvisory.reasoning}</p>
-            </div>
-
-            <div className="rounded-xl bg-brand-50/50 p-4 text-sm leading-relaxed text-brand-700">
-              <p className="font-semibold text-brand-900 mb-1">Market Context</p>
-              <p>{aiAdvisory.marketContext}</p>
-            </div>
-
-            {(aiAdvisory.industryInsight || aiAdvisory.companySizeInsight) && (
-              <div className="grid gap-3 sm:grid-cols-2">
-                {aiAdvisory.industryInsight && (
-                  <div className="rounded-xl bg-amber-50/50 p-4 text-sm leading-relaxed text-brand-700">
-                    <p className="font-semibold text-amber-800 mb-1">Industry Insight</p>
-                    <p>{aiAdvisory.industryInsight}</p>
-                  </div>
-                )}
-                {aiAdvisory.companySizeInsight && (
-                  <div className="rounded-xl bg-emerald-50/50 p-4 text-sm leading-relaxed text-brand-700">
-                    <p className="font-semibold text-emerald-800 mb-1">Company Size Insight</p>
-                    <p>{aiAdvisory.companySizeInsight}</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            <p className="text-xs text-brand-400 italic">{aiAdvisory.confidenceNote}</p>
-          </div>
-        </div>
-      )}
 
       <div className="flex flex-wrap items-center gap-3 pt-2">
         <Button variant="ghost" onClick={() => saveCurrentFilter()}>

@@ -27,6 +27,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useCompanySettings } from "@/lib/company";
 import { getDashboardOverviewRoutes } from "@/lib/company-vs-market";
 import { isFeatureEnabled, type FeatureKey } from "@/lib/release/ga-scope";
+import { useWorkspaceChangeVersion } from "@/lib/workspace-client";
 import { WorkspaceSwitcher } from "./workspace-switcher";
 
 type NavItem = {
@@ -165,6 +166,7 @@ export function DashboardSidebar({
   const pathname = usePathname();
   const [user, setUser] = useState<UserData | null>(null);
   const companySettings = useCompanySettings();
+  const workspaceChangeVersion = useWorkspaceChangeVersion();
 
   const isEmployee = user?.role === "employee";
   const navSections = isEmployee ? employeeNavSections : adminNavSections;
@@ -197,12 +199,15 @@ export function DashboardSidebar({
 
   // Load company settings from API and sync to Zustand (for sidebar display)
   useEffect(() => {
+    let isCancelled = false;
+
     async function loadCompanySettings() {
       try {
-        const res = await fetch("/api/settings");
+        const res = await fetch("/api/settings", { cache: "no-store" });
         if (!res.ok) return;
         
         const data = await res.json();
+        if (isCancelled) return;
         const s = data.settings;
         
         // Only update if we have real data from DB
@@ -235,9 +240,12 @@ export function DashboardSidebar({
       }
     }
 
-    loadCompanySettings();
+    void loadCompanySettings();
+    return () => {
+      isCancelled = true;
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [workspaceChangeVersion]);
 
   const displayName = user?.fullName || user?.email?.split("@")[0] || "User";
   const initials = displayName.charAt(0).toUpperCase();

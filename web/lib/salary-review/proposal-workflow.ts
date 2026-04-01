@@ -22,6 +22,9 @@ export type SalaryReviewDraftItemInput = {
   proposedPercentage: number;
   selected: boolean;
   reasonSummary: string;
+  changeReason: string | null;
+  recommendedLevelId: string | null;
+  recommendedLevelName: string | null;
   benchmarkSnapshot: Record<string, unknown> | null;
 };
 
@@ -54,15 +57,17 @@ export function buildApprovalChain(args: {
   totalIncrease: number;
   maxIncreasePercentage: number;
   hasAboveBandIncreases: boolean;
+  hasBandUpgradeRecommendations?: boolean;
 }): SalaryReviewApprovalStep[] {
   const steps: SalaryReviewApprovalStep[] = [
     createStep("manager", null),
   ];
 
-  if (args.maxIncreasePercentage >= 10 || args.hasAboveBandIncreases) {
+  if (args.maxIncreasePercentage >= 10 || args.hasAboveBandIncreases || args.hasBandUpgradeRecommendations) {
     const reasons: string[] = [];
     if (args.maxIncreasePercentage >= 10) reasons.push("Increase exceeds 10%");
     if (args.hasAboveBandIncreases) reasons.push("Proposal includes above-band pay decisions");
+    if (args.hasBandUpgradeRecommendations) reasons.push("Proposal includes band upgrade recommendations");
     steps.push(createStep("director", reasons.join(". ")));
   }
 

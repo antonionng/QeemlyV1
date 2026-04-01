@@ -90,6 +90,9 @@ export async function PATCH(
           proposed_salary: item.proposedSalary,
           proposed_percentage: item.proposedPercentage,
           reason_summary: item.reasonSummary,
+          change_reason: item.changeReason ?? null,
+          recommended_level_id: item.recommendedLevelId ?? null,
+          recommended_level_name: item.recommendedLevelName ?? null,
           benchmark_snapshot: {
             ...(item.benchmarkSnapshot ?? {}),
             bandPosition: item.bandPosition ?? null,
@@ -113,6 +116,9 @@ export async function PATCH(
         proposedPercentage: item.proposedPercentage,
         selected: item.selected,
         reasonSummary: item.reasonSummary,
+        changeReason: item.changeReason ?? null,
+        recommendedLevelId: item.recommendedLevelId ?? null,
+        recommendedLevelName: item.recommendedLevelName ?? null,
         benchmarkSnapshot: item.benchmarkSnapshot ?? {},
       }))
     );

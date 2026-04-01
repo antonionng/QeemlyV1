@@ -38,6 +38,7 @@ import {
 } from "@/lib/salary-review/dashboard";
 import type { SalaryReviewTab } from "@/lib/salary-review/url-state";
 import { createEmployee } from "./actions";
+import { useWorkspaceChangeVersion } from "@/lib/workspace-client";
 
 const PERCENTAGE_BUDGET_SUGGESTIONS = [2, 3, 5, 8, 10];
 const ABSOLUTE_BUDGET_SUGGESTIONS = [25000, 50000, 100000, 250000, 500000];
@@ -128,11 +129,13 @@ function SalaryReviewPageContent() {
     isApprovalDetailLoading,
   } = useSalaryReview();
   const { salaryView, setSalaryView } = useSalaryView();
+  const workspaceChangeVersion = useWorkspaceChangeVersion();
 
-  // Load employees from database on mount
+  // Load employees and proposals when the page mounts or the active workspace changes.
   useEffect(() => {
     void (async () => {
       try {
+        setFeedback(null);
         await loadEmployeesFromDb();
         await loadCycles();
         await loadLatestProposal();
@@ -144,7 +147,13 @@ function SalaryReviewPageContent() {
         });
       }
     })();
-  }, [loadEmployeesFromDb, loadCycles, loadLatestProposal, loadApprovalProposalList]);
+  }, [
+    loadEmployeesFromDb,
+    loadCycles,
+    loadLatestProposal,
+    loadApprovalProposalList,
+    workspaceChangeVersion,
+  ]);
 
   useEffect(() => {
     if (activeProposal?.cycle) {

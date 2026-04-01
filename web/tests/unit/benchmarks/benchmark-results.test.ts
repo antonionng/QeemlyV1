@@ -140,6 +140,7 @@ const aiDetailBriefing = {
 describe("BenchmarkResults", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true;
     useBenchmarkStateMock.setState = vi.fn();
     useBenchmarkStateMock.mockReturnValue({
       clearResult: vi.fn(),
@@ -183,18 +184,14 @@ describe("BenchmarkResults", () => {
     );
     getBenchmarkEnrichedMock.mockImplementation(async (_roleId: string, _locationId: string, levelId: string) => ({
       benchmark: { ...baseBenchmark, levelId },
-      aiAdvisory: null,
-      aiInsights: null,
-      aiDetailBriefing: null,
+      aiSummary: null,
     }));
   });
 
-  it("preloads the shared detail briefing into benchmark state after the results page renders", async () => {
+  it("does not persist the AI detail briefing from the results page", async () => {
     getBenchmarkEnrichedMock.mockImplementation(async (_roleId: string, _locationId: string, levelId: string) => ({
       benchmark: { ...baseBenchmark, levelId },
-      aiAdvisory: null,
-      aiInsights: null,
-      aiDetailBriefing,
+      aiSummary: "Fintech compensation remains above the broader market in Riyadh.",
     }));
     vi.stubGlobal(
       "fetch",
@@ -260,36 +257,18 @@ describe("BenchmarkResults", () => {
       await Promise.resolve();
     });
 
-    expect(useBenchmarkStateMock.setState).toHaveBeenCalled();
-    const updaterCalls = (useBenchmarkStateMock.setState as ReturnType<typeof vi.fn>).mock.calls
-      .map(([arg]) => arg)
-      .filter((arg): arg is (state: { currentResult: Record<string, unknown> | null; recentResults: Array<Record<string, unknown>> }) => unknown => typeof arg === "function");
-    const updater = updaterCalls.at(-1);
+    expect(useBenchmarkStateMock.setState).not.toHaveBeenCalled();
 
-    expect(updater).toBeTypeOf("function");
-    const nextState = updater?.({
-      currentResult: {
-        role: { id: "pm" },
-        level: { id: "ic3" },
-        location: { id: "riyadh" },
-        createdAt: new Date("2026-03-12T00:00:00.000Z"),
-      },
-      recentResults: [],
-    }) as { currentResult: { aiDetailBriefing: typeof aiDetailBriefing; aiDetailBriefingStatus: string } };
-
-    expect(nextState.currentResult.aiDetailBriefing).toEqual(aiDetailBriefing);
-    expect(nextState.currentResult.aiDetailBriefingStatus).toBe("ready");
-
-    root.unmount();
+    await act(async () => {
+      root.unmount();
+    });
     vi.unstubAllGlobals();
   });
 
-  it("does not re-fetch the enriched benchmark when only AI preload state changes", async () => {
+  it("does not re-fetch the enriched benchmark when the result identity stays the same", async () => {
     getBenchmarkEnrichedMock.mockImplementation(async (_roleId: string, _locationId: string, levelId: string) => ({
       benchmark: { ...baseBenchmark, levelId },
-      aiAdvisory: null,
-      aiInsights: null,
-      aiDetailBriefing,
+      aiSummary: "Fintech compensation remains above the broader market in Riyadh.",
     }));
     vi.stubGlobal(
       "fetch",
@@ -340,33 +319,33 @@ describe("BenchmarkResults", () => {
       flag: "SA",
     };
     const sharedCreatedAt = new Date("2026-03-12T00:00:00.000Z");
-    const makeResult = (status?: "idle" | "loading" | "ready" | "unavailable") => ({
+    const makeResult = () => ({
       formData: sharedFormData,
       benchmark: baseBenchmark,
       role: sharedRole,
       level: sharedLevel,
       location: sharedLocation,
       isOverridden: false,
-      aiDetailBriefing: status === "ready" ? aiDetailBriefing : null,
-      aiDetailBriefingStatus: status,
       createdAt: sharedCreatedAt,
     });
 
     await act(async () => {
-      root.render(React.createElement(BenchmarkResults, { result: makeResult("idle") }));
+      root.render(React.createElement(BenchmarkResults, { result: makeResult() }));
       await Promise.resolve();
       await Promise.resolve();
     });
 
     await act(async () => {
-      root.render(React.createElement(BenchmarkResults, { result: makeResult("loading") }));
+      root.render(React.createElement(BenchmarkResults, { result: makeResult() }));
       await Promise.resolve();
       await Promise.resolve();
     });
 
     expect(getBenchmarkEnrichedMock).toHaveBeenCalledTimes(1);
 
-    root.unmount();
+    await act(async () => {
+      root.unmount();
+    });
     vi.unstubAllGlobals();
   });
 
@@ -459,13 +438,124 @@ describe("BenchmarkResults", () => {
       locationId: string;
       levelId: string;
     }>;
-    expect(batchEntries).toHaveLength(9);
+    expect(batchEntries).toHaveLength(10);
     expect(batchEntries[0]).toMatchObject({
       roleId: "pm",
       locationId: "riyadh",
     });
 
-    root.unmount();
+    await act(async () => {
+      root.unmount();
+    });
+    vi.unstubAllGlobals();
+  });
+
+  it("shows the comparison sections as soon as level batch data is ready, even if the AI summary is still loading", async () => {
+    let resolveBatch: ((value: Record<string, typeof baseBenchmark>) => void) | null = null;
+    let resolveEnriched: ((value: { benchmark: typeof baseBenchmark; aiSummary: string | null }) => void) | null = null;
+    getBenchmarksBatchMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveBatch = resolve;
+        }),
+    );
+    getBenchmarkEnrichedMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveEnriched = resolve;
+        }),
+    );
+    vi.stubGlobal("fetch", vi.fn());
+
+    const container = document.createElement("div");
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        React.createElement(BenchmarkResults, {
+          result: {
+            formData: {
+              context: "existing",
+              roleId: "pm",
+              levelId: "ic3",
+              locationId: "riyadh",
+              employmentType: "national",
+              currentSalaryLow: null,
+              currentSalaryHigh: null,
+              industry: "Fintech",
+              companySize: "1-50",
+              fundingStage: null,
+              targetPercentile: 50,
+            },
+            benchmark: baseBenchmark,
+            role: {
+              id: "pm",
+              title: "Product Manager",
+              family: "Product",
+              icon: "PM",
+            },
+            level: {
+              id: "ic3",
+              name: "Senior (IC3)",
+              category: "IC",
+            },
+            location: {
+              id: "riyadh",
+              city: "Riyadh",
+              country: "Saudi Arabia",
+              countryCode: "SA",
+              currency: "AED",
+              flag: "SA",
+            },
+            isOverridden: false,
+            createdAt: new Date("2026-03-12T00:00:00.000Z"),
+          },
+        }),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('[data-testid="benchmark-results-level-table"]')).toBeNull();
+    expect(container.querySelector('[data-testid="benchmark-results-boxplot-section"]')).toBeNull();
+
+    resolveBatch?.({
+      "pm::riyadh::ic3::Fintech::1-50": { ...baseBenchmark, levelId: "ic3" },
+      "pm::riyadh::ic1::Fintech::1-50": { ...baseBenchmark, levelId: "ic1" },
+      "pm::riyadh::ic2::Fintech::1-50": { ...baseBenchmark, levelId: "ic2" },
+      "pm::riyadh::ic4::Fintech::1-50": { ...baseBenchmark, levelId: "ic4" },
+      "pm::riyadh::ic5::Fintech::1-50": { ...baseBenchmark, levelId: "ic5" },
+      "pm::riyadh::m1::Fintech::1-50": { ...baseBenchmark, levelId: "m1" },
+      "pm::riyadh::m2::Fintech::1-50": { ...baseBenchmark, levelId: "m2" },
+      "pm::riyadh::d1::Fintech::1-50": { ...baseBenchmark, levelId: "d1" },
+      "pm::riyadh::d2::Fintech::1-50": { ...baseBenchmark, levelId: "d2" },
+      "pm::riyadh::vp::Fintech::1-50": { ...baseBenchmark, levelId: "vp" },
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.querySelector('[data-testid="benchmark-results-level-table"]')).not.toBeNull();
+    expect(container.querySelector('[data-testid="benchmark-results-boxplot-section"]')).not.toBeNull();
+    expect(container.textContent).not.toContain("Market Analysis");
+
+    resolveEnriched?.({
+      benchmark: { ...baseBenchmark, levelId: "ic3" },
+      aiSummary: "Fintech compensation remains above the broader market in Riyadh.",
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain("Fintech compensation remains above the broader market in Riyadh.");
+
+    await act(async () => {
+      root.unmount();
+    });
     vi.unstubAllGlobals();
   });
 
@@ -569,7 +659,9 @@ describe("BenchmarkResults", () => {
 
     expect(fetchCalls).toBe(1);
 
-    root.unmount();
+    await act(async () => {
+      root.unmount();
+    });
     vi.unstubAllGlobals();
   });
 
@@ -631,7 +723,9 @@ describe("BenchmarkResults", () => {
     expect(container.textContent).toContain("Target (P50)");
     expect(container.textContent).not.toContain("Your Target");
 
-    root.unmount();
+    await act(async () => {
+      root.unmount();
+    });
     vi.unstubAllGlobals();
   });
 
@@ -713,7 +807,9 @@ describe("BenchmarkResults", () => {
     expect(tableNode.compareDocumentPosition(summaryNode) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(graphNode.compareDocumentPosition(summaryNode) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
-    root.unmount();
+    await act(async () => {
+      root.unmount();
+    });
     vi.unstubAllGlobals();
   });
 
@@ -802,7 +898,9 @@ describe("BenchmarkResults", () => {
       expect(select.className).toContain("appearance-none");
     });
 
-    root.unmount();
+    await act(async () => {
+      root.unmount();
+    });
     vi.unstubAllGlobals();
   });
 
@@ -874,7 +972,9 @@ describe("BenchmarkResults", () => {
     expect(container.textContent).toContain("AED 168000");
     expect(container.textContent).not.toContain("AED 2016000");
 
-    root.unmount();
+    await act(async () => {
+      root.unmount();
+    });
     vi.unstubAllGlobals();
   });
 
@@ -947,7 +1047,9 @@ describe("BenchmarkResults", () => {
     expect(container.innerHTML).toContain("data-testid=\"benchmark-results-boxplot-scroller\"");
     expect(container.innerHTML).toContain("min-w-[720px]");
 
-    root.unmount();
+    await act(async () => {
+      root.unmount();
+    });
     vi.unstubAllGlobals();
   });
 
@@ -1021,11 +1123,15 @@ describe("BenchmarkResults", () => {
       await Promise.resolve();
     });
 
-    expect(container.textContent).toContain("Qeemly Advisory AI");
-    expect(container.textContent).toContain("Refreshing the benchmark with your latest filters");
-    expect(container.textContent).toContain("Comparing market cohorts and preparing the advisory");
+    expect(document.body.textContent).toContain("Qeemly Advisory AI");
+    expect(document.body.textContent).toContain("Refreshing the benchmark with your latest filters");
+    expect(document.body.textContent).toContain("Comparing market cohorts and preparing the advisory");
+    expect(document.body.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(document.body.querySelector('[data-testid="qeemly-loading-icon"]')).not.toBeNull();
 
-    root.unmount();
+    await act(async () => {
+      root.unmount();
+    });
     vi.unstubAllGlobals();
   });
 });

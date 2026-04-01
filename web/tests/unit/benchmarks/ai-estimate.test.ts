@@ -24,6 +24,8 @@ vi.mock("next/cache", () => ({
 import {
   getAiBenchmarkForLevel,
   getAiBenchmarkAdvisory,
+  getAiBenchmarkForLevelLight,
+  getAiBenchmarkAdvisoryLight,
 } from "@/lib/benchmarks/ai-estimate";
 
 const MOCK_ADVISORY = {
@@ -46,6 +48,13 @@ const MOCK_ADVISORY = {
   confidenceNote: "Estimates based on regional market patterns. Use alongside published data.",
   industryInsight: "Fintech typically pays 10-15% above broad market.",
   companySizeInsight: "Mid-size companies (201-500) offer competitive base with limited equity.",
+};
+
+const MOCK_LIGHT_ADVISORY = {
+  levels: MOCK_ADVISORY.levels,
+  currency: "AED",
+  payPeriod: "annual",
+  summary: "Software engineer pay in Abu Dhabi remains competitive, with fintech premiums holding above the broader market.",
 };
 
 describe("AI benchmark advisory", () => {
@@ -163,5 +172,44 @@ describe("AI benchmark advisory", () => {
     expect(userMessage.content).toContain("Abu Dhabi");
     expect(userMessage.content).toContain("Fintech");
     expect(userMessage.content).toContain("201-500");
+  });
+
+  it("returns a specific level from the light advisory", async () => {
+    mockCreate.mockResolvedValueOnce({
+      choices: [{ message: { content: JSON.stringify(MOCK_LIGHT_ADVISORY) } }],
+    });
+
+    const result = await getAiBenchmarkForLevelLight("swe", "abu-dhabi", "ic3", {
+      industry: "Fintech",
+      companySize: "201-500",
+    });
+
+    expect(result).not.toBeNull();
+    expect(result!.level.levelId).toBe("ic3");
+    expect(result!.level.p50).toBe(380000);
+    expect(result!.advisory.summary).toContain("competitive");
+  });
+
+  it("caches the light advisory and reuses it for a different level", async () => {
+    mockCreate.mockResolvedValueOnce({
+      choices: [{ message: { content: JSON.stringify(MOCK_LIGHT_ADVISORY) } }],
+    });
+
+    await getAiBenchmarkForLevelLight("swe", "abu-dhabi", "ic3");
+    const result = await getAiBenchmarkForLevelLight("swe", "abu-dhabi", "ic2");
+
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+    expect(result!.level.levelId).toBe("ic2");
+    expect(result!.advisory.summary).toContain("competitive");
+  });
+
+  it("returns null when the light advisory response is empty", async () => {
+    mockCreate.mockResolvedValueOnce({
+      choices: [{ message: { content: null } }],
+    });
+
+    const result = await getAiBenchmarkAdvisoryLight("swe", "abu-dhabi", null, null);
+
+    expect(result).toBeNull();
   });
 });

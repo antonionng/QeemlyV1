@@ -3,22 +3,29 @@
 import React from "react";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BenchmarkResult } from "@/lib/benchmarks/benchmark-state";
 
 const {
   getBenchmarkMock,
+  getBenchmarksBatchMock,
   useCompanySettingsMock,
   useSalaryViewMock,
 } = vi.hoisted(() => ({
   getBenchmarkMock: vi.fn(),
+  getBenchmarksBatchMock: vi.fn(),
   useCompanySettingsMock: vi.fn(),
   useSalaryViewMock: vi.fn(),
 }));
 
-vi.mock("@/lib/benchmarks/data-service", () => ({
-  getBenchmark: getBenchmarkMock,
-}));
+vi.mock("@/lib/benchmarks/data-service", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/benchmarks/data-service")>();
+  return {
+    ...actual,
+    getBenchmark: getBenchmarkMock,
+    getBenchmarksBatch: getBenchmarksBatchMock,
+  };
+});
 
 vi.mock("@/lib/company", () => ({
   useCompanySettings: useCompanySettingsMock,
@@ -104,6 +111,7 @@ const baseResult: BenchmarkResult = {
 describe("segmented benchmark breakdown fallbacks", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true;
     useCompanySettingsMock.mockReturnValue({
       industry: "Fintech",
       companySize: "1-50",
@@ -113,6 +121,33 @@ describe("segmented benchmark breakdown fallbacks", () => {
       salaryView: "annual",
     });
     getBenchmarkMock.mockResolvedValue(baseResult.benchmark);
+    getBenchmarksBatchMock.mockImplementation(
+      async (
+        entries: Array<{
+          roleId: string;
+          locationId: string;
+          levelId: string;
+          industry?: string | null;
+          companySize?: string | null;
+        }>,
+      ) =>
+      Object.fromEntries(
+        entries.map((entry) => [
+          [
+            entry.roleId,
+            entry.locationId,
+            entry.levelId,
+            entry.industry ?? "",
+            entry.companySize ?? "",
+          ].join("::"),
+          baseResult.benchmark,
+        ]),
+      ),
+    );
+  });
+
+  afterEach(() => {
+    delete globalThis.IS_REACT_ACT_ENVIRONMENT;
   });
 
   it("shows a broader market row in the industry card when no segmented industry cohort exists", async () => {
@@ -131,7 +166,9 @@ describe("segmented benchmark breakdown fallbacks", () => {
       "No industry-specific cohort is available for this role yet. Showing the broader market benchmark instead.",
     );
 
-    root.unmount();
+    await act(async () => {
+      root.unmount();
+    });
   });
 
   it("shows a broader market row in the company size card when no segmented size cohort exists", async () => {
@@ -150,6 +187,8 @@ describe("segmented benchmark breakdown fallbacks", () => {
       "No company-size-specific cohort is available for this role yet. Showing the broader market benchmark instead.",
     );
 
-    root.unmount();
+    await act(async () => {
+      root.unmount();
+    });
   });
 });

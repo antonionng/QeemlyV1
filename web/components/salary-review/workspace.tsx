@@ -768,10 +768,27 @@ export function SalaryReviewTable({
   return (
     <Card className="overflow-hidden rounded-2xl border-[#E6E8F0] bg-white shadow-none">
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[1200px]">
+        <table className="w-full min-w-[1200px] table-fixed">
+          <colgroup>
+            <col className="w-[44px]" />
+            <col className="w-[220px]" />
+            {showColumn("role") ? <col className="w-[140px]" /> : null}
+            {showColumn("level") ? <col className="w-[100px]" /> : null}
+            {showColumn("department") ? <col className="w-[120px]" /> : null}
+            {showColumn("location") ? <col className="w-[100px]" /> : null}
+            {showColumn("current") ? <col className="w-[130px]" /> : null}
+            {showColumn("basic") ? <col className="w-[120px]" /> : null}
+            {showColumn("housing") ? <col className="w-[120px]" /> : null}
+            {showColumn("transport") ? <col className="w-[120px]" /> : null}
+            {showColumn("other") ? <col className="w-[110px]" /> : null}
+            {showColumn("band") ? <col className="w-[90px]" /> : null}
+            {showColumn("performance") ? <col className="w-[80px]" /> : null}
+            <col className="w-[140px]" />
+            {showColumn("increase") ? <col className="w-[100px]" /> : null}
+          </colgroup>
           <thead className="border-b border-[#F0F2F7] bg-white">
-            <tr className="h-12">
-              <th className="px-4 text-left">
+            <tr className="h-11">
+              <th className="px-3 text-left">
                 <input
                   type="checkbox"
                   checked={employees.length > 0 && employees.every((employee) => employee.isSelected)}
@@ -779,23 +796,24 @@ export function SalaryReviewTable({
                   className="h-4 w-4 rounded [accent-color:#6E56CF]"
                 />
               </th>
-              <th className="px-4 text-left text-xs font-medium uppercase tracking-[0.06em] text-[#7B8190]">
+              <th className="px-3 text-left text-xs font-medium uppercase tracking-[0.06em] text-[#7B8190]">
                 <button type="button" onClick={() => toggleSort("name")}>Name</button>
               </th>
-              {showColumn("role") ? <th className="px-4 text-left text-xs font-medium uppercase tracking-[0.06em] text-[#7B8190]"><button type="button" onClick={() => toggleSort("role")}>Role</button></th> : null}
-              {showColumn("department") ? <th className="px-4 text-left text-xs font-medium uppercase tracking-[0.06em] text-[#7B8190]"><button type="button" onClick={() => toggleSort("department")}>Department</button></th> : null}
-              {showColumn("location") ? <th className="px-4 text-left text-xs font-medium uppercase tracking-[0.06em] text-[#7B8190]"><button type="button" onClick={() => toggleSort("location")}>Location</button></th> : null}
-              {showColumn("current") ? <th className="px-4 text-right text-xs font-medium uppercase tracking-[0.06em] text-[#7B8190]"><button type="button" onClick={() => toggleSort("current")}>Current (AED)</button></th> : null}
-              {showColumn("basic") ? <th className="px-4 text-right text-xs font-medium uppercase tracking-[0.06em] text-[#7B8190]">Basic (AED)</th> : null}
-              {showColumn("housing") ? <th className="px-4 text-right text-xs font-medium uppercase tracking-[0.06em] text-[#7B8190]">Housing (AED)</th> : null}
-              {showColumn("transport") ? <th className="px-4 text-right text-xs font-medium uppercase tracking-[0.06em] text-[#7B8190]">Transport (AED)</th> : null}
-              {showColumn("other") ? <th className="px-4 text-right text-xs font-medium uppercase tracking-[0.06em] text-[#7B8190]">Other (AED)</th> : null}
-              {showColumn("band") ? <th className="px-4 text-center text-xs font-medium uppercase tracking-[0.06em] text-[#7B8190]">Band</th> : null}
-              {showColumn("performance") ? <th className="px-4 text-center text-xs font-medium uppercase tracking-[0.06em] text-[#7B8190]">Perf</th> : null}
-              <th className="px-4 text-right text-xs font-medium uppercase tracking-[0.06em] text-[#7B8190]">
-                <button type="button" onClick={() => toggleSort("proposed")}>Proposed (AED)</button>
+              {showColumn("role") ? <th className="px-3 text-left text-xs font-medium uppercase tracking-[0.06em] text-[#7B8190]"><button type="button" onClick={() => toggleSort("role")}>Role</button></th> : null}
+              {showColumn("level") ? <th className="px-3 text-left text-xs font-medium uppercase tracking-[0.06em] text-[#7B8190]">Level</th> : null}
+              {showColumn("department") ? <th className="px-3 text-left text-xs font-medium uppercase tracking-[0.06em] text-[#7B8190]"><button type="button" onClick={() => toggleSort("department")}>Dept</button></th> : null}
+              {showColumn("location") ? <th className="px-3 text-left text-xs font-medium uppercase tracking-[0.06em] text-[#7B8190]"><button type="button" onClick={() => toggleSort("location")}>Location</button></th> : null}
+              {showColumn("current") ? <th className="px-3 text-right text-xs font-medium uppercase tracking-[0.06em] text-[#7B8190]"><button type="button" onClick={() => toggleSort("current")}>Current</button></th> : null}
+              {showColumn("basic") ? <th className="px-3 text-right text-xs font-medium uppercase tracking-[0.06em] text-[#7B8190]">Basic</th> : null}
+              {showColumn("housing") ? <th className="px-3 text-right text-xs font-medium uppercase tracking-[0.06em] text-[#7B8190]">Housing</th> : null}
+              {showColumn("transport") ? <th className="px-3 text-right text-xs font-medium uppercase tracking-[0.06em] text-[#7B8190]">Transport</th> : null}
+              {showColumn("other") ? <th className="px-3 text-right text-xs font-medium uppercase tracking-[0.06em] text-[#7B8190]">Other</th> : null}
+              {showColumn("band") ? <th className="px-3 text-center text-xs font-medium uppercase tracking-[0.06em] text-[#7B8190]">Band</th> : null}
+              {showColumn("performance") ? <th className="px-3 text-center text-xs font-medium uppercase tracking-[0.06em] text-[#7B8190]">Perf</th> : null}
+              <th className="px-3 text-right text-xs font-medium uppercase tracking-[0.06em] text-[#7B8190]">
+                <button type="button" onClick={() => toggleSort("proposed")}>Proposed</button>
               </th>
-              {showColumn("increase") ? <th className="px-4 text-right text-xs font-medium uppercase tracking-[0.06em] text-[#7B8190]"><button type="button" onClick={() => toggleSort("increase")}>Increase</button></th> : null}
+              {showColumn("increase") ? <th className="px-3 text-right text-xs font-medium uppercase tracking-[0.06em] text-[#7B8190]"><button type="button" onClick={() => toggleSort("increase")}>Increase</button></th> : null}
             </tr>
           </thead>
           <tbody>
@@ -805,9 +823,9 @@ export function SalaryReviewTable({
               return (
                 <tr
                   key={employee.id}
-                  className="h-16 border-b border-[#F0F2F7] hover:bg-[#F7F8FC]"
+                  className="h-[52px] border-b border-[#F0F2F7] hover:bg-[#F7F8FC]"
                 >
-                  <td className="px-4">
+                  <td className="px-3">
                     <input
                       type="checkbox"
                       checked={employee.isSelected}
@@ -815,47 +833,49 @@ export function SalaryReviewTable({
                       className="h-4 w-4 rounded [accent-color:#6E56CF]"
                     />
                   </td>
-                  <td className="px-4">
+                  <td className="px-3">
                     <button
                       type="button"
                       onClick={() => onSelectEmployee(employee)}
-                      className="flex items-center gap-3 text-left"
+                      className="flex items-center gap-2.5 text-left"
                     >
-                      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#F2EDFF] text-xs font-semibold text-[#6E56CF]">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#F2EDFF] text-[11px] font-semibold text-[#6E56CF]">
                         {employee.firstName[0]}{employee.lastName[0]}
                       </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-medium text-[#1F2430]">
-                            {employee.firstName} {employee.lastName}
-                          </span>
-                          <span className="rounded-full bg-[#F2EDFF] px-2 py-1 text-[11px] text-[#6E56CF]">
-                            {employee.level.name}
-                          </span>
-                        </div>
-                        <p className="text-xs text-[#8A90A0]">{trust?.sourceLabel ?? "Market aligned"}</p>
+                      <div className="min-w-0">
+                        <span className="block truncate text-sm font-medium text-[#1F2430]">
+                          {employee.firstName} {employee.lastName}
+                        </span>
+                        <span className="block truncate text-[11px] text-[#8A90A0]">{trust?.sourceLabel ?? "Market aligned"}</span>
                       </div>
                     </button>
                   </td>
-                  {showColumn("role") ? <td className="px-4 text-sm text-[#2E3440]">{employee.role.title}</td> : null}
-                  {showColumn("department") ? <td className="px-4 text-sm text-[#2E3440]">{employee.department}</td> : null}
-                  {showColumn("location") ? <td className="px-4 text-sm text-[#2E3440]">{employee.location.city}</td> : null}
-                  {showColumn("current") ? <td className="px-4 text-right text-sm text-[#1F2430]">{formatAED(employee.baseSalary)}</td> : null}
-                  {showColumn("basic") ? <td className="px-4 text-right text-sm text-[#1F2430]">{formatAED(breakdown.basic)}<div className="text-xs text-[#8A90A0]">53%</div></td> : null}
-                  {showColumn("housing") ? <td className="px-4 text-right text-sm text-[#1F2430]">{formatAED(breakdown.housing)}<div className="text-xs text-[#8A90A0]">28%</div></td> : null}
-                  {showColumn("transport") ? <td className="px-4 text-right text-sm text-[#1F2430]">{formatAED(breakdown.transport)}<div className="text-xs text-[#8A90A0]">11%</div></td> : null}
-                  {showColumn("other") ? <td className="px-4 text-right text-sm text-[#1F2430]">{formatAED(breakdown.other)}<div className="text-xs text-[#8A90A0]">8%</div></td> : null}
+                  {showColumn("role") ? <td className="truncate px-3 text-sm text-[#2E3440]">{employee.role.title}</td> : null}
+                  {showColumn("level") ? (
+                    <td className="px-3">
+                      <span className="inline-flex items-center rounded-md bg-[#F2EDFF] px-2 py-0.5 text-[11px] font-medium text-[#6E56CF]">
+                        {employee.level.name}
+                      </span>
+                    </td>
+                  ) : null}
+                  {showColumn("department") ? <td className="truncate px-3 text-sm text-[#2E3440]">{employee.department}</td> : null}
+                  {showColumn("location") ? <td className="truncate px-3 text-sm text-[#2E3440]">{employee.location.city}</td> : null}
+                  {showColumn("current") ? <td className="whitespace-nowrap px-3 text-right text-sm text-[#1F2430]">{formatAED(employee.baseSalary)}</td> : null}
+                  {showColumn("basic") ? <td className="whitespace-nowrap px-3 text-right text-sm text-[#1F2430]">{formatAED(breakdown.basic)}<div className="text-[11px] text-[#8A90A0]">53%</div></td> : null}
+                  {showColumn("housing") ? <td className="whitespace-nowrap px-3 text-right text-sm text-[#1F2430]">{formatAED(breakdown.housing)}<div className="text-[11px] text-[#8A90A0]">28%</div></td> : null}
+                  {showColumn("transport") ? <td className="whitespace-nowrap px-3 text-right text-sm text-[#1F2430]">{formatAED(breakdown.transport)}<div className="text-[11px] text-[#8A90A0]">11%</div></td> : null}
+                  {showColumn("other") ? <td className="whitespace-nowrap px-3 text-right text-sm text-[#1F2430]">{formatAED(breakdown.other)}<div className="text-[11px] text-[#8A90A0]">8%</div></td> : null}
                   {showColumn("band") ? (
-                    <td className="px-4 text-center">
-                      <span className={clsx("inline-flex h-6 items-center rounded-full px-3 text-xs font-medium", BAND_STYLES[employee.bandPosition])}>
+                    <td className="px-3 text-center">
+                      <span className={clsx("inline-flex h-6 items-center rounded-full px-2.5 text-[11px] font-medium", BAND_STYLES[employee.bandPosition])}>
                         {employee.bandPosition === "in-band" ? "In Band" : employee.bandPosition === "above" ? "Above" : "Below"}
                       </span>
                     </td>
                   ) : null}
                   {showColumn("performance") ? (
-                    <td className="px-4 text-center">
+                    <td className="px-3 text-center">
                       {employee.performanceRating ? (
-                        <span className={clsx("inline-flex h-6 items-center rounded-full px-3 text-xs font-medium", PERFORMANCE_STYLES[employee.performanceRating])}>
+                        <span className={clsx("inline-flex h-6 items-center rounded-full px-2.5 text-[11px] font-medium", PERFORMANCE_STYLES[employee.performanceRating])}>
                           {employee.performanceRating.charAt(0).toUpperCase() + employee.performanceRating.slice(1)}
                         </span>
                       ) : (
@@ -863,7 +883,7 @@ export function SalaryReviewTable({
                       )}
                     </td>
                   ) : null}
-                  <td className="px-4 text-right">
+                  <td className="px-3 text-right">
                     <input
                       type="number"
                       min={0}
@@ -873,11 +893,11 @@ export function SalaryReviewTable({
                         const nextSalary = Number(event.target.value);
                         updateEmployeeIncrease(employee.id, Math.max(nextSalary - employee.baseSalary, 0));
                       }}
-                      className="h-9 w-[110px] rounded-[8px] border border-[#DADFF0] bg-white px-3 text-right text-sm text-[#1F2430] outline-none focus:border-[#6E56CF] focus:shadow-[0_0_0_2px_rgba(110,86,207,0.15)]"
+                      className="h-8 w-[110px] rounded-lg border border-[#DADFF0] bg-white px-2.5 text-right text-sm text-[#1F2430] outline-none focus:border-[#6E56CF] focus:shadow-[0_0_0_2px_rgba(110,86,207,0.15)]"
                     />
                   </td>
                   {showColumn("increase") ? (
-                    <td className="px-4 text-right">
+                    <td className="px-3 text-right">
                       {employee.proposedIncrease > 0 ? (
                         <span className="inline-flex items-center gap-1 text-sm font-medium text-[#16A34A]">
                           <TrendingUp className="h-3.5 w-3.5" />

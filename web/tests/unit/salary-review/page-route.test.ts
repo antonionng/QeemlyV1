@@ -10,12 +10,20 @@ const {
   searchParamsMock,
   salaryReviewOverviewPropsMock,
   reviewCycleListPropsMock,
+  loadEmployeesFromDbMock,
+  loadCyclesMock,
+  loadLatestProposalMock,
+  loadApprovalProposalListMock,
 } = vi.hoisted(() => ({
   replaceMock: vi.fn(),
   pushMock: vi.fn(),
   searchParamsMock: { value: "tab=review&filter=outside-band" },
   salaryReviewOverviewPropsMock: vi.fn(),
   reviewCycleListPropsMock: vi.fn(),
+  loadEmployeesFromDbMock: vi.fn().mockResolvedValue(undefined),
+  loadCyclesMock: vi.fn().mockResolvedValue(undefined),
+  loadLatestProposalMock: vi.fn().mockResolvedValue(undefined),
+  loadApprovalProposalListMock: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -212,8 +220,8 @@ vi.mock("@/lib/salary-review", async () => {
       applyDefaultIncreases: vi.fn(),
       applyAiProposal: vi.fn(),
       resetReview: vi.fn(),
-      loadEmployeesFromDb: vi.fn().mockResolvedValue(undefined),
-      loadCycles: vi.fn().mockResolvedValue(undefined),
+      loadEmployeesFromDb: loadEmployeesFromDbMock,
+      loadCycles: loadCyclesMock,
       cycles: [
         {
           id: "proposal-1",
@@ -248,8 +256,8 @@ vi.mock("@/lib/salary-review", async () => {
       departmentAllocations: [],
       childCycles: [],
       isProposalLoading: false,
-      loadLatestProposal: vi.fn().mockResolvedValue(undefined),
-      loadApprovalProposalList: vi.fn().mockResolvedValue(undefined),
+      loadLatestProposal: loadLatestProposalMock,
+      loadApprovalProposalList: loadApprovalProposalListMock,
       selectCycle: vi.fn().mockResolvedValue(undefined),
       approvalQueue: [],
       selectedApprovalProposalId: null,
@@ -283,6 +291,10 @@ describe("SalaryReviewPage", () => {
     pushMock.mockReset();
     salaryReviewOverviewPropsMock.mockReset();
     reviewCycleListPropsMock.mockReset();
+    loadEmployeesFromDbMock.mockClear();
+    loadCyclesMock.mockClear();
+    loadLatestProposalMock.mockClear();
+    loadApprovalProposalListMock.mockClear();
   });
 
   afterEach(() => {
@@ -346,6 +358,35 @@ describe("SalaryReviewPage", () => {
     });
 
     expect(pushMock).toHaveBeenCalledWith("/dashboard/salary-review/new?proposalId=proposal-1");
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("re-loads salary review data when the workspace changes", async () => {
+    searchParamsMock.value = "tab=overview";
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(React.createElement(SalaryReviewPage));
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(loadEmployeesFromDbMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent("qeemly:workspace-changed", {
+          detail: { workspaceId: "ws-2", source: "override" },
+        }),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(loadEmployeesFromDbMock).toHaveBeenCalledTimes(2);
 
     await act(async () => {
       root.unmount();

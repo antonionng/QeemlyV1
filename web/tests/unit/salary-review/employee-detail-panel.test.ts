@@ -20,6 +20,7 @@ vi.mock("lucide-react", () => ({
   ShieldAlert: () => React.createElement("svg"),
   Shield: () => React.createElement("svg"),
   ArrowUpRight: () => React.createElement("svg"),
+  ArrowUpCircle: () => React.createElement("svg"),
   Star: () => React.createElement("svg"),
   ChevronDown: () => React.createElement("svg"),
   CheckCircle2: () => React.createElement("svg"),
@@ -91,6 +92,9 @@ const employee = {
   proposedPercentage: 0,
   newSalary: 200_000,
   isSelected: true,
+  changeReason: null,
+  recommendedLevelId: null,
+  recommendedLevelName: null,
 } as const;
 
 describe("EmployeeDetailPanel", () => {

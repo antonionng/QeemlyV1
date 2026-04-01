@@ -102,6 +102,9 @@ export function buildDraftItemsFromRecords(
     proposed_percentage: number;
     selected: boolean;
     reason_summary: string | null;
+    change_reason?: string | null;
+    recommended_level_id?: string | null;
+    recommended_level_name?: string | null;
     benchmark_snapshot: Record<string, unknown>;
   }>
 ): SalaryReviewDraftItemInput[] {
@@ -114,6 +117,9 @@ export function buildDraftItemsFromRecords(
     proposedPercentage: Number(item.proposed_percentage || 0),
     selected: Boolean(item.selected),
     reasonSummary: item.reason_summary || "",
+    changeReason: item.change_reason ?? null,
+    recommendedLevelId: item.recommended_level_id ?? null,
+    recommendedLevelName: item.recommended_level_name ?? null,
     benchmarkSnapshot: item.benchmark_snapshot || {},
   }));
 }
@@ -121,12 +127,14 @@ export function buildDraftItemsFromRecords(
 export function rebuildApprovalStepsForItems(args: {
   items: SalaryReviewDraftItemInput[];
   hasAboveBandIncreases?: boolean;
+  hasBandUpgradeRecommendations?: boolean;
 }) {
   const summary = summarizeProposalDraft(args.items);
   const workflowSteps = buildApprovalChain({
     totalIncrease: summary.totalIncrease,
     maxIncreasePercentage: summary.maxIncreasePercentage,
     hasAboveBandIncreases: Boolean(args.hasAboveBandIncreases),
+    hasBandUpgradeRecommendations: Boolean(args.hasBandUpgradeRecommendations),
   });
   return {
     summary,

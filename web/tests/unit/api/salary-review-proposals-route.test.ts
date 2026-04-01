@@ -205,6 +205,9 @@ describe("POST /api/salary-review/proposals", () => {
               proposedPercentage: 6,
               selected: true,
               reasonSummary: "Market adjustment",
+              changeReason: "market_adjustment",
+              recommendedLevelId: null,
+              recommendedLevelName: null,
               benchmarkSnapshot: {
                 source: "market",
                 matchQuality: "exact",
@@ -417,6 +420,9 @@ describe("POST /api/salary-review/proposals", () => {
                   proposedPercentage: 6,
                   selected: true,
                   reasonSummary: "Market adjustment",
+                  changeReason: "market_adjustment",
+                  recommendedLevelId: null,
+                  recommendedLevelName: null,
                   benchmarkSnapshot: {
                     source: "market",
                     matchQuality: "exact",

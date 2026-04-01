@@ -21,4 +21,60 @@ describe("validateData", () => {
     expect(result.errorRows).toBe(1);
     expect(result.issues.some((issue) => issue.message.includes("P10 should be less"))).toBe(true);
   });
+
+  it("flags unmapped employee roles as errors", () => {
+    const rows = [["Ava", "Stone", "Operations", "Founder's Associate", "IC3", "Dubai", "120000"]];
+    const mappings: ColumnMapping[] = [
+      { sourceColumn: "first_name", sourceIndex: 0, targetField: "firstName", confidence: 1, sampleValues: [] },
+      { sourceColumn: "last_name", sourceIndex: 1, targetField: "lastName", confidence: 1, sampleValues: [] },
+      { sourceColumn: "department", sourceIndex: 2, targetField: "department", confidence: 1, sampleValues: [] },
+      { sourceColumn: "role", sourceIndex: 3, targetField: "role", confidence: 1, sampleValues: [] },
+      { sourceColumn: "level", sourceIndex: 4, targetField: "level", confidence: 1, sampleValues: [] },
+      { sourceColumn: "location", sourceIndex: 5, targetField: "location", confidence: 1, sampleValues: [] },
+      { sourceColumn: "base_salary", sourceIndex: 6, targetField: "baseSalary", confidence: 1, sampleValues: [] },
+    ];
+
+    const result = validateData(rows, mappings, "employees");
+
+    expect(result.errorRows).toBe(1);
+    expect(result.rows[0]?.isValid).toBe(false);
+    expect(result.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: "role",
+          severity: "error",
+          message: "Role could not be mapped to a supported Qeemly job title",
+        }),
+      ]),
+    );
+  });
+
+  it("keeps unmapped employee levels as warnings", () => {
+    const rows = [["Ava", "Stone", "Engineering", "Software Engineer", "Career Track Purple", "Dubai", "120000"]];
+    const mappings: ColumnMapping[] = [
+      { sourceColumn: "first_name", sourceIndex: 0, targetField: "firstName", confidence: 1, sampleValues: [] },
+      { sourceColumn: "last_name", sourceIndex: 1, targetField: "lastName", confidence: 1, sampleValues: [] },
+      { sourceColumn: "department", sourceIndex: 2, targetField: "department", confidence: 1, sampleValues: [] },
+      { sourceColumn: "role", sourceIndex: 3, targetField: "role", confidence: 1, sampleValues: [] },
+      { sourceColumn: "level", sourceIndex: 4, targetField: "level", confidence: 1, sampleValues: [] },
+      { sourceColumn: "location", sourceIndex: 5, targetField: "location", confidence: 1, sampleValues: [] },
+      { sourceColumn: "base_salary", sourceIndex: 6, targetField: "baseSalary", confidence: 1, sampleValues: [] },
+    ];
+
+    const result = validateData(rows, mappings, "employees");
+
+    expect(result.errorRows).toBe(0);
+    expect(result.warningRows).toBe(1);
+    expect(result.rows[0]?.isValid).toBe(true);
+    expect(result.rows[0]?.hasWarnings).toBe(true);
+    expect(result.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: "level",
+          severity: "warning",
+          message: "Level could not be mapped to a supported Qeemly level",
+        }),
+      ]),
+    );
+  });
 });

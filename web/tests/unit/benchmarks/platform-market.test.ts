@@ -72,6 +72,43 @@ function createCanonicalPoolOnlyClient(rows: PooledRow[]) {
   };
 }
 
+function createDeferredCanonicalPoolClient(rows: PooledRow[]) {
+  let resolveRange: ((value: { data: PooledRow[] }) => void) | null = null;
+  const rangeSpy = vi.fn(() => new Promise<{ data: PooledRow[] }>((resolve) => {
+    resolveRange = resolve;
+  }));
+
+  return {
+    client: {
+      from(table: string) {
+        if (table !== "platform_market_benchmarks") {
+          throw new Error(`Unexpected table: ${table}`);
+        }
+
+        return {
+          select() {
+            return {
+              eq() {
+                return {
+                  order() {
+                    return {
+                      range: rangeSpy,
+                    };
+                  },
+                };
+              },
+            };
+          },
+        };
+      },
+    },
+    resolve() {
+      resolveRange?.({ data: rows });
+    },
+    rangeSpy,
+  };
+}
+
 function createPlatformFallbackClient(
   snapshotRows: Array<Record<string, unknown>>,
   platformRows: PlatformRow[],
@@ -470,6 +507,37 @@ describe("fetchMarketBenchmarks", () => {
 });
 
 describe("findMarketBenchmark", () => {
+  it("deduplicates concurrent cold-cache reads so the canonical pool is fetched once", async () => {
+    invalidateMarketBenchmarkCache();
+    const deferred = createDeferredCanonicalPoolClient([
+      {
+        role_id: "swe",
+        location_id: "dubai",
+        level_id: "ic3",
+        currency: "AED",
+        p10: 12000,
+        p25: 14000,
+        p50: 16000,
+        p75: 18000,
+        p90: 20000,
+        sample_size: 20,
+        provenance: "blended",
+      },
+    ]);
+
+    const first = findMarketBenchmark(deferred.client, "swe", "dubai", "ic3");
+    const second = findMarketBenchmark(deferred.client, "swe", "dubai", "ic3");
+
+    expect(deferred.rangeSpy).toHaveBeenCalledTimes(1);
+
+    deferred.resolve();
+
+    const [firstResult, secondResult] = await Promise.all([first, second]);
+    expect(firstResult?.p50).toBe(16000);
+    expect(secondResult?.p50).toBe(16000);
+    expect(deferred.rangeSpy).toHaveBeenCalledTimes(1);
+  });
+
   it("prefers an exact segmented cohort over the base market row", async () => {
     const client = createCanonicalPoolClient(
       [

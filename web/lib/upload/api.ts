@@ -264,7 +264,17 @@ export async function uploadEmployees(
   // Process in batches
   for (let i = 0; i < employeesWithAliases.length; i += batchSize) {
     const batch = employeesWithAliases.slice(i, i + batchSize);
-    const records = batch.map((emp) => ({
+    const validBatch = batch.filter((emp) => {
+      if (emp.roleId) return true;
+      const employeeLabel = [emp.firstName, emp.lastName].filter(Boolean).join(" ").trim() || "This employee";
+      const identifier = emp.email ? `${employeeLabel} (${emp.email})` : employeeLabel;
+      result.errors.push(
+        `${identifier} could not be imported because the role title could not be mapped to a supported Qeemly role.`,
+      );
+      result.failedCount += 1;
+      return false;
+    });
+    const records = validBatch.map((emp) => ({
       workspace_id: workspaceId,
       first_name: emp.firstName,
       last_name: emp.lastName,

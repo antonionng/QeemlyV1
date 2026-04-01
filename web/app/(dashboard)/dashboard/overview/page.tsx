@@ -28,6 +28,7 @@ import {
   type OverviewInteractionTarget,
   type OverviewMetricDrawerContent,
 } from "@/lib/dashboard/overview-interactions";
+import { useWorkspaceChangeVersion } from "@/lib/workspace-client";
 
 const EMPTY_SNAPSHOT: CompanyOverviewSnapshot = {
   metrics: {
@@ -100,6 +101,7 @@ export default function CompanyOverviewPage() {
   const { companyName, isConfigured } = useCompanySettings();
   const [snapshot, setSnapshot] = useState<CompanyOverviewSnapshot | null>(null);
   const router = useRouter();
+  const workspaceChangeVersion = useWorkspaceChangeVersion();
 
   const loadData = useCallback(async ({ refresh = false }: { refresh?: boolean } = {}) => {
     try {
@@ -132,8 +134,9 @@ export default function CompanyOverviewPage() {
   }, []);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    setLoading(true);
+    void loadData();
+  }, [loadData, workspaceChangeVersion]);
 
   const handleRefresh = useCallback(() => {
     setIsRefreshing(true);

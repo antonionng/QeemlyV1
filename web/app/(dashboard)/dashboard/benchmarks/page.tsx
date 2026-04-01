@@ -10,6 +10,7 @@ import { UploadModal } from "@/components/dashboard/upload";
 import { useBenchmarkState } from "@/lib/benchmarks/benchmark-state";
 import { hasDbEmployees } from "@/lib/employees/data-service";
 import { getBenchmarkPageTitle } from "@/lib/benchmarks/results-presentation";
+import { useWorkspaceChangeVersion } from "@/lib/workspace-client";
 
 type BenchmarkStats = {
   total: number;
@@ -92,6 +93,7 @@ export default function BenchmarksPage() {
     resetForm,
     loadFilter,
   } = useBenchmarkState();
+  const workspaceChangeVersion = useWorkspaceChangeVersion();
 
   const loadStats = useCallback(async () => {
     try {
@@ -114,12 +116,13 @@ export default function BenchmarksPage() {
       void loadStats();
     }, 0);
     return () => clearTimeout(timer);
-  }, [loadStats]);
+  }, [loadStats, workspaceChangeVersion]);
 
   useEffect(() => {
     let isCancelled = false;
 
     const syncWorkspaceState = async () => {
+      setIsWorkspaceReady(false);
       try {
         const [response, employeeDataPresent] = await Promise.all([
           fetch("/api/settings", { cache: "no-store" }),
@@ -145,7 +148,7 @@ export default function BenchmarksPage() {
     return () => {
       isCancelled = true;
     };
-  }, [reconcileWorkspace]);
+  }, [reconcileWorkspace, workspaceChangeVersion]);
 
   return (
     <div className="space-y-8">

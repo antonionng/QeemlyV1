@@ -2,11 +2,13 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { type BenchmarkResult } from "@/lib/benchmarks/benchmark-state";
+import { normalizeAiBreakdown } from "@/lib/benchmarks/detail-ai";
 import {
   annualizeBenchmarkValue,
   applyBenchmarkViewMode,
   resolveBenchmarkPayPeriod,
 } from "@/lib/benchmarks/pay-period";
+import { useCompanySettings } from "@/lib/company";
 import { LEVELS } from "@/lib/dashboard/dummy-data";
 import { useSalaryView } from "@/lib/salary-view-store";
 import { getBenchmarksBatch, makeBenchmarkLookupKey } from "@/lib/benchmarks/data-service";
@@ -19,6 +21,7 @@ interface LevelTableViewProps {
 export function LevelTableView({ result }: LevelTableViewProps) {
   const { role, level, location } = result;
   const [showBasic, setShowBasic] = useState(false);
+  const companySettings = useCompanySettings();
   const [rows, setRows] = useState<
     Array<{
       level: Pick<(typeof LEVELS)[number], "id" | "name">;
@@ -36,6 +39,14 @@ export function LevelTableView({ result }: LevelTableViewProps) {
     result.benchmark.percentiles,
   );
   const aiLevelBands = result.aiDetailBriefing?.views.levelTable.levelBands ?? null;
+  const estimatedBreakdown = normalizeAiBreakdown(
+    result.aiDetailBriefing?.views.salaryBreakdown.packageBreakdown
+      ?? result.aiDetailBriefing?.views.offerBuilder.packageBreakdown
+      ?? result.aiDetailBriefing?.views.compMix.compensationMix
+      ?? null,
+  );
+  const basicSalaryPct = estimatedBreakdown?.basicSalaryPct ?? companySettings.compSplitBasicPct;
+  const basicMultiplier = basicSalaryPct / 100;
 
   const convertValue = (value: number, payPeriod = benchmarkPayPeriod) => {
     const annualValue = annualizeBenchmarkValue(value, payPeriod);
@@ -49,6 +60,11 @@ export function LevelTableView({ result }: LevelTableViewProps) {
     if (value >= 1000) return `AED ${(value / 1000).toFixed(0)}k`;
     return new Intl.NumberFormat("en-AE", { style: "currency", currency: "AED", maximumFractionDigits: 0 }).format(value);
   };
+  const getDisplayValue = (value: number) =>
+    convertValue(showBasic ? value * basicMultiplier : value, "annual");
+  const basicModeDescription = estimatedBreakdown
+    ? `Estimated basic salary using ${basicSalaryPct}% AI package split.`
+    : `Estimated basic salary using your workspace ${basicSalaryPct}% package split.`;
 
   const aiRows = useMemo(
     () =>
@@ -129,7 +145,7 @@ export function LevelTableView({ result }: LevelTableViewProps) {
         </div>
       </div>
 
-      {showBasic && <p className="text-xs text-brand-500 px-5 pt-2">Basic split unavailable for this workspace dataset.</p>}
+      {showBasic && <p className="px-5 pt-2 text-xs text-brand-500">{basicModeDescription}</p>}
 
       <div className="overflow-x-auto mt-3">
         <table className="bench-table">
@@ -151,11 +167,11 @@ export function LevelTableView({ result }: LevelTableViewProps) {
                     {row.level.name}
                   </span>
                 </td>
-                <td className="text-right">{formatAED(convertValue(row.p25, "annual"))}</td>
-                <td className="text-right font-medium">{formatAED(convertValue(row.p50, "annual"))}</td>
-                <td className="text-right">{formatAED(convertValue(row.p75, "annual"))}</td>
-                <td className="text-right">{formatAED(convertValue(row.p85, "annual"))}</td>
-                <td className="text-right">{formatAED(convertValue(row.p90, "annual"))}</td>
+                <td className="text-right">{formatAED(getDisplayValue(row.p25))}</td>
+                <td className="text-right font-medium">{formatAED(getDisplayValue(row.p50))}</td>
+                <td className="text-right">{formatAED(getDisplayValue(row.p75))}</td>
+                <td className="text-right">{formatAED(getDisplayValue(row.p85))}</td>
+                <td className="text-right">{formatAED(getDisplayValue(row.p90))}</td>
               </tr>
             ))}
           </tbody>

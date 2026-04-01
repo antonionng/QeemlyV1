@@ -47,6 +47,9 @@ function makeEmployee(overrides: Partial<ReviewEmployee> = {}): ReviewEmployee {
     proposedPercentage: overrides.proposedPercentage ?? 0,
     newSalary: overrides.newSalary ?? ((overrides.baseSalary ?? 100_000) + (overrides.proposedIncrease ?? 0)),
     isSelected: overrides.isSelected ?? true,
+    changeReason: overrides.changeReason ?? null,
+    recommendedLevelId: overrides.recommendedLevelId ?? null,
+    recommendedLevelName: overrides.recommendedLevelName ?? null,
     guidance: overrides.guidance,
     avatar: overrides.avatar,
     visaExpiryDate: overrides.visaExpiryDate,
@@ -334,11 +337,13 @@ describe("salary review URL state", () => {
     expect(DEFAULT_VISIBLE_COLUMNS).toEqual([
       "name",
       "role",
+      "level",
       "department",
       "location",
       "current",
       "proposed",
       "increase",
+      "changeReason",
       "band",
       "performance",
     ]);

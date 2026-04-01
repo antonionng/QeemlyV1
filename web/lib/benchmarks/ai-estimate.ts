@@ -38,17 +38,28 @@ export type AiBenchmarkAdvisory = {
   detailBriefing: BenchmarkDetailAiBriefing;
 };
 
+export type AiBenchmarkAdvisoryLight = {
+  levels: AiLevelEstimate[];
+  currency: string;
+  payPeriod: "annual";
+  summary: string;
+};
+
 // ---------------------------------------------------------------------------
 // Cache: keyed by "role::location::industry::companySize"
 // ---------------------------------------------------------------------------
 
 type CacheEntry = { data: AiBenchmarkAdvisory; createdAt: number };
+type LightCacheEntry = { data: AiBenchmarkAdvisoryLight; createdAt: number };
 
 const cache = new Map<string, CacheEntry>();
 const inFlight = new Map<string, Promise<AiBenchmarkAdvisory | null>>();
+const lightCache = new Map<string, LightCacheEntry>();
+const lightInFlight = new Map<string, Promise<AiBenchmarkAdvisoryLight | null>>();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const SHARED_CACHE_TTL_SECONDS = 5 * 60;
 const AI_ADVISORY_SCHEMA_VERSION = "detail-numbers-v2";
+const AI_LIGHT_ADVISORY_SCHEMA_VERSION = "summary-v1";
 
 const getSharedAiBenchmarkAdvisory = unstable_cache(
   async (
@@ -61,6 +72,17 @@ const getSharedAiBenchmarkAdvisory = unstable_cache(
   { revalidate: SHARED_CACHE_TTL_SECONDS },
 );
 
+const getSharedAiBenchmarkAdvisoryLight = unstable_cache(
+  async (
+    roleId: string,
+    locationId: string,
+    industry: string | null,
+    companySize: string | null,
+  ) => callGptLight(roleId, locationId, industry, companySize),
+  [AI_LIGHT_ADVISORY_SCHEMA_VERSION, "shared"],
+  { revalidate: SHARED_CACHE_TTL_SECONDS },
+);
+
 function cacheKey(
   roleId: string,
   locationId: string,
@@ -70,9 +92,20 @@ function cacheKey(
   return `${AI_ADVISORY_SCHEMA_VERSION}::${roleId}::${locationId}::${industry ?? ""}::${companySize ?? ""}`;
 }
 
+function lightCacheKey(
+  roleId: string,
+  locationId: string,
+  industry: string | null,
+  companySize: string | null,
+): string {
+  return `${AI_LIGHT_ADVISORY_SCHEMA_VERSION}::${roleId}::${locationId}::${industry ?? ""}::${companySize ?? ""}`;
+}
+
 export function invalidateAiBenchmarkCache(): void {
   cache.clear();
   inFlight.clear();
+  lightCache.clear();
+  lightInFlight.clear();
 }
 
 // ---------------------------------------------------------------------------
@@ -99,6 +132,26 @@ export async function getAiBenchmarkForLevel(
   if (!advisory) return null;
 
   const level = advisory.levels.find((l) => l.levelId === levelId);
+  if (!level) return null;
+
+  return { advisory, level };
+}
+
+export async function getAiBenchmarkForLevelLight(
+  roleId: string,
+  locationId: string,
+  levelId: string,
+  filters: { industry?: string | null; companySize?: string | null } = {},
+): Promise<{ advisory: AiBenchmarkAdvisoryLight; level: AiLevelEstimate } | null> {
+  const advisory = await getAiBenchmarkAdvisoryLight(
+    roleId,
+    locationId,
+    filters.industry ?? null,
+    filters.companySize ?? null,
+  );
+  if (!advisory) return null;
+
+  const level = advisory.levels.find((entry) => entry.levelId === levelId);
   if (!level) return null;
 
   return { advisory, level };
@@ -143,6 +196,45 @@ export async function getAiBenchmarkAdvisory(
   })();
 
   inFlight.set(key, request);
+  return request;
+}
+
+export async function getAiBenchmarkAdvisoryLight(
+  roleId: string,
+  locationId: string,
+  industry: string | null,
+  companySize: string | null,
+): Promise<AiBenchmarkAdvisoryLight | null> {
+  const key = lightCacheKey(roleId, locationId, industry, companySize);
+  const cached = lightCache.get(key);
+  if (cached && Date.now() - cached.createdAt < CACHE_TTL) {
+    return cached.data;
+  }
+
+  const inFlightRequest = lightInFlight.get(key);
+  if (inFlightRequest) {
+    return inFlightRequest;
+  }
+
+  const request = (async () => {
+    try {
+      const advisory = await getSharedAiBenchmarkAdvisoryLight(
+        roleId,
+        locationId,
+        industry,
+        companySize,
+      );
+      lightCache.set(key, { data: advisory, createdAt: Date.now() });
+      return advisory;
+    } catch (error) {
+      console.error("[ai-estimate] GPT light benchmark call failed:", error);
+      return null;
+    } finally {
+      lightInFlight.delete(key);
+    }
+  })();
+
+  lightInFlight.set(key, request);
   return request;
 }
 
@@ -228,6 +320,38 @@ const JSON_SCHEMA = {
       "companySizeInsight",
       "detailBriefing",
     ],
+    additionalProperties: false,
+  },
+};
+
+const LIGHT_JSON_SCHEMA = {
+  name: "compensation_advisory_summary",
+  strict: true,
+  schema: {
+    type: "object" as const,
+    properties: {
+      levels: {
+        type: "array" as const,
+        items: {
+          type: "object" as const,
+          properties: {
+            levelId: { type: "string" as const },
+            levelName: { type: "string" as const },
+            p10: { type: "number" as const },
+            p25: { type: "number" as const },
+            p50: { type: "number" as const },
+            p75: { type: "number" as const },
+            p90: { type: "number" as const },
+          },
+          required: ["levelId", "levelName", "p10", "p25", "p50", "p75", "p90"],
+          additionalProperties: false,
+        },
+      },
+      currency: { type: "string" as const },
+      payPeriod: { type: "string" as const, enum: ["annual"] },
+      summary: { type: "string" as const },
+    },
+    required: ["levels", "currency", "payPeriod", "summary"],
     additionalProperties: false,
   },
 };
@@ -381,6 +505,50 @@ Guidelines:
 - Actions should be short, direct recommendations. Use null only if no action is appropriate.`;
 }
 
+function buildLightPrompt(
+  roleId: string,
+  locationId: string,
+  industry: string | null,
+  companySize: string | null,
+): string {
+  const role = ROLES.find((entry) => entry.id === roleId);
+  const location = LOCATIONS.find((entry) => entry.id === locationId);
+
+  const roleTitle = role?.title ?? roleId;
+  const city = location?.city ?? locationId;
+  const country = location?.country ?? "";
+  const currency = location?.currency ?? "AED";
+
+  const levelList = LEVELS
+    .map((entry) => `  - ${entry.id}: ${entry.name}`)
+    .join("\n");
+
+  const industryLine = industry ? `Industry: ${industry}` : "Industry: All industries (broad market)";
+  const sizeLine = companySize
+    ? `Company size: ${companySize} employees`
+    : "Company size: All sizes (broad market)";
+
+  return `You are a senior compensation and rewards analyst with deep expertise in GCC labour markets.
+
+Provide annual base salary compensation benchmarks in ${currency} for the following role and location:
+
+Role: ${roleTitle} (${role?.family ?? "General"})
+Location: ${city}, ${country}
+${industryLine}
+${sizeLine}
+
+Generate percentile estimates (p10, p25, p50, p75, p90) for each of these seniority levels:
+${levelList}
+
+Guidelines:
+- All figures must be annual base salary in ${currency}.
+- Account for local demand, supply, and regulatory context.
+- If an industry is specified, reflect its premium or discount relative to the broader market.
+- If a company size is specified, adjust accordingly.
+- Keep gaps between levels realistic and progressive.
+- Return one short summary in 1 or 2 sentences. Make it specific and useful for compensation decisions.`;
+}
+
 async function callGpt(
   roleId: string,
   locationId: string,
@@ -416,6 +584,49 @@ async function callGpt(
   }
 
   const parsed = JSON.parse(content) as AiBenchmarkAdvisory;
+
+  if (!Array.isArray(parsed.levels) || parsed.levels.length === 0) {
+    throw new Error("GPT returned no level estimates");
+  }
+
+  return parsed;
+}
+
+async function callGptLight(
+  roleId: string,
+  locationId: string,
+  industry: string | null,
+  companySize: string | null,
+): Promise<AiBenchmarkAdvisoryLight> {
+  const client = getOpenAIClient();
+  const model = getBenchmarkModel();
+
+  const response = await client.chat.completions.create({
+    model,
+    temperature: 0.3,
+    messages: [
+      {
+        role: "system",
+        content:
+          "You are a compensation benchmarking engine. Respond only with the requested JSON schema. Do not include markdown formatting.",
+      },
+      {
+        role: "user",
+        content: buildLightPrompt(roleId, locationId, industry, companySize),
+      },
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: LIGHT_JSON_SCHEMA,
+    },
+  });
+
+  const content = response.choices[0]?.message?.content;
+  if (!content) {
+    throw new Error("Empty GPT response");
+  }
+
+  const parsed = JSON.parse(content) as AiBenchmarkAdvisoryLight;
 
   if (!Array.isArray(parsed.levels) || parsed.levels.length === 0) {
     throw new Error("GPT returned no level estimates");

@@ -9,10 +9,12 @@ import {
   TrendingUp,
   Star,
   AlertCircle,
+  ArrowUpCircle,
 } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { buildBenchmarkTrustLabels } from "@/lib/benchmarks/trust";
 import { useSalaryReview, type ReviewEmployee, type ColumnKey } from "@/lib/salary-review";
+import { SALARY_CHANGE_REASONS, type SalaryChangeReason } from "@/lib/salary-review/proposal-types";
 import { formatAED, computeTenure, type Department } from "@/lib/employees";
 import { useSalaryView, applyViewMode } from "@/lib/salary-view-store";
 import { applySalaryReviewFilters } from "@/lib/salary-review/filters";
@@ -26,6 +28,7 @@ import { ReviewToolbar } from "./review-toolbar";
 
 type SortField =
   | "name"
+  | "level"
   | "department"
   | "location"
   | "current"
@@ -108,6 +111,7 @@ export function ReviewTable({
     activeProposal,
     proposalItemsByEmployee,
     updateEmployeeIncrease,
+    updateEmployeeChangeReason,
     toggleEmployeeSelection,
     visibleColumns,
   } = useSalaryReview();
@@ -144,6 +148,9 @@ export function ReviewTable({
     switch (sortField) {
       case "name":
         comparison = `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`);
+        break;
+      case "level":
+        comparison = a.level.name.localeCompare(b.level.name);
         break;
       case "department":
         comparison = a.department.localeCompare(b.department);
@@ -237,7 +244,12 @@ export function ReviewTable({
           totalCount={employees.length}
           onChange={(updates) => setQueryState((current) => ({ ...current, ...updates }))}
           onClear={() => setQueryState(DEFAULT_SALARY_REVIEW_QUERY_STATE)}
-          actions={<ColumnSettings />}
+          actions={
+            <div className="flex items-center gap-2">
+              <BulkReasonAction />
+              <ColumnSettings />
+            </div>
+          }
         />
 
         {/* Table */}
@@ -265,9 +277,14 @@ export function ReviewTable({
                   </th>
                 )}
                 {show("role") && (
-                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-accent-500 uppercase tracking-wider cursor-pointer hover:text-accent-700" onClick={() => handleSort("department")}>
+                  <th className="text-left px-4 py-3 text-[11px] font-semibold text-accent-500 uppercase tracking-wider">
+                    Role
+                  </th>
+                )}
+                {show("level") && (
+                  <th className="text-left px-3 py-3 text-[11px] font-semibold text-accent-500 uppercase tracking-wider cursor-pointer hover:text-accent-700" onClick={() => handleSort("level")}>
                     <div className="flex items-center gap-1">
-                      Role <SortIcon field="department" sortField={sortField} sortDirection={sortDirection} />
+                      Level <SortIcon field="level" sortField={sortField} sortDirection={sortDirection} />
                     </div>
                   </th>
                 )}
@@ -308,6 +325,11 @@ export function ReviewTable({
                     <div className="flex items-center justify-end gap-1">
                       Increase <SortIcon field="increase" sortField={sortField} sortDirection={sortDirection} />
                     </div>
+                  </th>
+                )}
+                {show("changeReason") && (
+                  <th className="text-left px-3 py-3 text-[11px] font-semibold text-accent-500 uppercase tracking-wider">
+                    Reason
                   </th>
                 )}
                 {show("band") && (
@@ -377,7 +399,6 @@ export function ReviewTable({
                               )}
                             </div>
                             <div className="mt-1 flex flex-wrap gap-1.5">
-                              <span className="text-xs text-accent-500">{employee.level.name}</span>
                               {!employee.isSelected && (
                                 <span className="rounded-full bg-accent-100 px-2 py-0.5 text-[10px] font-medium text-accent-600">
                                   Excluded
@@ -401,6 +422,20 @@ export function ReviewTable({
                     {show("role") && (
                       <td className="px-4 py-3">
                         <div className="text-sm text-accent-700">{employee.role.title}</div>
+                      </td>
+                    )}
+                    {show("level") && (
+                      <td className="px-3 py-3">
+                        <div className="flex items-center gap-1.5">
+                          <span className="inline-flex items-center rounded-md bg-accent-100 px-2 py-1 text-xs font-medium text-accent-700">
+                            {employee.level.name}
+                          </span>
+                          {employee.recommendedLevelName && (
+                            <span className="inline-flex items-center gap-0.5 rounded-md bg-purple-100 px-1.5 py-1 text-[10px] font-semibold text-purple-700" title={`Upgrade recommended: ${employee.recommendedLevelName}`}>
+                              <ArrowUpCircle className="h-3 w-3" />
+                            </span>
+                          )}
+                        </div>
                       </td>
                     )}
                     {show("department") && (
@@ -477,6 +512,24 @@ export function ReviewTable({
                         )}
                       </td>
                     )}
+                    {show("changeReason") && (
+                      <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
+                        <select
+                          value={employee.changeReason ?? ""}
+                          onChange={(e) => {
+                            const value = e.target.value as SalaryChangeReason | "";
+                            updateEmployeeChangeReason(employee.id, value || null);
+                          }}
+                          disabled={!employee.isSelected}
+                          className="w-[130px] h-8 rounded-lg border border-border bg-white px-2 text-xs text-accent-700 focus:border-brand-300 focus:outline-none disabled:opacity-50 appearance-none cursor-pointer"
+                        >
+                          <option value="">Select...</option>
+                          {SALARY_CHANGE_REASONS.map((r) => (
+                            <option key={r.value} value={r.value}>{r.label}</option>
+                          ))}
+                        </select>
+                      </td>
+                    )}
                     {show("band") && (
                       <td className="px-4 py-3 text-center">
                         <div className="space-y-1">
@@ -538,5 +591,43 @@ export function ReviewTable({
         />
       )}
     </>
+  );
+}
+
+function BulkReasonAction() {
+  const { employees, applyChangeReasonToSelected } = useSalaryReview();
+  const selectedCount = employees.filter((e) => e.isSelected).length;
+  const [open, setOpen] = useState(false);
+
+  if (selectedCount === 0) return null;
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="flex h-10 items-center gap-1.5 rounded-xl border border-border bg-white px-3 text-xs font-medium text-accent-600 transition-colors hover:bg-accent-50 hover:text-accent-800"
+        title="Apply change reason to all selected employees"
+      >
+        Apply Reason ({selectedCount})
+      </button>
+      {open && (
+        <div className="absolute right-0 top-12 z-30 w-52 rounded-xl border border-border bg-white p-1.5 shadow-lg">
+          {SALARY_CHANGE_REASONS.map((r) => (
+            <button
+              key={r.value}
+              type="button"
+              onClick={() => {
+                applyChangeReasonToSelected(r.value);
+                setOpen(false);
+              }}
+              className="flex w-full items-center rounded-lg px-3 py-2 text-sm text-accent-700 hover:bg-accent-50"
+            >
+              {r.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

@@ -6,14 +6,16 @@ import { createRoot } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { pushMock, createClientMock, isFeatureEnabledMock } = vi.hoisted(() => ({
+const { pushMock, createClientMock, isFeatureEnabledMock, usePathnameMock } = vi.hoisted(() => ({
   pushMock: vi.fn(),
   createClientMock: vi.fn(),
   isFeatureEnabledMock: vi.fn(),
+  usePathnameMock: vi.fn(),
 }));
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: pushMock }),
+  usePathname: usePathnameMock,
 }));
 
 vi.mock("@/components/logo", () => ({
@@ -70,6 +72,7 @@ describe("DashboardTopBar", () => {
       }),
     });
     isFeatureEnabledMock.mockReturnValue(true);
+    usePathnameMock.mockReturnValue("/dashboard");
   });
 
   afterEach(() => {

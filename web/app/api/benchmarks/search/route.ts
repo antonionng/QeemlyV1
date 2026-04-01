@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import type { BenchmarkDetailAiBriefing } from "@/lib/benchmarks/detail-ai";
-import { getAiBenchmarkForLevel, type AiLevelEstimate } from "@/lib/benchmarks/ai-estimate";
+import { getAiBenchmarkForLevelLight, type AiLevelEstimate } from "@/lib/benchmarks/ai-estimate";
 import type { Currency, SalaryBenchmark } from "@/lib/dashboard/dummy-data";
 import { LOCATIONS } from "@/lib/dashboard/dummy-data";
 import {
@@ -11,23 +10,8 @@ import { createClient } from "@/lib/supabase/server";
 
 export type AiAdvisoryPayload = {
   levelEstimate: AiLevelEstimate;
-  reasoning: string;
-  marketContext: string;
-  confidenceNote: string;
-  industryInsight: string | null;
-  companySizeInsight: string | null;
-  detailBriefing: AiDetailBriefing;
+  summary: string;
 };
-
-export type AiInsights = {
-  reasoning: string;
-  marketContext: string;
-  confidenceNote: string;
-  industryInsight: string | null;
-  companySizeInsight: string | null;
-};
-
-export type AiDetailBriefing = BenchmarkDetailAiBriefing;
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient();
@@ -120,27 +104,12 @@ export async function GET(request: NextRequest) {
 
   // Only attach the AI advisory panel when market data is strong enough to
   // stand on its own; otherwise the AI data already IS the primary display.
-  const aiAdvisoryPanel = shouldPromoteAi ? null : aiAdvisory;
-
-  // Always pass AI insights for the summary, regardless of whether AI is
-  // primary or supplementary.
-  const aiInsights: AiInsights | null = aiAdvisory
-    ? {
-        reasoning: aiAdvisory.reasoning,
-        marketContext: aiAdvisory.marketContext,
-        confidenceNote: aiAdvisory.confidenceNote,
-        industryInsight: aiAdvisory.industryInsight,
-        companySizeInsight: aiAdvisory.companySizeInsight,
-      }
-    : null;
-  const aiDetailBriefing: AiDetailBriefing | null = aiAdvisory?.detailBriefing ?? null;
+  const aiSummary = aiAdvisory?.summary ?? null;
   diagnostics.request.totalDurationMs = Date.now() - requestStartedAt;
 
   return NextResponse.json({
     benchmark: primaryBenchmark,
-    aiAdvisory: aiAdvisoryPanel,
-    aiInsights,
-    aiDetailBriefing,
+    aiSummary,
     diagnostics,
   });
 }
@@ -175,7 +144,7 @@ async function resolveAiAdvisory(
 ): Promise<AiAdvisoryPayload | null> {
   diagnostics.ai.called = true;
   try {
-    const result = await getAiBenchmarkForLevel(roleId, locationId, levelId, {
+    const result = await getAiBenchmarkForLevelLight(roleId, locationId, levelId, {
       industry,
       companySize,
     });
@@ -183,12 +152,7 @@ async function resolveAiAdvisory(
 
     return {
       levelEstimate: result.level,
-      reasoning: result.advisory.reasoning,
-      marketContext: result.advisory.marketContext,
-      confidenceNote: result.advisory.confidenceNote,
-      industryInsight: result.advisory.industryInsight,
-      companySizeInsight: result.advisory.companySizeInsight,
-      detailBriefing: result.advisory.detailBriefing,
+      summary: result.advisory.summary,
     };
   } catch (error) {
     diagnostics.ai.error = getErrorMessage(error);

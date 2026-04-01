@@ -11,12 +11,14 @@ const {
   fetchDbEmployeesMock,
   createOfferMock,
   getBenchmarkMock,
+  getBenchmarksBatchMock,
 } = vi.hoisted(() => ({
   useCompanySettingsMock: vi.fn(),
   useSalaryViewMock: vi.fn(),
   fetchDbEmployeesMock: vi.fn(),
   createOfferMock: vi.fn(),
   getBenchmarkMock: vi.fn(),
+  getBenchmarksBatchMock: vi.fn(),
 }));
 
 vi.mock("@/lib/company", () => ({
@@ -37,9 +39,14 @@ vi.mock("@/lib/offers/store", () => ({
   }),
 }));
 
-vi.mock("@/lib/benchmarks/data-service", () => ({
-  getBenchmark: getBenchmarkMock,
-}));
+vi.mock("@/lib/benchmarks/data-service", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/benchmarks/data-service")>();
+  return {
+    ...actual,
+    getBenchmark: getBenchmarkMock,
+    getBenchmarksBatch: getBenchmarksBatchMock,
+  };
+});
 
 import { OfferBuilderView } from "@/components/dashboard/benchmarks/drilldown/views/offer-builder-view";
 import { CompMixView } from "@/components/dashboard/benchmarks/drilldown/views/comp-mix-view";
@@ -160,6 +167,29 @@ describe("benchmark AI mix views", () => {
     fetchDbEmployeesMock.mockResolvedValue([]);
     createOfferMock.mockResolvedValue(null);
     getBenchmarkMock.mockResolvedValue(baseBenchmark);
+    getBenchmarksBatchMock.mockImplementation(
+      async (
+        entries: Array<{
+          roleId: string;
+          locationId: string;
+          levelId: string;
+          industry?: string | null;
+          companySize?: string | null;
+        }>,
+      ) =>
+      Object.fromEntries(
+        entries.map((entry) => [
+          [
+            entry.roleId,
+            entry.locationId,
+            entry.levelId,
+            entry.industry ?? "",
+            entry.companySize ?? "",
+          ].join("::"),
+          baseBenchmark,
+        ]),
+      ),
+    );
   });
 
   it("uses the AI package breakdown in offer builder instead of the 100 percent base placeholder", async () => {

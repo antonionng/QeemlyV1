@@ -65,6 +65,7 @@ type SupabaseLike = {
 
 let cachedMarketBenchmarks: MarketBenchmark[] | null = null;
 let cacheTimestamp = 0;
+let inFlightMarketBenchmarks: Promise<MarketBenchmark[]> | null = null;
 const CACHE_TTL = 30_000; // 30 seconds
 const PAGE_SIZE = 1000;
 
@@ -81,16 +82,28 @@ export async function fetchMarketBenchmarks(
     return filterMarketBenchmarks(cachedMarketBenchmarks, query);
   }
 
-  const benchmarks = await fetchFromCanonicalPool(supabase);
-  if (benchmarks.length > 0) {
-    cachedMarketBenchmarks = benchmarks;
-    cacheTimestamp = Date.now();
-    return filterMarketBenchmarks(benchmarks, query);
+  if (inFlightMarketBenchmarks) {
+    const sharedBenchmarks = await inFlightMarketBenchmarks;
+    return filterMarketBenchmarks(sharedBenchmarks, query);
   }
 
-  cachedMarketBenchmarks = [];
-  cacheTimestamp = Date.now();
-  return [];
+  const request = fetchFromCanonicalPool(supabase);
+  inFlightMarketBenchmarks = request;
+
+  try {
+    const benchmarks = await request;
+    if (benchmarks.length > 0) {
+      cachedMarketBenchmarks = benchmarks;
+      cacheTimestamp = Date.now();
+      return filterMarketBenchmarks(benchmarks, query);
+    }
+
+    cachedMarketBenchmarks = [];
+    cacheTimestamp = Date.now();
+    return [];
+  } finally {
+    inFlightMarketBenchmarks = null;
+  }
 }
 
 /**
@@ -128,6 +141,7 @@ export async function buildMarketBenchmarkMap(
 export function invalidateMarketBenchmarkCache() {
   cachedMarketBenchmarks = null;
   cacheTimestamp = 0;
+  inFlightMarketBenchmarks = null;
 }
 
 function normalizeSegmentValue(value: unknown): string | null {

@@ -125,7 +125,7 @@ describe("dashboard overview responsive hardening", () => {
     expect(source).toContain("xl:grid-cols-2");
   });
 
-  it("keeps overview stat cards in a single column until the rail is truly wide enough", () => {
+  it("keeps overview stat cards on the simplified responsive grid", () => {
     const html = renderToStaticMarkup(
       React.createElement(StatCards, {
         metrics,
@@ -134,8 +134,9 @@ describe("dashboard overview responsive hardening", () => {
     );
 
     expect(html).toContain('data-testid="overview-stat-card-grid"');
-    expect(html).toContain("xl:grid-cols-1");
-    expect(html).toContain("2xl:grid-cols-2");
+    expect(html).toContain("md:grid-cols-2");
+    expect(html).not.toContain("xl:grid-cols-1");
+    expect(html).not.toContain("2xl:grid-cols-2");
     expect(html).toContain("sm:flex-row");
     expect(html).toContain("sm:items-end");
     expect(html).toContain('data-testid="total-payroll-bars-grid"');
