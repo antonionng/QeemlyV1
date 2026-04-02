@@ -209,11 +209,15 @@ export function DashboardSidebar({
         const data = await res.json();
         if (isCancelled) return;
         const s = data.settings;
+        const effectiveCompanyName =
+          data.is_viewing_as_admin && data.workspace_name
+            ? data.workspace_name
+            : s.company_name || data.workspace_name || "";
         
         // Only update if we have real data from DB
         if (s.company_name || data.workspace_name) {
           companySettings.updateSettings({
-            companyName: s.company_name || data.workspace_name || "",
+            companyName: effectiveCompanyName,
             companyLogo: s.company_logo || "",
             companyWebsite: s.company_website || "",
             companyDescription: s.company_description || "",

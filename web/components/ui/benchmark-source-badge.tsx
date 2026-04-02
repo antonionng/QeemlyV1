@@ -26,8 +26,8 @@ const CONFIG: Record<
     icon: Upload,
   },
   "ai-estimated": {
-    label: "Qeemly AI Advisory",
-    title: "AI-generated compensation advisory powered by GPT-5.4",
+    label: "Qeemly AI Benchmark",
+    title: "AI-generated benchmark numbers powered by GPT-5.4",
     colors: "bg-violet-50 text-violet-700 ring-1 ring-violet-200",
     icon: Sparkles,
   },

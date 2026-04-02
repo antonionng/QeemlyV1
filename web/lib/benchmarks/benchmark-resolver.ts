@@ -10,7 +10,7 @@ export type BenchmarkResolverRow = {
   [key: string]: unknown;
 };
 
-export type BenchmarkResolverSource = "market" | "uploaded";
+export type BenchmarkResolverSource = "market" | "uploaded" | "ai-estimated";
 
 export type BenchmarkResolverMatchType =
   | "exact"
@@ -256,6 +256,12 @@ function resolveFromRows<Row extends BenchmarkResolverRow>(
 export function resolveBenchmarkForEmployee<Row extends BenchmarkResolverRow>(
   args: ResolveArgs<Row>,
 ): BenchmarkResolverResult<Row> {
+  const aiRows = args.marketBenchmarks.filter(
+    (row) => (row as { source?: string | null }).source === "ai-estimated",
+  );
+  const aiMatch = resolveFromRows("ai-estimated", aiRows, args.employee);
+  if (aiMatch) return aiMatch;
+
   const marketMatch = resolveFromRows("market", args.marketBenchmarks, args.employee);
   if (marketMatch) return marketMatch;
 

@@ -8,7 +8,7 @@ const { refreshMock, companySettingsState } = vi.hoisted(() => ({
   refreshMock: vi.fn(),
   companySettingsState: {
     companyName: "Workspace One",
-    companyLogo: null as string | null,
+    companyLogo: "https://example.com/old-logo.png" as string | null,
   },
 }));
 
@@ -146,6 +146,22 @@ describe("WorkspaceSwitcher", () => {
       workspaceId: "ws-2",
       source: "override",
     });
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("does not show a stale prior workspace logo when active workspace has no logo", async () => {
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(React.createElement(WorkspaceSwitcher));
+    });
+
+    const image = container.querySelector("img");
+    expect(image).toBeNull();
+    expect(container.textContent).toContain("WO");
 
     await act(async () => {
       root.unmount();

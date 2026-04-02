@@ -169,6 +169,7 @@ export const EXPERIENCE_BANDS = ["0-2", "3-5", "6-8", "9-12", "12+"];
 export const COMP_TYPES = ["Base", "Bonus", "Equity", "Allowance"];
 
 export const LOCATIONS: Location[] = [
+  { id: "london", city: "London", country: "United Kingdom", countryCode: "GB", currency: "GBP", flag: "GB" },
   { id: "dubai", city: "Dubai", country: "UAE", countryCode: "AE", currency: "AED", flag: "AE" },
   { id: "abu-dhabi", city: "Abu Dhabi", country: "UAE", countryCode: "AE", currency: "AED", flag: "AE" },
   { id: "riyadh", city: "Riyadh", country: "Saudi Arabia", countryCode: "SA", currency: "SAR", flag: "SA" },

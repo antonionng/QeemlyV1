@@ -9,10 +9,12 @@ const {
   useBenchmarkStateMock,
   useDrilldownPreferencesMock,
   fetchAiBriefingMock,
+  fetchBenchmarkDetailSupportDataMock,
 } = vi.hoisted(() => ({
   useBenchmarkStateMock: vi.fn(),
   useDrilldownPreferencesMock: vi.fn(),
   fetchAiBriefingMock: vi.fn(),
+  fetchBenchmarkDetailSupportDataMock: vi.fn(),
 }));
 
 vi.mock("@/components/ui/button", () => ({
@@ -32,6 +34,7 @@ vi.mock("@/lib/benchmarks/drilldown-views", () => ({
 
 vi.mock("@/lib/benchmarks/data-service", () => ({
   fetchAiBriefing: fetchAiBriefingMock,
+  fetchBenchmarkDetailSupportData: fetchBenchmarkDetailSupportDataMock,
 }));
 
 vi.mock("@/components/dashboard/benchmarks/drilldown/view-selector", () => ({
@@ -137,6 +140,15 @@ describe("BenchmarkDetail", () => {
     vi.clearAllMocks();
     globalThis.IS_REACT_ACT_ENVIRONMENT = true;
     useBenchmarkStateMock.setState = vi.fn();
+    fetchBenchmarkDetailSupportDataMock.mockResolvedValue({
+      levelTableBenchmarks: {},
+      offerBuilderBenchmarks: {},
+      industryBenchmarks: {},
+      industryFallbackBenchmark: null,
+      companySizeBenchmarks: {},
+      companySizeFallbackBenchmark: null,
+      geoBenchmarksByLocation: {},
+    });
     useBenchmarkStateMock.mockReturnValue({
       goToStep: vi.fn(),
     });

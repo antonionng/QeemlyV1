@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateApiKey } from "../middleware";
 import { fetchMarketBenchmarks } from "@/lib/benchmarks/platform-market";
+import { buildAiBenchmarkRows } from "@/lib/benchmarks/ai-benchmark-rows";
 import { refreshPlatformMarketPoolBestEffort } from "@/lib/benchmarks/platform-market-sync";
 import { createServiceClient } from "@/lib/supabase/service";
 import { upsertBenchmarksFreshness } from "@/lib/ingestion/freshness";
@@ -23,7 +24,13 @@ export async function GET(request: NextRequest) {
   const supabase = createServiceClient();
 
   const [marketRows, workspaceResult] = await Promise.all([
-    fetchMarketBenchmarks(supabase),
+    (async () => {
+      if (roleId && locationId) {
+        const aiRows = await buildAiBenchmarkRows([{ roleId, locationId }]).catch(() => []);
+        if (aiRows.length > 0) return aiRows;
+      }
+      return fetchMarketBenchmarks(supabase);
+    })(),
     supabase
       .from("salary_benchmarks")
       .select("*")

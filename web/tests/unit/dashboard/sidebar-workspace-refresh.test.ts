@@ -165,4 +165,58 @@ describe("DashboardSidebar workspace refresh", () => {
       root.unmount();
     });
   });
+
+  it("prefers the active workspace name over a saved company alias while viewing as admin", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/settings") {
+          return createJsonResponse({
+            workspace_name: "Qeemly Test",
+            is_viewing_as_admin: true,
+            settings: {
+              company_name: "Experrt",
+              company_logo: "",
+              company_website: "",
+              company_description: "",
+              primary_color: "#5C45FD",
+              industry: "Technology",
+              company_size: "201-500",
+              funding_stage: "seed",
+              headquarters_country: "AE",
+              headquarters_city: "Dubai",
+              target_percentile: 50,
+              review_cycle: "annual",
+              default_currency: "AED",
+              fiscal_year_start: 1,
+              default_bonus_percentage: 15,
+              equity_vesting_schedule: "4-year-1-cliff",
+              benefits_tier: "standard",
+              is_configured: true,
+            },
+          });
+        }
+
+        throw new Error(`Unexpected fetch: ${url}`);
+      }),
+    );
+
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(React.createElement(DashboardSidebar));
+      await Promise.resolve();
+    });
+
+    expect(companySettingsState.updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        companyName: "Qeemly Test",
+      }),
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });

@@ -236,4 +236,74 @@ describe("uploadBenchmarks", () => {
       }),
     );
   });
+
+  it("uses the server import route when a workspace override is active", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+
+      if (url === "/api/admin/workspace-override" && method === "GET") {
+        return new Response(
+          JSON.stringify({
+            is_overriding: true,
+            workspace: { id: "ws-override", name: "Qeemly Test", slug: "qeemly-test" },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+
+      if (url === "/api/upload/import" && method === "POST") {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            insertedCount: 1,
+            createdCount: 1,
+            updatedCount: 0,
+            skippedCount: 0,
+            failedCount: 0,
+            errors: [],
+            processedBenchmarks: [
+              {
+                roleId: "swe",
+                locationId: "dubai",
+                levelId: "ic3",
+                validFrom: "2026-04-02",
+                action: "created",
+              },
+            ],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+
+      throw new Error(`Unexpected fetch: ${method} ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { uploadBenchmarks } = await import("@/lib/upload/api");
+
+    const result = await uploadBenchmarks([
+      {
+        roleId: "swe",
+        locationId: "dubai",
+        levelId: "ic3",
+        currency: "AED",
+        p10: 8000,
+        p25: 10000,
+        p50: 12000,
+        p75: 14000,
+        p90: 16000,
+        sampleSize: 24,
+      },
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/upload/import",
+      expect.objectContaining({
+        method: "POST",
+      }),
+    );
+  });
 });

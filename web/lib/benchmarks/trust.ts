@@ -8,7 +8,7 @@ export type BenchmarkMatchType =
   | "family_location_fallback";
 
 export type BenchmarkTrustMetadata = {
-  source: "market" | "uploaded";
+  source: "market" | "uploaded" | "ai-estimated";
   provenance?: string | null;
   matchQuality?: BenchmarkMatchQuality | null;
   matchType?: BenchmarkMatchType | null;
@@ -39,6 +39,7 @@ type BenchmarkAwareEmployee = {
 export function getBenchmarkSourceLabel(metadata: BenchmarkTrustMetadata | null | undefined): string {
   if (!metadata) return "No benchmark coverage";
   if (metadata.source === "uploaded") return "Company Overlay";
+  if (metadata.source === "ai-estimated") return "Qeemly AI Benchmark";
   return "Qeemly Market Dataset";
 }
 
@@ -107,7 +108,7 @@ export function summarizeBenchmarkTrust(employees: BenchmarkAwareEmployee[]): Be
     const sourceLabel = getBenchmarkSourceLabel(metadata);
     sourceCounts.set(sourceLabel, (sourceCounts.get(sourceLabel) ?? 0) + 1);
 
-    if (metadata.source === "market") marketBacked += 1;
+    if (metadata.source === "market" || metadata.source === "ai-estimated") marketBacked += 1;
     if (metadata.source === "uploaded") workspaceBacked += 1;
     if (metadata.matchQuality === "role_level_fallback") fallbackMatches += 1;
     else exactMatches += 1;

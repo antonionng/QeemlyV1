@@ -5,6 +5,7 @@ import { getWorkspaceContext } from "@/lib/workspace-context";
 import { refreshPlatformMarketPoolBestEffort } from "@/lib/benchmarks/platform-market-sync";
 import { refreshComplianceSnapshot } from "@/lib/compliance/snapshot-service";
 import { fetchMarketBenchmarks, type MarketBenchmark } from "@/lib/benchmarks/platform-market";
+import { buildAiBenchmarkRows } from "@/lib/benchmarks/ai-benchmark-rows";
 import { refreshBenchmarkCoverageSnapshot } from "@/lib/benchmarks/coverage-snapshots";
 
 function isMissingRelationError(error: { code?: string; message?: string } | null | undefined): boolean {
@@ -40,13 +41,6 @@ export async function GET() {
 
   const { workspace_id, is_override } = wsContext.context;
   const queryClient = is_override ? createServiceClient() : supabase;
-
-  let marketBenchmarks: MarketBenchmark[] = [];
-  try {
-    marketBenchmarks = await fetchMarketBenchmarks(queryClient);
-  } catch {
-    // Non-fatal — market data may not be available yet
-  }
 
   const [employeesResult, benchmarksResult, enrichmentResult, visaResult] = await Promise.all([
     queryClient
@@ -112,6 +106,26 @@ export async function GET() {
       visa_status: visa?.visa_status || null,
     };
   });
+
+  let marketBenchmarks: MarketBenchmark[] = [];
+  try {
+    const aiBenchmarks = await buildAiBenchmarkRows(
+      employeesWithProfile.map((employee) => ({
+        roleId: String(employee.role_id || ""),
+        locationId: String(employee.location_id || ""),
+      })),
+    );
+    marketBenchmarks =
+      aiBenchmarks.length > 0
+        ? (aiBenchmarks as unknown as MarketBenchmark[])
+        : await fetchMarketBenchmarks(queryClient);
+  } catch {
+    try {
+      marketBenchmarks = await fetchMarketBenchmarks(queryClient);
+    } catch {
+      marketBenchmarks = [];
+    }
+  }
 
   return NextResponse.json({
     workspace_id,

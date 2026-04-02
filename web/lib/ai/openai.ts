@@ -4,6 +4,7 @@ let openaiClient: OpenAI | null = null;
 const DEFAULT_CHAT_MODEL = "gpt-5.4-mini";
 const DEFAULT_ADVISORY_MODEL = "gpt-5.4";
 const DEFAULT_BENCHMARK_MODEL = "gpt-5.4";
+const DEFAULT_BENCHMARK_BRIEFING_MODEL = "gpt-5.4-mini";
 
 export function getOpenAIClient(): OpenAI {
   if (!process.env.OPENAI_API_KEY) {
@@ -33,4 +34,8 @@ export function getComplianceScoringModel(): string {
 
 export function getBenchmarkModel(): string {
   return process.env.OPENAI_BENCHMARK_MODEL || DEFAULT_BENCHMARK_MODEL;
+}
+
+export function getBenchmarkBriefingModel(): string {
+  return process.env.OPENAI_BENCHMARK_BRIEFING_MODEL || DEFAULT_BENCHMARK_BRIEFING_MODEL;
 }

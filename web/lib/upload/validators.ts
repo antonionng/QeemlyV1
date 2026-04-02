@@ -2,7 +2,15 @@
 
 import type { ColumnMapping, UploadDataType, FieldDefinition } from "./column-detection";
 import { getFieldsForType } from "./column-detection";
-import { matchLevel, matchRole } from "./transformers";
+import {
+  matchLevel,
+  matchLocation,
+  matchRole,
+  normalizeDepartment,
+  normalizeEmploymentType,
+  normalizePerformanceRating,
+  normalizeStatus,
+} from "./transformers";
 
 export type ValidationSeverity = "error" | "warning";
 
@@ -196,6 +204,41 @@ function validateBenchmarkRow(
   rowIndex: number
 ): ValidationIssue[] {
   const issues: ValidationIssue[] = [];
+  const roleValue = typeof data.role === "string" ? data.role.trim() : "";
+  if (roleValue && !matchRole(roleValue)) {
+    issues.push({
+      row: rowIndex,
+      column: "role",
+      field: "role",
+      value: roleValue,
+      message: "Role could not be mapped to a supported Qeemly benchmark role",
+      severity: "error",
+    });
+  }
+
+  const locationValue = typeof data.location === "string" ? data.location.trim() : "";
+  if (locationValue && !matchLocation(locationValue)) {
+    issues.push({
+      row: rowIndex,
+      column: "location",
+      field: "location",
+      value: locationValue,
+      message: "Location could not be mapped to a supported Qeemly benchmark market",
+      severity: "error",
+    });
+  }
+
+  const levelValue = typeof data.level === "string" ? data.level.trim() : "";
+  if (levelValue && !matchLevel(levelValue)) {
+    issues.push({
+      row: rowIndex,
+      column: "level",
+      field: "level",
+      value: levelValue,
+      message: "Level could not be mapped to a supported Qeemly benchmark level",
+      severity: "error",
+    });
+  }
   
   const p10 = data.p10 as number | undefined;
   const p25 = data.p25 as number | undefined;
@@ -276,11 +319,62 @@ function validateEmployeeRow(
       field: "level",
       value: levelValue,
       message: "Level could not be mapped to a supported Qeemly level",
-      severity: "warning",
+      severity: "error",
+    });
+  }
+
+  const locationValue = typeof data.location === "string" ? data.location.trim() : "";
+  if (locationValue && !matchLocation(locationValue)) {
+    issues.push({
+      row: rowIndex,
+      column: "location",
+      field: "location",
+      value: locationValue,
+      message: "Location could not be mapped to a supported Qeemly location",
+      severity: "error",
     });
   }
 
   return issues;
+}
+
+function filterEmployeeEnumWarnings(
+  issues: ValidationIssue[],
+  data: Record<string, unknown>,
+): ValidationIssue[] {
+  return issues.filter((issue) => {
+    if (issue.severity !== "warning") return true;
+
+    if (issue.field === "department") {
+      const normalizedDepartment = normalizeDepartment(String(data.department ?? ""));
+      return ![
+        "Engineering",
+        "Product",
+        "Design",
+        "Data",
+        "Sales",
+        "Marketing",
+        "Operations",
+        "Executive",
+        "Finance",
+        "HR",
+      ].includes(normalizedDepartment);
+    }
+
+    if (issue.field === "employmentType") {
+      return false;
+    }
+
+    if (issue.field === "performanceRating") {
+      return normalizePerformanceRating(String(data.performanceRating ?? "")) === null;
+    }
+
+    if (issue.field === "status") {
+      return false;
+    }
+
+    return true;
+  });
 }
 
 /**
@@ -346,6 +440,9 @@ export function validateData(
     if (dataType === "employees") {
       const employeeIssues = validateEmployeeRow(data, rowIndex + 1);
       rowIssues.push(...employeeIssues);
+      const filteredIssues = filterEmployeeEnumWarnings(rowIssues, data);
+      rowIssues.length = 0;
+      rowIssues.push(...filteredIssues);
     }
 
     const hasErrors = rowIssues.some((i) => i.severity === "error");

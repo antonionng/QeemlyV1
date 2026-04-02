@@ -5,13 +5,13 @@ const {
   calculateRelocationMock,
   getRelocationAiAdvisoryMock,
   createServiceClientMock,
-  findMarketBenchmarkMock,
+  resolveAiFirstBenchmarkContextMock,
 } = vi.hoisted(() => ({
   getWorkspaceContextMock: vi.fn(),
   calculateRelocationMock: vi.fn(),
   getRelocationAiAdvisoryMock: vi.fn(),
   createServiceClientMock: vi.fn(),
-  findMarketBenchmarkMock: vi.fn(),
+  resolveAiFirstBenchmarkContextMock: vi.fn(),
 }));
 
 vi.mock("@/lib/workspace-context", () => ({
@@ -30,8 +30,8 @@ vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: createServiceClientMock,
 }));
 
-vi.mock("@/lib/benchmarks/platform-market", () => ({
-  findMarketBenchmark: findMarketBenchmarkMock,
+vi.mock("@/lib/benchmarks/ai-benchmark-rows", () => ({
+  resolveAiFirstBenchmarkContext: resolveAiFirstBenchmarkContextMock,
 }));
 
 describe("POST /api/relocation/advisory", () => {
@@ -87,20 +87,18 @@ describe("POST /api/relocation/advisory", () => {
       annualDifference: -52800,
     });
 
-    findMarketBenchmarkMock.mockResolvedValue({
+    resolveAiFirstBenchmarkContextMock.mockResolvedValue({
       role_id: "swe",
       location_id: "dubai",
       level_id: "ic3",
       currency: "AED",
-      pay_period: "annual",
       p10: 240000,
       p25: 280000,
       p50: 320000,
       p75: 370000,
       p90: 420000,
       sample_size: 12,
-      industry: "Technology",
-      company_size: "201-500",
+      benchmarkSource: "ai-estimated",
     });
 
     getRelocationAiAdvisoryMock.mockResolvedValue({
@@ -119,7 +117,7 @@ describe("POST /api/relocation/advisory", () => {
         "Offer a one-time mobility allowance instead of inflating fixed cash further.",
       ],
       sourceContext: {
-        benchmarkSource: "market",
+        benchmarkSource: "ai-estimated",
         targetPercentile: 50,
       },
     });
@@ -149,7 +147,7 @@ describe("POST /api/relocation/advisory", () => {
     expect(payload.deterministicResult.recommendedSalary).toBe(320000);
     expect(payload.aiAdvisory.recommendedSalary).toBe(338000);
     expect(payload.recommendedResult.recommendedSalary).toBe(338000);
-    expect(payload.aiAdvisory.sourceContext.benchmarkSource).toBe("market");
+    expect(payload.aiAdvisory.sourceContext.benchmarkSource).toBe("ai-estimated");
     expect(payload.aiAdvisory.risks[0]).toContain("Candidate may anchor");
   });
 

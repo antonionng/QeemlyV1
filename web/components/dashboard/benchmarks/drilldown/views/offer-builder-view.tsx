@@ -35,6 +35,7 @@ export function OfferBuilderView({ result }: OfferBuilderViewProps) {
   const companySettings = useCompanySettings();
   const { salaryView } = useSalaryView();
   const { createOffer } = useOffersStore();
+  const isAiBriefingLoading = !result.aiDetailBriefing && result.aiDetailBriefingStatus === "loading";
   const targetCurrency = location.currency;
   const [offerTarget] = useState<number>(
     companySettings.targetPercentile,
@@ -55,6 +56,7 @@ export function OfferBuilderView({ result }: OfferBuilderViewProps) {
   const aiLevelBands = result.aiDetailBriefing?.views.offerBuilder.levelBands
     ?? result.aiDetailBriefing?.views.levelTable.levelBands
     ?? null;
+  const prefetchedLevelBenchmarks = result.detailSupportData?.offerBuilderBenchmarks ?? {};
 
   useEffect(() => {
     const loadEmployees = async () => {
@@ -175,6 +177,16 @@ export function OfferBuilderView({ result }: OfferBuilderViewProps) {
       return;
     }
 
+    if (isAiBriefingLoading) {
+      setLevelBenchmarks({});
+      return;
+    }
+
+    if (Object.keys(prefetchedLevelBenchmarks).length > 0) {
+      setLevelBenchmarks(prefetchedLevelBenchmarks);
+      return;
+    }
+
     const run = async () => {
       const benchmarks = await getBenchmarksBatch(
         shownLevels.map((lvl) => ({
@@ -201,7 +213,16 @@ export function OfferBuilderView({ result }: OfferBuilderViewProps) {
       setLevelBenchmarks(next);
     };
     void run();
-  }, [aiLevelBenchmarks, location.id, result.formData.companySize, result.formData.industry, role.id, shownLevels]);
+  }, [
+    aiLevelBenchmarks,
+    isAiBriefingLoading,
+    location.id,
+    prefetchedLevelBenchmarks,
+    result.formData.companySize,
+    result.formData.industry,
+    role.id,
+    shownLevels,
+  ]);
 
   const downloadExportPayload = (payload: OfferExportPayload, offerId: string) => {
     const blob = new Blob([JSON.stringify(payload, null, 2)], {
@@ -341,34 +362,42 @@ export function OfferBuilderView({ result }: OfferBuilderViewProps) {
           </div>
         </div>
 
-        <div className="mb-5 flex h-4 overflow-hidden rounded-full bg-brand-100">
-          {breakdownItems.map((item) => (
-            <div
-              key={item.name}
-              className={item.bg}
-              style={{ width: `${item.percent}%` }}
-              title={`${item.name}: ${formatValue(item.amount)} (${item.percent}%)`}
-            />
-          ))}
-        </div>
-
-        <div className="space-y-3">
-          {breakdownItems.map((item) => (
-            <div
-              key={item.name}
-              className="flex items-center justify-between rounded-2xl border border-border bg-surface-1 px-4 py-3 text-sm"
-            >
-              <div className="flex items-center gap-3">
-                <div className={`h-3 w-3 rounded-full ${item.bg}`} />
-                <div>
-                  <p className={`font-medium ${item.label}`}>{item.name}</p>
-                  <p className="text-xs text-brand-500">{item.percent}% of total package</p>
-                </div>
-              </div>
-              <div className="font-semibold text-brand-900">{formatShort(item.amount)}</div>
+        {isAiBriefingLoading ? (
+          <div className="rounded-2xl border border-brand-100 bg-brand-50 px-4 py-4 text-sm text-brand-700">
+            Qeemly AI is preparing the package breakdown for this market view.
+          </div>
+        ) : (
+          <>
+            <div className="mb-5 flex h-4 overflow-hidden rounded-full bg-brand-100">
+              {breakdownItems.map((item) => (
+                <div
+                  key={item.name}
+                  className={item.bg}
+                  style={{ width: `${item.percent}%` }}
+                  title={`${item.name}: ${formatValue(item.amount)} (${item.percent}%)`}
+                />
+              ))}
             </div>
-          ))}
-        </div>
+
+            <div className="space-y-3">
+              {breakdownItems.map((item) => (
+                <div
+                  key={item.name}
+                  className="flex items-center justify-between rounded-2xl border border-border bg-surface-1 px-4 py-3 text-sm"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`h-3 w-3 rounded-full ${item.bg}`} />
+                    <div>
+                      <p className={`font-medium ${item.label}`}>{item.name}</p>
+                      <p className="text-xs text-brand-500">{item.percent}% of total package</p>
+                    </div>
+                  </div>
+                  <div className="font-semibold text-brand-900">{formatShort(item.amount)}</div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
       <div className="bench-section space-y-4">
@@ -494,73 +523,81 @@ export function OfferBuilderView({ result }: OfferBuilderViewProps) {
             Check the proposed package against nearby seniority levels before sending the offer.
           </p>
           <p className="mt-2 text-xs text-brand-500">
-            {Object.keys(aiLevelBenchmarks).length > 0
+            {isAiBriefingLoading
+              ? "Qeemly AI is preparing adjacent-level anchors for this market view."
+              : Object.keys(aiLevelBenchmarks).length > 0
               ? "AI-derived adjacent-level anchors are being used for this market view."
               : "Anchors are being loaded from segmented market benchmark rows for adjacent levels."}
           </p>
         </div>
-        <div className="space-y-8">
-          {shownLevels.map((lvl) => {
-            const bench = levelBenchmarks[lvl.id];
-            if (!bench) return null;
-            const p10 = convertToMarket(bench.percentiles.p10, bench.currency, bench.payPeriod);
-            const p25 = convertToMarket(bench.percentiles.p25, bench.currency, bench.payPeriod);
-            const p50 = convertToMarket(bench.percentiles.p50, bench.currency, bench.payPeriod);
-            const p75 = convertToMarket(bench.percentiles.p75, bench.currency, bench.payPeriod);
-            const p90 = convertToMarket(bench.percentiles.p90, bench.currency, bench.payPeriod);
+        {isAiBriefingLoading ? (
+          <div className="rounded-2xl border border-brand-100 bg-brand-50 px-4 py-4 text-sm text-brand-700">
+            Qeemly AI is preparing adjacent-level anchors for this market view.
+          </div>
+        ) : (
+          <div className="space-y-8">
+            {shownLevels.map((lvl) => {
+              const bench = levelBenchmarks[lvl.id];
+              if (!bench) return null;
+              const p10 = convertToMarket(bench.percentiles.p10, bench.currency, bench.payPeriod);
+              const p25 = convertToMarket(bench.percentiles.p25, bench.currency, bench.payPeriod);
+              const p50 = convertToMarket(bench.percentiles.p50, bench.currency, bench.payPeriod);
+              const p75 = convertToMarket(bench.percentiles.p75, bench.currency, bench.payPeriod);
+              const p90 = convertToMarket(bench.percentiles.p90, bench.currency, bench.payPeriod);
 
-            const gMin = p10 * 0.85;
-            const gMax = p90 * 1.15;
-            const pct = (v: number) =>
-              Math.max(0, Math.min(100, ((v - gMin) / (gMax - gMin)) * 100));
+              const gMin = p10 * 0.85;
+              const gMax = p90 * 1.15;
+              const pct = (v: number) =>
+                Math.max(0, Math.min(100, ((v - gMin) / (gMax - gMin)) * 100));
 
-            const isSelected = lvl.id === level.id;
-            const tgtVal = isSelected ? convertToMarket(getOfferValue(offerTarget)) : p50;
+              const isSelected = lvl.id === level.id;
+              const tgtVal = isSelected ? convertToMarket(getOfferValue(offerTarget)) : p50;
 
-            return (
-              <div key={lvl.id}>
-                <div className="text-xs font-medium text-brand-700 mb-2">
-                  {lvl.name}
+              return (
+                <div key={lvl.id}>
+                  <div className="text-xs font-medium text-brand-700 mb-2">
+                    {lvl.name}
+                  </div>
+
+                  <div className="relative h-10">
+                    {/* whisker line */}
+                    <div
+                      className="absolute top-1/2 h-[2px] bg-brand-300 -translate-y-1/2"
+                      style={{
+                        left: `${pct(p10)}%`,
+                        width: `${pct(p90) - pct(p10)}%`,
+                      }}
+                    />
+                    <div className="bench-boxplot-whisker" style={{ left: `${pct(p10)}%` }} />
+                    <div className="bench-boxplot-whisker" style={{ left: `${pct(p90)}%` }} />
+                    <div
+                      className="bench-boxplot-box"
+                      style={{
+                        left: `${pct(p25)}%`,
+                        width: `${pct(p75) - pct(p25)}%`,
+                      }}
+                    />
+                    <div className="bench-boxplot-median" style={{ left: `${pct(p50)}%` }} />
+                    {isSelected && (
+                      <div className="bench-boxplot-target" style={{ left: `${pct(tgtVal)}%` }}>
+                        {offerTarget}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Axis ticks */}
+                  <div className="flex justify-between text-[9px] text-brand-400 mt-1">
+                    <span>{formatShort(p10)}</span>
+                    <span>{formatShort(p25)}</span>
+                    <span>{formatShort(p50)}</span>
+                    <span>{formatShort(p75)}</span>
+                    <span>{formatShort(p90)}</span>
+                  </div>
                 </div>
-
-                <div className="relative h-10">
-                  {/* whisker line */}
-                  <div
-                    className="absolute top-1/2 h-[2px] bg-brand-300 -translate-y-1/2"
-                    style={{
-                      left: `${pct(p10)}%`,
-                      width: `${pct(p90) - pct(p10)}%`,
-                    }}
-                  />
-                  <div className="bench-boxplot-whisker" style={{ left: `${pct(p10)}%` }} />
-                  <div className="bench-boxplot-whisker" style={{ left: `${pct(p90)}%` }} />
-                  <div
-                    className="bench-boxplot-box"
-                    style={{
-                      left: `${pct(p25)}%`,
-                      width: `${pct(p75) - pct(p25)}%`,
-                    }}
-                  />
-                  <div className="bench-boxplot-median" style={{ left: `${pct(p50)}%` }} />
-                  {isSelected && (
-                    <div className="bench-boxplot-target" style={{ left: `${pct(tgtVal)}%` }}>
-                      {offerTarget}
-                    </div>
-                  )}
-                </div>
-
-                {/* Axis ticks */}
-                <div className="flex justify-between text-[9px] text-brand-400 mt-1">
-                  <span>{formatShort(p10)}</span>
-                  <span>{formatShort(p25)}</span>
-                  <span>{formatShort(p50)}</span>
-                  <span>{formatShort(p75)}</span>
-                  <span>{formatShort(p90)}</span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <SharedAiCallout section={result.aiDetailBriefing?.views.offerBuilder} />

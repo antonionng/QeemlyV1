@@ -1,6 +1,15 @@
 import { LEVELS, LOCATIONS, ROLES } from "@/lib/dashboard/dummy-data";
 import type { ChatFinalPayload } from "@/lib/ai/chat/protocol";
-import type { MarketBenchmark } from "@/lib/benchmarks/platform-market";
+
+type HelperBenchmarkRow = {
+  role_id: string;
+  location_id: string;
+  level_id: string;
+  currency: string;
+  p25: number;
+  p50: number;
+  sample_size?: number | null;
+};
 
 type EmployeeRow = {
   id: string;
@@ -58,7 +67,7 @@ export async function resolveGeneralHelperQuestion(args: {
   };
   workspaceId: string;
   message: string;
-  marketBenchmarks: MarketBenchmark[];
+  marketBenchmarks: HelperBenchmarkRow[];
 }): Promise<SupportedResolution> {
   const question = args.message.trim();
   if (!detectIntent(question)) {
@@ -95,7 +104,7 @@ export async function resolveGeneralHelperQuestion(args: {
 function resolveSupportedQuestion(
   question: string,
   employees: EmployeeRow[],
-  marketBenchmarks: MarketBenchmark[],
+  marketBenchmarks: HelperBenchmarkRow[],
 ): SupportedResolution {
   const intent = detectIntent(question);
   if (!intent) {
@@ -383,13 +392,13 @@ function inferRequestedResultCount(question: string): number {
 
 function rankMatchedEmployees(
   employees: EmployeeRow[],
-  marketBenchmarks: MarketBenchmark[],
+  marketBenchmarks: HelperBenchmarkRow[],
 ): {
   matches: EmployeeMarketMatch[];
   unmatchedEmployees: string[];
 } {
-  const exactMap = new Map<string, MarketBenchmark>();
-  const roleLevelMap = new Map<string, MarketBenchmark>();
+  const exactMap = new Map<string, HelperBenchmarkRow>();
+  const roleLevelMap = new Map<string, HelperBenchmarkRow>();
 
   for (const benchmark of marketBenchmarks) {
     const exactKey = `${benchmark.role_id}::${benchmark.location_id}::${benchmark.level_id}`;

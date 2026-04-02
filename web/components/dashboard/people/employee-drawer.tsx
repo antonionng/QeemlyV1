@@ -269,6 +269,8 @@ export function EmployeeDrawer({
   const benchmarkSourceLabel =
     employee.benchmarkContext?.source === "uploaded"
       ? "Your Data"
+      : employee.benchmarkContext?.source === "ai-estimated"
+        ? "Qeemly AI Benchmark"
       : employee.hasBenchmark
         ? "Market"
         : "Unmapped";

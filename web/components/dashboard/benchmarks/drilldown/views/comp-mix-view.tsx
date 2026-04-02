@@ -13,6 +13,7 @@ interface CompMixViewProps {
 export function CompMixView({ result }: CompMixViewProps) {
   const { level, benchmark } = result;
   const { salaryView } = useSalaryView();
+  const isAiBriefingLoading = !result.aiDetailBriefing && result.aiDetailBriefingStatus === "loading";
   const aiCompensationMix = normalizeAiBreakdown(
     result.aiDetailBriefing?.views.compMix.compensationMix
       ?? result.aiDetailBriefing?.views.offerBuilder.packageBreakdown
@@ -104,58 +105,66 @@ export function CompMixView({ result }: CompMixViewProps) {
         Typical breakdown for {level.name} at P50
       </p>
 
-      {/* Horizontal stacked bar */}
-      <div className="h-8 rounded-full overflow-hidden flex mb-4">
-        {compMixData.map((item) => {
-          const percentage = (item.value / totalComp) * 100;
-          return (
-            <div
-              key={item.name}
-              className={`h-full ${getColor(item.name)} transition-all`}
-              style={{ width: `${percentage}%` }}
-              title={`${item.name}: ${formatAED(item.value)}`}
-            />
-          );
-        })}
-      </div>
+      {isAiBriefingLoading ? (
+        <div className="rounded-2xl border border-brand-100 bg-brand-50 px-4 py-4 text-sm text-brand-700">
+          Qeemly AI is preparing the compensation mix for this market view.
+        </div>
+      ) : (
+        <>
+          {/* Horizontal stacked bar */}
+          <div className="h-8 rounded-full overflow-hidden flex mb-4">
+            {compMixData.map((item) => {
+              const percentage = (item.value / totalComp) * 100;
+              return (
+                <div
+                  key={item.name}
+                  className={`h-full ${getColor(item.name)} transition-all`}
+                  style={{ width: `${percentage}%` }}
+                  title={`${item.name}: ${formatAED(item.value)}`}
+                />
+              );
+            })}
+          </div>
 
-      {/* Legend and values */}
-      <div className="space-y-3">
-        {compMixData.map((item) => {
-          const percentage = (item.value / totalComp) * 100;
-          return (
-            <div key={item.name} className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className={`w-3 h-3 rounded-full ${getColor(item.name)}`} />
-                <span className="text-sm font-medium text-brand-700">{item.name}</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getColorLight(item.name)}`}>
-                  {percentage.toFixed(0)}%
-                </span>
-                <span className="text-sm font-bold text-brand-900 w-20 text-right">
-                  {formatAED(item.value)}
-                </span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+          {/* Legend and values */}
+          <div className="space-y-3">
+            {compMixData.map((item) => {
+              const percentage = (item.value / totalComp) * 100;
+              return (
+                <div key={item.name} className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-3 h-3 rounded-full ${getColor(item.name)}`} />
+                    <span className="text-sm font-medium text-brand-700">{item.name}</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getColorLight(item.name)}`}>
+                      {percentage.toFixed(0)}%
+                    </span>
+                    <span className="text-sm font-bold text-brand-900 w-20 text-right">
+                      {formatAED(item.value)}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
 
-      {/* Total */}
-      <div className="mt-4 pt-4 border-t border-border flex items-center justify-between">
-        <span className="text-sm font-semibold text-brand-900">Total Compensation</span>
-        <span className="text-lg font-bold text-brand-900">{formatAED(totalComp)}</span>
-      </div>
+          {/* Total */}
+          <div className="mt-4 pt-4 border-t border-border flex items-center justify-between">
+            <span className="text-sm font-semibold text-brand-900">Total Compensation</span>
+            <span className="text-lg font-bold text-brand-900">{formatAED(totalComp)}</span>
+          </div>
+        </>
+      )}
 
       {/* Equity note */}
-      {!aiCompensationMix && !hasEmployerCost && (
+      {!isAiBriefingLoading && !aiCompensationMix && !hasEmployerCost && (
         <div className="mt-4 p-3 rounded-xl bg-amber-50 text-xs text-amber-700">
           Detailed compensation component splits are not yet available for this workspace.
         </div>
       )}
 
-      {!aiCompensationMix && hasEmployerCost && (
+      {!isAiBriefingLoading && !aiCompensationMix && hasEmployerCost && (
         <div className="mt-4 p-3 rounded-xl bg-purple-50 text-xs text-purple-700">
           Employer contribution components are included where available for this benchmark row.
         </div>

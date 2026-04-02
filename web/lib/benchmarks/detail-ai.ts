@@ -1,3 +1,5 @@
+import type { SalaryBenchmark } from "@/lib/dashboard/dummy-data";
+
 export type BenchmarkDetailAiBreakdown = {
   basicSalaryPct: number;
   housingPct: number;
@@ -59,6 +61,18 @@ export type BenchmarkDetailAiBriefing = {
   };
 };
 
+export type BenchmarkDetailSupportStatus = "idle" | "loading" | "ready" | "unavailable";
+
+export type BenchmarkDetailSupportData = {
+  levelTableBenchmarks: Record<string, SalaryBenchmark>;
+  offerBuilderBenchmarks: Record<string, SalaryBenchmark>;
+  industryBenchmarks: Record<string, SalaryBenchmark>;
+  industryFallbackBenchmark: SalaryBenchmark | null;
+  companySizeBenchmarks: Record<string, SalaryBenchmark>;
+  companySizeFallbackBenchmark: SalaryBenchmark | null;
+  geoBenchmarksByLocation: Record<string, SalaryBenchmark>;
+};
+
 export function normalizeAiBreakdown(
   breakdown: BenchmarkDetailAiBreakdown | null | undefined,
 ): BenchmarkDetailAiBreakdown | null {
@@ -76,6 +90,59 @@ export function normalizeAiBreakdown(
     transportPct,
     otherAllowancesPct,
   };
+}
+
+export function isBenchmarkDetailSurfaceReady(input: {
+  aiDetailBriefing: BenchmarkDetailAiBriefing | null | undefined;
+  aiDetailBriefingStatus: BenchmarkDetailSupportStatus | null | undefined;
+  detailSupportData: BenchmarkDetailSupportData | null | undefined;
+  detailSupportStatus: BenchmarkDetailSupportStatus | null | undefined;
+}): boolean {
+  const { aiDetailBriefing, aiDetailBriefingStatus, detailSupportData, detailSupportStatus } = input;
+
+  if (aiDetailBriefingStatus !== "ready" || !aiDetailBriefing) {
+    return false;
+  }
+
+  if (detailSupportStatus !== "ready" || !detailSupportData) {
+    return false;
+  }
+
+  const hasBreakdown = Boolean(
+    normalizeAiBreakdown(
+      aiDetailBriefing.views.salaryBreakdown.packageBreakdown
+        ?? aiDetailBriefing.views.offerBuilder.packageBreakdown
+        ?? aiDetailBriefing.views.compMix.compensationMix
+        ?? null,
+    ),
+  );
+  const hasLevelTableData =
+    (aiDetailBriefing.views.levelTable.levelBands?.length ?? 0) > 0 ||
+    Object.keys(detailSupportData.levelTableBenchmarks).length > 0;
+  const hasOfferBuilderData =
+    (aiDetailBriefing.views.offerBuilder.levelBands?.length ?? 0) > 0 ||
+    (aiDetailBriefing.views.levelTable.levelBands?.length ?? 0) > 0 ||
+    Object.keys(detailSupportData.offerBuilderBenchmarks).length > 0;
+  const hasIndustryData =
+    (aiDetailBriefing.views.industry.comparisonPoints?.length ?? 0) > 0 ||
+    Object.keys(detailSupportData.industryBenchmarks).length > 0 ||
+    Boolean(detailSupportData.industryFallbackBenchmark);
+  const hasCompanySizeData =
+    (aiDetailBriefing.views.companySize.comparisonPoints?.length ?? 0) > 0 ||
+    Object.keys(detailSupportData.companySizeBenchmarks).length > 0 ||
+    Boolean(detailSupportData.companySizeFallbackBenchmark);
+  const hasGeoData =
+    (aiDetailBriefing.views.geoComparison.comparisonPoints?.length ?? 0) > 0 ||
+    Object.keys(detailSupportData.geoBenchmarksByLocation).length > 0;
+
+  return (
+    hasBreakdown &&
+    hasLevelTableData &&
+    hasOfferBuilderData &&
+    hasIndustryData &&
+    hasCompanySizeData &&
+    hasGeoData
+  );
 }
 
 function clampPercentage(value: number) {

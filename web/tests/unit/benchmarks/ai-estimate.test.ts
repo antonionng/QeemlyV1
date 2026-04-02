@@ -15,6 +15,7 @@ vi.mock("@/lib/ai/openai", () => ({
     },
   }),
   getBenchmarkModel: () => "gpt-5.4",
+  getBenchmarkBriefingModel: () => "gpt-5.4-mini",
 }));
 
 vi.mock("next/cache", () => ({
@@ -152,7 +153,7 @@ describe("AI benchmark advisory", () => {
 
     expect(mockCreate).toHaveBeenCalledWith(
       expect.objectContaining({
-        model: "gpt-5.4",
+        model: "gpt-5.4-mini",
         temperature: 0.3,
       }),
     );

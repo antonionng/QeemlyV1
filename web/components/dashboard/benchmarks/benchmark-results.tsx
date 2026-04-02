@@ -26,7 +26,10 @@ import {
 import {
   getBenchmarksBatch,
   getBenchmarkEnriched,
+  fetchAiBriefing,
+  fetchBenchmarkDetailSupportData,
 } from "@/lib/benchmarks/data-service";
+import { isBenchmarkDetailSurfaceReady } from "@/lib/benchmarks/detail-ai";
 import { getRoleDescription } from "@/lib/benchmarks/role-descriptions";
 import {
   getBenchmarkMarkerLabel,
@@ -132,6 +135,14 @@ export function BenchmarkResults({ result, hasCompanyData = true }: BenchmarkRes
     return String(value);
   };
 
+  const resultCreatedAtMs = new Date(result.createdAt).getTime();
+  const detailSurfaceReady = isBenchmarkDetailSurfaceReady({
+    aiDetailBriefing: result.aiDetailBriefing,
+    aiDetailBriefingStatus: result.aiDetailBriefingStatus,
+    detailSupportData: result.detailSupportData,
+    detailSupportStatus: result.detailSupportStatus,
+  });
+
   useEffect(() => {
     const filters = {
       industry: stateFormData.industry || resultFormData.industry,
@@ -224,6 +235,212 @@ export function BenchmarkResults({ result, hasCompanyData = true }: BenchmarkRes
     benchmark,
     level.id,
     location.id,
+    resultFormData.companySize,
+    resultFormData.industry,
+    role.id,
+    stateFormData.companySize,
+    stateFormData.industry,
+  ]);
+
+  useEffect(() => {
+    if (
+      result.aiDetailBriefing ||
+      result.aiDetailBriefingStatus === "loading" ||
+      result.aiDetailBriefingStatus === "unavailable"
+    ) {
+      return;
+    }
+
+    const filters = {
+      industry: stateFormData.industry || resultFormData.industry,
+      companySize: stateFormData.companySize || resultFormData.companySize,
+    };
+    let isCancelled = false;
+
+    useBenchmarkState.setState((state) => {
+      if (!state.currentResult) return state;
+      if (new Date(state.currentResult.createdAt).getTime() !== resultCreatedAtMs) {
+        return state;
+      }
+
+      return {
+        ...state,
+        currentResult: {
+          ...state.currentResult,
+          aiDetailBriefingStatus: "loading",
+        },
+        recentResults: state.recentResults.map((entry) =>
+          new Date(entry.createdAt).getTime() === resultCreatedAtMs
+            ? {
+                ...entry,
+                aiDetailBriefingStatus: "loading",
+              }
+            : entry,
+        ),
+      };
+    });
+
+    const prefetchAiBriefing = async () => {
+      const briefing = await fetchAiBriefing(role.id, location.id, level.id, filters);
+      if (isCancelled) return;
+
+      useBenchmarkState.setState((state) => {
+        if (!state.currentResult) return state;
+        if (new Date(state.currentResult.createdAt).getTime() !== resultCreatedAtMs) {
+          return state;
+        }
+
+        return {
+          ...state,
+          currentResult: {
+            ...state.currentResult,
+            aiDetailBriefing: briefing,
+            aiDetailBriefingStatus: briefing ? "ready" : "unavailable",
+          },
+          recentResults: state.recentResults.map((entry) =>
+            new Date(entry.createdAt).getTime() === resultCreatedAtMs
+              ? {
+                  ...entry,
+                  aiDetailBriefing: briefing,
+                  aiDetailBriefingStatus: briefing ? "ready" : "unavailable",
+                }
+              : entry,
+          ),
+        };
+      });
+    };
+
+    void prefetchAiBriefing();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    level.id,
+    location.id,
+    result.aiDetailBriefing,
+    result.aiDetailBriefingStatus,
+    resultCreatedAtMs,
+    resultFormData.companySize,
+    resultFormData.industry,
+    role.id,
+    stateFormData.companySize,
+    stateFormData.industry,
+  ]);
+
+  useEffect(() => {
+    if (
+      result.detailSupportData ||
+      result.detailSupportStatus === "loading" ||
+      result.detailSupportStatus === "unavailable"
+    ) {
+      return;
+    }
+
+    const filters = {
+      industry: stateFormData.industry || resultFormData.industry,
+      companySize: stateFormData.companySize || resultFormData.companySize,
+    };
+    let isCancelled = false;
+
+    useBenchmarkState.setState((state) => {
+      if (!state.currentResult) return state;
+      if (new Date(state.currentResult.createdAt).getTime() !== resultCreatedAtMs) {
+        return state;
+      }
+
+      return {
+        ...state,
+        currentResult: {
+          ...state.currentResult,
+          detailSupportStatus: "loading",
+        },
+        recentResults: state.recentResults.map((entry) =>
+          new Date(entry.createdAt).getTime() === resultCreatedAtMs
+            ? {
+                ...entry,
+                detailSupportStatus: "loading",
+              }
+            : entry,
+        ),
+      };
+    });
+
+    const prefetchDetailSupport = async () => {
+      try {
+        const detailSupportData = await fetchBenchmarkDetailSupportData({
+          roleId: role.id,
+          locationId: location.id,
+          levelId: level.id,
+          industry: filters.industry ?? null,
+          companySize: filters.companySize ?? null,
+        });
+        if (isCancelled) return;
+
+        useBenchmarkState.setState((state) => {
+          if (!state.currentResult) return state;
+          if (new Date(state.currentResult.createdAt).getTime() !== resultCreatedAtMs) {
+            return state;
+          }
+
+          return {
+            ...state,
+            currentResult: {
+              ...state.currentResult,
+              detailSupportData,
+              detailSupportStatus: "ready",
+            },
+            recentResults: state.recentResults.map((entry) =>
+              new Date(entry.createdAt).getTime() === resultCreatedAtMs
+                ? {
+                    ...entry,
+                    detailSupportData,
+                    detailSupportStatus: "ready",
+                  }
+                : entry,
+            ),
+          };
+        });
+      } catch {
+        if (isCancelled) return;
+        useBenchmarkState.setState((state) => {
+          if (!state.currentResult) return state;
+          if (new Date(state.currentResult.createdAt).getTime() !== resultCreatedAtMs) {
+            return state;
+          }
+
+          return {
+            ...state,
+            currentResult: {
+              ...state.currentResult,
+              detailSupportData: null,
+              detailSupportStatus: "unavailable",
+            },
+            recentResults: state.recentResults.map((entry) =>
+              new Date(entry.createdAt).getTime() === resultCreatedAtMs
+                ? {
+                    ...entry,
+                    detailSupportData: null,
+                    detailSupportStatus: "unavailable",
+                  }
+                : entry,
+            ),
+          };
+        });
+      }
+    };
+
+    void prefetchDetailSupport();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    level.id,
+    location.id,
+    result.detailSupportData,
+    result.detailSupportStatus,
+    resultCreatedAtMs,
     resultFormData.companySize,
     resultFormData.industry,
     role.id,
@@ -946,8 +1163,13 @@ export function BenchmarkResults({ result, hasCompanyData = true }: BenchmarkRes
           Export
         </Button>
         <div className="flex-1" />
-        <button onClick={() => goToStep("detail")} className="bench-cta max-w-xs">
-          View Detailed Breakdown <ArrowRight className="h-4 w-4" />
+        <button
+          onClick={() => goToStep("detail")}
+          disabled={!detailSurfaceReady}
+          className="bench-cta max-w-xs disabled:cursor-not-allowed disabled:opacity-70"
+        >
+          {detailSurfaceReady ? "View Detailed Breakdown" : "Preparing detailed breakdown..."}{" "}
+          <ArrowRight className="h-4 w-4" />
         </button>
       </div>
       <RolePickerModal

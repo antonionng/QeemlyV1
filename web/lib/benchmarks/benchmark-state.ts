@@ -2,7 +2,11 @@
 
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { BenchmarkDetailAiBriefing } from "./detail-ai";
+import type {
+  BenchmarkDetailAiBriefing,
+  BenchmarkDetailSupportData,
+  BenchmarkDetailSupportStatus,
+} from "./detail-ai";
 import {
   type Role,
   type Level,
@@ -58,6 +62,8 @@ export interface BenchmarkResult {
   isOverridden: boolean; // True if any setting was overridden from company defaults
   aiDetailBriefing?: BenchmarkDetailAiBriefing | null;
   aiDetailBriefingStatus?: "idle" | "loading" | "ready" | "unavailable";
+  detailSupportData?: BenchmarkDetailSupportData | null;
+  detailSupportStatus?: BenchmarkDetailSupportStatus;
   createdAt: Date;
 }
 
@@ -275,6 +281,8 @@ export const useBenchmarkState = create<BenchmarkState>()(
             isOverridden,
             aiDetailBriefing: null,
             aiDetailBriefingStatus: "idle",
+            detailSupportData: null,
+            detailSupportStatus: "idle",
             createdAt: new Date(),
           };
           

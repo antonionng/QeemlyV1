@@ -21,6 +21,7 @@ export function GeoView({ result }: GeoViewProps) {
   const { salaryView } = useSalaryView();
   const [benchmarksByLocation, setBenchmarksByLocation] = useState<Record<string, SalaryBenchmark>>({});
   const aiComparisonPoints = result.aiDetailBriefing?.views.geoComparison.comparisonPoints ?? null;
+  const prefetchedGeoBenchmarks = result.detailSupportData?.geoBenchmarksByLocation ?? {};
   
   // Company branding
   const hasCompanyLogo = !!companySettings.companyLogo;
@@ -59,6 +60,11 @@ export function GeoView({ result }: GeoViewProps) {
       return;
     }
 
+    if (Object.keys(prefetchedGeoBenchmarks).length > 0) {
+      setBenchmarksByLocation(prefetchedGeoBenchmarks);
+      return;
+    }
+
     const run = async () => {
       const benchmarks = await getBenchmarksBatch(
         ALL_LOCATIONS.map((loc) => ({
@@ -85,7 +91,7 @@ export function GeoView({ result }: GeoViewProps) {
       setBenchmarksByLocation(next);
     };
     void run();
-  }, [aiLocationData.length, level.id, result.formData.companySize, result.formData.industry, role.id]);
+  }, [aiLocationData.length, level.id, prefetchedGeoBenchmarks, result.formData.companySize, result.formData.industry, role.id]);
 
   // Build comparison data for locations where real rows exist
   const locationData = aiLocationData.length > 0

@@ -410,7 +410,195 @@ describe("uploadEmployees", () => {
     ]);
     expect(employeesInsert).not.toHaveBeenCalled();
     expect(roleMappingReviewsInsert).not.toHaveBeenCalled();
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/admin/workspace-override",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("rejects unresolved employee levels before inserting null level ids", async () => {
+    const profileQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      single: vi.fn().mockResolvedValue({ data: { workspace_id: "ws-1" } }),
+    };
+
+    const existingEmployeesQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      in: vi.fn().mockResolvedValue({ data: [], error: null }),
+    };
+
+    const employeesInsert = vi.fn();
+
+    let employeeTableCall = 0;
+
+    createClientMock.mockReturnValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({ data: { user: { id: "user-1" } } }),
+      },
+      from: vi.fn((table: string) => {
+        if (table === "profiles") return profileQuery;
+        if (table === "employees") {
+          employeeTableCall += 1;
+          return employeeTableCall === 1
+            ? existingEmployeesQuery
+            : {
+                insert: employeesInsert,
+              };
+        }
+        if (table === "employee_profile_enrichment") {
+          return { upsert: vi.fn().mockResolvedValue({ error: null }) };
+        }
+        if (table === "employee_visa_records") {
+          return { insert: vi.fn().mockResolvedValue({ error: null }) };
+        }
+        throw new Error(`Unexpected table: ${table}`);
+      }),
+    });
+
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { uploadEmployees } = await import("@/lib/upload/api");
+
+    const result = await uploadEmployees([
+      {
+        firstName: "Ava",
+        lastName: "Stone",
+        email: "ava@example.com",
+        department: "Engineering",
+        roleId: "swe",
+        canonicalRoleId: "swe",
+        roleMappingConfidence: "medium",
+        roleMappingSource: "upload",
+        roleMappingStatus: "pending",
+        originalRoleText: "Software Engineer",
+        levelId: null,
+        originalLevelText: "Career Track Purple",
+        locationId: "dubai",
+        baseSalary: 120_000,
+        bonus: null,
+        equity: null,
+        currency: "AED",
+        status: "active",
+        employmentType: "national",
+        hireDate: null,
+        performanceRating: null,
+        avatarUrl: null,
+        visaType: null,
+        visaStatus: null,
+        visaIssueDate: null,
+        visaExpiryDate: null,
+        visaSponsor: null,
+        visaPermitId: null,
+      },
+    ]);
+
+    expect(result.success).toBe(false);
+    expect(result.failedCount).toBe(1);
+    expect(result.errors).toEqual([
+      "Ava Stone (ava@example.com) could not be imported because the level could not be mapped to a supported Qeemly level.",
+    ]);
+    expect(employeesInsert).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/admin/workspace-override",
+      expect.objectContaining({ method: "GET" }),
+    );
+  });
+
+  it("uses the server import route when a workspace override is active", async () => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      const method = init?.method ?? "GET";
+
+      if (url === "/api/admin/workspace-override" && method === "GET") {
+        return new Response(
+          JSON.stringify({
+            is_overriding: true,
+            workspace: { id: "ws-override", name: "Qeemly Test", slug: "qeemly-test" },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+
+      if (url === "/api/upload/import" && method === "POST") {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            insertedCount: 1,
+            createdCount: 1,
+            updatedCount: 0,
+            skippedCount: 0,
+            failedCount: 0,
+            errors: [],
+            processedEmployees: [
+              {
+                email: "ava@example.com",
+                firstName: "Ava",
+                lastName: "Stone",
+                action: "created",
+              },
+            ],
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        );
+      }
+
+      throw new Error(`Unexpected fetch: ${method} ${url}`);
+    });
+
+    vi.stubGlobal("fetch", fetchMock);
+
+    const { uploadEmployees } = await import("@/lib/upload/api");
+
+    const result = await uploadEmployees([
+      {
+        firstName: "Ava",
+        lastName: "Stone",
+        email: "ava@example.com",
+        department: "Engineering",
+        roleId: "swe",
+        canonicalRoleId: "swe",
+        roleMappingConfidence: "high",
+        roleMappingSource: "upload",
+        roleMappingStatus: "mapped",
+        originalRoleText: "Software Engineer",
+        levelId: "ic3",
+        originalLevelText: "IC3",
+        locationId: "dubai",
+        baseSalary: 120_000,
+        bonus: null,
+        equity: null,
+        currency: "AED",
+        status: "active",
+        employmentType: "national",
+        hireDate: null,
+        performanceRating: null,
+        avatarUrl: null,
+        visaType: null,
+        visaStatus: null,
+        visaIssueDate: null,
+        visaExpiryDate: null,
+        visaSponsor: null,
+        visaPermitId: null,
+      },
+    ]);
+
+    expect(result.success).toBe(true);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/upload/import",
+      expect.objectContaining({
+        method: "POST",
+      }),
+    );
   });
 
   it("applies approved workspace aliases before creating a new review", async () => {

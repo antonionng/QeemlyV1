@@ -213,6 +213,47 @@ describe("getBenchmark", () => {
     expect(result).toEqual(aiDetailBriefing);
   });
 
+  it("deduplicates concurrent AI briefing requests for the same benchmark key", async () => {
+    const aiDetailBriefing = {
+      executiveBriefing: "Shared AI executive market view.",
+      hiringSignal: "Hiring remains competitive.",
+      negotiationPosture: "Leave room to close above median.",
+      views: {
+        levelTable: { summary: "Level table summary", action: "Use the table." },
+        aiInsights: { summary: "Insights summary", action: "Use the insights." },
+        trend: { summary: "Trend summary", action: "Watch the trend." },
+        salaryBreakdown: { summary: "Breakdown summary", action: "Keep the split simple." },
+        industry: { summary: "Industry summary", action: "Expect premium asks." },
+        companySize: { summary: "Company size summary", action: "Stay structured." },
+        geoComparison: { summary: "Geo summary", action: "Account for location gaps." },
+        compMix: { summary: "Mix summary", action: "Keep most value in cash." },
+        offerBuilder: { summary: "Offer summary", action: "Lead with certainty." },
+      },
+    };
+    const jsonMock = vi.fn().mockResolvedValue({
+      detailBriefing: aiDetailBriefing,
+    });
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: jsonMock,
+    }) as unknown as typeof fetch;
+
+    const first = fetchAiBriefing("swe-devops", "dubai", "ic2", {
+      industry: "Fintech",
+      companySize: "201-500",
+    });
+    const second = fetchAiBriefing("swe-devops", "dubai", "ic2", {
+      industry: "Fintech",
+      companySize: "201-500",
+    });
+
+    const [firstResult, secondResult] = await Promise.all([first, second]);
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(firstResult).toEqual(aiDetailBriefing);
+    expect(secondResult).toEqual(aiDetailBriefing);
+  });
+
   it("uses the batch lookup API for multi-entry market-backed requests", async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,

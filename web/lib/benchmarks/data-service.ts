@@ -3,9 +3,12 @@
 // Workspace benchmarks (company pay bands) are supplementary.
 
 import { createClient } from "@/lib/supabase/client";
-import type { BenchmarkDetailAiBriefing } from "@/lib/benchmarks/detail-ai";
+import type {
+  BenchmarkDetailAiBriefing,
+  BenchmarkDetailSupportData,
+} from "@/lib/benchmarks/detail-ai";
 import type { SalaryBenchmark, Currency } from "@/lib/dashboard/dummy-data";
-import { LOCATIONS } from "@/lib/dashboard/dummy-data";
+import { COMPANY_SIZES, INDUSTRIES, LEVELS, LOCATIONS } from "@/lib/dashboard/dummy-data";
 import {
   fetchMarketBenchmarks,
   findMarketBenchmark,
@@ -61,6 +64,8 @@ export function getConfidenceFromSampleSize(sampleSize: number): "High" | "Mediu
 let hasDbBenchmarksCache: boolean | null = null;
 let cacheTimestamp = 0;
 const CACHE_TTL = 5000;
+const briefingRequests = new Map<string, Promise<BenchmarkDetailAiBriefing | null>>();
+const detailSupportRequests = new Map<string, Promise<BenchmarkDetailSupportData>>();
 
 export type DbBenchmark = {
   id: string;
@@ -360,24 +365,261 @@ export async function fetchAiBriefing(
   const params = new URLSearchParams({ roleId, locationId, levelId });
   if (filters.industry) params.set("industry", filters.industry);
   if (filters.companySize) params.set("companySize", filters.companySize);
+  const requestUrl = `/api/benchmarks/briefing?${params.toString()}`;
+  const inFlightKey = params.toString();
 
-  try {
-    const response = await fetch(`/api/benchmarks/briefing?${params.toString()}`, {
-      cache: "no-store",
-    });
-
-    if (!response.ok) {
-      return null;
-    }
-
-    const payload = (await response.json()) as {
-      detailBriefing: BenchmarkDetailAiBriefing | null;
-    };
-
-    return payload.detailBriefing ?? null;
-  } catch {
-    return null;
+  const existingRequest = briefingRequests.get(inFlightKey);
+  if (existingRequest) {
+    return existingRequest;
   }
+
+  const request = (async () => {
+    try {
+      const response = await fetch(requestUrl, {
+        cache: "no-store",
+      });
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const payload = (await response.json()) as {
+        detailBriefing: BenchmarkDetailAiBriefing | null;
+      };
+
+      return payload.detailBriefing ?? null;
+    } catch {
+      return null;
+    } finally {
+      briefingRequests.delete(inFlightKey);
+    }
+  })();
+
+  briefingRequests.set(inFlightKey, request);
+  return request;
+}
+
+export async function fetchBenchmarkDetailSupportData(args: {
+  roleId: string;
+  locationId: string;
+  levelId: string;
+  industry: string | null;
+  companySize: string | null;
+}): Promise<BenchmarkDetailSupportData> {
+  const inFlightKey = JSON.stringify(args);
+  const existingRequest = detailSupportRequests.get(inFlightKey);
+  if (existingRequest) {
+    return existingRequest;
+  }
+
+  const request = (async () => {
+    try {
+      const currentLevelIndex = LEVELS.findIndex((entry) => entry.id === args.levelId);
+      const adjacentLevels = LEVELS.slice(
+        Math.max(0, currentLevelIndex - 1),
+        Math.min(LEVELS.length, currentLevelIndex + 2),
+      );
+      const levelTableLevels = LEVELS.filter((entry) => entry.category === "IC" || entry.category === "Manager").slice(
+        0,
+        6,
+      );
+      const levelTableLocationId =
+        args.locationId === "london" || args.locationId === "manchester" ? "dubai" : args.locationId;
+      const industriesToLoad = [args.industry, ...INDUSTRIES.filter((entry) => entry !== args.industry)]
+        .filter((entry): entry is string => Boolean(entry))
+        .slice(0, 5);
+      const companySizesToLoad = [args.companySize, ...COMPANY_SIZES.filter((entry) => entry !== args.companySize)]
+        .filter((entry): entry is string => Boolean(entry))
+        .slice(0, 5);
+
+      const uniqueEntries = new Map<string, BenchmarkLookupEntry>();
+      const addEntry = (entry: BenchmarkLookupEntry) => {
+        uniqueEntries.set(makeBenchmarkLookupKey(entry), entry);
+      };
+
+      for (const level of levelTableLevels) {
+        addEntry({
+          roleId: args.roleId,
+          locationId: levelTableLocationId,
+          levelId: level.id,
+          industry: args.industry,
+          companySize: args.companySize,
+        });
+      }
+
+      for (const level of adjacentLevels) {
+        addEntry({
+          roleId: args.roleId,
+          locationId: args.locationId,
+          levelId: level.id,
+          industry: args.industry,
+          companySize: args.companySize,
+        });
+      }
+
+      for (const industry of industriesToLoad) {
+        addEntry({
+          roleId: args.roleId,
+          locationId: args.locationId,
+          levelId: args.levelId,
+          industry,
+          companySize: args.companySize,
+        });
+      }
+
+      for (const companySize of companySizesToLoad) {
+        addEntry({
+          roleId: args.roleId,
+          locationId: args.locationId,
+          levelId: args.levelId,
+          industry: args.industry,
+          companySize,
+        });
+      }
+
+      for (const location of LOCATIONS) {
+        addEntry({
+          roleId: args.roleId,
+          locationId: location.id,
+          levelId: args.levelId,
+          industry: args.industry,
+          companySize: args.companySize,
+        });
+      }
+
+      const batchResults = await getBenchmarksBatch([...uniqueEntries.values()]);
+
+      const levelTableBenchmarks = Object.fromEntries(
+        levelTableLevels
+          .map((level) => {
+            const benchmark = batchResults[
+              makeBenchmarkLookupKey({
+                roleId: args.roleId,
+                locationId: levelTableLocationId,
+                levelId: level.id,
+                industry: args.industry,
+                companySize: args.companySize,
+              })
+            ];
+            return benchmark ? [level.id, benchmark] : null;
+          })
+          .filter(Boolean) as Array<[string, SalaryBenchmark]>,
+      );
+
+      const offerBuilderBenchmarks = Object.fromEntries(
+        adjacentLevels
+          .map((level) => {
+            const benchmark = batchResults[
+              makeBenchmarkLookupKey({
+                roleId: args.roleId,
+                locationId: args.locationId,
+                levelId: level.id,
+                industry: args.industry,
+                companySize: args.companySize,
+              })
+            ];
+            return benchmark ? [level.id, benchmark] : null;
+          })
+          .filter(Boolean) as Array<[string, SalaryBenchmark]>,
+      );
+
+      const industryEntries = industriesToLoad.map((industry) => {
+        const benchmark = batchResults[
+          makeBenchmarkLookupKey({
+            roleId: args.roleId,
+            locationId: args.locationId,
+            levelId: args.levelId,
+            industry,
+            companySize: args.companySize,
+          })
+        ];
+        if (!benchmark) return null;
+        if (
+          benchmark.benchmarkSegmentation?.matchedIndustry &&
+          benchmark.benchmarkSegmentation.matchedIndustry === industry
+        ) {
+          return { industry, benchmark, fallback: false };
+        }
+        if (benchmark.benchmarkSegmentation?.isFallback) {
+          return { industry, benchmark, fallback: true };
+        }
+        return null;
+      });
+      const industryBenchmarks: Record<string, SalaryBenchmark> = {};
+      let industryFallbackBenchmark: SalaryBenchmark | null = null;
+      for (const entry of industryEntries) {
+        if (!entry) continue;
+        if (entry.fallback) {
+          industryFallbackBenchmark ??= entry.benchmark;
+        } else {
+          industryBenchmarks[entry.industry] = entry.benchmark;
+        }
+      }
+
+      const companySizeEntries = companySizesToLoad.map((companySize) => {
+        const benchmark = batchResults[
+          makeBenchmarkLookupKey({
+            roleId: args.roleId,
+            locationId: args.locationId,
+            levelId: args.levelId,
+            industry: args.industry,
+            companySize,
+          })
+        ];
+        if (!benchmark) return null;
+        if (
+          benchmark.benchmarkSegmentation?.matchedCompanySize &&
+          benchmark.benchmarkSegmentation.matchedCompanySize === companySize
+        ) {
+          return { companySize, benchmark, fallback: false };
+        }
+        if (benchmark.benchmarkSegmentation?.isFallback) {
+          return { companySize, benchmark, fallback: true };
+        }
+        return null;
+      });
+      const companySizeBenchmarks: Record<string, SalaryBenchmark> = {};
+      let companySizeFallbackBenchmark: SalaryBenchmark | null = null;
+      for (const entry of companySizeEntries) {
+        if (!entry) continue;
+        if (entry.fallback) {
+          companySizeFallbackBenchmark ??= entry.benchmark;
+        } else {
+          companySizeBenchmarks[entry.companySize] = entry.benchmark;
+        }
+      }
+
+      const geoBenchmarksByLocation = Object.fromEntries(
+        LOCATIONS.map((location) => {
+          const benchmark = batchResults[
+            makeBenchmarkLookupKey({
+              roleId: args.roleId,
+              locationId: location.id,
+              levelId: args.levelId,
+              industry: args.industry,
+              companySize: args.companySize,
+            })
+          ];
+          return benchmark ? [location.id, benchmark] : null;
+        }).filter(Boolean) as Array<[string, SalaryBenchmark]>,
+      );
+
+      return {
+        levelTableBenchmarks,
+        offerBuilderBenchmarks,
+        industryBenchmarks,
+        industryFallbackBenchmark,
+        companySizeBenchmarks,
+        companySizeFallbackBenchmark,
+        geoBenchmarksByLocation,
+      };
+    } finally {
+      detailSupportRequests.delete(inFlightKey);
+    }
+  })();
+
+  detailSupportRequests.set(inFlightKey, request);
+  return request;
 }
 
 export async function getBenchmark(

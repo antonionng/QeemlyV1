@@ -57,7 +57,7 @@ export const EMPLOYEE_FIELDS: FieldDefinition[] = [
     required: true,
     aliases: ["department", "dept", "team", "division", "business unit", "org"],
     type: "enum",
-    enumValues: ["Engineering", "Product", "Design", "Data", "Sales", "Marketing", "Operations", "Finance", "HR"],
+    enumValues: ["Engineering", "Product", "Design", "Data", "Sales", "Marketing", "Operations", "Executive", "Finance", "HR"],
   },
   {
     key: "role",

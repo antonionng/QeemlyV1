@@ -7,7 +7,7 @@
  * instant.
  */
 
-import { getOpenAIClient, getBenchmarkModel } from "@/lib/ai/openai";
+import { getOpenAIClient, getBenchmarkBriefingModel } from "@/lib/ai/openai";
 import { unstable_cache } from "next/cache";
 import type { BenchmarkDetailAiBriefing } from "@/lib/benchmarks/detail-ai";
 import { LEVELS, LOCATIONS, ROLES } from "@/lib/dashboard/dummy-data";
@@ -556,7 +556,7 @@ async function callGpt(
   companySize: string | null,
 ): Promise<AiBenchmarkAdvisory> {
   const client = getOpenAIClient();
-  const model = getBenchmarkModel();
+  const model = getBenchmarkBriefingModel();
 
   const response = await client.chat.completions.create({
     model,
@@ -599,7 +599,7 @@ async function callGptLight(
   companySize: string | null,
 ): Promise<AiBenchmarkAdvisoryLight> {
   const client = getOpenAIClient();
-  const model = getBenchmarkModel();
+  const model = getBenchmarkBriefingModel();
 
   const response = await client.chat.completions.create({
     model,

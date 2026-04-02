@@ -6,6 +6,7 @@ import {
   fetchMarketBenchmarks,
   invalidateMarketBenchmarkCache,
 } from "@/lib/benchmarks/platform-market";
+import { buildAiBenchmarkRows } from "@/lib/benchmarks/ai-benchmark-rows";
 import { __internal } from "@/lib/employees/data-service";
 import {
   buildCompanyOverviewSnapshot,
@@ -34,8 +35,6 @@ export async function GET(request: Request) {
 
   const { workspace_id, is_override } = workspaceContext.context;
   const queryClient = is_override ? createServiceClient() : supabase;
-
-  const marketBenchmarks = await fetchMarketBenchmarks(queryClient).catch(() => []);
 
   const [
     employeesResult,
@@ -153,6 +152,24 @@ export async function GET(request: Request) {
       visa_status: visa?.visa_status || null,
     };
   });
+
+  const marketBenchmarks = await (async () => {
+    try {
+      const aiBenchmarks = await buildAiBenchmarkRows(
+        employeesWithProfile.map((employee) => ({
+          roleId: String(employee.role_id || ""),
+          locationId: String(employee.location_id || ""),
+        })),
+      );
+      if (aiBenchmarks.length > 0) {
+        return aiBenchmarks;
+      }
+    } catch {
+      // Fall back to pooled market rows.
+    }
+
+    return fetchMarketBenchmarks(queryClient).catch(() => []);
+  })();
 
   const employees = __internal.mapRowsToEmployees(
     employeesWithProfile,

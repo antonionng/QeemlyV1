@@ -1,17 +1,20 @@
-// Supabase API functions for data upload
-
-import { createClient } from "@/lib/supabase/client";
-import { fetchDbEmployees } from "@/lib/employees";
+import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
+import { getWorkspaceContext } from "@/lib/workspace-context";
+import { refreshPlatformMarketPoolBestEffort } from "@/lib/benchmarks/platform-market-sync";
+import { refreshBenchmarkCoverageSnapshot } from "@/lib/benchmarks/coverage-snapshots";
+import { upsertBenchmarksFreshness } from "@/lib/ingestion/freshness";
+import { normalize } from "@/lib/upload/transformers";
 import type {
   TransformedBenchmark,
   TransformedCompensationUpdate,
   TransformedEmployee,
-} from "./transformers";
-import { normalize } from "./transformers";
-import type { UploadDataType } from "./column-detection";
-import type { UploadImportMode } from "./upload-state";
+} from "@/lib/upload/transformers";
+import type { UploadDataType } from "@/lib/upload/column-detection";
+import type { UploadImportMode } from "@/lib/upload/upload-state";
 
-export type UploadResult = {
+type UploadResult = {
   success: boolean;
   insertedCount: number;
   createdCount: number;
@@ -19,127 +22,24 @@ export type UploadResult = {
   skippedCount: number;
   failedCount: number;
   errors: string[];
-  processedEmployees?: UploadProcessedEmployee[];
-  processedBenchmarks?: UploadProcessedBenchmark[];
+  processedEmployees?: Array<{
+    email: string;
+    firstName: string;
+    lastName: string;
+    action: "created" | "updated";
+  }>;
+  processedBenchmarks?: Array<{
+    roleId: string;
+    locationId: string;
+    levelId: string;
+    validFrom: string;
+    action: "created" | "updated";
+  }>;
 };
 
-export type UploadProcessedEmployee = {
-  email: string;
-  firstName: string;
-  lastName: string;
-  action: "created" | "updated";
-};
-
-export type UploadProcessedBenchmark = {
-  roleId: string;
-  locationId: string;
-  levelId: string;
-  validFrom: string;
-  action: "created" | "updated";
-};
-
-type UploadOptions = {
-  mode?: UploadImportMode;
-};
-
-export type UploadVerificationSummary = {
-  headline: string;
-  details: string[];
-  links: Array<{ href: string; label: string }>;
-};
-
-async function refreshMarketPool(): Promise<void> {
-  const response = await fetch("/api/benchmarks/market-pool/refresh", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-  });
-  if (!response.ok) {
-    throw new Error("Failed to refresh the Qeemly market pool after import.");
-  }
-}
-
-async function refreshCoverageSnapshot(): Promise<void> {
-  const response = await fetch("/api/benchmarks/coverage/refresh", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-  });
-  if (!response.ok) {
-    throw new Error("Failed to refresh benchmark coverage after import.");
-  }
-}
-
-async function getWorkspaceOverrideInfo(): Promise<{
-  isOverriding: boolean;
-  workspaceId: string | null;
-}> {
-  try {
-    const response = await fetch("/api/admin/workspace-override", {
-      method: "GET",
-      cache: "no-store",
-    });
-    if (!response.ok) {
-      return { isOverriding: false, workspaceId: null };
-    }
-    const payload = (await response.json()) as {
-      is_overriding?: boolean;
-      workspace?: { id?: string | null } | null;
-    };
-    return {
-      isOverriding: payload.is_overriding === true,
-      workspaceId: payload.workspace?.id ? String(payload.workspace.id) : null,
-    };
-  } catch {
-    return { isOverriding: false, workspaceId: null };
-  }
-}
-
-async function importViaServerRoute(
-  uploadType: UploadDataType,
-  rows: unknown[],
-  options?: UploadOptions,
-): Promise<UploadResult> {
-  const response = await fetch("/api/upload/import", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      uploadType,
-      rows,
-      mode: options?.mode ?? "upsert",
-    }),
-  });
-  const payload = (await response.json()) as UploadResult & { error?: string };
-  if (!response.ok) {
-    throw new Error(payload.error || "Failed to import upload batch");
-  }
-  return payload;
-}
-
-/**
- * Get the current user's workspace ID
- */
-async function getWorkspaceId(): Promise<string | null> {
-  const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  
-  if (!user) return null;
-  
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("workspace_id")
-    .eq("id", user.id)
-    .single();
-  
-  return profile?.workspace_id || null;
-}
-
-/**
- * Get current user ID for audit
- */
-async function getUserId(): Promise<string | null> {
-  const supabase = createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  return user?.id || null;
-}
+type UploadQueryClient =
+  | Awaited<ReturnType<typeof createClient>>
+  | ReturnType<typeof createServiceClient>;
 
 function createInitialUploadResult(): UploadResult {
   return {
@@ -156,7 +56,7 @@ function createInitialUploadResult(): UploadResult {
 }
 
 async function applyCanonicalRoleAliases(
-  supabase: ReturnType<typeof createClient>,
+  queryClient: UploadQueryClient,
   workspaceId: string,
   employees: TransformedEmployee[],
 ): Promise<TransformedEmployee[]> {
@@ -172,7 +72,7 @@ async function applyCanonicalRoleAliases(
     | null = null;
   let error: { message?: string } | null = null;
   try {
-    const result = await supabase
+    const result = await queryClient
       .from("canonical_role_aliases")
       .select("canonical_role_id,alias_normalized,workspace_id")
       .eq("is_active", true);
@@ -186,10 +86,8 @@ async function applyCanonicalRoleAliases(
     return employees;
   }
 
-  type AliasRow = { canonical_role_id?: string | null; alias_normalized?: string | null; workspace_id?: string | null };
-  const rows = (data ?? []) as AliasRow[];
   const aliasToRoleId = new Map<string, string>();
-  for (const row of rows) {
+  for (const row of data) {
     const scopedWorkspaceId = row.workspace_id ? String(row.workspace_id) : null;
     if (scopedWorkspaceId && scopedWorkspaceId !== workspaceId) continue;
     if (!row.alias_normalized || !row.canonical_role_id) continue;
@@ -239,33 +137,12 @@ function isMissingColumnError(error: { message?: string } | null | undefined, co
   return error.message.toLowerCase().includes(`column salary_benchmarks.${columnName}`.toLowerCase());
 }
 
-/**
- * Upload employees to the database
- */
-export async function uploadEmployees(
+async function importEmployees(
+  queryClient: UploadQueryClient,
+  workspaceId: string,
   employees: TransformedEmployee[],
-  onProgress?: (progress: number) => void,
-  options?: UploadOptions,
+  importMode: UploadImportMode,
 ): Promise<UploadResult> {
-  const override = await getWorkspaceOverrideInfo();
-  if (override.isOverriding && override.workspaceId) {
-    const result = await importViaServerRoute("employees", employees, options);
-    onProgress?.(100);
-    return result;
-  }
-
-  const supabase = createClient();
-  const workspaceId = await getWorkspaceId();
-  const importMode = options?.mode ?? "upsert";
-  
-  if (!workspaceId) {
-    return {
-      ...createInitialUploadResult(),
-      success: false,
-      errors: ["No workspace found"],
-    };
-  }
-
   const result = createInitialUploadResult();
   const batchSize = 50;
   const pendingReviewRows: Array<{
@@ -279,10 +156,18 @@ export async function uploadEmployees(
   }> = [];
 
   if (importMode === "replace") {
-    await clearEmployees();
+    const { error } = await queryClient
+      .from("employees")
+      .delete()
+      .eq("workspace_id", workspaceId);
+    if (error) {
+      result.success = false;
+      result.errors.push(error.message);
+      return result;
+    }
   }
 
-  const employeesWithAliases = await applyCanonicalRoleAliases(supabase, workspaceId, employees);
+  const employeesWithAliases = await applyCanonicalRoleAliases(queryClient, workspaceId, employees);
 
   const emailMatches = employeesWithAliases
     .map((employee) => employee.email?.toLowerCase())
@@ -291,7 +176,7 @@ export async function uploadEmployees(
   const crossWorkspaceEmails = new Set<string>();
 
   if (importMode === "upsert" && emailMatches.length > 0) {
-    const { data, error } = await supabase
+    const { data, error } = await queryClient
       .from("employees")
       .select("id,email,workspace_id")
       .in("email", Array.from(new Set(emailMatches)));
@@ -313,8 +198,7 @@ export async function uploadEmployees(
       }
     }
   }
-  
-  // Process in batches
+
   for (let i = 0; i < employeesWithAliases.length; i += batchSize) {
     const batch = employeesWithAliases.slice(i, i + batchSize);
     const validBatch = batch.filter((emp) => {
@@ -337,6 +221,7 @@ export async function uploadEmployees(
       result.failedCount += 1;
       return false;
     });
+
     const records = validBatch.map((emp) => ({
       workspace_id: workspaceId,
       first_name: emp.firstName,
@@ -390,7 +275,7 @@ export async function uploadEmployees(
         const existingId = existingEmployeesByEmail.get(normalizedEmail);
         if (!existingId) continue;
 
-        const { error } = await supabase
+        const { error } = await queryClient
           .from("employees")
           .update(record)
           .eq("id", existingId)
@@ -428,7 +313,7 @@ export async function uploadEmployees(
       }
 
       if (newRows.length > 0) {
-        const { data, error } = await supabase
+        const { data, error } = await queryClient
           .from("employees")
           .insert(newRows)
           .select("id,email");
@@ -473,7 +358,7 @@ export async function uploadEmployees(
     }
 
     if (withoutEmail.length > 0) {
-      const { data, error } = await supabase
+      const { data, error } = await queryClient
         .from("employees")
         .insert(withoutEmail)
         .select("id,email");
@@ -509,7 +394,7 @@ export async function uploadEmployees(
       .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
 
     if (enrichmentPayload.length > 0) {
-      await supabase
+      await queryClient
         .from("employee_profile_enrichment")
         .upsert(enrichmentPayload, { onConflict: "employee_id" });
     }
@@ -538,17 +423,12 @@ export async function uploadEmployees(
 
     if (visaPayload.length > 0) {
       const visaEmployeeIds = Array.from(new Set(visaPayload.map((entry) => entry.employee_id)));
-      await supabase
+      await queryClient
         .from("employee_visa_records")
         .delete()
         .eq("workspace_id", workspaceId)
         .in("employee_id", visaEmployeeIds);
-      await supabase.from("employee_visa_records").insert(visaPayload);
-    }
-    
-    // Report progress
-    if (onProgress) {
-      onProgress(Math.min(100, Math.round(((i + batch.length) / employeesWithAliases.length) * 100)));
+      await queryClient.from("employee_visa_records").insert(visaPayload);
     }
   }
 
@@ -558,53 +438,32 @@ export async function uploadEmployees(
   if (result.insertedCount > 0) {
     if (pendingReviewRows.length > 0) {
       try {
-        await supabase.from("role_mapping_reviews").insert(pendingReviewRows);
+        await queryClient.from("role_mapping_reviews").insert(pendingReviewRows);
       } catch {
-        // Review queue persistence is best-effort during uploads.
+        // Best effort only.
       }
     }
     try {
-      await refreshMarketPool();
+      await refreshPlatformMarketPoolBestEffort();
     } catch {
-      // Market-pool refresh is best-effort during uploads.
+      // Best effort only.
     }
     try {
-      await refreshCoverageSnapshot();
+      await refreshBenchmarkCoverageSnapshot(workspaceId);
     } catch {
-      // Coverage refresh is best-effort during uploads.
+      // Best effort only.
     }
   }
 
   return result;
 }
 
-/**
- * Upload benchmarks to the database (upsert)
- */
-export async function uploadBenchmarks(
+async function importBenchmarks(
+  queryClient: UploadQueryClient,
+  workspaceId: string,
   benchmarks: TransformedBenchmark[],
-  onProgress?: (progress: number) => void,
-  options?: UploadOptions,
+  importMode: UploadImportMode,
 ): Promise<UploadResult> {
-  const override = await getWorkspaceOverrideInfo();
-  if (override.isOverriding && override.workspaceId) {
-    const result = await importViaServerRoute("benchmarks", benchmarks, options);
-    onProgress?.(100);
-    return result;
-  }
-
-  const supabase = createClient();
-  const workspaceId = await getWorkspaceId();
-  const importMode = options?.mode ?? "upsert";
-  
-  if (!workspaceId) {
-    return {
-      ...createInitialUploadResult(),
-      success: false,
-      errors: ["No workspace found"],
-    };
-  }
-
   const result = createInitialUploadResult();
   const batchSize = 50;
   const validFrom = new Date().toISOString().split("T")[0];
@@ -612,7 +471,15 @@ export async function uploadBenchmarks(
   let useSegmentedConflictKey = true;
 
   if (importMode === "replace") {
-    await clearBenchmarks();
+    const { error } = await queryClient
+      .from("salary_benchmarks")
+      .delete()
+      .eq("workspace_id", workspaceId);
+    if (error) {
+      result.success = false;
+      result.errors.push(error.message);
+      return result;
+    }
   } else {
     let data:
       | Array<{
@@ -626,7 +493,7 @@ export async function uploadBenchmarks(
       | null = null;
     let error: { message?: string } | null = null;
 
-    const segmentedResult = await supabase
+    const segmentedResult = await queryClient
       .from("salary_benchmarks")
       .select("role_id,location_id,level_id,industry_key,company_size_key,valid_from")
       .eq("workspace_id", workspaceId);
@@ -635,7 +502,7 @@ export async function uploadBenchmarks(
 
     if (isMissingColumnError(error, "industry_key") || isMissingColumnError(error, "company_size_key")) {
       useSegmentedConflictKey = false;
-      const legacyResult = await supabase
+      const legacyResult = await queryClient
         .from("salary_benchmarks")
         .select("role_id,location_id,level_id,valid_from")
         .eq("workspace_id", workspaceId);
@@ -650,22 +517,22 @@ export async function uploadBenchmarks(
     }
 
     for (const row of data || []) {
-      existingKeys.add(toBenchmarkConflictKey({
-        role_id: String(row.role_id),
-        location_id: String(row.location_id),
-        level_id: String(row.level_id),
-        valid_from: String(row.valid_from),
-        industry_key: useSegmentedConflictKey && row.industry_key ? String(row.industry_key) : null,
-        company_size_key:
-          useSegmentedConflictKey && row.company_size_key ? String(row.company_size_key) : null,
-      }));
+      existingKeys.add(
+        toBenchmarkConflictKey({
+          role_id: String(row.role_id),
+          location_id: String(row.location_id),
+          level_id: String(row.level_id),
+          valid_from: String(row.valid_from),
+          industry_key: useSegmentedConflictKey && row.industry_key ? String(row.industry_key) : null,
+          company_size_key:
+            useSegmentedConflictKey && row.company_size_key ? String(row.company_size_key) : null,
+        }),
+      );
     }
   }
-  
-  // Process in batches
+
   for (let i = 0; i < benchmarks.length; i += batchSize) {
     const batch = benchmarks.slice(i, i + batchSize);
-    
     const records = batch.map((bm) => ({
       workspace_id: workspaceId,
       role_id: bm.roleId,
@@ -693,7 +560,7 @@ export async function uploadBenchmarks(
       ),
     ).length;
 
-    const { data, error } = await supabase
+    const { error } = await queryClient
       .from("salary_benchmarks")
       .upsert(records, {
         onConflict: useSegmentedConflictKey
@@ -701,7 +568,7 @@ export async function uploadBenchmarks(
           : "workspace_id,role_id,location_id,level_id,valid_from",
       })
       .select("id");
-    
+
     if (error) {
       result.errors.push(`Batch ${Math.floor(i / batchSize) + 1}: ${error.message}`);
       result.failedCount += batch.length;
@@ -709,16 +576,16 @@ export async function uploadBenchmarks(
       result.updatedCount += batchUpdatedCount;
       result.createdCount += batch.length - batchUpdatedCount;
       for (const record of records) {
-          const action = existingKeys.has(
-            toBenchmarkConflictKey({
-              role_id: String(record.role_id),
-              location_id: String(record.location_id),
-              level_id: String(record.level_id),
-              valid_from: String(record.valid_from),
-            }),
-          )
-            ? "updated"
-            : "created";
+        const action = existingKeys.has(
+          toBenchmarkConflictKey({
+            role_id: String(record.role_id),
+            location_id: String(record.location_id),
+            level_id: String(record.level_id),
+            valid_from: String(record.valid_from),
+          }),
+        )
+          ? "updated"
+          : "created";
         existingKeys.add(
           toBenchmarkConflictKey({
             role_id: String(record.role_id),
@@ -727,19 +594,14 @@ export async function uploadBenchmarks(
             valid_from: String(record.valid_from),
           }),
         );
-          result.processedBenchmarks?.push({
-            roleId: String(record.role_id),
-            locationId: String(record.location_id),
-            levelId: String(record.level_id),
-            validFrom: String(record.valid_from),
-            action,
-          });
+        result.processedBenchmarks?.push({
+          roleId: String(record.role_id),
+          locationId: String(record.location_id),
+          levelId: String(record.level_id),
+          validFrom: String(record.valid_from),
+          action,
+        });
       }
-    }
-    
-    // Report progress
-    if (onProgress) {
-      onProgress(Math.min(100, Math.round(((i + batch.length) / benchmarks.length) * 100)));
     }
   }
 
@@ -748,57 +610,33 @@ export async function uploadBenchmarks(
 
   if (result.insertedCount > 0) {
     try {
-      const freshnessResponse = await fetch("/api/benchmarks/freshness", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ recordCount: result.insertedCount }),
-      });
-      if (!freshnessResponse.ok) {
-        throw new Error("Failed to update benchmark freshness after import.");
-      }
+      await upsertBenchmarksFreshness(workspaceId, result.insertedCount, null);
     } catch {
-      // Freshness sync is best-effort; uploaded benchmark rows should still succeed.
+      // Best effort only.
     }
     try {
-      await refreshMarketPool();
+      await refreshPlatformMarketPoolBestEffort();
     } catch {
-      // Market-pool refresh is best-effort during uploads.
+      // Best effort only.
     }
     try {
-      await refreshCoverageSnapshot();
+      await refreshBenchmarkCoverageSnapshot(workspaceId);
     } catch {
-      // Coverage refresh is best-effort during uploads.
+      // Best effort only.
     }
   }
-  
+
   return result;
 }
 
-export async function uploadCompensationUpdates(
+async function importCompensationUpdates(
+  queryClient: UploadQueryClient,
+  workspaceId: string,
   updates: TransformedCompensationUpdate[],
-  onProgress?: (progress: number) => void,
 ): Promise<UploadResult> {
-  const override = await getWorkspaceOverrideInfo();
-  if (override.isOverriding && override.workspaceId) {
-    const result = await importViaServerRoute("compensation", updates);
-    onProgress?.(100);
-    return result;
-  }
-
-  const supabase = createClient();
-  const workspaceId = await getWorkspaceId();
-
-  if (!workspaceId) {
-    return {
-      ...createInitialUploadResult(),
-      success: false,
-      errors: ["No workspace found"],
-    };
-  }
-
   const result = createInitialUploadResult();
   const emails = Array.from(new Set(updates.map((update) => update.email)));
-  const { data: existingEmployees, error: lookupError } = await supabase
+  const { data: existingEmployees, error: lookupError } = await queryClient
     .from("employees")
     .select("id,email,currency,base_salary,bonus,equity")
     .eq("workspace_id", workspaceId)
@@ -843,8 +681,7 @@ export async function uploadCompensationUpdates(
     change_percentage: number | null;
   }> = [];
 
-  for (let i = 0; i < updates.length; i += 1) {
-    const update = updates[i];
+  for (const update of updates) {
     const existing = existingByEmail.get(update.email);
 
     if (!existing) {
@@ -857,14 +694,10 @@ export async function uploadCompensationUpdates(
       base_salary: update.baseSalary,
       updated_at: new Date().toISOString(),
     };
-    if (update.bonus !== null) {
-      employeeUpdate.bonus = update.bonus;
-    }
-    if (update.equity !== null) {
-      employeeUpdate.equity = update.equity;
-    }
+    if (update.bonus !== null) employeeUpdate.bonus = update.bonus;
+    if (update.equity !== null) employeeUpdate.equity = update.equity;
 
-    const { error } = await supabase
+    const { error } = await queryClient
       .from("employees")
       .update(employeeUpdate)
       .eq("id", existing.id)
@@ -891,14 +724,10 @@ export async function uploadCompensationUpdates(
       change_percentage: changePercentage,
     });
     result.updatedCount += 1;
-
-    if (onProgress) {
-      onProgress(Math.min(100, Math.round(((i + 1) / updates.length) * 100)));
-    }
   }
 
   if (historyPayload.length > 0) {
-    const { error } = await supabase.from("compensation_history").insert(historyPayload);
+    const { error } = await queryClient.from("compensation_history").insert(historyPayload);
     if (error) {
       result.errors.push(`Failed to write compensation history: ${error.message}`);
       result.success = false;
@@ -911,244 +740,73 @@ export async function uploadCompensationUpdates(
 
   if (result.insertedCount > 0) {
     try {
-      await refreshMarketPool();
+      await refreshPlatformMarketPoolBestEffort();
     } catch {
-      // Market-pool refresh is best-effort during uploads.
+      // Best effort only.
     }
   }
 
   return result;
 }
 
-/**
- * Create an audit record for the upload
- */
-export async function createUploadRecord(params: {
-  uploadType: UploadDataType;
-  fileName: string;
-  fileSize: number;
-  rowCount: number;
-  successCount: number;
-  errorCount: number;
-  errors: string[];
-  createdCount?: number;
-  updatedCount?: number;
-  skippedCount?: number;
-  verificationSummary?: Record<string, unknown> | null;
-}): Promise<void> {
-  const supabase = createClient();
-  const workspaceId = await getWorkspaceId();
-  const userId = await getUserId();
-  
-  if (!workspaceId) return;
-  
-  await supabase.from("data_uploads").insert({
-    workspace_id: workspaceId,
-    upload_type: params.uploadType,
-    file_name: params.fileName,
-    file_size: params.fileSize,
-    row_count: params.rowCount,
-    success_count: params.successCount,
-    error_count: params.errorCount,
-    errors: params.errors.length > 0 ? params.errors : null,
-    created_count: params.createdCount ?? 0,
-    updated_count: params.updatedCount ?? 0,
-    skipped_count: params.skippedCount ?? 0,
-    verification_summary: params.verificationSummary ?? null,
-    uploaded_by: userId,
-  });
-}
+export async function POST(request: Request) {
+  const wsContext = await getWorkspaceContext();
+  if (!wsContext.context) {
+    return NextResponse.json({ error: wsContext.error }, { status: wsContext.status });
+  }
 
-export async function fetchUploadVerificationSummary(
-  uploadType: UploadDataType,
-  options?: { uploadedCount?: number },
-): Promise<UploadVerificationSummary | null> {
-  if (uploadType === "employees" || uploadType === "compensation") {
-    const response = await fetch("/api/dashboard/company-overview?refresh=1", {
-      method: "GET",
-      cache: "no-store",
-    });
-    if (!response.ok) return null;
+  const supabase = await createClient();
+  const queryClient = wsContext.context.is_override ? createServiceClient() : supabase;
 
-    const payload = await response.json();
-    const activeEmployees = Number(payload?.benchmarkCoverage?.activeEmployees ?? 0);
-    const benchmarkedEmployees = Number(payload?.benchmarkCoverage?.benchmarkedEmployees ?? 0);
-    const unbenchmarkedEmployees = Number(payload?.benchmarkCoverage?.unbenchmarkedEmployees ?? 0);
-    const marketBacked = Number(payload?.benchmarkTrust?.marketBacked ?? 0);
-
-    return {
-      headline:
-        activeEmployees > 0
-          ? `${benchmarkedEmployees} of ${activeEmployees} active employees currently have benchmark coverage.`
-          : "Your company data was imported, but Company Overview is still waiting for active employees.",
-      details: [
-        `${marketBacked} employee matches are currently backed by Qeemly market data.`,
-        unbenchmarkedEmployees > 0
-          ? `${unbenchmarkedEmployees} still need role, level, or location mapping before they can influence company insights.`
-          : "All active employees currently have benchmark coverage.",
-      ],
-      links: [
-        { href: "/dashboard/overview", label: "Open Company Overview" },
-        { href: "/dashboard/salary-review", label: "Open Salary Review" },
-      ],
+  try {
+    const body = (await request.json()) as {
+      uploadType?: UploadDataType;
+      rows?: unknown[];
+      mode?: UploadImportMode;
     };
-  }
 
-  if (uploadType === "benchmarks") {
-    const response = await fetch("/api/benchmarks/market-insights", {
-      method: "GET",
-      cache: "no-store",
-    });
-    if (!response.ok) return null;
+    const uploadType = body.uploadType;
+    const rows = Array.isArray(body.rows) ? body.rows : [];
+    const mode = body.mode === "replace" ? "replace" : "upsert";
 
-    const payload = await response.json();
-    const overlayCount = Number(payload?.workspaceOverlay?.count ?? 0);
-    const contributorQualifiedRows = Number(payload?.summary?.contributorQualifiedRows ?? 0);
-    const effectiveOverlayCount = overlayCount > 0 ? overlayCount : Number(options?.uploadedCount ?? 0);
+    if (!uploadType) {
+      return NextResponse.json({ error: "uploadType is required" }, { status: 400 });
+    }
 
-    return {
-      headline:
-        effectiveOverlayCount > 0
-          ? `${effectiveOverlayCount} company benchmark rows from this upload are now available to review as your workspace overlay.`
-          : "Your benchmark upload completed. Review the uploaded rows below and open Benchmarking to confirm the overlay.",
-      details: [
-        "Qeemly market data remains the primary benchmark source used across the product.",
-        `${contributorQualifiedRows} contributor-qualified rows belong to the shared Qeemly market pool, not your uploaded company overlay.`,
-      ],
-      links: [
-        { href: "/dashboard/benchmarks", label: "Open Benchmarking" },
-        { href: "/dashboard/salary-review", label: "Open Salary Review" },
-      ],
-    };
-  }
+    if (uploadType === "employees") {
+      const result = await importEmployees(
+        queryClient,
+        wsContext.context.workspace_id,
+        rows as TransformedEmployee[],
+        mode,
+      );
+      return NextResponse.json(result);
+    }
 
-  return null;
-}
+    if (uploadType === "benchmarks") {
+      const result = await importBenchmarks(
+        queryClient,
+        wsContext.context.workspace_id,
+        rows as TransformedBenchmark[],
+        mode,
+      );
+      return NextResponse.json(result);
+    }
 
-export async function fetchUploadedEmployeeResults(
-  processedEmployees: UploadProcessedEmployee[],
-) {
-  if (processedEmployees.length === 0) return [];
+    if (uploadType === "compensation") {
+      const result = await importCompensationUpdates(
+        queryClient,
+        wsContext.context.workspace_id,
+        rows as TransformedCompensationUpdate[],
+      );
+      return NextResponse.json(result);
+    }
 
-  const employees = await fetchDbEmployees();
-  const emails = new Set(processedEmployees.map((employee) => employee.email.toLowerCase()));
-  return employees.filter((employee) => emails.has(employee.email.toLowerCase()));
-}
-
-export async function fetchUploadedBenchmarkResults(
-  processedBenchmarks: UploadProcessedBenchmark[],
-) {
-  if (processedBenchmarks.length === 0) return [];
-
-  const workspaceId = await getWorkspaceId();
-  if (!workspaceId) return [];
-
-  const supabase = createClient();
-  const { data, error } = await supabase
-    .from("salary_benchmarks")
-    .select("role_id,location_id,level_id,currency,p25,p50,p75,sample_size,valid_from,source")
-    .eq("workspace_id", workspaceId);
-  if (error) return [];
-
-  const keys = new Set(
-    processedBenchmarks.map(
-      (benchmark) =>
-        `${benchmark.roleId}::${benchmark.locationId}::${benchmark.levelId}::${benchmark.validFrom}`,
-    ),
-  );
-
-  return (data || []).filter((benchmark) =>
-    keys.has(
-      `${benchmark.role_id}::${benchmark.location_id}::${benchmark.level_id}::${benchmark.valid_from ?? ""}`,
-    ),
-  );
-}
-
-/**
- * Get recent uploads for the workspace
- */
-export async function getRecentUploads(limit = 10) {
-  const supabase = createClient();
-  const workspaceId = await getWorkspaceId();
-  
-  if (!workspaceId) return [];
-  
-  const { data } = await supabase
-    .from("data_uploads")
-    .select("*")
-    .eq("workspace_id", workspaceId)
-    .order("created_at", { ascending: false })
-    .limit(limit);
-  
-  return data || [];
-}
-
-/**
- * Get employee count for the workspace
- */
-export async function getEmployeeCount(): Promise<number> {
-  const supabase = createClient();
-  const workspaceId = await getWorkspaceId();
-  
-  if (!workspaceId) return 0;
-  
-  const { count } = await supabase
-    .from("employees")
-    .select("*", { count: "exact", head: true })
-    .eq("workspace_id", workspaceId);
-  
-  return count || 0;
-}
-
-/**
- * Get benchmark count for the workspace
- */
-export async function getBenchmarkCount(): Promise<number> {
-  const supabase = createClient();
-  const workspaceId = await getWorkspaceId();
-  
-  if (!workspaceId) return 0;
-  
-  const { count } = await supabase
-    .from("salary_benchmarks")
-    .select("*", { count: "exact", head: true })
-    .eq("workspace_id", workspaceId);
-  
-  return count || 0;
-}
-
-/**
- * Delete all employees for the workspace (for re-upload)
- */
-export async function clearEmployees(): Promise<void> {
-  const supabase = createClient();
-  const workspaceId = await getWorkspaceId();
-  
-  if (!workspaceId) return;
-  
-  const { error } = await supabase
-    .from("employees")
-    .delete()
-    .eq("workspace_id", workspaceId);
-  if (error) {
-    throw new Error(error.message);
-  }
-}
-
-/**
- * Delete all benchmarks for the workspace (for re-upload)
- */
-export async function clearBenchmarks(): Promise<void> {
-  const supabase = createClient();
-  const workspaceId = await getWorkspaceId();
-  
-  if (!workspaceId) return;
-  
-  const { error } = await supabase
-    .from("salary_benchmarks")
-    .delete()
-    .eq("workspace_id", workspaceId);
-  if (error) {
-    throw new Error(error.message);
+    return NextResponse.json({ error: "Unsupported upload type" }, { status: 400 });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Failed to import upload batch" },
+      { status: 500 },
+    );
   }
 }

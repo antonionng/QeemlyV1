@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { matchLevel, matchRole, transformEmployee } from "@/lib/upload/transformers";
+import {
+  matchLevel,
+  matchRole,
+  normalizeDepartment,
+  normalizeEmploymentType,
+  normalizePerformanceRating,
+  transformEmployee,
+} from "@/lib/upload/transformers";
 
 describe("transformEmployee role mapping", () => {
   it("keeps unresolved roles pending instead of defaulting to software engineer", () => {
@@ -77,5 +84,44 @@ describe("transformEmployee role mapping", () => {
     expect(matchLevel("Senior Manager")).toBe("m2");
     expect(matchLevel("Director")).toBe("d1");
     expect(matchLevel("Vice President")).toBe("vp");
+  });
+
+  it("normalizes common employee enum synonyms used in CSV exports", () => {
+    expect(normalizeDepartment("People Ops")).toBe("HR");
+    expect(normalizeEmploymentType("Local")).toBe("national");
+    expect(normalizeEmploymentType("Expatriate")).toBe("expat");
+    expect(normalizePerformanceRating("Meets Expectations")).toBe("meets");
+    expect(normalizePerformanceRating("4")).toBe("exceeds");
+  });
+
+  it("maps the unsupported CSV titles and locations from Untitled 14.csv", () => {
+    expect(matchRole("HR Manager")).toBe("people-ops");
+    expect(matchRole("Finance Analyst")).toBe("financial-analyst");
+    expect(matchRole("Marketing Executive")).toBe("digital-marketing");
+    expect(matchRole("Product Owner")).toBe("pm");
+    expect(matchRole("Content Manager")).toBe("content-marketing");
+    expect(matchRole("Operations Analyst")).toBe("project-manager");
+    expect(matchRole("HR Assistant")).toBe("hr-generalist");
+    expect(matchRole("Business Analyst")).toBe("product-analyst");
+    expect(matchLevel("Executive")).toBe("vp");
+  });
+
+  it("maps London and Executive department values from the CSV", () => {
+    const result = transformEmployee({
+      firstName: "John",
+      lastName: "Walker",
+      department: "Executive",
+      role: "CTO",
+      level: "Executive",
+      location: "London",
+      baseSalary: "600000",
+    });
+
+    expect(result).toMatchObject({
+      department: "Executive",
+      roleId: "cto",
+      levelId: "vp",
+      locationId: "london",
+    });
   });
 });

@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import type { WorkspaceContext } from "@/lib/workspace-context";
 import { fetchMarketBenchmarks } from "@/lib/benchmarks/platform-market";
+import { buildAiBenchmarkRows } from "@/lib/benchmarks/ai-benchmark-rows";
 
 type WorkspaceSnapshot = {
   employeeCount: number;
@@ -40,18 +41,33 @@ export async function buildGeneralChatInput(
   question: string
 ): Promise<string> {
   const supabase = await createClient();
-  const [snapshot, marketBenchmarks] = await Promise.all([
+  const [snapshot, employeeBenchmarksResult] = await Promise.all([
     getWorkspaceSnapshot(workspaceContext.workspace_id),
-    fetchMarketBenchmarks(supabase).catch(() => []),
+    supabase
+      .from("employees")
+      .select("role_id, location_id")
+      .eq("workspace_id", workspaceContext.workspace_id)
+      .eq("status", "active")
+      .limit(500),
   ]);
+  const aiBenchmarks = await buildAiBenchmarkRows(
+    ((employeeBenchmarksResult.data || []) as Array<{ role_id?: string | null; location_id?: string | null }>).map(
+      (row) => ({
+        roleId: String(row.role_id || ""),
+        locationId: String(row.location_id || ""),
+      }),
+    ),
+  ).catch(() => []);
+  const marketBenchmarks =
+    aiBenchmarks.length > 0 ? aiBenchmarks : await fetchMarketBenchmarks(supabase).catch(() => []);
   const todayIso = new Date().toISOString().slice(0, 10);
 
   const sections = [
     "You are Qeemly AI, a GCC-focused compensation sidekick.",
     "Give concise, practical answers.",
     "Use the workspace snapshot for facts about this customer's organisation.",
-    "Use the Qeemly Market Data to answer questions about market rates, salary comparisons across roles, levels, and locations.",
-    "If data for a specific combination is not in the market data, say what is available and suggest the closest match.",
+    "Use the Qeemly AI benchmark layer to answer questions about market rates, salary comparisons across roles, levels, and locations.",
+    "If data for a specific combination is not available, say what is available and suggest the closest match.",
     "",
     "Workspace snapshot (do not invent missing values):",
     JSON.stringify(
@@ -79,7 +95,7 @@ export async function buildGeneralChatInput(
     }));
     sections.push(
       "",
-      `Qeemly Market Data (${condensed.length} benchmarks — p25/p50/p75 are annual base salary):`,
+      `Qeemly AI Benchmark Data (${condensed.length} benchmarks, p25/p50/p75 are annual base salary):`,
       JSON.stringify(condensed, null, 2),
     );
   }

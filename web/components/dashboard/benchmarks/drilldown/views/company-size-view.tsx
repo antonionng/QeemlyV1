@@ -27,6 +27,8 @@ export function CompanySizeView({ result }: CompanySizeViewProps) {
     return ordered.filter(Boolean).slice(0, 5);
   }, [companySize]);
   const aiComparisonPoints = result.aiDetailBriefing?.views.companySize.comparisonPoints ?? null;
+  const prefetchedCompanySizeBenchmarks = result.detailSupportData?.companySizeBenchmarks ?? {};
+  const prefetchedFallbackBenchmark = result.detailSupportData?.companySizeFallbackBenchmark ?? null;
 
   const aiCompanySizeData = useMemo(
     () =>
@@ -44,6 +46,12 @@ export function CompanySizeView({ result }: CompanySizeViewProps) {
     if (aiCompanySizeData.length > 0) {
       setCompanySizeBenchmarks({});
       setFallbackBenchmark(null);
+      return;
+    }
+
+    if (Object.keys(prefetchedCompanySizeBenchmarks).length > 0 || prefetchedFallbackBenchmark) {
+      setCompanySizeBenchmarks(prefetchedCompanySizeBenchmarks);
+      setFallbackBenchmark(prefetchedFallbackBenchmark);
       return;
     }
 
@@ -95,7 +103,16 @@ export function CompanySizeView({ result }: CompanySizeViewProps) {
     };
 
     void run();
-  }, [aiCompanySizeData.length, level.id, location.id, result.formData.industry, role.id, sizesToLoad]);
+  }, [
+    aiCompanySizeData.length,
+    level.id,
+    location.id,
+    prefetchedCompanySizeBenchmarks,
+    prefetchedFallbackBenchmark,
+    result.formData.industry,
+    role.id,
+    sizesToLoad,
+  ]);
 
   const companySizeData = aiCompanySizeData.length > 0
     ? aiCompanySizeData

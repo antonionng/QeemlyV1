@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { fetchMarketBenchmarks } from "@/lib/benchmarks/platform-market";
+import { buildAiBenchmarkRows } from "@/lib/benchmarks/ai-benchmark-rows";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getWorkspaceContext } from "@/lib/workspace-context";
@@ -180,12 +181,35 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: workspaceBenchmarkError.message }, { status: 500 });
   }
 
-  const marketBenchmarkRows = (await fetchMarketBenchmarks(serviceClient)).filter((row) => {
-    const roleMatch = roleIds.length === 0 || roleIds.includes(row.role_id);
-    const levelMatch = levelIds.length === 0 || levelIds.includes(row.level_id);
-    const locationMatch = locationIds.length === 0 || locationIds.includes(row.location_id);
-    return roleMatch && levelMatch && locationMatch;
-  });
+  const marketBenchmarkRows = await (async () => {
+    try {
+      const aiBenchmarks = await buildAiBenchmarkRows(
+        filteredEmployees.map((employee) => ({
+          roleId: employee.role_id,
+          locationId: employee.location_id,
+          industry: workspaceSettings?.industry ?? null,
+          companySize: workspaceSettings?.company_size ?? inferCompanySize(employeeRows.length),
+        })),
+      );
+      if (aiBenchmarks.length > 0) {
+        return aiBenchmarks.filter((row) => {
+          const roleMatch = roleIds.length === 0 || roleIds.includes(row.role_id);
+          const levelMatch = levelIds.length === 0 || levelIds.includes(row.level_id);
+          const locationMatch = locationIds.length === 0 || locationIds.includes(row.location_id);
+          return roleMatch && levelMatch && locationMatch;
+        });
+      }
+    } catch {
+      // Fall back to pooled market rows.
+    }
+
+    return (await fetchMarketBenchmarks(serviceClient)).filter((row) => {
+      const roleMatch = roleIds.length === 0 || roleIds.includes(row.role_id);
+      const levelMatch = levelIds.length === 0 || levelIds.includes(row.level_id);
+      const locationMatch = locationIds.length === 0 || locationIds.includes(row.location_id);
+      return roleMatch && levelMatch && locationMatch;
+    });
+  })();
 
   const { data: freshnessRows } = await serviceClient
     .from("data_freshness_metrics")
@@ -226,15 +250,22 @@ export async function POST(request: Request) {
     "workspace_uploaded",
     "Workspace Benchmarks"
   );
+  const usingAiBenchmarks = marketBenchmarkRows.some(
+    (row) => (row as { source?: string | null }).source === "ai-estimated",
+  );
   const ingestionBenchmarks = dedupeBenchmarks(
     marketBenchmarkRows as BenchmarkRow[],
     "ingestion",
-    (Array.isArray(allowedIngestionFreshness?.ingestion_sources)
-      ? allowedIngestionFreshness?.ingestion_sources[0]?.slug
-      : allowedIngestionFreshness?.ingestion_sources?.slug) ?? "qeemly_ingestion",
-    (Array.isArray(allowedIngestionFreshness?.ingestion_sources)
-      ? allowedIngestionFreshness?.ingestion_sources[0]?.name
-      : allowedIngestionFreshness?.ingestion_sources?.name) ?? "Qeemly Ingestion"
+    usingAiBenchmarks
+      ? "qeemly_ai_benchmark"
+      : (Array.isArray(allowedIngestionFreshness?.ingestion_sources)
+          ? allowedIngestionFreshness?.ingestion_sources[0]?.slug
+          : allowedIngestionFreshness?.ingestion_sources?.slug) ?? "qeemly_ingestion",
+    usingAiBenchmarks
+      ? "Qeemly AI Benchmark"
+      : (Array.isArray(allowedIngestionFreshness?.ingestion_sources)
+          ? allowedIngestionFreshness?.ingestion_sources[0]?.name
+          : allowedIngestionFreshness?.ingestion_sources?.name) ?? "Qeemly Ingestion"
   );
 
   const plan = buildSalaryReviewAiPlan({

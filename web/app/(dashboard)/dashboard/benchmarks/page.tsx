@@ -8,6 +8,8 @@ import { BenchmarkResults } from "@/components/dashboard/benchmarks/benchmark-re
 import { BenchmarkDetail } from "@/components/dashboard/benchmarks/benchmark-detail";
 import { UploadModal } from "@/components/dashboard/upload";
 import { useBenchmarkState } from "@/lib/benchmarks/benchmark-state";
+import { useCompanySettings } from "@/lib/company";
+import type { FundingStage } from "@/lib/company/settings";
 import { hasDbEmployees } from "@/lib/employees/data-service";
 import { getBenchmarkPageTitle } from "@/lib/benchmarks/results-presentation";
 import { useWorkspaceChangeVersion } from "@/lib/workspace-client";
@@ -84,6 +86,8 @@ export default function BenchmarksPage() {
   const [stats, setStats] = useState<BenchmarkStats | null>(null);
   const [isWorkspaceReady, setIsWorkspaceReady] = useState(false);
   const [hasCompanyData, setHasCompanyData] = useState(false);
+  const updateCompanySettings = useCompanySettings((state) => state.updateSettings);
+  const markCompanyConfigured = useCompanySettings((state) => state.markAsConfigured);
   const {
     step,
     currentResult,
@@ -130,8 +134,79 @@ export default function BenchmarksPage() {
         ]);
         if (!response.ok) return;
 
-        const payload = (await response.json()) as { workspace_id?: string | null };
+        const payload = (await response.json()) as {
+          workspace_id?: string | null;
+          workspace_name?: string | null;
+          is_viewing_as_admin?: boolean;
+          settings?: {
+            company_name?: string | null;
+            company_logo?: string | null;
+            company_website?: string | null;
+            company_description?: string | null;
+            primary_color?: string | null;
+            industry?: string | null;
+            company_size?: string | null;
+            funding_stage?: string | null;
+            headquarters_country?: string | null;
+            headquarters_city?: string | null;
+            target_percentile?: number | null;
+            review_cycle?: string | null;
+            default_currency?: string | null;
+            fiscal_year_start?: number | null;
+            default_bonus_percentage?: number | null;
+            equity_vesting_schedule?: string | null;
+            benefits_tier?: string | null;
+            comp_split_basic_pct?: number | null;
+            comp_split_housing_pct?: number | null;
+            comp_split_transport_pct?: number | null;
+            comp_split_other_pct?: number | null;
+            is_configured?: boolean;
+          };
+        };
         if (isCancelled) return;
+
+        const settings = payload.settings ?? {};
+        const isViewingAsAdmin = payload.is_viewing_as_admin === true;
+        const effectiveCompanyName =
+          isViewingAsAdmin && payload.workspace_name
+            ? payload.workspace_name
+            : settings.company_name || payload.workspace_name || "";
+
+        updateCompanySettings({
+          companyName: effectiveCompanyName,
+          companyLogo: isViewingAsAdmin ? null : settings.company_logo || null,
+          companyWebsite: settings.company_website || "",
+          companyDescription: settings.company_description || "",
+          primaryColor: settings.primary_color || "#5C45FD",
+          industry: settings.industry || "",
+          companySize: settings.company_size || "",
+          fundingStage: (settings.funding_stage as FundingStage | null) || "Seed",
+          headquartersCountry: settings.headquarters_country || "AE",
+          headquartersCity: settings.headquarters_city || "",
+          targetPercentile: (settings.target_percentile as 25 | 50 | 75 | 90 | null) || 50,
+          reviewCycle: (settings.review_cycle as "monthly" | "quarterly" | "biannual" | "annual" | null) || "annual",
+          defaultCurrency: settings.default_currency || "AED",
+          fiscalYearStart: settings.fiscal_year_start || 1,
+          defaultBonusPercentage: settings.default_bonus_percentage ?? 15,
+          equityVestingSchedule:
+            (settings.equity_vesting_schedule as
+              | "4-year-1-cliff"
+              | "4-year-no-cliff"
+              | "3-year"
+              | "5-year"
+              | "custom"
+              | "none"
+              | null) || "4-year-1-cliff",
+          benefitsTier: (settings.benefits_tier as "basic" | "standard" | "premium" | "custom" | null) || "standard",
+          compSplitBasicPct: settings.comp_split_basic_pct ?? 60,
+          compSplitHousingPct: settings.comp_split_housing_pct ?? 25,
+          compSplitTransportPct: settings.comp_split_transport_pct ?? 10,
+          compSplitOtherPct: settings.comp_split_other_pct ?? 5,
+        });
+        if (settings.is_configured && !isViewingAsAdmin) {
+          markCompanyConfigured();
+        }
+
         reconcileWorkspace(payload.workspace_id ?? null);
         setHasCompanyData(employeeDataPresent);
       } catch (error) {
@@ -148,7 +223,7 @@ export default function BenchmarksPage() {
     return () => {
       isCancelled = true;
     };
-  }, [reconcileWorkspace, workspaceChangeVersion]);
+  }, [markCompanyConfigured, reconcileWorkspace, updateCompanySettings, workspaceChangeVersion]);
 
   return (
     <div className="space-y-8">

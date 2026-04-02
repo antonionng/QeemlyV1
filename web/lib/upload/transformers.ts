@@ -190,6 +190,17 @@ const PROFESSION_KEYWORDS: Array<{ keywords: string[]; roleId: string }> = [
   { keywords: ["quality", "assurance"], roleId: "qa" },
 ];
 
+const ROLE_ALIASES: Record<string, string> = {
+  "hr manager": "people-ops",
+  "finance analyst": "financial-analyst",
+  "marketing executive": "digital-marketing",
+  "product owner": "pm",
+  "content manager": "content-marketing",
+  "operations analyst": "project-manager",
+  "hr assistant": "hr-generalist",
+  "business analyst": "product-analyst",
+};
+
 /**
  * Match a role string to a known role ID
  * Supports: direct role names, ILO sector codes, BLS SOC codes, 
@@ -205,6 +216,8 @@ export function matchRole(roleStr: string): string | null {
   }
 
   const normalized = normalize(trimmed);
+  const aliasedRole = ROLE_ALIASES[normalized];
+  if (aliasedRole) return aliasedRole;
   const role = roleByNorm.get(normalized);
   if (role) return role.id;
 
@@ -293,6 +306,10 @@ export function matchLevel(levelStr: string): string | null {
   const level = levelByNorm.get(normalized);
   if (level) return level.id;
 
+  if (normalized === "executive") {
+    return "vp";
+  }
+
   const keywordLevels: Array<[string, string]> = [
     ["vice president", "vp"],
     ["senior director", "d2"],
@@ -352,6 +369,8 @@ export function normalizeDepartment(dept: string): string {
     "growth": "Marketing",
     "operations": "Operations",
     "ops": "Operations",
+    "executive": "Executive",
+    "leadership": "Executive",
     "finance": "Finance",
     "accounting": "Finance",
     "fp a": "Finance",

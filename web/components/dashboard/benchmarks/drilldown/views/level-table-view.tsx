@@ -85,10 +85,36 @@ export function LevelTableView({ result }: LevelTableViewProps) {
       }) ?? [],
     [aiLevelBands, level.id],
   );
+  const prefetchedRows = useMemo(() => {
+    const prefetchedBenchmarks = result.detailSupportData?.levelTableBenchmarks ?? {};
+    const targetLevels = LEVELS.filter((entry) => entry.category === "IC" || entry.category === "Manager").slice(0, 6);
+
+    return targetLevels
+      .map((entry) => {
+        const benchmark = prefetchedBenchmarks[entry.id];
+        if (!benchmark) return null;
+        const p85 = benchmark.percentiles.p75 + (benchmark.percentiles.p90 - benchmark.percentiles.p75) * 0.5;
+        return {
+          level: entry,
+          p25: benchmark.percentiles.p25,
+          p50: benchmark.percentiles.p50,
+          p75: benchmark.percentiles.p75,
+          p85,
+          p90: benchmark.percentiles.p90,
+          isSelected: entry.id === level.id,
+        };
+      })
+      .filter(Boolean) as typeof rows;
+  }, [level.id, result.detailSupportData?.levelTableBenchmarks]);
 
   useEffect(() => {
     if (aiRows.length > 0) {
       setRows(aiRows);
+      return;
+    }
+
+    if (prefetchedRows.length > 0) {
+      setRows(prefetchedRows);
       return;
     }
 
@@ -129,7 +155,7 @@ export function LevelTableView({ result }: LevelTableViewProps) {
       setRows(nextRows);
     };
     void run();
-  }, [aiRows, level.id, location.id, result.formData.companySize, result.formData.industry, role.id]);
+  }, [aiRows, level.id, location.id, prefetchedRows, result.formData.companySize, result.formData.industry, role.id]);
 
   return (
     <div className="bench-section p-0 overflow-hidden">

@@ -10,7 +10,7 @@ import {
   getOrderedEnabledViews,
   type DrilldownViewId,
 } from "@/lib/benchmarks/drilldown-views";
-import { fetchAiBriefing } from "@/lib/benchmarks/data-service";
+import { fetchAiBriefing, fetchBenchmarkDetailSupportData } from "@/lib/benchmarks/data-service";
 import { ViewSelector } from "./drilldown/view-selector";
 import {
   LevelTableView,
@@ -55,7 +55,11 @@ export function BenchmarkDetail({ result, hasCompanyData = true }: BenchmarkDeta
   );
 
   useEffect(() => {
-    if (result.aiDetailBriefing || result.aiDetailBriefingStatus === "loading") {
+    if (
+      result.aiDetailBriefing ||
+      result.aiDetailBriefingStatus === "loading" ||
+      result.aiDetailBriefingStatus === "unavailable"
+    ) {
       return;
     }
 
@@ -113,6 +117,102 @@ export function BenchmarkDetail({ result, hasCompanyData = true }: BenchmarkDeta
     result.aiDetailBriefing,
     result.aiDetailBriefingStatus,
     result.createdAt,
+    result.formData.companySize,
+    result.formData.industry,
+    role.id,
+  ]);
+
+  useEffect(() => {
+    if (
+      result.detailSupportData ||
+      result.detailSupportStatus === "loading" ||
+      result.detailSupportStatus === "unavailable"
+    ) {
+      return;
+    }
+
+    let isCancelled = false;
+
+    useBenchmarkState.setState((state) => {
+      if (!state.currentResult) return state;
+      return {
+        ...state,
+        currentResult: {
+          ...state.currentResult,
+          detailSupportStatus: "loading",
+        },
+      };
+    });
+
+    const loadDetailSupport = async () => {
+      try {
+        const detailSupportData = await fetchBenchmarkDetailSupportData({
+          roleId: role.id,
+          locationId: location.id,
+          levelId: level.id,
+          industry: result.formData.industry ?? null,
+          companySize: result.formData.companySize ?? null,
+        });
+
+        if (isCancelled) return;
+
+        useBenchmarkState.setState((state) => {
+          if (!state.currentResult) return state;
+          return {
+            ...state,
+            currentResult: {
+              ...state.currentResult,
+              detailSupportData,
+              detailSupportStatus: "ready",
+            },
+            recentResults: state.recentResults.map((entry) =>
+              entry.createdAt === result.createdAt
+                ? {
+                    ...entry,
+                    detailSupportData,
+                    detailSupportStatus: "ready",
+                  }
+                : entry,
+            ),
+          };
+        });
+      } catch {
+        if (isCancelled) return;
+
+        useBenchmarkState.setState((state) => {
+          if (!state.currentResult) return state;
+          return {
+            ...state,
+            currentResult: {
+              ...state.currentResult,
+              detailSupportData: null,
+              detailSupportStatus: "unavailable",
+            },
+            recentResults: state.recentResults.map((entry) =>
+              entry.createdAt === result.createdAt
+                ? {
+                    ...entry,
+                    detailSupportData: null,
+                    detailSupportStatus: "unavailable",
+                  }
+                : entry,
+            ),
+          };
+        });
+      }
+    };
+
+    void loadDetailSupport();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [
+    level.id,
+    location.id,
+    result.createdAt,
+    result.detailSupportData,
+    result.detailSupportStatus,
     result.formData.companySize,
     result.formData.industry,
     role.id,

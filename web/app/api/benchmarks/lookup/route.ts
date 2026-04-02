@@ -1,26 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import {
-  resolveBenchmarkLookup,
+  resolveCanonicalBenchmarkLookup,
+  type CanonicalBenchmarkDiagnostics,
   type BenchmarkLookupClient,
 } from "@/lib/benchmarks/lookup-service";
 
-async function resolveMarketBenchmark(
+async function resolvePrimaryBenchmark(
   supabase: Awaited<ReturnType<typeof createClient>>,
   roleId: string,
   locationId: string,
   levelId: string,
   industry: string | null,
   companySize: string | null,
-  diagnostics: {
-    market: {
-      readMode: "service" | "session";
-      clientWarning: string | null;
-      error: string | null;
-    };
-  },
+  diagnostics: CanonicalBenchmarkDiagnostics,
 ) {
-  return resolveBenchmarkLookup(
+  return resolveCanonicalBenchmarkLookup(
     supabase as unknown as BenchmarkLookupClient,
     roleId,
     locationId,
@@ -62,9 +57,13 @@ export async function GET(request: NextRequest) {
       clientWarning: null as string | null,
       error: null as string | null,
     },
+    ai: {
+      called: false,
+      error: null as string | null,
+    },
   };
 
-  const benchmark = await resolveMarketBenchmark(
+  const resolved = await resolvePrimaryBenchmark(
     supabase,
     roleId,
     locationId,
@@ -75,7 +74,8 @@ export async function GET(request: NextRequest) {
   );
 
   return NextResponse.json({
-    benchmark,
+    benchmark: resolved.benchmark,
+    aiSummary: resolved.aiSummary,
     diagnostics,
   });
 }

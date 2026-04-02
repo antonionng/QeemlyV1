@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { findMarketBenchmark } from "@/lib/benchmarks/platform-market";
+import { resolveAiFirstBenchmarkContext } from "@/lib/benchmarks/ai-benchmark-rows";
 import { getRelocationAiAdvisory, type RelocationAdvisoryRequest } from "@/lib/relocation/ai-advisory";
 import { calculateRelocation } from "@/lib/relocation/calculator";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -72,12 +72,12 @@ export async function POST(request: Request) {
 
   const settings = (workspaceSettings as WorkspaceSettingsRow | null) ?? null;
 
-  const benchmark = await findMarketBenchmark(
+  const benchmark = await resolveAiFirstBenchmarkContext(
     serviceClient,
-    body.roleId,
-    body.targetCityId,
-    body.levelId,
     {
+      roleId: body.roleId,
+      locationId: body.targetCityId,
+      levelId: body.levelId,
       industry: settings?.industry ?? null,
       companySize: settings?.company_size ?? null,
     },
@@ -106,7 +106,7 @@ export async function POST(request: Request) {
           p75: benchmark.p75,
           p90: benchmark.p90,
           sampleSize: benchmark.sample_size ?? 0,
-          benchmarkSource: benchmark.source,
+          benchmarkSource: benchmark.benchmarkSource,
         }
       : null,
   });

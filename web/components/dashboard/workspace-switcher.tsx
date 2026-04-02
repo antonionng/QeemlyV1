@@ -11,7 +11,7 @@ import {
   X,
   ShieldAlert,
 } from "lucide-react";
-import { getCompanyInitials, useCompanySettings } from "@/lib/company";
+import { getCompanyInitials } from "@/lib/company";
 import { emitWorkspaceChange } from "@/lib/workspace-client";
 
 type Workspace = {
@@ -26,7 +26,6 @@ type Props = {
 
 export function WorkspaceSwitcher({ collapsed = false }: Props) {
   const router = useRouter();
-  const companySettings = useCompanySettings();
   const [loading, setLoading] = useState(true);
   const [switching, setSwitching] = useState(false);
   const [open, setOpen] = useState(false);
@@ -36,6 +35,8 @@ export function WorkspaceSwitcher({ collapsed = false }: Props) {
   const [currentWorkspace, setCurrentWorkspace] = useState<Workspace | null>(null);
   const [overrideWorkspace, setOverrideWorkspace] = useState<Workspace | null>(null);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [activeWorkspaceName, setActiveWorkspaceName] = useState<string | null>(null);
+  const [activeWorkspaceLogo, setActiveWorkspaceLogo] = useState<string | null>(null);
 
   const loadWorkspaces = useCallback(async () => {
     try {
@@ -64,6 +65,7 @@ export function WorkspaceSwitcher({ collapsed = false }: Props) {
         const workspaceId = settingsData.workspace_id || null;
         const workspaceName = settingsData.workspace_name || null;
         const workspaceSlug = settingsData.workspace_slug || "";
+        const workspaceSettings = settingsData.settings || {};
 
         if (workspaceId) {
           setCurrentWorkspaceId((prev) => prev || workspaceId);
@@ -76,6 +78,9 @@ export function WorkspaceSwitcher({ collapsed = false }: Props) {
             slug: workspaceSlug,
           });
         }
+
+        setActiveWorkspaceName(workspaceSettings.company_name || workspaceName || null);
+        setActiveWorkspaceLogo(workspaceSettings.company_logo || null);
       }
     } catch {
       // Not a super admin or error - hide switcher
@@ -129,7 +134,7 @@ export function WorkspaceSwitcher({ collapsed = false }: Props) {
 
   useEffect(() => {
     setLogoLoadFailed(false);
-  }, [companySettings.companyLogo]);
+  }, [activeWorkspaceLogo]);
 
   // Don't render if not super admin or still loading
   if (loading || !isSuperAdmin) {
@@ -141,8 +146,9 @@ export function WorkspaceSwitcher({ collapsed = false }: Props) {
     workspaces.find((w) => w.id === currentWorkspaceId) ||
     currentWorkspace;
   const isOverriding = !!overrideWorkspace;
-  const companyInitials = getCompanyInitials(companySettings.companyName || activeWorkspace?.name || "Workspace");
-  const hasCompanyLogo = !!companySettings.companyLogo && !logoLoadFailed;
+  const displayWorkspaceName = activeWorkspaceName || activeWorkspace?.name || "Workspace";
+  const companyInitials = getCompanyInitials(displayWorkspaceName);
+  const hasCompanyLogo = !!activeWorkspaceLogo && !logoLoadFailed;
 
   if (collapsed) {
     return (
@@ -158,8 +164,8 @@ export function WorkspaceSwitcher({ collapsed = false }: Props) {
         >
           {hasCompanyLogo ? (
             <img
-              src={companySettings.companyLogo!}
-              alt={companySettings.companyName || activeWorkspace?.name || "Workspace"}
+              src={activeWorkspaceLogo!}
+              alt={displayWorkspaceName}
               className="h-6 w-6 rounded-md object-contain"
               onError={() => setLogoLoadFailed(true)}
             />
@@ -231,8 +237,8 @@ export function WorkspaceSwitcher({ collapsed = false }: Props) {
             <Loader2 className="h-4 w-4 animate-spin" />
           ) : hasCompanyLogo ? (
             <img
-              src={companySettings.companyLogo!}
-              alt={companySettings.companyName || activeWorkspace?.name || "Workspace"}
+              src={activeWorkspaceLogo!}
+              alt={displayWorkspaceName}
               className="h-6 w-6 rounded-md object-contain"
               onError={() => setLogoLoadFailed(true)}
             />

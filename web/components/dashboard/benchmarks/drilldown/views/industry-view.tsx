@@ -27,6 +27,8 @@ export function IndustryView({ result }: IndustryViewProps) {
     return ordered.filter(Boolean).slice(0, 5);
   }, [companyIndustry]);
   const aiComparisonPoints = result.aiDetailBriefing?.views.industry.comparisonPoints ?? null;
+  const prefetchedIndustryBenchmarks = result.detailSupportData?.industryBenchmarks ?? {};
+  const prefetchedFallbackBenchmark = result.detailSupportData?.industryFallbackBenchmark ?? null;
 
   const aiIndustryData = useMemo(
     () =>
@@ -44,6 +46,12 @@ export function IndustryView({ result }: IndustryViewProps) {
     if (aiIndustryData.length > 0) {
       setIndustryBenchmarks({});
       setFallbackBenchmark(null);
+      return;
+    }
+
+    if (Object.keys(prefetchedIndustryBenchmarks).length > 0 || prefetchedFallbackBenchmark) {
+      setIndustryBenchmarks(prefetchedIndustryBenchmarks);
+      setFallbackBenchmark(prefetchedFallbackBenchmark);
       return;
     }
 
@@ -95,7 +103,16 @@ export function IndustryView({ result }: IndustryViewProps) {
     };
 
     void run();
-  }, [aiIndustryData.length, industriesToLoad, level.id, location.id, result.formData.companySize, role.id]);
+  }, [
+    aiIndustryData.length,
+    industriesToLoad,
+    level.id,
+    location.id,
+    prefetchedFallbackBenchmark,
+    prefetchedIndustryBenchmarks,
+    result.formData.companySize,
+    role.id,
+  ]);
 
   const industryData = aiIndustryData.length > 0
     ? aiIndustryData

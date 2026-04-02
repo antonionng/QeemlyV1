@@ -1,5 +1,6 @@
 import { summarizeBenchmarkTrust } from "@/lib/benchmarks/trust";
 import { fetchMarketBenchmarks } from "@/lib/benchmarks/platform-market";
+import { buildAiBenchmarkRows } from "@/lib/benchmarks/ai-benchmark-rows";
 import { __internal as employeeInternals } from "@/lib/employees/data-service";
 import { createServiceClient } from "@/lib/supabase/service";
 import type { Report } from "./types";
@@ -166,7 +167,7 @@ export function composeReportResult(
 
 export async function generateReportResult(report: Report): Promise<GeneratedReportResult> {
   const supabase = createServiceClient();
-  const [employeesResult, workspaceBenchmarksResult, complianceResult, marketBenchmarks] = await Promise.all([
+  const [employeesResult, workspaceBenchmarksResult, complianceResult] = await Promise.all([
     supabase
       .from("employees")
       .select("id, first_name, last_name, email, department, role_id, level_id, location_id, base_salary, bonus, equity, status, employment_type, hire_date, performance_rating")
@@ -183,7 +184,6 @@ export async function generateReportResult(report: Report): Promise<GeneratedRep
       .select("compliance_score, updated_at, ai_scoring_metadata")
       .eq("workspace_id", report.workspace_id)
       .maybeSingle(),
-    fetchMarketBenchmarks(supabase),
   ]);
 
   if (employeesResult.error) throw new Error(employeesResult.error.message);
@@ -192,6 +192,23 @@ export async function generateReportResult(report: Report): Promise<GeneratedRep
 
   const employeeRows = (employeesResult.data || []) as Record<string, unknown>[];
   const workspaceBenchmarkRows = (workspaceBenchmarksResult.data || []) as Record<string, unknown>[];
+  const marketBenchmarks = await (async () => {
+    try {
+      const aiBenchmarks = await buildAiBenchmarkRows(
+        employeeRows.map((row) => ({
+          roleId: String(row.role_id || ""),
+          locationId: String(row.location_id || ""),
+        })),
+      );
+      if (aiBenchmarks.length > 0) {
+        return aiBenchmarks;
+      }
+    } catch {
+      // Fall back to pooled market rows.
+    }
+
+    return fetchMarketBenchmarks(supabase);
+  })();
   const marketBenchmarkRows = marketBenchmarks.map((row) => ({
     role_id: row.role_id,
     location_id: row.location_id,

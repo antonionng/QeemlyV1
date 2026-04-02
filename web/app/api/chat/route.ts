@@ -14,6 +14,7 @@ import { buildEmployeeChatInput, loadEmployeeChatContext } from "@/lib/ai/chat/e
 import { encodeChatEvent, extractOutputTextDelta } from "@/lib/ai/chat/stream";
 import { buildThreadTitle } from "@/lib/ai/chat/threads";
 import { fetchMarketBenchmarks } from "@/lib/benchmarks/platform-market";
+import { buildAiBenchmarkRows } from "@/lib/benchmarks/ai-benchmark-rows";
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
@@ -73,11 +74,28 @@ export async function POST(request: NextRequest) {
           let finalPayload: ChatFinalPayload;
 
           if (thread.mode === "general") {
+            const { data: generalEmployeeRows } = await supabase
+              .from("employees")
+              .select("role_id, location_id")
+              .eq("workspace_id", wsContext.context.workspace_id)
+              .eq("status", "active")
+              .limit(500);
+            const helperBenchmarks = await buildAiBenchmarkRows(
+              ((generalEmployeeRows || []) as Array<{ role_id?: string | null; location_id?: string | null }>).map(
+                (row) => ({
+                  roleId: String(row.role_id || ""),
+                  locationId: String(row.location_id || ""),
+                }),
+              ),
+            ).catch(() => []);
             const helperResolution = await resolveGeneralHelperQuestion({
               supabase: supabase as { from: (table: string) => unknown },
               workspaceId: wsContext.context.workspace_id,
               message: chatRequest.message,
-              marketBenchmarks: await fetchMarketBenchmarks(supabase as never).catch(() => []),
+              marketBenchmarks:
+                helperBenchmarks.length > 0
+                  ? helperBenchmarks
+                  : await fetchMarketBenchmarks(supabase as never).catch(() => []),
             });
 
             if (helperResolution.handled) {

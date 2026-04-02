@@ -390,7 +390,7 @@ describe("GET /api/benchmarks/search", () => {
     expect(payload.diagnostics.market.clientWarning).toBeNull();
   });
 
-  it("returns a short ai summary alongside strong market data", async () => {
+  it("returns a short ai summary while still using AI as the primary benchmark", async () => {
     createClientMock.mockResolvedValue(createSessionSupabase());
     createServiceClientMock.mockReturnValue({
       from: vi.fn((table: string) => {
@@ -443,7 +443,10 @@ describe("GET /api/benchmarks/search", () => {
     const payload = await response.json();
 
     expect(response.status).toBe(200);
-    expect(payload.benchmark).toMatchObject({ benchmarkSource: "market" });
+    expect(payload.benchmark).toMatchObject({
+      benchmarkSource: "ai-estimated",
+      percentiles: { p50: 240000 },
+    });
     expect(payload.aiSummary).toContain("competitive");
     expect(payload.aiAdvisory).toBeUndefined();
     expect(payload.aiDetailBriefing).toBeUndefined();

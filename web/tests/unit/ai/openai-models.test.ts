@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
   getAdvisoryModel,
+  getBenchmarkBriefingModel,
   getChatModel,
   getComplianceScoringModel,
   getBenchmarkModel,
@@ -11,6 +12,7 @@ const originalEnv = {
   OPENAI_ADVISORY_MODEL: process.env.OPENAI_ADVISORY_MODEL,
   OPENAI_COMPLIANCE_SCORING_MODEL: process.env.OPENAI_COMPLIANCE_SCORING_MODEL,
   OPENAI_BENCHMARK_MODEL: process.env.OPENAI_BENCHMARK_MODEL,
+  OPENAI_BENCHMARK_BRIEFING_MODEL: process.env.OPENAI_BENCHMARK_BRIEFING_MODEL,
 };
 
 afterEach(() => {
@@ -18,6 +20,7 @@ afterEach(() => {
   process.env.OPENAI_ADVISORY_MODEL = originalEnv.OPENAI_ADVISORY_MODEL;
   process.env.OPENAI_COMPLIANCE_SCORING_MODEL = originalEnv.OPENAI_COMPLIANCE_SCORING_MODEL;
   process.env.OPENAI_BENCHMARK_MODEL = originalEnv.OPENAI_BENCHMARK_MODEL;
+  process.env.OPENAI_BENCHMARK_BRIEFING_MODEL = originalEnv.OPENAI_BENCHMARK_BRIEFING_MODEL;
 });
 
 describe("AI model selectors", () => {
@@ -26,11 +29,13 @@ describe("AI model selectors", () => {
     delete process.env.OPENAI_ADVISORY_MODEL;
     delete process.env.OPENAI_COMPLIANCE_SCORING_MODEL;
     delete process.env.OPENAI_BENCHMARK_MODEL;
+    delete process.env.OPENAI_BENCHMARK_BRIEFING_MODEL;
 
     expect(getChatModel()).toBe("gpt-5.4-mini");
     expect(getAdvisoryModel()).toBe("gpt-5.4");
     expect(getComplianceScoringModel()).toBe("gpt-5.4");
     expect(getBenchmarkModel()).toBe("gpt-5.4");
+    expect(getBenchmarkBriefingModel()).toBe("gpt-5.4-mini");
   });
 
   it("respects explicit model overrides", () => {
@@ -38,10 +43,12 @@ describe("AI model selectors", () => {
     process.env.OPENAI_ADVISORY_MODEL = "gpt-5.2-custom";
     process.env.OPENAI_COMPLIANCE_SCORING_MODEL = "gpt-5.2-compliance";
     process.env.OPENAI_BENCHMARK_MODEL = "gpt-5.3-bench";
+    process.env.OPENAI_BENCHMARK_BRIEFING_MODEL = "gpt-5.3-brief";
 
     expect(getChatModel()).toBe("gpt-5-mini-custom");
     expect(getAdvisoryModel()).toBe("gpt-5.2-custom");
     expect(getComplianceScoringModel()).toBe("gpt-5.2-compliance");
     expect(getBenchmarkModel()).toBe("gpt-5.3-bench");
+    expect(getBenchmarkBriefingModel()).toBe("gpt-5.3-brief");
   });
 });

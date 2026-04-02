@@ -39,6 +39,13 @@ const { reconcileWorkspaceMock, resetFormMock, loadFilterMock } = vi.hoisted(() 
   loadFilterMock: vi.fn(),
 }));
 
+const { companySettingsState } = vi.hoisted(() => ({
+  companySettingsState: {
+    updateSettings: vi.fn(),
+    markAsConfigured: vi.fn(),
+  },
+}));
+
 vi.mock("@/lib/benchmarks/benchmark-state", () => ({
   useBenchmarkState: () => ({
     step: "form",
@@ -63,6 +70,11 @@ vi.mock("@/lib/benchmarks/results-presentation", () => ({
   getBenchmarkPageTitle: () => "Benchmarking",
 }));
 
+vi.mock("@/lib/company", () => ({
+  useCompanySettings: (selector?: (state: typeof companySettingsState) => unknown) =>
+    selector ? selector(companySettingsState) : companySettingsState,
+}));
+
 import BenchmarksPage from "@/app/(dashboard)/dashboard/benchmarks/page";
 
 describe("BenchmarksPage", () => {
@@ -74,6 +86,8 @@ describe("BenchmarksPage", () => {
     container = document.createElement("div");
     document.body.appendChild(container);
     hasDbEmployeesMock.mockResolvedValue(false);
+    companySettingsState.updateSettings.mockReset();
+    companySettingsState.markAsConfigured.mockReset();
   });
 
   afterEach(() => {
@@ -264,5 +278,82 @@ describe("BenchmarksPage", () => {
 
     expect(container.textContent).toContain("Source: Qeemly Market Data");
     expect(container.textContent).toContain("Published: 17 Mar 2026");
+  });
+
+  it("syncs benchmark branding to the active workspace while viewing as admin", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: string | URL | Request) => {
+        const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+        if (url.includes("/api/benchmarks/stats")) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                total: 12,
+                uniqueRoles: 2,
+                uniqueLocations: 2,
+                sources: ["market"],
+                lastUpdated: "2026-03-17T10:00:00.000Z",
+                hasRealData: true,
+                diagnostics: {
+                  market: {
+                    readMode: "session",
+                    clientWarning: null,
+                    error: null,
+                    warning: null,
+                    hasServiceRoleKey: true,
+                    hasPlatformWorkspaceId: true,
+                  },
+                },
+              }),
+              { status: 200, headers: { "Content-Type": "application/json" } },
+            ),
+          );
+        }
+
+        if (url.includes("/api/settings")) {
+          return Promise.resolve(
+            new Response(
+              JSON.stringify({
+                workspace_id: "workspace-2",
+                workspace_name: "Qeemly Test",
+                is_viewing_as_admin: true,
+                settings: {
+                  company_name: "Experrt",
+                  company_logo: "https://example.com/expert-logo.png",
+                  is_configured: true,
+                },
+              }),
+              { status: 200, headers: { "Content-Type": "application/json" } },
+            ),
+          );
+        }
+
+        throw new Error(`Unexpected fetch: ${url}`);
+      }),
+    );
+
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(React.createElement(BenchmarksPage));
+    });
+
+    await act(async () => {
+      await vi.runAllTimersAsync();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(companySettingsState.updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        companyName: "Qeemly Test",
+        companyLogo: null,
+      }),
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
   });
 });

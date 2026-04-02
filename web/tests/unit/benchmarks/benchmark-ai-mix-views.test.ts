@@ -236,4 +236,60 @@ describe("benchmark AI mix views", () => {
       root.unmount();
     });
   });
+
+  it("holds the offer builder in a loading state while the AI briefing is still pending", async () => {
+    const container = document.createElement("div");
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        React.createElement(OfferBuilderView, {
+          result: {
+            ...makeResult(),
+            aiDetailBriefing: null,
+            aiDetailBriefingStatus: "loading",
+          },
+        }),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain("Qeemly AI is preparing the package breakdown for this market view.");
+    expect(container.textContent).toContain("Qeemly AI is preparing adjacent-level anchors for this market view.");
+    expect(container.textContent).not.toContain("100% of total package");
+    expect(getBenchmarksBatchMock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("holds the compensation mix view in a loading state while the AI briefing is still pending", async () => {
+    const container = document.createElement("div");
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        React.createElement(CompMixView, {
+          result: {
+            ...makeResult(),
+            aiDetailBriefing: null,
+            aiDetailBriefingStatus: "loading",
+          },
+        }),
+      );
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain("Qeemly AI is preparing the compensation mix for this market view.");
+    expect(container.textContent).not.toContain("Cash Compensation");
+    expect(container.textContent).not.toContain(
+      "Detailed compensation component splits are not yet available for this workspace.",
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });
