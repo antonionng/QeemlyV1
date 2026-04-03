@@ -51,15 +51,19 @@ export type AiBenchmarkAdvisoryLight = {
 
 type CacheEntry = { data: AiBenchmarkAdvisory; createdAt: number };
 type LightCacheEntry = { data: AiBenchmarkAdvisoryLight; createdAt: number };
+type DetailBriefingCacheEntry = { data: BenchmarkDetailAiBriefing; createdAt: number };
 
 const cache = new Map<string, CacheEntry>();
 const inFlight = new Map<string, Promise<AiBenchmarkAdvisory | null>>();
 const lightCache = new Map<string, LightCacheEntry>();
 const lightInFlight = new Map<string, Promise<AiBenchmarkAdvisoryLight | null>>();
+const detailBriefingCache = new Map<string, DetailBriefingCacheEntry>();
+const detailBriefingInFlight = new Map<string, Promise<BenchmarkDetailAiBriefing | null>>();
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const SHARED_CACHE_TTL_SECONDS = 5 * 60;
 const AI_ADVISORY_SCHEMA_VERSION = "detail-numbers-v2";
 const AI_LIGHT_ADVISORY_SCHEMA_VERSION = "summary-v1";
+const AI_DETAIL_BRIEFING_SCHEMA_VERSION = "detail-briefing-v1";
 
 const getSharedAiBenchmarkAdvisory = unstable_cache(
   async (
@@ -83,6 +87,17 @@ const getSharedAiBenchmarkAdvisoryLight = unstable_cache(
   { revalidate: SHARED_CACHE_TTL_SECONDS },
 );
 
+const getSharedAiBenchmarkDetailBriefing = unstable_cache(
+  async (
+    roleId: string,
+    locationId: string,
+    industry: string | null,
+    companySize: string | null,
+  ) => callGptDetailBriefing(roleId, locationId, industry, companySize),
+  [AI_DETAIL_BRIEFING_SCHEMA_VERSION, "shared"],
+  { revalidate: SHARED_CACHE_TTL_SECONDS },
+);
+
 function cacheKey(
   roleId: string,
   locationId: string,
@@ -101,11 +116,22 @@ function lightCacheKey(
   return `${AI_LIGHT_ADVISORY_SCHEMA_VERSION}::${roleId}::${locationId}::${industry ?? ""}::${companySize ?? ""}`;
 }
 
+function detailBriefingCacheKey(
+  roleId: string,
+  locationId: string,
+  industry: string | null,
+  companySize: string | null,
+): string {
+  return `${AI_DETAIL_BRIEFING_SCHEMA_VERSION}::${roleId}::${locationId}::${industry ?? ""}::${companySize ?? ""}`;
+}
+
 export function invalidateAiBenchmarkCache(): void {
   cache.clear();
   inFlight.clear();
   lightCache.clear();
   lightInFlight.clear();
+  detailBriefingCache.clear();
+  detailBriefingInFlight.clear();
 }
 
 // ---------------------------------------------------------------------------
@@ -238,6 +264,45 @@ export async function getAiBenchmarkAdvisoryLight(
   return request;
 }
 
+export async function getAiBenchmarkDetailBriefing(
+  roleId: string,
+  locationId: string,
+  industry: string | null,
+  companySize: string | null,
+): Promise<BenchmarkDetailAiBriefing | null> {
+  const key = detailBriefingCacheKey(roleId, locationId, industry, companySize);
+  const cached = detailBriefingCache.get(key);
+  if (cached && Date.now() - cached.createdAt < CACHE_TTL) {
+    return cached.data;
+  }
+
+  const inFlightRequest = detailBriefingInFlight.get(key);
+  if (inFlightRequest) {
+    return inFlightRequest;
+  }
+
+  const request = (async () => {
+    try {
+      const detailBriefing = await getSharedAiBenchmarkDetailBriefing(
+        roleId,
+        locationId,
+        industry,
+        companySize,
+      );
+      detailBriefingCache.set(key, { data: detailBriefing, createdAt: Date.now() });
+      return detailBriefing;
+    } catch (error) {
+      console.error("[ai-estimate] GPT detail briefing call failed:", error);
+      return null;
+    } finally {
+      detailBriefingInFlight.delete(key);
+    }
+  })();
+
+  detailBriefingInFlight.set(key, request);
+  return request;
+}
+
 // ---------------------------------------------------------------------------
 // GPT call
 // ---------------------------------------------------------------------------
@@ -356,6 +421,47 @@ const LIGHT_JSON_SCHEMA = {
   },
 };
 
+const DETAIL_BRIEFING_JSON_SCHEMA = {
+  name: "compensation_detail_briefing",
+  strict: true,
+  schema: {
+    type: "object" as const,
+    properties: {
+      executiveBriefing: { type: "string" as const },
+      hiringSignal: { type: "string" as const },
+      negotiationPosture: { type: "string" as const },
+      views: {
+        type: "object" as const,
+        properties: {
+          levelTable: detailBriefingSectionSchema(),
+          aiInsights: detailBriefingSectionSchema(),
+          trend: detailBriefingSectionSchema(),
+          salaryBreakdown: detailBriefingSectionSchema({ includePackageBreakdown: true }),
+          industry: detailBriefingSectionSchema(),
+          companySize: detailBriefingSectionSchema(),
+          geoComparison: detailBriefingSectionSchema(),
+          compMix: detailBriefingSectionSchema({ includeCompensationMix: true }),
+          offerBuilder: detailBriefingSectionSchema({ includePackageBreakdown: true }),
+        },
+        required: [
+          "levelTable",
+          "aiInsights",
+          "trend",
+          "salaryBreakdown",
+          "industry",
+          "companySize",
+          "geoComparison",
+          "compMix",
+          "offerBuilder",
+        ],
+        additionalProperties: false,
+      },
+    },
+    required: ["executiveBriefing", "hiringSignal", "negotiationPosture", "views"],
+    additionalProperties: false,
+  },
+};
+
 function sectionSchema() {
   return {
     type: "object" as const,
@@ -442,6 +548,76 @@ function sectionSchema() {
       "comparisonPoints",
       "trendPoints",
     ],
+    additionalProperties: false,
+  };
+}
+
+function detailBriefingSectionSchema(options: {
+  includePackageBreakdown?: boolean;
+  includeCompensationMix?: boolean;
+} = {}) {
+  const properties: {
+    summary: { type: "string" };
+    action: { type: ["string", "null"] };
+    packageBreakdown?: {
+      type: ["object", "null"];
+      properties: {
+        basicSalaryPct: { type: "number" };
+        housingPct: { type: "number" };
+        transportPct: { type: "number" };
+        otherAllowancesPct: { type: "number" };
+      };
+      required: ["basicSalaryPct", "housingPct", "transportPct", "otherAllowancesPct"];
+      additionalProperties: false;
+    };
+    compensationMix?: {
+      type: ["object", "null"];
+      properties: {
+        basicSalaryPct: { type: "number" };
+        housingPct: { type: "number" };
+        transportPct: { type: "number" };
+        otherAllowancesPct: { type: "number" };
+      };
+      required: ["basicSalaryPct", "housingPct", "transportPct", "otherAllowancesPct"];
+      additionalProperties: false;
+    };
+  } = {
+    summary: { type: "string" as const },
+    action: { type: ["string", "null"] as const },
+  };
+
+  if (options.includePackageBreakdown) {
+    properties.packageBreakdown = {
+      type: ["object", "null"] as const,
+      properties: {
+        basicSalaryPct: { type: "number" as const },
+        housingPct: { type: "number" as const },
+        transportPct: { type: "number" as const },
+        otherAllowancesPct: { type: "number" as const },
+      },
+      required: ["basicSalaryPct", "housingPct", "transportPct", "otherAllowancesPct"],
+      additionalProperties: false,
+    };
+  }
+
+  if (options.includeCompensationMix) {
+    properties.compensationMix = {
+      type: ["object", "null"] as const,
+      properties: {
+        basicSalaryPct: { type: "number" as const },
+        housingPct: { type: "number" as const },
+        transportPct: { type: "number" as const },
+        otherAllowancesPct: { type: "number" as const },
+      },
+      required: ["basicSalaryPct", "housingPct", "transportPct", "otherAllowancesPct"],
+      additionalProperties: false,
+    };
+  }
+
+  return {
+    type: "object" as const,
+    properties,
+    required: ["summary", "action"],
     additionalProperties: false,
   };
 }
@@ -549,6 +725,45 @@ Guidelines:
 - Return one short summary in 1 or 2 sentences. Make it specific and useful for compensation decisions.`;
 }
 
+function buildDetailBriefingPrompt(
+  roleId: string,
+  locationId: string,
+  industry: string | null,
+  companySize: string | null,
+): string {
+  const role = ROLES.find((entry) => entry.id === roleId);
+  const location = LOCATIONS.find((entry) => entry.id === locationId);
+
+  const roleTitle = role?.title ?? roleId;
+  const city = location?.city ?? locationId;
+  const country = location?.country ?? "";
+  const currency = location?.currency ?? "AED";
+  const industryLine = industry ? `Industry: ${industry}` : "Industry: Broad market";
+  const sizeLine = companySize
+    ? `Company size: ${companySize} employees`
+    : "Company size: Broad market";
+
+  return `You are a senior compensation and rewards analyst with deep expertise in GCC labour markets.
+
+Create a concise shared AI drilldown briefing for this benchmark:
+
+Role: ${roleTitle} (${role?.family ?? "General"})
+Location: ${city}, ${country}
+Currency: ${currency}
+${industryLine}
+${sizeLine}
+
+Important constraints:
+- The numeric charts, comparisons, trend lines, and level tables are populated separately from Qeemly market data.
+- Do not invent comparison tables, level arrays, geo arrays, or trend arrays.
+- Focus on narrative interpretation and package guidance only.
+- Keep each summary short, specific, and useful for compensation decisions.
+- Each action should be short and direct. Use null only if no action is needed.
+- For salaryBreakdown and offerBuilder, include a realistic packageBreakdown percentage split across basic salary, housing, transport, and other allowances that totals 100.
+- For compMix, include a realistic compensationMix percentage split across the same four categories that totals 100.
+- For all other sections, only provide summary and action.`;
+}
+
 async function callGpt(
   roleId: string,
   locationId: string,
@@ -633,4 +848,41 @@ async function callGptLight(
   }
 
   return parsed;
+}
+
+async function callGptDetailBriefing(
+  roleId: string,
+  locationId: string,
+  industry: string | null,
+  companySize: string | null,
+): Promise<BenchmarkDetailAiBriefing> {
+  const client = getOpenAIClient();
+  const model = getBenchmarkBriefingModel();
+
+  const response = await client.chat.completions.create({
+    model,
+    temperature: 0.3,
+    messages: [
+      {
+        role: "system",
+        content:
+          "You are a compensation benchmarking engine. Respond only with the requested JSON schema. Do not include markdown formatting.",
+      },
+      {
+        role: "user",
+        content: buildDetailBriefingPrompt(roleId, locationId, industry, companySize),
+      },
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: DETAIL_BRIEFING_JSON_SCHEMA,
+    },
+  });
+
+  const content = response.choices[0]?.message?.content;
+  if (!content) {
+    throw new Error("Empty GPT response");
+  }
+
+  return JSON.parse(content) as BenchmarkDetailAiBriefing;
 }

@@ -2,10 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
   createClientMock,
-  getAiBenchmarkAdvisoryMock,
+  getAiBenchmarkDetailBriefingMock,
 } = vi.hoisted(() => ({
   createClientMock: vi.fn(),
-  getAiBenchmarkAdvisoryMock: vi.fn(),
+  getAiBenchmarkDetailBriefingMock: vi.fn(),
 }));
 
 vi.mock("@/lib/supabase/server", () => ({
@@ -13,7 +13,7 @@ vi.mock("@/lib/supabase/server", () => ({
 }));
 
 vi.mock("@/lib/benchmarks/ai-estimate", () => ({
-  getAiBenchmarkAdvisory: getAiBenchmarkAdvisoryMock,
+  getAiBenchmarkDetailBriefing: getAiBenchmarkDetailBriefingMock,
 }));
 
 import { GET } from "@/app/api/benchmarks/briefing/route";
@@ -49,19 +49,7 @@ describe("GET /api/benchmarks/briefing", () => {
   });
 
   it("returns the full detail briefing for the requested benchmark", async () => {
-    getAiBenchmarkAdvisoryMock.mockResolvedValue({
-      levels: [
-        { levelId: "ic2", levelName: "Mid-Level (IC2)", p10: 180000, p25: 200000, p50: 240000, p75: 280000, p90: 320000 },
-      ],
-      currency: "AED",
-      payPeriod: "annual",
-      reasoning: "Strong demand for DevOps in Dubai.",
-      marketContext: "UAE tech market remains competitive.",
-      confidenceNote: "Use with market data.",
-      industryInsight: null,
-      companySizeInsight: null,
-      detailBriefing: DETAIL_BRIEFING,
-    });
+    getAiBenchmarkDetailBriefingMock.mockResolvedValue(DETAIL_BRIEFING);
 
     const request = new Request(
       "http://localhost/api/benchmarks/briefing?roleId=swe-devops&locationId=dubai&levelId=ic2&industry=Fintech&companySize=201-500",
@@ -71,7 +59,7 @@ describe("GET /api/benchmarks/briefing", () => {
     const payload = await response.json();
 
     expect(response.status).toBe(200);
-    expect(getAiBenchmarkAdvisoryMock).toHaveBeenCalledWith(
+    expect(getAiBenchmarkDetailBriefingMock).toHaveBeenCalledWith(
       "swe-devops",
       "dubai",
       "Fintech",

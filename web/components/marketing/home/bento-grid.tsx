@@ -67,7 +67,7 @@ export function HomeBentoGrid() {
           return (
             <article
               key={card.title}
-              className={`relative overflow-hidden rounded-[2.5rem] px-10 py-12 text-white ${baseClassName} ${shellClassName}`}
+              className={`relative overflow-hidden rounded-[2.5rem] px-6 py-8 text-white sm:px-10 sm:py-12 ${baseClassName} ${shellClassName}`}
             >
               {card.imageSrc ? (
                 <>

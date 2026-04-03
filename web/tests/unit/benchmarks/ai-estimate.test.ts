@@ -25,6 +25,7 @@ vi.mock("next/cache", () => ({
 import {
   getAiBenchmarkForLevel,
   getAiBenchmarkAdvisory,
+  getAiBenchmarkDetailBriefing,
   getAiBenchmarkForLevelLight,
   getAiBenchmarkAdvisoryLight,
 } from "@/lib/benchmarks/ai-estimate";
@@ -56,6 +57,50 @@ const MOCK_LIGHT_ADVISORY = {
   currency: "AED",
   payPeriod: "annual",
   summary: "Software engineer pay in Abu Dhabi remains competitive, with fintech premiums holding above the broader market.",
+};
+
+const MOCK_DETAIL_BRIEFING = {
+  executiveBriefing: "Abu Dhabi engineering pay remains competitive, with the strongest pressure at senior IC levels.",
+  hiringSignal: "Senior backend talent remains hard to close at median in this market.",
+  negotiationPosture: "Keep a modest upward buffer for late-stage candidates.",
+  views: {
+    levelTable: { summary: "Spacing between nearby levels is still healthy.", action: "Use the current band as the primary anchor." },
+    aiInsights: { summary: "Candidates react best to crisp market positioning.", action: "Lead with a clear rationale for your target percentile." },
+    trend: { summary: "Market momentum is still positive overall.", action: "Avoid assuming immediate cooling." },
+    salaryBreakdown: {
+      summary: "A cash-led package remains the clearest offer shape.",
+      action: "Keep allowances simple and easy to explain.",
+      packageBreakdown: {
+        basicSalaryPct: 70,
+        housingPct: 15,
+        transportPct: 8,
+        otherAllowancesPct: 7,
+      },
+    },
+    industry: { summary: "Industry premiums remain meaningful for this role.", action: "Expect comp references above the broad market." },
+    companySize: { summary: "Structured mid-market offers are still credible.", action: "Use policy clarity as a differentiator." },
+    geoComparison: { summary: "Regional location gaps are still material.", action: "Treat relocation cases separately." },
+    compMix: {
+      summary: "Most value should remain in fixed cash.",
+      action: "Do not overcomplicate the package.",
+      compensationMix: {
+        basicSalaryPct: 68,
+        housingPct: 16,
+        transportPct: 8,
+        otherAllowancesPct: 8,
+      },
+    },
+    offerBuilder: {
+      summary: "A decisive first offer still matters.",
+      action: "Preserve a small buffer for final negotiation.",
+      packageBreakdown: {
+        basicSalaryPct: 70,
+        housingPct: 15,
+        transportPct: 8,
+        otherAllowancesPct: 7,
+      },
+    },
+  },
 };
 
 describe("AI benchmark advisory", () => {
@@ -212,5 +257,15 @@ describe("AI benchmark advisory", () => {
     const result = await getAiBenchmarkAdvisoryLight("swe", "abu-dhabi", null, null);
 
     expect(result).toBeNull();
+  });
+
+  it("returns the dedicated detail briefing from the smaller advisory response", async () => {
+    mockCreate.mockResolvedValueOnce({
+      choices: [{ message: { content: JSON.stringify(MOCK_DETAIL_BRIEFING) } }],
+    });
+
+    const result = await getAiBenchmarkDetailBriefing("swe", "abu-dhabi", "Fintech", "201-500");
+
+    expect(result).toEqual(MOCK_DETAIL_BRIEFING);
   });
 });

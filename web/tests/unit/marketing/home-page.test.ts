@@ -73,8 +73,13 @@ describe("home page", () => {
     expect(html).toContain("lg:w-[46rem]");
     expect(html).toContain("xl:w-[53.125rem]");
     expect(html).toContain("max-w-none");
-    expect(html).toContain("h-[14.375rem]");
-    expect(html).toContain("text-[2.25rem]");
+    expect(html).toContain("py-12");
+    expect(html).toContain("sm:py-16");
+    expect(html).toContain("lg:h-[14.375rem]");
+    expect(html).toContain("text-[1.875rem]");
+    expect(html).toContain("sm:text-[2.25rem]");
+    expect(html).toContain("px-6 py-8");
+    expect(html).toContain("sm:px-10 sm:py-12");
     expect(html).toContain("lg:grid-cols-[minmax(0,39rem)_minmax(0,1fr)]");
     expect(html).toContain("xl:grid-cols-[44.5625rem_44.5625rem]");
     expect(html).toContain("lg:left-[-3rem]");

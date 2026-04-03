@@ -142,6 +142,13 @@ export function BenchmarkResults({ result, hasCompanyData = true }: BenchmarkRes
     detailSupportData: result.detailSupportData,
     detailSupportStatus: result.detailSupportStatus,
   });
+  const detailSurfaceUnavailable =
+    result.aiDetailBriefingStatus === "unavailable" || result.detailSupportStatus === "unavailable";
+  const detailBreakdownCtaLabel = detailSurfaceReady
+    ? "View Detailed Breakdown"
+    : detailSurfaceUnavailable
+      ? "Detailed breakdown unavailable"
+      : "Preparing detailed breakdown...";
 
   useEffect(() => {
     const filters = {
@@ -1168,7 +1175,7 @@ export function BenchmarkResults({ result, hasCompanyData = true }: BenchmarkRes
           disabled={!detailSurfaceReady}
           className="bench-cta max-w-xs disabled:cursor-not-allowed disabled:opacity-70"
         >
-          {detailSurfaceReady ? "View Detailed Breakdown" : "Preparing detailed breakdown..."}{" "}
+          {detailBreakdownCtaLabel}{" "}
           <ArrowRight className="h-4 w-4" />
         </button>
       </div>

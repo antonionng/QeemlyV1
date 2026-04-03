@@ -478,6 +478,83 @@ describe("BenchmarkResults", () => {
     vi.unstubAllGlobals();
   });
 
+  it("does not keep showing preparing when the detailed breakdown becomes unavailable", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          benchmarkSource: "market",
+          bandLow: 120000,
+          bandHigh: 180000,
+          matchingEmployeeCount: 0,
+          inBandCount: 0,
+        }),
+      })),
+    );
+
+    const container = document.createElement("div");
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        React.createElement(BenchmarkResults, {
+          result: {
+            formData: {
+              context: "existing",
+              roleId: "pm",
+              levelId: "ic3",
+              locationId: "riyadh",
+              employmentType: "national",
+              currentSalaryLow: null,
+              currentSalaryHigh: null,
+              industry: "Fintech",
+              companySize: "1-50",
+              fundingStage: null,
+              targetPercentile: 50,
+            },
+            benchmark: baseBenchmark,
+            role: {
+              id: "pm",
+              title: "Product Manager",
+              family: "Product",
+              icon: "PM",
+            },
+            level: {
+              id: "ic3",
+              name: "Senior (IC3)",
+              category: "IC",
+            },
+            location: {
+              id: "riyadh",
+              city: "Riyadh",
+              country: "Saudi Arabia",
+              countryCode: "SA",
+              currency: "AED",
+              flag: "SA",
+            },
+            isOverridden: false,
+            aiDetailBriefing: null,
+            aiDetailBriefingStatus: "unavailable",
+            detailSupportData,
+            detailSupportStatus: "ready",
+            createdAt: new Date("2026-03-12T00:00:00.000Z"),
+          },
+        }),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).not.toContain("Preparing detailed breakdown");
+    expect(container.textContent).toContain("Detailed breakdown unavailable");
+
+    await act(async () => {
+      root.unmount();
+    });
+    vi.unstubAllGlobals();
+  });
+
   it("enables the detailed breakdown CTA once AI briefing and support data are both ready", async () => {
     vi.stubGlobal(
       "fetch",

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAiBenchmarkAdvisory } from "@/lib/benchmarks/ai-estimate";
+import { getAiBenchmarkDetailBriefing } from "@/lib/benchmarks/ai-estimate";
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET(request: NextRequest) {
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const advisory = await getAiBenchmarkAdvisory(
+  const detailBriefing = await getAiBenchmarkDetailBriefing(
     roleId,
     locationId,
     industry,
@@ -35,6 +35,6 @@ export async function GET(request: NextRequest) {
   );
 
   return NextResponse.json({
-    detailBriefing: advisory?.detailBriefing ?? null,
+    detailBriefing,
   });
 }
