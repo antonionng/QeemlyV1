@@ -1,9 +1,9 @@
 "use client";
 
 import { type BenchmarkResult } from "@/lib/benchmarks/benchmark-state";
-import { normalizeAiBreakdown } from "@/lib/benchmarks/detail-ai";
 import { applyBenchmarkViewMode } from "@/lib/benchmarks/pay-period";
 import { useSalaryView } from "@/lib/salary-view-store";
+import { ModuleStateBanner } from "../module-state-banner";
 import { SharedAiCallout } from "../shared-ai-callout";
 
 interface CompMixViewProps {
@@ -13,20 +13,19 @@ interface CompMixViewProps {
 export function CompMixView({ result }: CompMixViewProps) {
   const { level, benchmark } = result;
   const { salaryView } = useSalaryView();
-  const isAiBriefingLoading = !result.aiDetailBriefing && result.aiDetailBriefingStatus === "loading";
-  const aiCompensationMix = normalizeAiBreakdown(
-    result.aiDetailBriefing?.views.compMix.compensationMix
-      ?? result.aiDetailBriefing?.views.offerBuilder.packageBreakdown
-      ?? null,
-  );
-  
+
+  const mod = result.detailSurface?.modules.compMix;
+  const isLoading = !mod || result.detailSurfaceStatus === "loading";
+  const breakdown = mod?.data.breakdown;
+  const hasBreakdown = mod?.status === "ready" && breakdown && breakdown.basicSalaryPct > 0;
+
   const convertValue = (annualValue: number) => {
     const viewValue = applyBenchmarkViewMode(annualValue, salaryView);
     return salaryView === "annual"
       ? Math.round(viewValue / 1000) * 1000
       : Math.round(viewValue / 100) * 100;
   };
-  
+
   const formatAED = (value: number) => {
     if (value >= 1000) {
       return `AED ${(value / 1000).toFixed(0)}k`;
@@ -39,39 +38,26 @@ export function CompMixView({ result }: CompMixViewProps) {
   };
 
   const hasEmployerCost = Boolean(benchmark.nationalsCostBreakdown);
-  const compMixData = aiCompensationMix
+  const p50 = convertValue(benchmark.percentiles.p50);
+
+  const compMixData = hasBreakdown
     ? [
-        {
-          name: "Basic Salary",
-          value: Math.round((convertValue(benchmark.percentiles.p50) * aiCompensationMix.basicSalaryPct) / 100),
-          rawValue: benchmark.percentiles.p50,
-        },
-        {
-          name: "Housing",
-          value: Math.round((convertValue(benchmark.percentiles.p50) * aiCompensationMix.housingPct) / 100),
-          rawValue: benchmark.percentiles.p50,
-        },
-        {
-          name: "Transport",
-          value: Math.round((convertValue(benchmark.percentiles.p50) * aiCompensationMix.transportPct) / 100),
-          rawValue: benchmark.percentiles.p50,
-        },
-        {
-          name: "Other Allowances",
-          value: Math.round((convertValue(benchmark.percentiles.p50) * aiCompensationMix.otherAllowancesPct) / 100),
-          rawValue: benchmark.percentiles.p50,
-        },
+        { name: "Basic Salary", value: Math.round((p50 * breakdown.basicSalaryPct) / 100) },
+        { name: "Housing", value: Math.round((p50 * breakdown.housingPct) / 100) },
+        { name: "Transport", value: Math.round((p50 * breakdown.transportPct) / 100) },
+        { name: "Other Allowances", value: Math.round((p50 * breakdown.otherAllowancesPct) / 100) },
       ]
     : hasEmployerCost
       ? [
-          { name: "Cash Compensation", value: convertValue(benchmark.percentiles.p50), rawValue: benchmark.percentiles.p50 },
+          { name: "Cash Compensation", value: p50 },
           {
             name: "Employer Contributions",
-            value: convertValue((benchmark.nationalsCostBreakdown?.gpssaAmount || 0) + (benchmark.nationalsCostBreakdown?.nafisAmount || 0)),
-            rawValue: (benchmark.nationalsCostBreakdown?.gpssaAmount || 0) + (benchmark.nationalsCostBreakdown?.nafisAmount || 0),
+            value: convertValue(
+              (benchmark.nationalsCostBreakdown?.gpssaAmount || 0) + (benchmark.nationalsCostBreakdown?.nafisAmount || 0),
+            ),
           },
         ]
-      : [{ name: "Cash Compensation", value: convertValue(benchmark.percentiles.p50), rawValue: benchmark.percentiles.p50 }];
+      : [{ name: "Cash Compensation", value: p50 }];
 
   const totalComp = compMixData.reduce((sum, item) => sum + item.value, 0);
 
@@ -100,21 +86,21 @@ export function CompMixView({ result }: CompMixViewProps) {
   return (
     <div className="bench-section">
       <h3 className="bench-section-header">Compensation Mix</h3>
-      
+
       <p className="text-xs text-brand-500 mb-4">
         Typical breakdown for {level.name} at P50
       </p>
 
-      {isAiBriefingLoading ? (
-        <div className="rounded-2xl border border-brand-100 bg-brand-50 px-4 py-4 text-sm text-brand-700">
-          Qeemly AI is preparing the compensation mix for this market view.
-        </div>
+      {isLoading ? (
+        <ModuleStateBanner
+          variant="loading"
+          message="Qeemly AI is preparing the compensation mix for this market view."
+        />
       ) : (
         <>
-          {/* Horizontal stacked bar */}
           <div className="h-8 rounded-full overflow-hidden flex mb-4">
             {compMixData.map((item) => {
-              const percentage = (item.value / totalComp) * 100;
+              const percentage = totalComp > 0 ? (item.value / totalComp) * 100 : 0;
               return (
                 <div
                   key={item.name}
@@ -126,15 +112,22 @@ export function CompMixView({ result }: CompMixViewProps) {
             })}
           </div>
 
-          {/* Legend and values */}
           <div className="space-y-3">
             {compMixData.map((item) => {
-              const percentage = (item.value / totalComp) * 100;
+              const percentage = totalComp > 0 ? (item.value / totalComp) * 100 : 0;
               return (
                 <div key={item.name} className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className={`w-3 h-3 rounded-full ${getColor(item.name)}`} />
-                    <span className="text-sm font-medium text-brand-700">{item.name}</span>
+                    <div>
+                      <span className="text-sm font-medium text-brand-700">{item.name}</span>
+                      {item.name === "Housing" ? (
+                        <div className="text-[10px] text-brand-400">Accommodation allowance (shown as Housing).</div>
+                      ) : null}
+                      {item.name === "Transport" ? (
+                        <div className="text-[10px] text-brand-400">Transport allowance component.</div>
+                      ) : null}
+                    </div>
                   </div>
                   <div className="flex items-center gap-3">
                     <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getColorLight(item.name)}`}>
@@ -149,7 +142,6 @@ export function CompMixView({ result }: CompMixViewProps) {
             })}
           </div>
 
-          {/* Total */}
           <div className="mt-4 pt-4 border-t border-border flex items-center justify-between">
             <span className="text-sm font-semibold text-brand-900">Total Compensation</span>
             <span className="text-lg font-bold text-brand-900">{formatAED(totalComp)}</span>
@@ -157,20 +149,19 @@ export function CompMixView({ result }: CompMixViewProps) {
         </>
       )}
 
-      {/* Equity note */}
-      {!isAiBriefingLoading && !aiCompensationMix && !hasEmployerCost && (
+      {!isLoading && !hasBreakdown && !hasEmployerCost && (
         <div className="mt-4 p-3 rounded-xl bg-amber-50 text-xs text-amber-700">
-          Detailed compensation component splits are not yet available for this workspace.
+          {mod?.message ?? "Detailed compensation component splits are not yet available for this workspace."}
         </div>
       )}
 
-      {!isAiBriefingLoading && !aiCompensationMix && hasEmployerCost && (
+      {!isLoading && !hasBreakdown && hasEmployerCost && (
         <div className="mt-4 p-3 rounded-xl bg-purple-50 text-xs text-purple-700">
           Employer contribution components are included where available for this benchmark row.
         </div>
       )}
 
-      <SharedAiCallout section={result.aiDetailBriefing?.views.compMix} />
+      <SharedAiCallout section={mod?.narrative} />
     </div>
   );
 }

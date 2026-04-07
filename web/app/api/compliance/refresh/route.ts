@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getWorkspaceContext } from "@/lib/workspace-context";
 import { refreshComplianceSnapshot } from "@/lib/compliance/snapshot-service";
+import { jsonServerError } from "@/lib/errors/http";
 
 function isRecoverableConfigError(message: string): boolean {
   const lower = message.toLowerCase();
@@ -49,7 +50,10 @@ export async function POST() {
         compliance_score: 0,
         updated_at: null,
         ai_scoring_metadata: { missing_data: ["refresh_unavailable"] },
-        error: message,
+        error: "Compliance refresh is temporarily unavailable.",
+        message: "Compliance refresh is temporarily unavailable.",
+        code: "service_unavailable",
+        action: "Try again in a few minutes.",
       };
       if (isDev) {
         return NextResponse.json({
@@ -64,6 +68,9 @@ export async function POST() {
       }
       return NextResponse.json(payload);
     }
-    return NextResponse.json({ error: message }, { status: 500 });
+    return jsonServerError(error, {
+      defaultMessage: "We could not refresh compliance data right now.",
+      logLabel: "Compliance refresh failed",
+    });
   }
 }

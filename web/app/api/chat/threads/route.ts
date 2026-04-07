@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getWorkspaceContext } from "@/lib/workspace-context";
 import type { ChatMode } from "@/lib/ai/chat/protocol";
 import { summarizeTitleFromMessage } from "@/lib/ai/chat/threads";
+import { jsonServerError, jsonValidationError } from "@/lib/errors/http";
 
 type CreateThreadBody = {
   mode?: ChatMode;
@@ -36,7 +37,10 @@ export async function GET() {
     .limit(200);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonServerError(error, {
+      defaultMessage: "We could not load your chat threads right now.",
+      logLabel: "Chat threads load failed",
+    });
   }
 
   return NextResponse.json({ threads: data || [] });
@@ -53,7 +57,12 @@ export async function POST(request: NextRequest) {
   const body = (await request.json().catch(() => null)) as CreateThreadBody | null;
   const mode = body?.mode;
   if (mode !== "general" && mode !== "employee") {
-    return NextResponse.json({ error: "mode must be one of: general, employee" }, { status: 400 });
+    return jsonValidationError({
+      message: "Please correct the highlighted fields and try again.",
+      fields: {
+        mode: "Choose either general or employee mode and try again.",
+      },
+    });
   }
 
   let employeeId: string | null = null;
@@ -64,7 +73,12 @@ export async function POST(request: NextRequest) {
   if (mode === "employee") {
     const requestedEmployeeId = body?.employeeId || body?.employee?.id;
     if (!requestedEmployeeId?.trim()) {
-      return NextResponse.json({ error: "employeeId is required for employee mode" }, { status: 400 });
+      return jsonValidationError({
+        message: "Please correct the highlighted fields and try again.",
+        fields: {
+          employeeId: "Choose an employee to start this chat.",
+        },
+      });
     }
 
     const { data: employee, error: employeeError } = await supabase
@@ -110,7 +124,10 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonServerError(error, {
+      defaultMessage: "We could not create this chat thread right now.",
+      logLabel: "Chat thread create failed",
+    });
   }
 
   return NextResponse.json({ thread: data }, { status: 201 });

@@ -1,9 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
-
-const ALLOWLIST = (process.env.QEEMLY_SUPERADMINS || "ag@experrt.com")
-  .split(",")
-  .map((e) => e.trim().toLowerCase());
+import { isSuperAdminEmail } from "@/lib/admin/super-admins";
 
 export async function requireSuperAdmin() {
   const supabase = await createClient();
@@ -12,7 +9,7 @@ export async function requireSuperAdmin() {
     return { error: NextResponse.json({ error: "Unauthorized" }, { status: 401 }) };
   }
   const email = user.email?.toLowerCase();
-  if (!email || !ALLOWLIST.includes(email)) {
+  if (!isSuperAdminEmail(email)) {
     return { error: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
   }
   return { user };

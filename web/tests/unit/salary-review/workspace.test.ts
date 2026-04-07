@@ -234,12 +234,45 @@ describe("SalaryReviewOverview", () => {
       );
     });
 
-    expect(container.textContent).toContain("Salary Review");
     expect(container.textContent).toContain("Ava Stone");
     expect(container.textContent).toContain("Start Review Cycle");
     expect(container.textContent).toContain("AI Draft");
     expect(container.textContent).toContain("1 of 1 employees shown");
     expect(container.textContent).not.toContain("Review Settings");
+
+    const headings = container.querySelectorAll("h1");
+    expect(headings.length).toBe(0);
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("does not render a duplicate page title or a narrow width cap", async () => {
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        React.createElement(SalaryReviewOverview, {
+          cycles: [makeCycle()],
+          activeCycle: null,
+          actionLabel: "Start Review Cycle",
+          onPrimaryAction: vi.fn(),
+          onAiDraft: vi.fn(),
+          onImport: vi.fn(),
+          onExport: vi.fn(),
+          onReset: vi.fn(),
+          onSelectCycle: vi.fn(),
+        }),
+      );
+    });
+
+    const headings = container.querySelectorAll("h1");
+    expect(headings.length).toBe(0);
+
+    const outerWrapper = container.firstElementChild as HTMLElement | null;
+    expect(outerWrapper?.className).not.toContain("max-w-");
+    expect(outerWrapper?.className).not.toContain("px-8");
 
     await act(async () => {
       root.unmount();

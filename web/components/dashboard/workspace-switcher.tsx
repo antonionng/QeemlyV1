@@ -83,8 +83,7 @@ export function WorkspaceSwitcher({ collapsed = false }: Props) {
         setActiveWorkspaceLogo(workspaceSettings.company_logo || null);
       }
     } catch {
-      // Not a super admin or error - hide switcher
-      setIsSuperAdmin(false);
+      // Keep the last known admin state on transient failures.
     } finally {
       setLoading(false);
     }
@@ -105,6 +104,7 @@ export function WorkspaceSwitcher({ collapsed = false }: Props) {
 
       if (res.ok) {
         setOverrideWorkspace(workspace);
+        await loadWorkspaces();
         emitWorkspaceChange({ workspaceId: workspace.id, source: "override" });
         setOpen(false);
         router.refresh();
@@ -123,6 +123,7 @@ export function WorkspaceSwitcher({ collapsed = false }: Props) {
 
       if (res.ok) {
         setOverrideWorkspace(null);
+        await loadWorkspaces();
         emitWorkspaceChange({ workspaceId: currentWorkspaceId, source: "profile" });
         setOpen(false);
         router.refresh();

@@ -135,14 +135,16 @@ export function isBenchmarkDetailSurfaceReady(input: {
     (aiDetailBriefing.views.geoComparison.comparisonPoints?.length ?? 0) > 0 ||
     Object.keys(detailSupportData.geoBenchmarksByLocation).length > 0;
 
-  return (
-    hasBreakdown &&
-    hasLevelTableData &&
-    hasOfferBuilderData &&
-    hasIndustryData &&
-    hasCompanySizeData &&
-    hasGeoData
-  );
+  const viewChecks = [
+    hasLevelTableData,
+    hasOfferBuilderData,
+    hasIndustryData,
+    hasCompanySizeData,
+    hasGeoData,
+  ];
+  const passingViews = viewChecks.filter(Boolean).length;
+
+  return hasBreakdown && passingViews >= 3;
 }
 
 function clampPercentage(value: number) {

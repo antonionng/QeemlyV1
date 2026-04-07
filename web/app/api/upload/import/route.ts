@@ -13,6 +13,7 @@ import type {
 } from "@/lib/upload/transformers";
 import type { UploadDataType } from "@/lib/upload/column-detection";
 import type { UploadImportMode } from "@/lib/upload/upload-state";
+import { jsonServerError, jsonValidationError } from "@/lib/errors/http";
 
 type UploadResult = {
   success: boolean;
@@ -22,6 +23,16 @@ type UploadResult = {
   skippedCount: number;
   failedCount: number;
   errors: string[];
+  importPolicyApplied?: {
+    excludedRowCount: number;
+    multiCurrencyDetected: boolean;
+    multiCurrencyConfirmed: boolean;
+    mappingSummary?: {
+      departmentsMapped?: number;
+      rolesMapped?: number;
+      levelsMapped?: number;
+    };
+  };
   processedEmployees?: Array<{
     email: string;
     firstName: string;
@@ -40,6 +51,27 @@ type UploadResult = {
 type UploadQueryClient =
   | Awaited<ReturnType<typeof createClient>>
   | ReturnType<typeof createServiceClient>;
+
+type ImportPolicy = {
+  excludedRowIndices?: number[];
+  multiCurrencyDetected?: boolean;
+  multiCurrencyConfirmed?: boolean;
+  mappingSummary?: {
+    departmentsMapped?: number;
+    rolesMapped?: number;
+    levelsMapped?: number;
+  };
+};
+
+function toImportPolicyAudit(importPolicy: ImportPolicy | undefined): UploadResult["importPolicyApplied"] {
+  if (!importPolicy) return undefined;
+  return {
+    excludedRowCount: importPolicy.excludedRowIndices?.length ?? 0,
+    multiCurrencyDetected: importPolicy.multiCurrencyDetected === true,
+    multiCurrencyConfirmed: importPolicy.multiCurrencyConfirmed === true,
+    mappingSummary: importPolicy.mappingSummary,
+  };
+}
 
 function createInitialUploadResult(): UploadResult {
   return {
@@ -61,22 +93,27 @@ async function applyCanonicalRoleAliases(
   employees: TransformedEmployee[],
 ): Promise<TransformedEmployee[]> {
   const unresolvedEmployees = employees.filter(
-    (employee) => employee.roleMappingStatus === "pending" && employee.originalRoleText,
+    (employee) =>
+      (employee.roleMappingStatus === "pending" || employee.roleMappingStatus === "needs_review")
+      && employee.originalRoleText,
   );
   if (unresolvedEmployees.length === 0) {
     return employees;
   }
 
-  let data:
-    | Array<{ canonical_role_id?: string | null; alias_normalized?: string | null; workspace_id?: string | null }>
-    | null = null;
+  type AliasRow = {
+    canonical_role_id?: string | null;
+    alias_normalized?: string | null;
+    workspace_id?: string | null;
+  };
+  let data: AliasRow[] | null = null;
   let error: { message?: string } | null = null;
   try {
     const result = await queryClient
       .from("canonical_role_aliases")
       .select("canonical_role_id,alias_normalized,workspace_id")
       .eq("is_active", true);
-    data = result.data as typeof data;
+    data = result.data as AliasRow[] | null;
     error = result.error ?? null;
   } catch {
     return employees;
@@ -87,7 +124,7 @@ async function applyCanonicalRoleAliases(
   }
 
   const aliasToRoleId = new Map<string, string>();
-  for (const row of data) {
+  for (const row of data as AliasRow[]) {
     const scopedWorkspaceId = row.workspace_id ? String(row.workspace_id) : null;
     if (scopedWorkspaceId && scopedWorkspaceId !== workspaceId) continue;
     if (!row.alias_normalized || !row.canonical_role_id) continue;
@@ -95,7 +132,10 @@ async function applyCanonicalRoleAliases(
   }
 
   return employees.map((employee) => {
-    if (employee.roleMappingStatus !== "pending" || !employee.originalRoleText) {
+    if (
+      (employee.roleMappingStatus !== "pending" && employee.roleMappingStatus !== "needs_review")
+      || !employee.originalRoleText
+    ) {
       return employee;
     }
 
@@ -162,7 +202,7 @@ async function importEmployees(
       .eq("workspace_id", workspaceId);
     if (error) {
       result.success = false;
-      result.errors.push(error.message);
+      result.errors.push("We could not replace the current employee records right now.");
       return result;
     }
   }
@@ -182,7 +222,7 @@ async function importEmployees(
       .in("email", Array.from(new Set(emailMatches)));
 
     if (error) {
-      result.errors.push(`Unable to read existing employees: ${error.message}`);
+      result.errors.push("We could not load the current employee records right now.");
       result.success = false;
       return result;
     }
@@ -283,7 +323,7 @@ async function importEmployees(
 
         if (error) {
           result.errors.push(
-            `Batch ${Math.floor(i / batchSize) + 1}: failed to update ${record.email}: ${error.message}`,
+            `Batch ${Math.floor(i / batchSize) + 1} could not update ${record.email}. Try again after reviewing the row data.`,
           );
           result.failedCount += 1;
         } else {
@@ -298,7 +338,11 @@ async function importEmployees(
           const sourceEmployee = batch.find(
             (employee) => String(employee.email || "").toLowerCase() === normalizedEmail,
           );
-          if (sourceEmployee?.roleMappingStatus === "pending" && sourceEmployee.originalRoleText) {
+          if (
+            (sourceEmployee?.roleMappingStatus === "pending"
+              || sourceEmployee?.roleMappingStatus === "needs_review")
+            && sourceEmployee.originalRoleText
+          ) {
             pendingReviewRows.push({
               workspace_id: workspaceId,
               subject_type: "employee",
@@ -319,7 +363,9 @@ async function importEmployees(
           .select("id,email");
 
         if (error) {
-          result.errors.push(`Batch ${Math.floor(i / batchSize) + 1}: ${error.message}`);
+          result.errors.push(
+            `Batch ${Math.floor(i / batchSize) + 1} could not be created right now. Review the batch and try again.`,
+          );
           result.failedCount += newRows.length;
         } else {
           result.createdCount += data?.length || 0;
@@ -340,7 +386,11 @@ async function importEmployees(
               const sourceEmployee = batch.find(
                 (employee) => String(employee.email || "").toLowerCase() === normalizedEmail,
               );
-              if (sourceEmployee?.roleMappingStatus === "pending" && sourceEmployee.originalRoleText) {
+              if (
+                (sourceEmployee?.roleMappingStatus === "pending"
+                  || sourceEmployee?.roleMappingStatus === "needs_review")
+                && sourceEmployee.originalRoleText
+              ) {
                 pendingReviewRows.push({
                   workspace_id: workspaceId,
                   subject_type: "employee",
@@ -364,7 +414,9 @@ async function importEmployees(
         .select("id,email");
 
       if (error) {
-        result.errors.push(`Batch ${Math.floor(i / batchSize) + 1}: ${error.message}`);
+        result.errors.push(
+          `Batch ${Math.floor(i / batchSize) + 1} could not be created right now. Review the batch and try again.`,
+        );
         result.failedCount += withoutEmail.length;
       } else {
         result.createdCount += data?.length || 0;
@@ -477,7 +529,7 @@ async function importBenchmarks(
       .eq("workspace_id", workspaceId);
     if (error) {
       result.success = false;
-      result.errors.push(error.message);
+      result.errors.push("We could not replace the current benchmark rows right now.");
       return result;
     }
   } else {
@@ -511,7 +563,7 @@ async function importBenchmarks(
     }
 
     if (error) {
-      result.errors.push(`Unable to read existing benchmarks: ${error.message}`);
+      result.errors.push("We could not load the current benchmark rows right now.");
       result.success = false;
       return result;
     }
@@ -570,7 +622,9 @@ async function importBenchmarks(
       .select("id");
 
     if (error) {
-      result.errors.push(`Batch ${Math.floor(i / batchSize) + 1}: ${error.message}`);
+      result.errors.push(
+        `Batch ${Math.floor(i / batchSize) + 1} could not be saved right now. Review the batch and try again.`,
+      );
       result.failedCount += batch.length;
     } else {
       result.updatedCount += batchUpdatedCount;
@@ -644,7 +698,7 @@ async function importCompensationUpdates(
 
   if (lookupError) {
     result.success = false;
-    result.errors.push(`Unable to read existing employees: ${lookupError.message}`);
+    result.errors.push("We could not load the current employee records right now.");
     return result;
   }
 
@@ -704,7 +758,7 @@ async function importCompensationUpdates(
       .eq("workspace_id", workspaceId);
 
     if (error) {
-      result.errors.push(`Failed to update ${update.email}: ${error.message}`);
+      result.errors.push(`We could not update ${update.email} right now. Review that row and try again.`);
       result.failedCount += 1;
       continue;
     }
@@ -729,7 +783,7 @@ async function importCompensationUpdates(
   if (historyPayload.length > 0) {
     const { error } = await queryClient.from("compensation_history").insert(historyPayload);
     if (error) {
-      result.errors.push(`Failed to write compensation history: ${error.message}`);
+      result.errors.push("We could not save the compensation history for this batch right now.");
       result.success = false;
       return result;
     }
@@ -763,24 +817,41 @@ export async function POST(request: Request) {
       uploadType?: UploadDataType;
       rows?: unknown[];
       mode?: UploadImportMode;
+      importPolicy?: ImportPolicy;
     };
 
     const uploadType = body.uploadType;
     const rows = Array.isArray(body.rows) ? body.rows : [];
     const mode = body.mode === "replace" ? "replace" : "upsert";
+    const importPolicy = body.importPolicy;
 
     if (!uploadType) {
-      return NextResponse.json({ error: "uploadType is required" }, { status: 400 });
+      return jsonValidationError({
+        message: "Please correct the highlighted fields and try again.",
+        fields: { uploadType: "Choose an upload type and try again." },
+      });
     }
 
     if (uploadType === "employees") {
+      if (importPolicy?.multiCurrencyDetected && !importPolicy.multiCurrencyConfirmed) {
+        return jsonValidationError({
+          message: "Please review and confirm multi-currency handling before importing.",
+          fields: {
+            multiCurrencyConfirmed:
+              "Confirm multi-currency handling to continue with this employee import.",
+          },
+        });
+      }
       const result = await importEmployees(
         queryClient,
         wsContext.context.workspace_id,
         rows as TransformedEmployee[],
         mode,
       );
-      return NextResponse.json(result);
+      return NextResponse.json({
+        ...result,
+        importPolicyApplied: toImportPolicyAudit(importPolicy),
+      });
     }
 
     if (uploadType === "benchmarks") {
@@ -790,7 +861,10 @@ export async function POST(request: Request) {
         rows as TransformedBenchmark[],
         mode,
       );
-      return NextResponse.json(result);
+      return NextResponse.json({
+        ...result,
+        importPolicyApplied: toImportPolicyAudit(importPolicy),
+      });
     }
 
     if (uploadType === "compensation") {
@@ -799,14 +873,20 @@ export async function POST(request: Request) {
         wsContext.context.workspace_id,
         rows as TransformedCompensationUpdate[],
       );
-      return NextResponse.json(result);
+      return NextResponse.json({
+        ...result,
+        importPolicyApplied: toImportPolicyAudit(importPolicy),
+      });
     }
 
-    return NextResponse.json({ error: "Unsupported upload type" }, { status: 400 });
+    return jsonValidationError({
+      message: "Please correct the highlighted fields and try again.",
+      fields: { uploadType: "Choose a supported upload type and try again." },
+    });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to import upload batch" },
-      { status: 500 },
-    );
+    return jsonServerError(error, {
+      defaultMessage: "We could not import this upload batch right now.",
+      logLabel: "Upload import failed",
+    });
   }
 }

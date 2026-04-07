@@ -221,7 +221,7 @@ export async function generateReportResult(report: Report): Promise<GeneratedRep
     source: row.source,
     provenance: row.provenance,
     freshness_at: row.freshness_at,
-    contributor_count: row.contributor_count,
+    contributor_count: "contributor_count" in row ? row.contributor_count : null,
     sample_size: row.sample_size,
   }));
 

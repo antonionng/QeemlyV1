@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { randomBytes } from "node:crypto";
+import { getWorkspaceContext } from "@/lib/workspace-context";
+import { jsonServerError, jsonValidationError } from "@/lib/errors/http";
+
+const READ_ONLY_OVERRIDE_ERROR =
+  "Team management is read-only while viewing another workspace as super admin.";
 
 type InvitationPayload = {
   invitationId?: string;
@@ -10,6 +15,31 @@ type InvitationPayload = {
 
 export function resolveInvitationId(payload: InvitationPayload): string | undefined {
   return payload.invitationId ?? payload.invitation_id;
+}
+
+async function requireTeamInviteAccess(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  context: NonNullable<Awaited<ReturnType<typeof getWorkspaceContext>>["context"]>,
+) {
+  if (context.is_super_admin && context.is_override) {
+    return { error: NextResponse.json({ error: READ_ONLY_OVERRIDE_ERROR }, { status: 403 }) };
+  }
+
+  if (context.is_super_admin) {
+    return { workspaceId: context.workspace_id };
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", context.user_id)
+    .single();
+
+  if (profile?.role !== "admin") {
+    return { error: NextResponse.json({ error: "Admin access required" }, { status: 403 }) };
+  }
+
+  return { workspaceId: context.workspace_id };
 }
 
 function resolveAppOrigin(request: NextRequest): string {
@@ -44,49 +74,47 @@ async function sendBrandedInviteEmail(params: {
  */
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
-  
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const wsContext = await getWorkspaceContext();
+  if (!wsContext.context) {
+    return NextResponse.json({ error: wsContext.error }, { status: wsContext.status });
   }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("workspace_id, role")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile?.workspace_id) {
-    return NextResponse.json({ error: "No workspace found" }, { status: 404 });
+  const access = await requireTeamInviteAccess(supabase, wsContext.context);
+  if (access.error) {
+    return access.error;
   }
-
-  // Only admins can invite
-  if (profile.role !== "admin") {
-    return NextResponse.json({ error: "Admin access required" }, { status: 403 });
-  }
+  const workspaceId = access.workspaceId;
 
   const { email, role = "member" } = await request.json();
 
   if (!email) {
-    return NextResponse.json({ error: "Email required" }, { status: 400 });
+    return jsonValidationError({
+      message: "Please correct the highlighted fields and try again.",
+      fields: { email: "Enter an email address to send the invitation." },
+    });
   }
 
   // Validate email format
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!emailRegex.test(email)) {
-    return NextResponse.json({ error: "Invalid email format" }, { status: 400 });
+    return jsonValidationError({
+      message: "Please correct the highlighted fields and try again.",
+      fields: { email: "Enter a valid email address." },
+    });
   }
 
   // Validate role
   if (!["admin", "member", "employee"].includes(role)) {
-    return NextResponse.json({ error: "Invalid role" }, { status: 400 });
+    return jsonValidationError({
+      message: "Please correct the highlighted fields and try again.",
+      fields: { role: "Choose a valid role and try again." },
+    });
   }
 
   // Check if invitation already exists
   const { data: existingInvite } = await supabase
     .from("team_invitations")
     .select("id, status")
-    .eq("workspace_id", profile.workspace_id)
+    .eq("workspace_id", workspaceId)
     .eq("email", email.toLowerCase())
     .eq("status", "pending")
     .single();
@@ -103,9 +131,9 @@ export async function POST(request: NextRequest) {
   const { data: invitation, error: inviteError } = await supabase
     .from("team_invitations")
     .insert({
-      workspace_id: profile.workspace_id,
+      workspace_id: workspaceId,
       email: email.toLowerCase(),
-      invited_by: user.id,
+      invited_by: wsContext.context.user_id,
       role,
       token,
       status: "pending",
@@ -114,23 +142,26 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (inviteError) {
-    return NextResponse.json({ error: inviteError.message }, { status: 500 });
+    return jsonServerError(inviteError, {
+      defaultMessage: "We could not create this invitation right now.",
+      logLabel: "Team invitation create failed",
+    });
   }
 
   const { error: emailError } = await sendBrandedInviteEmail({
     email: invitation.email,
     role: invitation.role,
-    workspaceId: profile.workspace_id,
+    workspaceId,
     token: invitation.token,
     request,
   });
 
   if (emailError) {
     await supabase.from("team_invitations").delete().eq("id", invitation.id);
-    return NextResponse.json(
-      { error: `Invitation email could not be sent: ${emailError.message}` },
-      { status: 500 }
-    );
+    return jsonServerError(emailError, {
+      defaultMessage: "We created the invitation but could not send the email. Please try again.",
+      logLabel: "Team invitation email failed",
+    });
   }
 
   return NextResponse.json({ 
@@ -151,31 +182,24 @@ export async function POST(request: NextRequest) {
  */
 export async function DELETE(request: NextRequest) {
   const supabase = await createClient();
-  
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const wsContext = await getWorkspaceContext();
+  if (!wsContext.context) {
+    return NextResponse.json({ error: wsContext.error }, { status: wsContext.status });
   }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("workspace_id, role")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile?.workspace_id) {
-    return NextResponse.json({ error: "No workspace found" }, { status: 404 });
+  const access = await requireTeamInviteAccess(supabase, wsContext.context);
+  if (access.error) {
+    return access.error;
   }
-
-  if (profile.role !== "admin") {
-    return NextResponse.json({ error: "Admin access required" }, { status: 403 });
-  }
+  const workspaceId = access.workspaceId;
 
   const payload = (await request.json()) as InvitationPayload;
   const invitationId = resolveInvitationId(payload);
 
   if (!invitationId) {
-    return NextResponse.json({ error: "Invitation ID required" }, { status: 400 });
+    return jsonValidationError({
+      message: "Please correct the highlighted fields and try again.",
+      fields: { invitationId: "Select an invitation and try again." },
+    });
   }
 
   // Verify invitation belongs to this workspace
@@ -185,7 +209,7 @@ export async function DELETE(request: NextRequest) {
     .eq("id", invitationId)
     .single();
 
-  if (!invitation || invitation.workspace_id !== profile.workspace_id) {
+  if (!invitation || invitation.workspace_id !== workspaceId) {
     return NextResponse.json({ error: "Invitation not found" }, { status: 404 });
   }
 
@@ -196,7 +220,10 @@ export async function DELETE(request: NextRequest) {
     .eq("id", invitationId);
 
   if (deleteError) {
-    return NextResponse.json({ error: deleteError.message }, { status: 500 });
+    return jsonServerError(deleteError, {
+      defaultMessage: "We could not cancel this invitation right now.",
+      logLabel: "Team invitation delete failed",
+    });
   }
 
   return NextResponse.json({ success: true });
@@ -208,31 +235,24 @@ export async function DELETE(request: NextRequest) {
  */
 export async function PATCH(request: NextRequest) {
   const supabase = await createClient();
-  
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const wsContext = await getWorkspaceContext();
+  if (!wsContext.context) {
+    return NextResponse.json({ error: wsContext.error }, { status: wsContext.status });
   }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("workspace_id, role")
-    .eq("id", user.id)
-    .single();
-
-  if (!profile?.workspace_id) {
-    return NextResponse.json({ error: "No workspace found" }, { status: 404 });
+  const access = await requireTeamInviteAccess(supabase, wsContext.context);
+  if (access.error) {
+    return access.error;
   }
-
-  if (profile.role !== "admin") {
-    return NextResponse.json({ error: "Admin access required" }, { status: 403 });
-  }
+  const workspaceId = access.workspaceId;
 
   const payload = (await request.json()) as InvitationPayload;
   const invitationId = resolveInvitationId(payload);
 
   if (!invitationId) {
-    return NextResponse.json({ error: "Invitation ID required" }, { status: 400 });
+    return jsonValidationError({
+      message: "Please correct the highlighted fields and try again.",
+      fields: { invitationId: "Select an invitation and try again." },
+    });
   }
 
   // Verify invitation belongs to this workspace
@@ -242,7 +262,7 @@ export async function PATCH(request: NextRequest) {
     .eq("id", invitationId)
     .single();
 
-  if (!invitation || invitation.workspace_id !== profile.workspace_id) {
+  if (!invitation || invitation.workspace_id !== workspaceId) {
     return NextResponse.json({ error: "Invitation not found" }, { status: 404 });
   }
 
@@ -255,22 +275,25 @@ export async function PATCH(request: NextRequest) {
     .eq("id", invitationId);
 
   if (updateError) {
-    return NextResponse.json({ error: updateError.message }, { status: 500 });
+    return jsonServerError(updateError, {
+      defaultMessage: "We could not resend this invitation right now.",
+      logLabel: "Team invitation update failed",
+    });
   }
 
   const { error: emailError } = await sendBrandedInviteEmail({
     email: invitation.email,
     role: invitation.role ?? "member",
-    workspaceId: profile.workspace_id,
+    workspaceId,
     token: invitation.token,
     request,
   });
 
   if (emailError) {
-    return NextResponse.json(
-      { error: `Invitation resend failed: ${emailError.message}` },
-      { status: 500 }
-    );
+    return jsonServerError(emailError, {
+      defaultMessage: "We could not resend this invitation email right now.",
+      logLabel: "Team invitation resend email failed",
+    });
   }
 
   return NextResponse.json({ 

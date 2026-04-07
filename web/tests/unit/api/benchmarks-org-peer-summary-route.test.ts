@@ -156,7 +156,11 @@ describe("GET /api/benchmarks/org-peer-summary", () => {
     const payload = await response.json();
 
     expect(response.status).toBe(400);
-    expect(payload.error).toContain("roleId");
+    expect(payload.error).toBe("Please correct the highlighted fields and try again.");
+    expect(payload.fields).toEqual({
+      locationId: "Choose a location and try again.",
+      levelId: "Choose a level and try again.",
+    });
     expect(getOrgPeerSummaryMock).not.toHaveBeenCalled();
   });
 

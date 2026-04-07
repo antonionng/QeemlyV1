@@ -1,6 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { toClientSafeError } from "@/lib/errors/client-safe";
 
 export type InvitableEmployee = {
   id: string;
@@ -111,7 +112,14 @@ export async function inviteEmployee(
     role: "employee",
   });
 
-  if (error) return { success: false, error: error.message };
+  if (error) {
+    return {
+      success: false,
+      error: toClientSafeError(error, {
+        defaultMessage: "We could not send this employee invitation right now.",
+      }).message,
+    };
+  }
   return { success: true };
 }
 

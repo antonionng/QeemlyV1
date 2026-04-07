@@ -73,6 +73,7 @@ vi.mock("@/lib/benchmarks/results-presentation", () => ({
 vi.mock("@/lib/company", () => ({
   useCompanySettings: (selector?: (state: typeof companySettingsState) => unknown) =>
     selector ? selector(companySettingsState) : companySettingsState,
+  normalizeSavedBonusPercentage: (value: number | null | undefined) => value ?? 10,
 }));
 
 import BenchmarksPage from "@/app/(dashboard)/dashboard/benchmarks/page";
@@ -155,9 +156,9 @@ describe("BenchmarksPage", () => {
     });
 
     expect(container.textContent).toContain("Benchmarking");
-    expect(container.textContent).not.toContain("Market dataset diagnostics:");
-    expect(container.textContent).toContain("Source: Qeemly Market Data");
-    expect(container.textContent).toContain("Published: Not published yet");
+    expect(container.textContent).not.toContain("Market benchmark updates:");
+    expect(container.textContent).not.toContain("Source: Qeemly Market Data");
+    expect(container.textContent).not.toContain("Published: Not published yet");
   });
 
   it("still shows the diagnostics banner for a technical market error", async () => {
@@ -179,7 +180,7 @@ describe("BenchmarksPage", () => {
                   market: {
                     readMode: "session",
                     clientWarning: null,
-                    error: "Failed to fetch rows from platform_market_benchmarks",
+                    error: "Market benchmark data is temporarily unavailable.",
                     warning: null,
                     hasServiceRoleKey: false,
                     hasPlatformWorkspaceId: false,
@@ -216,11 +217,11 @@ describe("BenchmarksPage", () => {
       await Promise.resolve();
     });
 
-    expect(container.textContent).toContain("Market dataset diagnostics:");
-    expect(container.textContent).toContain("Failed to fetch rows from platform_market_benchmarks");
+    expect(container.textContent).toContain("Market benchmark updates:");
+    expect(container.textContent).toContain("Market benchmark data is temporarily unavailable.");
   });
 
-  it("shows a clearer market freshness badge when a publish date exists", async () => {
+  it("does not render source or published badges when a publish date exists", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn((input: string | URL | Request) => {
@@ -276,8 +277,8 @@ describe("BenchmarksPage", () => {
       await Promise.resolve();
     });
 
-    expect(container.textContent).toContain("Source: Qeemly Market Data");
-    expect(container.textContent).toContain("Published: 17 Mar 2026");
+    expect(container.textContent).not.toContain("Source: Qeemly Market Data");
+    expect(container.textContent).not.toContain("Published: 17 Mar 2026");
   });
 
   it("syncs benchmark branding to the active workspace while viewing as admin", async () => {

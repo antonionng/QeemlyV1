@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
   getAdvisoryModel,
+  getBenchmarkBriefingModelCandidates,
   getBenchmarkBriefingModel,
   getChatModel,
   getComplianceScoringModel,
@@ -50,5 +51,18 @@ describe("AI model selectors", () => {
     expect(getComplianceScoringModel()).toBe("gpt-5.2-compliance");
     expect(getBenchmarkModel()).toBe("gpt-5.3-bench");
     expect(getBenchmarkBriefingModel()).toBe("gpt-5.3-brief");
+  });
+
+  it("builds benchmark briefing fallback candidates in priority order", () => {
+    process.env.OPENAI_BENCHMARK_BRIEFING_MODEL = "gpt-5.3-brief";
+    process.env.OPENAI_ADVISORY_MODEL = "gpt-4o-mini";
+    process.env.OPENAI_CHAT_MODEL = "gpt-4o-mini";
+
+    expect(getBenchmarkBriefingModelCandidates()).toEqual([
+      "gpt-5.3-brief",
+      "gpt-4o-mini",
+      "gpt-5.4-mini",
+      "gpt-5.4",
+    ]);
   });
 });

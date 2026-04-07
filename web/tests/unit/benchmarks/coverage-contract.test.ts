@@ -122,6 +122,12 @@ describe("benchmark coverage contract", () => {
 
     expect(summary).toEqual([
       {
+        key: "swe::ic1::london",
+        roleTitle: "Software Engineer",
+        levelName: "Junior (IC1)",
+        locationLabel: "London, United Kingdom",
+      },
+      {
         key: "swe::ic1::abu-dhabi",
         roleTitle: "Software Engineer",
         levelName: "Junior (IC1)",
@@ -132,12 +138,6 @@ describe("benchmark coverage contract", () => {
         roleTitle: "Software Engineer",
         levelName: "Junior (IC1)",
         locationLabel: "Riyadh, Saudi Arabia",
-      },
-      {
-        key: "swe::ic1::jeddah",
-        roleTitle: "Software Engineer",
-        levelName: "Junior (IC1)",
-        locationLabel: "Jeddah, Saudi Arabia",
       },
     ]);
   });

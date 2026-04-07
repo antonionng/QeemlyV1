@@ -7,23 +7,15 @@ import {
 } from "@/lib/benchmarks/market-insights";
 import { createClient } from "@/lib/supabase/server";
 import { readMarketDataWithFallback } from "@/lib/benchmarks/market-read";
+import { getWorkspaceContextOrError } from "@/lib/workspace-access";
+import { toClientSafeError } from "@/lib/errors/client-safe";
 
 export async function GET() {
   const supabase = await createClient();
-
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
-  if (authError || !user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const workspaceContext = await getWorkspaceContextOrError();
+  if (workspaceContext.error) {
+    return workspaceContext.error;
   }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("workspace_id")
-    .eq("id", user.id)
-    .single();
 
   const diagnostics: {
     market: MarketDiagnostics;
@@ -49,10 +41,13 @@ export async function GET() {
       diagnostics.market.warning = "No market benchmark rows were returned from the platform market dataset.";
     }
   } catch (error) {
-    diagnostics.market.error = getErrorMessage(error);
+    diagnostics.market.error = toClientSafeError(error, {
+      defaultMessage: "Market benchmark data is temporarily unavailable.",
+      action: "Refresh the page or try again in a few minutes.",
+    }).message;
   }
 
-  const workspaceOverlay = await loadWorkspaceOverlaySummary(supabase, profile?.workspace_id ?? null);
+  const workspaceOverlay = await loadWorkspaceOverlaySummary(supabase, workspaceContext.context.workspace_id);
 
   return NextResponse.json(
     buildMarketInsightsResponse({
@@ -96,9 +91,4 @@ async function loadWorkspaceOverlaySummary(
     uniqueLocations: new Set(benchmarks.map((benchmark) => benchmark.location_id)).size,
     sources: [...new Set(benchmarks.map((benchmark) => benchmark.source))],
   };
-}
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  return String(error);
 }

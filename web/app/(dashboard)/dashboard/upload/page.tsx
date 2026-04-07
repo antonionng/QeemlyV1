@@ -3,14 +3,16 @@
 import { useEffect } from "react";
 import { UploadWizard } from "@/components/dashboard/upload";
 import { useUploadStore } from "@/lib/upload";
+import { useWorkspaceChangeVersion } from "@/lib/workspace-client";
 
 export default function UploadPage() {
   const { reset } = useUploadStore();
+  const workspaceChangeVersion = useWorkspaceChangeVersion();
 
   // Reset wizard state when page loads
   useEffect(() => {
     reset();
-  }, [reset]);
+  }, [reset, workspaceChangeVersion]);
 
   return (
     <div className="h-full bg-brand-50/30">

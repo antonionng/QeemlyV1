@@ -12,6 +12,7 @@ import { PeopleTable } from "@/components/dashboard/people/people-table";
 import { PeopleToolbar } from "@/components/dashboard/people/people-toolbar";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { DashboardPageHeader } from "@/components/dashboard/page-header";
 import type { Department, Employee } from "@/lib/employees";
 import {
   DEFAULT_PEOPLE_FILTERS,
@@ -228,25 +229,22 @@ export function PeoplePageClient() {
   return (
     <>
       <div className="space-y-8" data-testid="people-page">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="space-y-1">
-            <h1 className="page-title">People</h1>
-            <p className="page-subtitle">
-              Browse every employee, review market context, and edit workforce records without leaving
-              the platform workflow.
-            </p>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <Button variant="secondary" size="sm" onClick={() => void handleRefresh()}>
-              <RefreshCw className="h-4 w-4" />
-              Refresh
-            </Button>
-            <Button size="sm" onClick={() => setIsAddEmployeeOpen(true)}>
-              <Users className="h-4 w-4" />
-              Add Employee
-            </Button>
-          </div>
-        </div>
+        <DashboardPageHeader
+          title="People"
+          subtitle="Browse every employee, review market context, and edit workforce records without leaving the platform workflow."
+          actions={
+            <>
+              <Button variant="secondary" size="sm" onClick={() => void handleRefresh()}>
+                <RefreshCw className="h-4 w-4" />
+                Refresh
+              </Button>
+              <Button size="sm" onClick={() => setIsAddEmployeeOpen(true)}>
+                <Users className="h-4 w-4" />
+                Add Employee
+              </Button>
+            </>
+          }
+        />
 
         <div className="grid gap-4 lg:grid-cols-2">
           <Card className="border-border/70 p-5">

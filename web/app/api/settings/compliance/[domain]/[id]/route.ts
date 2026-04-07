@@ -8,6 +8,7 @@ import {
   safeRefreshComplianceSnapshot,
   sanitizeDomainPayload,
 } from "../../_shared";
+import { jsonServerError, jsonValidationError } from "@/lib/errors/http";
 
 type Params = { params: Promise<{ domain: string; id: string }> };
 
@@ -26,8 +27,13 @@ export async function PATCH(request: NextRequest, { params }: Params) {
 
   const body = (await request.json()) as Record<string, unknown>;
   const parsed = sanitizeDomainPayload(domain, body, "update");
-  if ("error" in parsed) {
-    return NextResponse.json({ error: parsed.error }, { status: 400 });
+  if ("error" in parsed && typeof parsed.error === "string") {
+    const errorMessage = parsed.error;
+    const fieldKey = errorMessage.match(/^([a-zA-Z0-9_.]+)/)?.[1];
+    return jsonValidationError({
+      message: "Please correct the highlighted fields and try again.",
+      fields: fieldKey ? { [fieldKey]: errorMessage } : undefined,
+    });
   }
 
   const cfg = DOMAIN_CONFIG[domain];
@@ -40,7 +46,12 @@ export async function PATCH(request: NextRequest, { params }: Params) {
     .eq("id", id)
     .select(cfg.select)
     .single();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    return jsonServerError(error, {
+      defaultMessage: "We could not update this compliance record right now.",
+      logLabel: "Compliance record update failed",
+    });
+  }
 
   const refresh = await safeRefreshComplianceSnapshot(workspace_id);
   return NextResponse.json({
@@ -71,7 +82,12 @@ export async function DELETE(_: NextRequest, { params }: Params) {
     .delete()
     .eq("workspace_id", workspace_id)
     .eq("id", id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    return jsonServerError(error, {
+      defaultMessage: "We could not delete this compliance record right now.",
+      logLabel: "Compliance record delete failed",
+    });
+  }
 
   const refresh = await safeRefreshComplianceSnapshot(workspace_id);
   return NextResponse.json({

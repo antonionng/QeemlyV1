@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createOAuthState } from "@/lib/security/oauth-state";
+import { getAdminWorkspaceContextOrError } from "@/lib/workspace-access";
+import { jsonServerError, jsonValidationError } from "@/lib/errors/http";
 
 /**
  * POST /api/integrations/connect
@@ -20,41 +22,28 @@ import { createOAuthState } from "@/lib/security/oauth-state";
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const workspaceContext = await getAdminWorkspaceContextOrError();
+    if (workspaceContext.error) {
+      return workspaceContext.error;
     }
 
     const body = await request.json();
     const { provider, category, api_key, config } = body;
 
     if (!provider || !category) {
-      return NextResponse.json(
-        { error: "Missing required fields: provider, category" },
-        { status: 400 }
-      );
-    }
-
-    // Get user's workspace
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("workspace_id, role")
-      .eq("id", user.id)
-      .single();
-
-    if (!profile?.workspace_id) {
-      return NextResponse.json({ error: "No workspace found" }, { status: 404 });
-    }
-
-    if (profile.role !== "admin") {
-      return NextResponse.json({ error: "Only admins can connect integrations" }, { status: 403 });
+      return jsonValidationError({
+        message: "Please correct the highlighted fields and try again.",
+        fields: {
+          ...(provider ? {} : { provider: "Choose an integration provider and try again." }),
+          ...(category ? {} : { category: "Choose an integration category and try again." }),
+        },
+      });
     }
 
     const { data: integration, error } = await supabase
       .from("integrations")
       .upsert({
-        workspace_id: profile.workspace_id,
+        workspace_id: workspaceContext.context.workspace_id,
         provider,
         category,
         status: "connecting",
@@ -66,13 +55,16 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return jsonServerError(error, {
+        defaultMessage: "We could not start this integration right now.",
+        logLabel: "Integration connect create failed",
+      });
     }
 
     if (provider === "slack" || provider === "teams") {
       const state = createOAuthState({
         provider,
-        workspace_id: profile.workspace_id,
+        workspace_id: workspaceContext.context.workspace_id,
         integration_id: integration.id,
       });
       const callbackUrl = new URL("/api/integrations/callback", request.url).toString();
@@ -83,7 +75,7 @@ export async function POST(request: NextRequest) {
 
       if (!oauthBase) {
         return NextResponse.json(
-          { error: `Missing OAuth authorize URL for ${provider}` },
+          { error: "This integration is not available right now." },
           { status: 500 }
         );
       }
@@ -100,12 +92,15 @@ export async function POST(request: NextRequest) {
         .from("integrations")
         .update({ status: "connected", updated_at: new Date().toISOString() })
         .eq("id", integration.id)
-        .eq("workspace_id", profile.workspace_id)
+        .eq("workspace_id", workspaceContext.context.workspace_id)
         .select()
         .single();
 
       if (updateError) {
-        return NextResponse.json({ error: updateError.message }, { status: 500 });
+        return jsonServerError(updateError, {
+          defaultMessage: "We could not finish connecting this integration right now.",
+          logLabel: "Integration connect finalize failed",
+        });
       }
 
       return NextResponse.json({ integration: connectedIntegration });

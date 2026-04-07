@@ -7,6 +7,7 @@ import {
   validateSalaryReviewProposalCreateBody,
   type SalaryReviewProposalCreateBody,
 } from "@/lib/salary-review/proposals";
+import { jsonServerError, jsonValidationError } from "@/lib/errors/http";
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient();
@@ -32,7 +33,10 @@ export async function GET(request: NextRequest) {
   if (latestOnly) {
     const { data, error } = await baseQuery.limit(1);
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return jsonServerError(error, {
+        defaultMessage: "We could not load salary review proposals right now.",
+        logLabel: "Salary review proposals latest load failed",
+      });
     }
     const latest = data?.[0];
     if (!latest) {
@@ -52,7 +56,10 @@ export async function GET(request: NextRequest) {
 
   const { data, error } = await baseQuery.limit(50);
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonServerError(error, {
+      defaultMessage: "We could not load salary review proposals right now.",
+      logLabel: "Salary review proposals list load failed",
+    });
   }
 
   return NextResponse.json({ proposals: data || [] });
@@ -68,7 +75,9 @@ export async function POST(request: NextRequest) {
   const body = (await request.json().catch(() => null)) as SalaryReviewProposalCreateBody | null;
   const validation = validateSalaryReviewProposalCreateBody(body || {});
   if (!validation.ok) {
-    return NextResponse.json({ error: validation.error }, { status: 400 });
+    return jsonValidationError({
+      message: validation.error,
+    });
   }
 
   const validatedBody = validation.value as Required<
@@ -89,7 +98,10 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (cycleError || !cycle) {
-    return NextResponse.json({ error: cycleError?.message || "Could not create proposal draft" }, { status: 500 });
+    return jsonServerError(cycleError ?? new Error("Could not create proposal draft"), {
+      defaultMessage: "We could not create this proposal right now.",
+      logLabel: "Salary review proposal create failed",
+    });
   }
 
   const masterItems = draftRecords.itemInserts(cycle.id);
@@ -100,7 +112,10 @@ export async function POST(request: NextRequest) {
       .select("*");
 
     if (itemsError) {
-      return NextResponse.json({ error: itemsError.message }, { status: 500 });
+      return jsonServerError(itemsError, {
+        defaultMessage: "We could not save proposal items right now.",
+        logLabel: "Salary review proposal items create failed",
+      });
     }
   }
 
@@ -112,7 +127,10 @@ export async function POST(request: NextRequest) {
       .select("*");
 
     if (stepsError) {
-      return NextResponse.json({ error: stepsError.message }, { status: 500 });
+      return jsonServerError(stepsError, {
+        defaultMessage: "We could not save approval steps right now.",
+        logLabel: "Salary review approval steps create failed",
+      });
     }
   }
 
@@ -121,7 +139,10 @@ export async function POST(request: NextRequest) {
     .insert(draftRecords.auditInsert(cycle.id));
 
   if (auditError) {
-    return NextResponse.json({ error: auditError.message }, { status: 500 });
+    return jsonServerError(auditError, {
+      defaultMessage: "We could not save proposal audit history right now.",
+      logLabel: "Salary review proposal audit create failed",
+    });
   }
 
   const childCycleDrafts = draftRecords.childCycleInserts(cycle.id);
@@ -131,7 +152,10 @@ export async function POST(request: NextRequest) {
       .insert(childCycleDrafts)
       .select("*");
     if (childCyclesError) {
-      return NextResponse.json({ error: childCyclesError.message }, { status: 500 });
+      return jsonServerError(childCyclesError, {
+        defaultMessage: "We could not create split review drafts right now.",
+        logLabel: "Salary review child cycles create failed",
+      });
     }
 
     const allocationInserts = draftRecords.departmentAllocationInserts(cycle.id).map((allocation) => ({
@@ -145,7 +169,10 @@ export async function POST(request: NextRequest) {
         .insert(allocationInserts)
         .select("*");
       if (allocationError) {
-        return NextResponse.json({ error: allocationError.message }, { status: 500 });
+        return jsonServerError(allocationError, {
+          defaultMessage: "We could not save department allocations right now.",
+          logLabel: "Salary review department allocations create failed",
+        });
       }
     }
 
@@ -154,7 +181,10 @@ export async function POST(request: NextRequest) {
       if (childItems.length > 0) {
         const { error } = await supabase.from("salary_review_proposal_items").insert(childItems).select("*");
         if (error) {
-          return NextResponse.json({ error: error.message }, { status: 500 });
+          return jsonServerError(error, {
+            defaultMessage: "We could not save split review proposal items right now.",
+            logLabel: "Salary review child proposal items create failed",
+          });
         }
       }
 
@@ -168,7 +198,10 @@ export async function POST(request: NextRequest) {
           .insert(childSteps)
           .select("*");
         if (error) {
-          return NextResponse.json({ error: error.message }, { status: 500 });
+          return jsonServerError(error, {
+            defaultMessage: "We could not save split review approval steps right now.",
+            logLabel: "Salary review child approval steps create failed",
+          });
         }
       }
     }

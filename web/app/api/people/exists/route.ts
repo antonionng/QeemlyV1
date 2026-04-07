@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getWorkspaceContext } from "@/lib/workspace-context";
+import { jsonServerError } from "@/lib/errors/http";
 
 export async function GET() {
   const supabase = await createClient();
@@ -20,7 +21,10 @@ export async function GET() {
     .limit(1);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonServerError(error, {
+      defaultMessage: "We could not check your employee roster right now.",
+      logLabel: "People exists check failed",
+    });
   }
 
   return NextResponse.json({

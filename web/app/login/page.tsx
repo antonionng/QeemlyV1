@@ -1,21 +1,48 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AuthSplitShell, AUTH_PUBLIC_HERO_IMAGE_PATH } from "@/components/auth/auth-split-shell";
 import { login } from "./actions";
+import { parseClientError } from "@/lib/errors/client-safe";
 
-export default function LoginPage() {
+function mapLoginError(errorCode: string | null): string | null {
+  switch (errorCode) {
+    case "invalid_invite":
+      return "This invite link is invalid. Ask your workspace admin for a new invitation.";
+    case "invite_expired":
+      return "This invite link has expired or has already been used. Ask your workspace admin to resend it.";
+    case "invite_accept_failed":
+      return "We could not finish linking that invitation to your account. Please ask your workspace admin for help.";
+    case "invite_wrong_workspace":
+      return "This invitation belongs to a different workspace than your current account. Ask your workspace admin for help.";
+    case "auth_callback_failed":
+      return "We could not complete sign-in. Please try again from the login page.";
+    case "forbidden":
+      return "Your account is not allowed to access the admin area.";
+    default:
+      return null;
+  }
+}
+
+function LoginPageContent() {
+  const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const queryError = useMemo(() => mapLoginError(searchParams.get("error")), [searchParams]);
 
   async function handleSubmit(formData: FormData) {
     setIsLoading(true);
     setError(null);
+    setFieldErrors({});
     const result = await login(formData);
     if (result?.error) {
-      setError(result.error);
+      const parsed = parseClientError(result);
+      setError(parsed.message);
+      setFieldErrors(parsed.fields ?? {});
       setIsLoading(false);
     }
     // If successful, login action will redirect
@@ -47,6 +74,7 @@ export default function LoginPage() {
             fullWidth
             required
           />
+          {fieldErrors.email && <p className="text-sm font-medium text-red-600">{fieldErrors.email}</p>}
         </div>
 
         <div className="space-y-3">
@@ -63,14 +91,23 @@ export default function LoginPage() {
             fullWidth
             required
           />
+          {fieldErrors.password && <p className="text-sm font-medium text-red-600">{fieldErrors.password}</p>}
         </div>
 
-        {error && <p className="text-sm font-medium text-red-600">{error}</p>}
+        {(error || queryError) && <p className="text-sm font-medium text-red-600">{error || queryError}</p>}
 
         <Button type="submit" className="h-16 rounded-[32px] text-lg font-semibold shadow-none" fullWidth isLoading={isLoading}>
           Sign in
         </Button>
       </form>
     </AuthSplitShell>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginPageContent />
+    </Suspense>
   );
 }

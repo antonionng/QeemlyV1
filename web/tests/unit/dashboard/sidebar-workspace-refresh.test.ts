@@ -40,6 +40,14 @@ vi.mock("@/lib/supabase/client", () => ({
 
 vi.mock("@/lib/company", () => ({
   useCompanySettings: () => companySettingsState,
+  normalizeSavedBonusPercentage: (value: unknown, fallback = 15) => {
+    if (value === null) return null;
+    if (value === undefined) return fallback;
+    if (typeof value === "string" && value.trim() === "") return fallback;
+
+    const parsed = typeof value === "number" ? value : Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  },
 }));
 
 vi.mock("@/lib/release/ga-scope", () => ({
@@ -212,6 +220,112 @@ describe("DashboardSidebar workspace refresh", () => {
     expect(companySettingsState.updateSettings).toHaveBeenCalledWith(
       expect.objectContaining({
         companyName: "Qeemly Test",
+      }),
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("preserves a disabled default bonus from workspace settings", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/settings") {
+          return createJsonResponse({
+            workspace_name: "Workspace One",
+            settings: {
+              company_name: "Workspace One",
+              company_logo: "",
+              company_website: "",
+              company_description: "",
+              primary_color: "#5C45FD",
+              industry: "Technology",
+              company_size: "201-500",
+              funding_stage: "Seed",
+              headquarters_country: "AE",
+              headquarters_city: "Dubai",
+              target_percentile: 50,
+              review_cycle: "annual",
+              default_currency: "AED",
+              fiscal_year_start: 1,
+              default_bonus_percentage: null,
+              equity_vesting_schedule: "4-year-1-cliff",
+              benefits_tier: "standard",
+              is_configured: true,
+            },
+          });
+        }
+
+        throw new Error(`Unexpected fetch: ${url}`);
+      }),
+    );
+
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(React.createElement(DashboardSidebar));
+      await Promise.resolve();
+    });
+
+    expect(companySettingsState.updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        defaultBonusPercentage: null,
+      }),
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("preserves a zero default bonus from workspace settings", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url === "/api/settings") {
+          return createJsonResponse({
+            workspace_name: "Workspace One",
+            settings: {
+              company_name: "Workspace One",
+              company_logo: "",
+              company_website: "",
+              company_description: "",
+              primary_color: "#5C45FD",
+              industry: "Technology",
+              company_size: "201-500",
+              funding_stage: "Seed",
+              headquarters_country: "AE",
+              headquarters_city: "Dubai",
+              target_percentile: 50,
+              review_cycle: "annual",
+              default_currency: "AED",
+              fiscal_year_start: 1,
+              default_bonus_percentage: 0,
+              equity_vesting_schedule: "4-year-1-cliff",
+              benefits_tier: "standard",
+              is_configured: true,
+            },
+          });
+        }
+
+        throw new Error(`Unexpected fetch: ${url}`);
+      }),
+    );
+
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(React.createElement(DashboardSidebar));
+      await Promise.resolve();
+    });
+
+    expect(companySettingsState.updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({
+        defaultBonusPercentage: 0,
       }),
     );
 

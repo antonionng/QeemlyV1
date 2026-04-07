@@ -5,6 +5,8 @@ import { buildAiBenchmarkRows } from "@/lib/benchmarks/ai-benchmark-rows";
 import { refreshPlatformMarketPoolBestEffort } from "@/lib/benchmarks/platform-market-sync";
 import { createServiceClient } from "@/lib/supabase/service";
 import { upsertBenchmarksFreshness } from "@/lib/ingestion/freshness";
+import { jsonServerError, jsonValidationError } from "@/lib/errors/http";
+import { toClientSafeError } from "@/lib/errors/client-safe";
 
 /**
  * GET /api/v1/benchmarks
@@ -39,7 +41,10 @@ export async function GET(request: NextRequest) {
   ]);
 
   if (workspaceResult.error) {
-    return NextResponse.json({ error: workspaceResult.error.message }, { status: 500 });
+    return jsonServerError(workspaceResult.error, {
+      defaultMessage: "We could not load benchmark data right now.",
+      logLabel: "V1 benchmarks load failed",
+    });
   }
 
   const filteredMarketRows = marketRows.filter((row) => {
@@ -75,10 +80,12 @@ export async function POST(request: NextRequest) {
   const { benchmarks } = body;
 
   if (!Array.isArray(benchmarks) || benchmarks.length === 0) {
-    return NextResponse.json(
-      { error: "Request body must contain a non-empty 'benchmarks' array" },
-      { status: 400 }
-    );
+    return jsonValidationError({
+      message: "Please correct the request and try again.",
+      fields: {
+        benchmarks: "Provide at least one benchmark row and try again.",
+      },
+    });
   }
 
   const supabase = createServiceClient();
@@ -108,7 +115,12 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) {
-      errors.push({ index: i, error: error.message });
+      errors.push({
+        index: i,
+        error: toClientSafeError(error, {
+          defaultMessage: "This benchmark row could not be saved right now.",
+        }).message,
+      });
     } else {
       // Rough check: if created_at equals the current time, it was created
       created++;

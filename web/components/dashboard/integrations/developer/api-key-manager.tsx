@@ -94,7 +94,7 @@ export function ApiKeyManager() {
                 This is the only time the full key will be shown. Copy it to a secure location.
               </p>
               <div className="mt-3 flex items-center gap-2">
-                <code className="flex-1 min-w-0 truncate rounded-lg bg-white border border-amber-200 px-3 py-2 text-xs font-mono text-brand-900">
+                <code className="flex-1 min-w-0 truncate rounded-lg bg-white border border-amber-200 px-3 py-2 text-xs text-brand-900">
                   {createdFullKey}
                 </code>
                 <Button
@@ -141,7 +141,7 @@ export function ApiKeyManager() {
                   </span>
                 </div>
                 <div className="mt-1 flex flex-wrap items-center gap-2">
-                  <code className="text-[11px] font-mono text-brand-500 bg-brand-50 px-1.5 py-0.5 rounded">
+                  <code className="text-[11px] text-brand-500 bg-brand-50 px-1.5 py-0.5 rounded">
                     {key.key_prefix}
                   </code>
                   {key.scopes.slice(0, 3).map((scope) => (

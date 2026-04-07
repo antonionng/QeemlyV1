@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import {
   resolveCanonicalBenchmarkLookupBatch,
+  resolveMarketBenchmarkLookupBatch,
   type BenchmarkLookupClient,
 } from "@/lib/benchmarks/lookup-service";
 import {
@@ -11,6 +12,7 @@ import {
 
 type RequestBody = {
   entries?: BenchmarkLookupEntry[];
+  marketOnly?: boolean;
 };
 
 export async function POST(request: NextRequest) {
@@ -34,10 +36,10 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const benchmarks = await resolveCanonicalBenchmarkLookupBatch(
-    supabase as unknown as BenchmarkLookupClient,
-    entries,
-  );
+  const client = supabase as unknown as BenchmarkLookupClient;
+  const benchmarks = body?.marketOnly
+    ? await resolveMarketBenchmarkLookupBatch(client, entries)
+    : await resolveCanonicalBenchmarkLookupBatch(client, entries);
 
   return NextResponse.json({
     benchmarks: Object.fromEntries(

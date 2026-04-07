@@ -253,6 +253,47 @@ export async function resolveCanonicalBenchmarkLookupBatch(
   return Object.fromEntries(results);
 }
 
+export async function resolveMarketBenchmarkLookupBatch(
+  supabase: BenchmarkLookupClient,
+  entries: Array<{
+    roleId: string;
+    locationId: string;
+    levelId: string;
+    industry?: string | null;
+    companySize?: string | null;
+  }>,
+): Promise<Record<string, SalaryBenchmark | null>> {
+  const results = await Promise.all(
+    entries.map(async (entry) => {
+      const entryKey = [
+        entry.roleId,
+        entry.locationId,
+        entry.levelId,
+        entry.industry ?? "",
+        entry.companySize ?? "",
+      ].join("::");
+
+      const diagnostics: { market: MarketDiagnostics } = {
+        market: { readMode: "session", clientWarning: null, error: null },
+      };
+
+      const benchmark = await resolveBenchmarkLookup(
+        supabase,
+        entry.roleId,
+        entry.locationId,
+        entry.levelId,
+        entry.industry ?? null,
+        entry.companySize ?? null,
+        diagnostics,
+      );
+
+      return [entryKey, benchmark] as const;
+    }),
+  );
+
+  return Object.fromEntries(results);
+}
+
 export async function resolveBenchmarkLookup(
   supabase: BenchmarkLookupClient,
   roleId: string,

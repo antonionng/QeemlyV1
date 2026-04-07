@@ -273,7 +273,7 @@ export function CodeExamples() {
               </div>
 
               <div className="relative">
-                <pre className="rounded-xl bg-brand-900 p-4 text-[11px] font-mono text-brand-100 overflow-x-auto leading-relaxed">
+                <pre className="rounded-xl bg-brand-900 p-4 text-[11px] text-brand-100 overflow-x-auto leading-relaxed">
                   {snippet}
                 </pre>
 

@@ -7,6 +7,7 @@ import type {
   BenchmarkDetailSupportData,
   BenchmarkDetailSupportStatus,
 } from "./detail-ai";
+import type { DetailSurfaceContract } from "./detail-surface";
 import {
   type Role,
   type Level,
@@ -64,6 +65,8 @@ export interface BenchmarkResult {
   aiDetailBriefingStatus?: "idle" | "loading" | "ready" | "unavailable";
   detailSupportData?: BenchmarkDetailSupportData | null;
   detailSupportStatus?: BenchmarkDetailSupportStatus;
+  detailSurface?: DetailSurfaceContract | null;
+  detailSurfaceStatus?: "idle" | "loading" | "ready" | "unavailable";
   createdAt: Date;
 }
 
@@ -283,6 +286,8 @@ export const useBenchmarkState = create<BenchmarkState>()(
             aiDetailBriefingStatus: "idle",
             detailSupportData: null,
             detailSupportStatus: "idle",
+            detailSurface: null,
+            detailSurfaceStatus: "idle",
             createdAt: new Date(),
           };
           
@@ -405,7 +410,9 @@ export const useBenchmarkState = create<BenchmarkState>()(
   )
 );
 
-export const BENCHMARK_LOCATIONS: Location[] = LOCATIONS;
+export const BENCHMARK_LOCATIONS: Location[] = LOCATIONS.filter(
+  (location) => location.countryCode !== "GB",
+);
 
 export function getBenchmarkLocation(id: string): Location | undefined {
   return BENCHMARK_LOCATIONS.find((location) => location.id === id);

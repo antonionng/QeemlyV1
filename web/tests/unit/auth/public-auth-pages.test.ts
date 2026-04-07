@@ -2,7 +2,15 @@ import React from "react";
 import fs from "node:fs";
 import path from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const { useSearchParamsMock } = vi.hoisted(() => ({
+  useSearchParamsMock: vi.fn(),
+}));
+
+vi.mock("next/navigation", () => ({
+  useSearchParams: useSearchParamsMock,
+}));
 
 vi.mock("next/link", () => ({
   default: ({ href, children, ...props }: React.ComponentProps<"a"> & { href: string }) =>
@@ -20,6 +28,10 @@ vi.mock("next/image", () => ({
 }));
 
 describe("public auth pages", () => {
+  beforeEach(() => {
+    useSearchParamsMock.mockReturnValue(new URLSearchParams());
+  });
+
   it("renders the login page inside the shared Figma-style auth shell", async () => {
     const { default: LoginPage } = await import("@/app/login/page");
     const html = renderToStaticMarkup(React.createElement(LoginPage));
@@ -42,6 +54,15 @@ describe("public auth pages", () => {
     expect(html).not.toContain("Compensation intelligence, localized for the Gulf.");
     expect(html).not.toContain("© 2026 Qeemly. All rights reserved.");
     expect(html).not.toContain("Hero prompt archived for reference.");
+  });
+
+  it("renders a visible invite error message when login is opened from a failed invite flow", async () => {
+    useSearchParamsMock.mockReturnValue(new URLSearchParams("error=invite_expired"));
+
+    const { default: LoginPage } = await import("@/app/login/page");
+    const html = renderToStaticMarkup(React.createElement(LoginPage));
+
+    expect(html).toContain("This invite link has expired or has already been used.");
   });
 
   it("keeps the register page on the same shared auth shell", async () => {

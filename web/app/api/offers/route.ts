@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { findMarketBenchmark } from "@/lib/benchmarks/platform-market";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getWorkspaceContext } from "@/lib/workspace-context";
 import type { OfferBenchmarkSnapshot } from "@/lib/offers/types";
+import { jsonServerError } from "@/lib/errors/http";
 
 type RecipientMode = "employee" | "manual";
 
@@ -46,18 +46,10 @@ function resolveRecipientMode(body: OfferCreateBody): RecipientMode | null {
   return null;
 }
 
-type ResolvedOfferBenchmark = {
-  source: "market" | "uploaded";
-  percentiles: { p10: number; p25: number; p50: number; p75: number; p90: number };
-  sampleSize: number;
-  confidence: string;
-  lastUpdated: string | null;
-  freshnessAt: string | null;
-  provenance: string | null;
-};
+type OfferPercentiles = { p10: number; p25: number; p50: number; p75: number; p90: number };
 
 function getExpectedOfferValue(
-  percentiles: ResolvedOfferBenchmark["percentiles"],
+  percentiles: OfferPercentiles,
   percentile: number,
 ): number {
   const { p25, p50, p75, p90 } = percentiles;
@@ -68,72 +60,6 @@ function getExpectedOfferValue(
   return p90;
 }
 
-async function resolveOfferBenchmark(args: {
-  workspaceId: string;
-  roleId: string;
-  locationId: string;
-  levelId: string;
-  supabase: Awaited<ReturnType<typeof createClient>>;
-}): Promise<ResolvedOfferBenchmark | null> {
-  const marketClient = createServiceClient();
-  const marketBenchmark = await findMarketBenchmark(
-    marketClient,
-    args.roleId,
-    args.locationId,
-    args.levelId,
-  );
-  if (marketBenchmark) {
-    return {
-      source: "market",
-      percentiles: {
-        p10: marketBenchmark.p10,
-        p25: marketBenchmark.p25,
-        p50: marketBenchmark.p50,
-        p75: marketBenchmark.p75,
-        p90: marketBenchmark.p90,
-      },
-      sampleSize: marketBenchmark.sample_size ?? 0,
-      confidence: marketBenchmark.sample_size && marketBenchmark.sample_size >= 50 ? "High" : "Medium",
-      lastUpdated: marketBenchmark.freshness_at ?? null,
-      freshnessAt: marketBenchmark.freshness_at ?? null,
-      provenance: marketBenchmark.provenance ?? null,
-    };
-  }
-
-  const { data: workspaceRows, error } = await args.supabase
-    .from("salary_benchmarks")
-    .select("p10,p25,p50,p75,p90,sample_size,confidence,created_at")
-    .eq("workspace_id", args.workspaceId)
-    .eq("role_id", args.roleId)
-    .eq("location_id", args.locationId)
-    .eq("level_id", args.levelId)
-    .order("valid_from", { ascending: false })
-    .order("created_at", { ascending: false })
-    .limit(1);
-
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  const row = workspaceRows?.[0];
-  if (!row) return null;
-
-  return {
-    source: "uploaded",
-    percentiles: {
-      p10: Number(row.p10),
-      p25: Number(row.p25),
-      p50: Number(row.p50),
-      p75: Number(row.p75),
-      p90: Number(row.p90),
-    },
-    sampleSize: Number(row.sample_size ?? 0),
-    confidence: String(row.confidence ?? "Medium"),
-    lastUpdated: row.created_at ? String(row.created_at) : null,
-    freshnessAt: row.created_at ? String(row.created_at) : null,
-    provenance: "workspace",
-  };
-}
 
 export async function GET() {
   const supabase = await createClient();
@@ -142,15 +68,19 @@ export async function GET() {
     return NextResponse.json({ error: wsContext.error }, { status: wsContext.status });
   }
 
-  const { workspace_id } = wsContext.context;
-  const { data, error } = await supabase
+  const { workspace_id, is_override } = wsContext.context;
+  const queryClient = is_override ? createServiceClient() : supabase;
+  const { data, error } = await queryClient
     .from("offers")
     .select("*")
     .eq("workspace_id", workspace_id)
     .order("created_at", { ascending: false });
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonServerError(error, {
+      defaultMessage: "We could not load your offers right now.",
+      logLabel: "Offers load failed",
+    });
   }
 
   return NextResponse.json({ offers: data || [] });
@@ -163,7 +93,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: wsContext.error }, { status: wsContext.status });
   }
 
-  const { workspace_id, user_id } = wsContext.context;
+  const { workspace_id, user_id, is_override } = wsContext.context;
+  const queryClient = is_override ? createServiceClient() : supabase;
   const body = (await request.json()) as OfferCreateBody;
 
   const requiredFields: Array<keyof OfferCreateBody> = [
@@ -194,16 +125,16 @@ export async function POST(request: NextRequest) {
   if (mode === "manual" && body.recipient_email && !isValidEmail(body.recipient_email)) {
     return NextResponse.json({ error: "recipient_email is invalid." }, { status: 400 });
   }
-  if (body.export_format && body.export_format !== "JSON") {
+  if (body.export_format && !["JSON", "PDF"].includes(body.export_format)) {
     return NextResponse.json(
-      { error: "Only JSON offer exports are currently supported." },
+      { error: "Supported export formats are JSON and PDF." },
       { status: 400 },
     );
   }
 
   let employeeId: string | null = null;
   if (mode === "employee" && body.employee_id) {
-    const { data: employee } = await supabase
+    const { data: employee } = await queryClient
       .from("employees")
       .select("id")
       .eq("id", body.employee_id)
@@ -221,66 +152,60 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "target_percentile must be between 25 and 90." }, { status: 400 });
   }
 
-  const resolvedBenchmark = await resolveOfferBenchmark({
-    workspaceId: workspace_id,
-    roleId: body.role_id!,
-    locationId: body.location_id!,
-    levelId: body.level_id!,
-    supabase,
-  });
-
-  if (!resolvedBenchmark) {
-    return NextResponse.json(
-      { error: "No benchmark match found for the requested offer." },
-      { status: 400 },
-    );
-  }
-
-  const expectedOfferValue = Math.round(
-    getExpectedOfferValue(resolvedBenchmark.percentiles, targetPercentile),
-  );
-  const expectedLow = Math.round(expectedOfferValue * 0.96);
-  const expectedHigh = Math.round(expectedOfferValue * 1.04);
-  const submittedOfferValue = Math.round(Number(body.offer_value));
-  const submittedLow = Math.round(Number(body.offer_low));
-  const submittedHigh = Math.round(Number(body.offer_high));
-
-  if (
-    !Number.isFinite(submittedOfferValue) ||
-    !Number.isFinite(submittedLow) ||
-    !Number.isFinite(submittedHigh)
-  ) {
-    return NextResponse.json({ error: "Offer values must be numeric." }, { status: 400 });
-  }
-  if (submittedLow > submittedOfferValue || submittedOfferValue > submittedHigh) {
-    return NextResponse.json(
-      { error: "Offer range is invalid. Expected low <= value <= high." },
-      { status: 400 },
-    );
-  }
-  if (
-    submittedOfferValue !== expectedOfferValue ||
-    submittedLow !== expectedLow ||
-    submittedHigh !== expectedHigh
-  ) {
-    return NextResponse.json(
-      {
-        error:
-          "Offer math does not match the current benchmark. Refresh the benchmark and retry.",
-      },
-      { status: 400 },
-    );
-  }
-
   const clientSnapshot = body.benchmark_snapshot ?? {};
+  const snapshotPercentiles = clientSnapshot.benchmark_percentiles as
+    | Record<string, number>
+    | undefined;
+
+  if (
+    !snapshotPercentiles ||
+    !Number.isFinite(snapshotPercentiles.p25) ||
+    !Number.isFinite(snapshotPercentiles.p50) ||
+    !Number.isFinite(snapshotPercentiles.p75) ||
+    !Number.isFinite(snapshotPercentiles.p90)
+  ) {
+    return NextResponse.json(
+      { error: "benchmark_snapshot must include valid percentile data (p25, p50, p75, p90)." },
+      { status: 400 },
+    );
+  }
+
+  const percentiles = {
+    p10: Number(snapshotPercentiles.p10 ?? snapshotPercentiles.p25),
+    p25: Number(snapshotPercentiles.p25),
+    p50: Number(snapshotPercentiles.p50),
+    p75: Number(snapshotPercentiles.p75),
+    p90: Number(snapshotPercentiles.p90),
+  };
+
+  const offerValue = Math.round(getExpectedOfferValue(percentiles, targetPercentile));
+  const offerLow = Math.round(offerValue * 0.96);
+  const offerHigh = Math.round(offerValue * 1.04);
+
   const benchmarkSnapshot: OfferBenchmarkSnapshot = {
-    benchmark_percentiles: resolvedBenchmark.percentiles,
-    benchmark_source: resolvedBenchmark.source,
-    sample_size: resolvedBenchmark.sampleSize,
-    confidence: resolvedBenchmark.confidence,
-    last_updated: resolvedBenchmark.lastUpdated,
-    freshness_at: resolvedBenchmark.freshnessAt,
-    provenance: resolvedBenchmark.provenance,
+    benchmark_percentiles: percentiles,
+    benchmark_source:
+      clientSnapshot.benchmark_source === "uploaded" ? "uploaded" : "market",
+    sample_size:
+      typeof clientSnapshot.sample_size === "number"
+        ? clientSnapshot.sample_size
+        : 0,
+    confidence:
+      typeof clientSnapshot.confidence === "string"
+        ? clientSnapshot.confidence
+        : "Medium",
+    last_updated:
+      typeof clientSnapshot.last_updated === "string"
+        ? clientSnapshot.last_updated
+        : null,
+    freshness_at:
+      typeof clientSnapshot.freshness_at === "string"
+        ? clientSnapshot.freshness_at
+        : null,
+    provenance:
+      typeof clientSnapshot.provenance === "string"
+        ? clientSnapshot.provenance
+        : null,
     role:
       clientSnapshot.role && typeof clientSnapshot.role === "object"
         ? (clientSnapshot.role as Record<string, unknown>)
@@ -310,24 +235,27 @@ export async function POST(request: NextRequest) {
     location_id: body.location_id!,
     employment_type: body.employment_type!,
     target_percentile: targetPercentile,
-    offer_value: submittedOfferValue,
-    offer_low: submittedLow,
-    offer_high: submittedHigh,
+    offer_value: offerValue,
+    offer_low: offerLow,
+    offer_high: offerHigh,
     currency: body.currency!,
     salary_breakdown: body.salary_breakdown || {},
     benchmark_snapshot: benchmarkSnapshot,
-    export_format: "JSON",
+    export_format: body.export_format || "JSON",
     status: body.status || "draft",
   };
 
-  const { data, error } = await supabase
+  const { data, error } = await queryClient
     .from("offers")
     .insert(insertPayload)
     .select("*")
     .single();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonServerError(error, {
+      defaultMessage: "We could not create this offer right now.",
+      logLabel: "Offer create failed",
+    });
   }
 
   return NextResponse.json(

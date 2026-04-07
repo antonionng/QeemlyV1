@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getWorkspaceContextOrError } from "@/lib/workspace-access";
+import { jsonServerError } from "@/lib/errors/http";
 
 /**
  * GET /api/developer/webhooks/deliveries
@@ -13,20 +15,9 @@ import { createClient } from "@/lib/supabase/server";
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("workspace_id")
-      .eq("id", user.id)
-      .single();
-
-    if (!profile?.workspace_id) {
-      return NextResponse.json({ error: "No workspace found" }, { status: 404 });
+    const workspaceContext = await getWorkspaceContextOrError();
+    if (workspaceContext.error) {
+      return workspaceContext.error;
     }
 
     const { searchParams } = new URL(request.url);
@@ -37,7 +28,7 @@ export async function GET(request: NextRequest) {
     const { data: webhooks } = await supabase
       .from("outgoing_webhooks")
       .select("id")
-      .eq("workspace_id", profile.workspace_id);
+      .eq("workspace_id", workspaceContext.context.workspace_id);
 
     const webhookIds = (webhooks || []).map((w) => w.id);
 
@@ -59,7 +50,10 @@ export async function GET(request: NextRequest) {
     const { data: deliveries, error } = await query;
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return jsonServerError(error, {
+        defaultMessage: "We could not load webhook deliveries right now.",
+        logLabel: "Webhook deliveries load failed",
+      });
     }
 
     return NextResponse.json({ deliveries: deliveries || [] });

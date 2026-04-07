@@ -179,61 +179,53 @@ export function SalaryReviewHeader({
   onReset,
 }: SalaryReviewHeaderProps) {
   return (
-    <div className="flex flex-wrap items-start justify-between gap-4">
-      <div>
-        <h1 className="text-[32px] font-semibold text-[#1F2430]">Salary Review</h1>
-        <p className="mt-2 text-sm text-[#2E3440]">
-          Review employee cohorts and compensation data here first. Start a review cycle only when you are ready to take action.
-        </p>
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          variant="primary"
-          size="sm"
-          onClick={onPrimaryAction}
-          className="h-10 rounded-[10px] bg-[linear-gradient(135deg,#6E56CF,#7C6AF2)] px-4 text-white hover:bg-[#5B46C2]"
-        >
-          {actionLabel}
-        </Button>
-        {onAiDraft ? (
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={onAiDraft}
-            className="h-10 rounded-[10px] border-[#D9D2FF] bg-[#F6F2FF] px-4 text-[#6E56CF]"
-          >
-            <Sparkles className="h-4 w-4" />
-            AI Draft
-          </Button>
-        ) : null}
+    <div className="flex flex-wrap items-center gap-2">
+      <Button
+        variant="primary"
+        size="sm"
+        onClick={onPrimaryAction}
+        className="h-10 rounded-[10px] bg-[linear-gradient(135deg,#6E56CF,#7C6AF2)] px-4 text-white hover:bg-[#5B46C2]"
+      >
+        {actionLabel}
+      </Button>
+      {onAiDraft ? (
         <Button
           variant="secondary"
           size="sm"
-          onClick={onImport}
-          className="h-10 rounded-[10px] border-[#E6E8F0] bg-[#F4F5FB] px-4 text-[#2E3440]"
+          onClick={onAiDraft}
+          className="h-10 rounded-[10px] border-[#D9D2FF] bg-[#F6F2FF] px-4 text-[#6E56CF]"
         >
-          <Upload className="h-4 w-4" />
-          Import
+          <Sparkles className="h-4 w-4" />
+          AI Draft
         </Button>
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={onExport}
-          className="h-10 rounded-[10px] border-[#E6E8F0] bg-[#F4F5FB] px-4 text-[#2E3440]"
-        >
-          <Download className="h-4 w-4" />
-          Export
-        </Button>
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={onReset}
-          className="h-10 rounded-[10px] border-[#E6E8F0] bg-[#F4F5FB] px-4 text-[#2E3440]"
-        >
-          <RotateCcw className="h-4 w-4" />
-          Reset
-        </Button>
-      </div>
+      ) : null}
+      <Button
+        variant="secondary"
+        size="sm"
+        onClick={onImport}
+        className="h-10 rounded-[10px] border-[#E6E8F0] bg-[#F4F5FB] px-4 text-[#2E3440]"
+      >
+        <Upload className="h-4 w-4" />
+        Import
+      </Button>
+      <Button
+        variant="secondary"
+        size="sm"
+        onClick={onExport}
+        className="h-10 rounded-[10px] border-[#E6E8F0] bg-[#F4F5FB] px-4 text-[#2E3440]"
+      >
+        <Download className="h-4 w-4" />
+        Export
+      </Button>
+      <Button
+        variant="secondary"
+        size="sm"
+        onClick={onReset}
+        className="h-10 rounded-[10px] border-[#E6E8F0] bg-[#F4F5FB] px-4 text-[#2E3440]"
+      >
+        <RotateCcw className="h-4 w-4" />
+        Reset
+      </Button>
     </div>
   );
 }
@@ -1010,7 +1002,7 @@ export function SalaryReviewOverview({
   }, [initialQueryState]);
 
   return (
-    <div className="mx-auto flex w-full max-w-[1280px] flex-col gap-6 px-8 py-8">
+    <div className="flex w-full flex-col gap-6">
       <SalaryReviewHeader
         actionLabel={actionLabel}
         onPrimaryAction={onPrimaryAction}

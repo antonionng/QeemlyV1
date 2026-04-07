@@ -13,6 +13,8 @@ import {
   type ComplianceSettingsPayload,
   type FieldDef,
 } from "@/lib/compliance/settings-schema";
+import { useWorkspaceChangeVersion } from "@/lib/workspace-client";
+import { parseClientError } from "@/lib/errors/client-safe";
 
 const DOMAIN_DEFS = DOMAIN_CONFIG;
 type DomainGuidance = {
@@ -93,9 +95,11 @@ function normalizeJurisdictions(value: unknown): string[] {
 }
 
 export function ComplianceSettingsPanel() {
+  const workspaceChangeVersion = useWorkspaceChangeVersion();
   const [loading, setLoading] = useState(true);
   const [savingSettings, setSavingSettings] = useState(false);
   const [settingsError, setSettingsError] = useState<string | null>(null);
+  const [settingsFieldErrors, setSettingsFieldErrors] = useState<Record<string, string>>({});
   const [recordError, setRecordError] = useState<string | null>(null);
   const [settings, setSettings] = useState<ComplianceSettingsPayload>({
     ...DEFAULT_COMPLIANCE_SETTINGS,
@@ -134,18 +138,14 @@ export function ComplianceSettingsPanel() {
   const loadAll = async () => {
     setLoading(true);
     setSettingsError(null);
+    setSettingsFieldErrors({});
     setRecordError(null);
     try {
       const settingsRes = await fetch("/api/settings/compliance");
-      if (!settingsRes.ok) {
-        let message = "Failed to load compliance settings";
-        try {
-          const body = (await settingsRes.json()) as { error?: string };
-          if (body?.error) message = body.error;
-        } catch {}
-        throw new Error(message);
-      }
       const settingsData = await settingsRes.json();
+      if (!settingsRes.ok) {
+        throw new Error(parseClientError(settingsData).message || "Failed to load compliance settings");
+      }
       const normalizedJurisdictions = normalizeJurisdictions(settingsData.settings?.default_jurisdictions);
       setSettings({
         ...settingsData.settings,
@@ -189,11 +189,12 @@ export function ComplianceSettingsPanel() {
 
   useEffect(() => {
     void loadAll();
-  }, []);
+  }, [workspaceChangeVersion]);
 
   const saveSettings = async () => {
     setSavingSettings(true);
     setSettingsError(null);
+    setSettingsFieldErrors({});
     try {
       if (selectedJurisdictions.length === 0) {
         throw new Error("At least one default jurisdiction is required");
@@ -207,11 +208,17 @@ export function ComplianceSettingsPanel() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
+      const body = await res.json();
       if (!res.ok) {
-        const body = await res.json();
-        throw new Error(body.error || "Failed to save compliance settings");
+        const problem = parseClientError(body);
+        setSettingsFieldErrors(problem.fields ?? {});
+        throw new Error(problem.message || "Failed to save compliance settings");
       }
-      setSettings((prev) => ({ ...prev, is_compliance_configured: true }));
+      if (body.settings) {
+        setSettings(body.settings);
+      } else {
+        setSettings((prev) => ({ ...prev, is_compliance_configured: true }));
+      }
     } catch (err) {
       setSettingsError(err instanceof Error ? err.message : "Failed to save compliance settings");
     } finally {
@@ -256,7 +263,7 @@ export function ComplianceSettingsPanel() {
         body: JSON.stringify(payload),
       });
       const body = await res.json();
-      if (!res.ok) throw new Error(body.error || `Failed to create ${domain}`);
+      if (!res.ok) throw new Error(parseClientError(body).message || `Failed to create ${domain}`);
       setDrafts((prev) => ({ ...prev, [domain]: { ...DOMAIN_DEFS[domain].defaults } }));
       if (body.item) {
         setRecords((prev) => ({
@@ -286,7 +293,7 @@ export function ComplianceSettingsPanel() {
         body: JSON.stringify(payload),
       });
       const body = await res.json();
-      if (!res.ok) throw new Error(body.error || "Failed to update record");
+      if (!res.ok) throw new Error(parseClientError(body).message || "Failed to update record");
       if (body.item) {
         setRecords((prev) => ({
           ...prev,
@@ -361,7 +368,7 @@ export function ComplianceSettingsPanel() {
     try {
       const res = await fetch(`/api/settings/compliance/${domain}/${id}`, { method: "DELETE" });
       const body = await res.json();
-      if (!res.ok) throw new Error(body.error || "Failed to delete record");
+      if (!res.ok) throw new Error(parseClientError(body).message || "Failed to delete record");
       setRecords((prev) => ({
         ...prev,
         [domain]: prev[domain].filter((item) => String(item.id || "") !== id),
@@ -493,6 +500,11 @@ export function ComplianceSettingsPanel() {
               <Button type="button" variant="outline" onClick={() => setJurisdictionModalOpen(true)}>
                 Select jurisdictions
               </Button>
+              {settingsFieldErrors.default_jurisdictions && (
+                <p className="mt-2 text-xs font-medium text-rose-600">
+                  {settingsFieldErrors.default_jurisdictions}
+                </p>
+              )}
             </div>
           </div>
           <div>
@@ -502,6 +514,11 @@ export function ComplianceSettingsPanel() {
               value={settings.visa_lead_time_days}
               onChange={(e) => setSettings((p) => ({ ...p, visa_lead_time_days: Number(e.target.value || 0) }))}
             />
+            {settingsFieldErrors.visa_lead_time_days && (
+              <p className="mt-2 text-xs font-medium text-rose-600">
+                {settingsFieldErrors.visa_lead_time_days}
+              </p>
+            )}
           </div>
           <div>
             <label className="mb-2 block text-sm font-medium text-brand-700">Deadline SLA (days)</label>
@@ -510,6 +527,11 @@ export function ComplianceSettingsPanel() {
               value={settings.deadline_sla_days}
               onChange={(e) => setSettings((p) => ({ ...p, deadline_sla_days: Number(e.target.value || 1) }))}
             />
+            {settingsFieldErrors.deadline_sla_days && (
+              <p className="mt-2 text-xs font-medium text-rose-600">
+                {settingsFieldErrors.deadline_sla_days}
+              </p>
+            )}
           </div>
           <div>
             <label className="mb-2 block text-sm font-medium text-brand-700">Document Renewal Threshold (days)</label>
@@ -520,6 +542,11 @@ export function ComplianceSettingsPanel() {
                 setSettings((p) => ({ ...p, document_renewal_threshold_days: Number(e.target.value || 1) }))
               }
             />
+            {settingsFieldErrors.document_renewal_threshold_days && (
+              <p className="mt-2 text-xs font-medium text-rose-600">
+                {settingsFieldErrors.document_renewal_threshold_days}
+              </p>
+            )}
           </div>
         </div>
 
@@ -710,7 +737,7 @@ export function ComplianceSettingsPanel() {
                 return (
                   <div key={id} className="rounded-xl border border-border bg-white p-4">
                     <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                      <span className="rounded bg-brand-50 px-2 py-1 font-mono text-xs text-brand-700">{id}</span>
+                      <span className="rounded bg-brand-50 px-2 py-1 text-xs text-brand-700">{id}</span>
                       <div className="flex items-center gap-2">
                         <Button
                           size="sm"

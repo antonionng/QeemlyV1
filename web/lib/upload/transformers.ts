@@ -201,77 +201,174 @@ const ROLE_ALIASES: Record<string, string> = {
   "business analyst": "product-analyst",
 };
 
+const ROLE_MATCH_THRESHOLD = 0.65;
+const ROLE_STOP_WORDS = new Set([
+  "and",
+  "of",
+  "the",
+  "for",
+  "to",
+  "in",
+  "a",
+  "an",
+  "with",
+  "at",
+  "on",
+]);
+const EXECUTIVE_ROLE_IDS = new Set([
+  "ceo",
+  "cfo",
+  "cto",
+  "cmo",
+  "coo",
+  "coo-exec",
+]);
+const EXECUTIVE_HINTS = ["chief", "officer", "executive", "ceo", "cfo", "cto", "cmo", "coo", "vp"];
+
+function tokenizeRole(value: string): string[] {
+  return normalize(value)
+    .split(" ")
+    .map((token) => token.trim())
+    .filter((token) => token.length >= 2 && !ROLE_STOP_WORDS.has(token));
+}
+
+function keywordRoleFallback(normalized: string): { roleId: string; score: number } | null {
+  if (normalized.includes("frontend") || normalized.includes("front end")) return { roleId: "swe-fe", score: 0.85 };
+  if (normalized.includes("backend") || normalized.includes("back end")) return { roleId: "swe-be", score: 0.85 };
+  if (normalized.includes("mobile") || normalized.includes("ios") || normalized.includes("android")) return { roleId: "swe-mobile", score: 0.85 };
+  if (normalized.includes("machine learning") || normalized.includes(" ml ") || normalized.startsWith("ml ")) return { roleId: "swe-ml", score: 0.85 };
+  if (normalized.includes("data engineer") || normalized.includes("data platform")) return { roleId: "swe-data", score: 0.8 };
+  if (normalized.includes("technical program manager") || normalized.includes("tpm")) return { roleId: "tpm", score: 0.8 };
+  if (normalized.includes("customer support")) return { roleId: "support-eng", score: 0.75 };
+  if (normalized.includes("customer success")) return { roleId: "cs-manager", score: 0.78 };
+  if (normalized.includes("marketing manager")) return { roleId: "marketing-manager", score: 0.8 };
+  if (normalized.includes("digital marketing")) return { roleId: "digital-marketing", score: 0.82 };
+  if (normalized.includes("technician") || normalized.includes("technical")) return { roleId: "swe", score: 0.68 };
+  if (normalized.includes("information") || normalized.includes("ict") || normalized.includes("software")) return { roleId: "swe", score: 0.7 };
+  if (normalized.includes("financial") || normalized.includes("insurance") || normalized.includes("bank")) return { roleId: "data-analyst", score: 0.7 };
+  if (normalized.includes("professional") || normalized.includes("scientific")) return { roleId: "pm", score: 0.68 };
+  return null;
+}
+
+function scoreRoleTokenOverlap(normalizedInput: string): { roleId: string; score: number } | null {
+  const inputTokens = tokenizeRole(normalizedInput);
+  if (inputTokens.length === 0) return null;
+
+  let best: { roleId: string; score: number } | null = null;
+  for (const role of ROLES) {
+    const roleTokens = new Set([...tokenizeRole(role.id), ...tokenizeRole(role.title)]);
+    if (roleTokens.size === 0) continue;
+    const overlapCount = inputTokens.filter((token) => roleTokens.has(token)).length;
+    if (overlapCount === 0) continue;
+    const overlapRatio = overlapCount / Math.max(inputTokens.length, roleTokens.size);
+    const coverageRatio = overlapCount / inputTokens.length;
+    let score = overlapRatio * 0.55 + coverageRatio * 0.45;
+
+    if (EXECUTIVE_ROLE_IDS.has(role.id)) {
+      const hasExecutiveSignal = EXECUTIVE_HINTS.some((hint) => normalizedInput.includes(hint));
+      if (!hasExecutiveSignal) {
+        score -= 0.25;
+      }
+    }
+
+    if (!best || score > best.score) {
+      best = { roleId: role.id, score };
+    }
+  }
+
+  return best;
+}
+
+export type RoleMatchConfidence = "high" | "medium" | "low";
+export type RoleMatchWithConfidence = {
+  roleId: string | null;
+  confidence: RoleMatchConfidence;
+  score: number;
+};
+
+export function matchRoleWithConfidence(roleStr: string): RoleMatchWithConfidence {
+  const trimmed = roleStr.trim();
+  if (!trimmed || trimmed === "__macro_indicator__" || trimmed === "__macro__") {
+    return { roleId: null, confidence: "low", score: 0 };
+  }
+
+  const normalized = normalize(trimmed);
+  if (normalized === "marketing") {
+    return { roleId: null, confidence: "low", score: 0.5 };
+  }
+
+  const aliasedRole = ROLE_ALIASES[normalized];
+  if (aliasedRole) {
+    return { roleId: aliasedRole, confidence: "high", score: 1 };
+  }
+
+  const exactRole = roleByNorm.get(normalized);
+  if (exactRole) {
+    return { roleId: exactRole.id, confidence: "high", score: 1 };
+  }
+
+  if (trimmed.length === 1) {
+    const sectorId = SECTOR_TO_ROLE[trimmed.toUpperCase()];
+    if (sectorId) {
+      return { roleId: sectorId, confidence: "high", score: 0.95 };
+    }
+  }
+
+  const socMatch = trimmed.match(/^\d{2}-\d{4}$/);
+  if (socMatch) {
+    const socRole = SOC_TO_ROLE[trimmed];
+    if (socRole) {
+      return { roleId: socRole, confidence: "high", score: 0.95 };
+    }
+  }
+
+  const activityRole = ACTIVITY_TO_ROLE[normalized];
+  if (activityRole) {
+    return { roleId: activityRole, confidence: "medium", score: 0.8 };
+  }
+
+  for (const [key, roleId] of Object.entries(ACTIVITY_TO_ROLE)) {
+    if (key.length >= 4 && normalized.includes(key)) {
+      return { roleId, confidence: "medium", score: 0.72 };
+    }
+  }
+
+  for (const { keywords, roleId } of PROFESSION_KEYWORDS) {
+    if (keywords.every((k) => normalized.includes(k))) {
+      return { roleId, confidence: "medium", score: 0.75 };
+    }
+  }
+
+  const keywordFallback = keywordRoleFallback(normalized);
+  if (keywordFallback) {
+    const confidence: RoleMatchConfidence =
+      keywordFallback.score >= 0.85 ? "high" : keywordFallback.score >= ROLE_MATCH_THRESHOLD ? "medium" : "low";
+    return {
+      roleId: keywordFallback.score >= ROLE_MATCH_THRESHOLD ? keywordFallback.roleId : null,
+      confidence,
+      score: keywordFallback.score,
+    };
+  }
+
+  const overlapCandidate = scoreRoleTokenOverlap(normalized);
+  if (!overlapCandidate || overlapCandidate.score < ROLE_MATCH_THRESHOLD) {
+    return { roleId: null, confidence: "low", score: overlapCandidate?.score ?? 0 };
+  }
+
+  return {
+    roleId: overlapCandidate.roleId,
+    confidence: overlapCandidate.score >= 0.85 ? "high" : "medium",
+    score: overlapCandidate.score,
+  };
+}
+
 /**
  * Match a role string to a known role ID
  * Supports: direct role names, ILO sector codes, BLS SOC codes, 
  * economic activity names (Qatar/Bahrain), and profession keywords
  */
 export function matchRole(roleStr: string): string | null {
-  const trimmed = roleStr.trim();
-  if (!trimmed) return null;
-
-  // Skip macro indicator markers from World Bank adapter
-  if (trimmed === "__macro_indicator__" || trimmed === "__macro__") {
-    return null;
-  }
-
-  const normalized = normalize(trimmed);
-  const aliasedRole = ROLE_ALIASES[normalized];
-  if (aliasedRole) return aliasedRole;
-  const role = roleByNorm.get(normalized);
-  if (role) return role.id;
-
-  // ILO sector code (single letter like J, K, M, P)
-  if (trimmed.length === 1) {
-    const sectorId = SECTOR_TO_ROLE[trimmed.toUpperCase()];
-    if (sectorId) return sectorId;
-  }
-
-  // BLS SOC code (format: XX-XXXX)
-  const socMatch = trimmed.match(/^\d{2}-\d{4}$/);
-  if (socMatch) {
-    const socRole = SOC_TO_ROLE[trimmed];
-    if (socRole) return socRole;
-  }
-
-  // Economic activity matching (Qatar/Bahrain government data)
-  const activityRole = ACTIVITY_TO_ROLE[normalized];
-  if (activityRole) return activityRole;
-  
-  // Partial activity matching
-  for (const [key, roleId] of Object.entries(ACTIVITY_TO_ROLE)) {
-    if (normalized.includes(key) || key.includes(normalized)) {
-      return roleId;
-    }
-  }
-
-  // Profession keyword matching (KAPSARC-style)
-  const lower = normalized;
-  for (const { keywords, roleId } of PROFESSION_KEYWORDS) {
-    if (keywords.every((k) => lower.includes(k))) return roleId;
-  }
-  
-  // Fallback keyword matching
-  if (lower.includes("frontend") || lower.includes("front end")) return "swe-fe";
-  if (lower.includes("backend") || lower.includes("back end")) return "swe-be";
-  if (lower.includes("mobile") || lower.includes("ios") || lower.includes("android")) return "swe-mobile";
-  if (lower.includes("machine learning") || lower.includes(" ml ") || lower.startsWith("ml ")) return "swe-ml";
-  if (lower.includes("data engineer") || lower.includes("data platform")) return "swe-data";
-  if (lower.includes("technical program manager") || lower.includes("tpm")) return "tpm";
-  if (lower.includes("technician") || lower.includes("technical")) return "swe";
-  if (lower.includes("specialist")) return "pm";
-  if (lower.includes("information") || lower.includes("ict") || lower.includes("software")) return "swe";
-  if (lower.includes("financial") || lower.includes("insurance") || lower.includes("bank")) return "data-analyst";
-  if (lower.includes("professional") || lower.includes("scientific")) return "pm";
-
-  // Try partial matching against known roles
-  for (const [key, value] of roleByNorm) {
-    if (normalized.includes(key) || key.includes(normalized)) {
-      return value.id;
-    }
-  }
-
-  return null;
+  return matchRoleWithConfidence(roleStr).roleId;
 }
 
 /**
@@ -460,6 +557,20 @@ export function getCurrencyForLocation(locationId: string): string {
   return location?.currency || "USD";
 }
 
+const DEFAULT_UNIT_VALUE = 100;
+
+function toComparableEquityValue(params: {
+  equityValue: number | null;
+  equityUnits: number | null;
+  equityPercent: number | null;
+  totalSalary: number;
+}): number | null {
+  if (params.equityValue !== null) return params.equityValue;
+  if (params.equityUnits !== null) return params.equityUnits * DEFAULT_UNIT_VALUE;
+  if (params.equityPercent !== null) return params.totalSalary * (params.equityPercent / 100);
+  return null;
+}
+
 export type TransformedEmployee = {
   firstName: string;
   lastName: string;
@@ -469,14 +580,20 @@ export type TransformedEmployee = {
   canonicalRoleId: string | null;
   roleMappingConfidence: "high" | "medium" | "low";
   roleMappingSource: "upload";
-  roleMappingStatus: "mapped" | "pending";
+  roleMappingStatus: "mapped" | "pending" | "needs_review";
   originalRoleText: string | null;
   levelId: string | null;
   originalLevelText: string | null;
   locationId: string;
+  totalSalary?: number;
   baseSalary: number;
+  transportAllowance?: number | null;
+  accommodationAllowance?: number | null;
   bonus: number | null;
   equity: number | null;
+  equityUnits?: number | null;
+  equityPercent?: number | null;
+  equityComparableValue?: number | null;
   currency: string;
   status: "active" | "inactive";
   employmentType: "national" | "expat";
@@ -510,14 +627,49 @@ export function transformEmployee(data: Record<string, unknown>): TransformedEmp
   const locationId = matchLocation(data.location as string || "");
   if (!locationId) return null;
   
-  const baseSalary = parseNumber(String(data.baseSalary || ""));
-  if (baseSalary === null) return null;
+  const totalSalary = parseNumber(String(data.totalSalary || ""));
+  const baseSalaryInput = parseNumber(String(data.baseSalary || ""));
+  const transportAllowance = parseNumber(String(data.transportAllowance || ""));
+  const accommodationAllowance = parseNumber(String(data.accommodationAllowance || ""));
+
+  let baseSalary = baseSalaryInput;
+  let normalizedTotalSalary = totalSalary;
+
+  if (normalizedTotalSalary === null && baseSalaryInput !== null) {
+    const derivedTotal =
+      baseSalaryInput + (transportAllowance ?? 0) + (accommodationAllowance ?? 0);
+    normalizedTotalSalary = derivedTotal;
+  }
+
+  if (baseSalary === null && normalizedTotalSalary !== null) {
+    // Temporary default until company-level split setup is enforced server-side.
+    baseSalary = normalizedTotalSalary;
+  }
+
+  if (baseSalary === null || normalizedTotalSalary === null) return null;
   
   const originalRoleText = (data.role as string | undefined)?.trim() || null;
   const originalLevelText = (data.level as string | undefined)?.trim() || null;
-  const roleId = matchRole(data.role as string || "");
+  const roleMatch = matchRoleWithConfidence(data.role as string || "");
+  const roleId = roleMatch.roleId;
   const levelId = matchLevel(data.level as string || "");
-  const roleMappingStatus = roleId && levelId ? "mapped" : "pending";
+  const roleMappingStatus =
+    roleId && levelId
+      ? "mapped"
+      : originalRoleText
+        ? "needs_review"
+        : "pending";
+  const equityValue =
+    parseNumber(String(data.equityValue || "")) ??
+    parseNumber(String(data.equity || ""));
+  const equityUnits = parseNumber(String(data.equityUnits || ""));
+  const equityPercent = parseNumber(String(data.equityPercent || ""));
+  const equityComparableValue = toComparableEquityValue({
+    equityValue,
+    equityUnits,
+    equityPercent,
+    totalSalary: normalizedTotalSalary,
+  });
 
   return {
     firstName,
@@ -526,16 +678,27 @@ export function transformEmployee(data: Record<string, unknown>): TransformedEmp
     department: normalizeDepartment(data.department as string || ""),
     roleId,
     canonicalRoleId: roleId,
-    roleMappingConfidence: roleMappingStatus === "mapped" ? "high" : roleId || levelId ? "medium" : "low",
+    roleMappingConfidence:
+      roleMappingStatus === "mapped"
+        ? roleMatch.confidence
+        : roleId || levelId
+          ? "medium"
+          : "low",
     roleMappingSource: "upload",
     roleMappingStatus,
     originalRoleText,
     levelId,
     originalLevelText,
     locationId,
+    totalSalary: normalizedTotalSalary,
     baseSalary,
+    transportAllowance,
+    accommodationAllowance,
     bonus: parseNumber(String(data.bonus || "")),
-    equity: parseNumber(String(data.equity || "")),
+    equity: equityComparableValue,
+    equityUnits,
+    equityPercent,
+    equityComparableValue,
     currency: (data.currency as string) || getCurrencyForLocation(locationId),
     status: normalizeStatus(data.status as string || "active"),
     employmentType: normalizeEmploymentType(data.employmentType as string || "national"),

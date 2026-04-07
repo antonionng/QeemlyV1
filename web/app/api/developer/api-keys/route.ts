@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import crypto from "crypto";
 import { buildApiKeyPrefix, hashApiKey } from "@/lib/security/api-key";
+import { getAdminWorkspaceContextOrError, getWorkspaceContextOrError } from "@/lib/workspace-access";
+import { jsonServerError, jsonValidationError } from "@/lib/errors/http";
 
 /**
  * GET /api/developer/api-keys
@@ -10,30 +12,22 @@ import { buildApiKeyPrefix, hashApiKey } from "@/lib/security/api-key";
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("workspace_id")
-      .eq("id", user.id)
-      .single();
-
-    if (!profile?.workspace_id) {
-      return NextResponse.json({ error: "No workspace found" }, { status: 404 });
+    const workspaceContext = await getWorkspaceContextOrError();
+    if (workspaceContext.error) {
+      return workspaceContext.error;
     }
 
     const { data: keys, error } = await supabase
       .from("api_keys")
       .select("id, name, key_prefix, scopes, last_used_at, expires_at, revoked_at, created_by, created_at")
-      .eq("workspace_id", profile.workspace_id)
+      .eq("workspace_id", workspaceContext.context.workspace_id)
       .order("created_at", { ascending: false });
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return jsonServerError(error, {
+        defaultMessage: "We could not load API keys right now.",
+        logLabel: "API keys list failed",
+      });
     }
 
     return NextResponse.json({ keys: keys || [] });
@@ -56,35 +50,24 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("workspace_id, role")
-      .eq("id", user.id)
-      .single();
-
-    if (!profile?.workspace_id) {
-      return NextResponse.json({ error: "No workspace found" }, { status: 404 });
-    }
-
-    // Only admins can create API keys
-    if (profile.role !== "admin") {
-      return NextResponse.json({ error: "Only admins can create API keys" }, { status: 403 });
+    const workspaceContext = await getAdminWorkspaceContextOrError();
+    if (workspaceContext.error) {
+      return workspaceContext.error;
     }
 
     const body = await request.json();
     const { name, scopes, expires_at } = body;
 
     if (!name || !Array.isArray(scopes) || scopes.length === 0) {
-      return NextResponse.json(
-        { error: "Missing required fields: name, scopes (non-empty array)" },
-        { status: 400 }
-      );
+      return jsonValidationError({
+        message: "Please correct the highlighted fields and try again.",
+        fields: {
+          ...(name ? {} : { name: "Enter a name for this API key." }),
+          ...(!Array.isArray(scopes) || scopes.length === 0
+            ? { scopes: "Choose at least one scope and try again." }
+            : {}),
+        },
+      });
     }
 
     // Generate a secure API key
@@ -96,19 +79,22 @@ export async function POST(request: NextRequest) {
     const { data: apiKey, error } = await supabase
       .from("api_keys")
       .insert({
-        workspace_id: profile.workspace_id,
+        workspace_id: workspaceContext.context.workspace_id,
         name,
         key_prefix: keyPrefix,
         key_hash: keyHash,
         scopes,
         expires_at: expires_at || null,
-        created_by: user.id,
+        created_by: workspaceContext.context.user_id,
       })
       .select("id, name, key_prefix, scopes, expires_at, created_at")
       .single();
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return jsonServerError(error, {
+        defaultMessage: "We could not create this API key right now.",
+        logLabel: "API key create failed",
+      });
     }
 
     // Return the full key only this once

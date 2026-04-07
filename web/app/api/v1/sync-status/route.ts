@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateApiKey } from "../middleware";
 import { createServiceClient } from "@/lib/supabase/service";
+import { jsonServerError } from "@/lib/errors/http";
 
 /**
  * GET /api/v1/sync-status
@@ -22,7 +23,10 @@ export async function GET(request: NextRequest) {
     .order("created_at", { ascending: false });
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonServerError(error, {
+      defaultMessage: "We could not load integration sync status right now.",
+      logLabel: "V1 sync status load failed",
+    });
   }
 
   // Fetch latest sync log for each integration

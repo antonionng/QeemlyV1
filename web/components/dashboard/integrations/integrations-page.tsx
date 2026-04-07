@@ -16,6 +16,7 @@ import {
 import clsx from "clsx";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { DashboardPageHeader } from "@/components/dashboard/page-header";
 import { IntegrationCard } from "./integration-card";
 import { IntegrationContactModal } from "./integration-contact-modal";
 import { IntegrationDetailModal } from "./integration-detail-modal";
@@ -162,23 +163,20 @@ export function IntegrationsPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <h1 className="text-3xl font-semibold text-text-primary">Integrations</h1>
-          <p className="mt-1 max-w-3xl text-sm text-text-secondary">
-            Connect communication tools, HR systems, ATS platforms, and custom APIs to keep compensation data in sync.
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="secondary" size="sm" onClick={() => setActiveTab("developer")}>
-            Open API docs
-          </Button>
-          <Button variant="primary" size="sm">
-            + New key
-          </Button>
-        </div>
-      </div>
+      <DashboardPageHeader
+        title="Integrations"
+        subtitle="Connect communication tools, HR systems, ATS platforms, and custom APIs to keep compensation data in sync."
+        actions={
+          <>
+            <Button variant="secondary" size="sm" onClick={() => setActiveTab("developer")}>
+              Open API docs
+            </Button>
+            <Button variant="primary" size="sm">
+              + New key
+            </Button>
+          </>
+        }
+      />
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <div className="rounded-2xl border border-border bg-white p-4">

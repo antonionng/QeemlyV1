@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getWorkspaceContext } from "@/lib/workspace-context";
 import { refreshComplianceSnapshot } from "@/lib/compliance/snapshot-service";
+import { jsonServerError } from "@/lib/errors/http";
 
 function isMissingRelationError(error: { code?: string; message?: string } | null): boolean {
   if (!error) return false;
@@ -107,7 +108,10 @@ export async function GET() {
     .maybeSingle();
 
   if (error && !isMissingRelationError(error)) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonServerError(error, {
+      defaultMessage: "We could not load your compliance summary right now.",
+      logLabel: "Compliance snapshot load failed",
+    });
   }
 
   let snapshot = data as Record<string, unknown> | null;

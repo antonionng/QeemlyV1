@@ -8,6 +8,7 @@ import {
   safeRefreshComplianceSnapshot,
   sanitizeDomainPayload,
 } from "../_shared";
+import { jsonServerError, jsonValidationError } from "@/lib/errors/http";
 
 type Params = { params: Promise<{ domain: string }> };
 
@@ -62,13 +63,21 @@ export async function GET(_: NextRequest, { params }: Params) {
       return NextResponse.json({ items: [] });
     }
     if (fallback.error) {
-      return NextResponse.json({ error: fallback.error.message }, { status: 500 });
+      return jsonServerError(fallback.error, {
+        defaultMessage: "We could not load compliance records right now.",
+        logLabel: "Compliance domain fallback load failed",
+      });
     }
 
     const rows = Array.isArray(fallback.data) ? (fallback.data as Record<string, unknown>[]) : [];
     return NextResponse.json({ items: sortByField(rows, cfg.orderBy, ascending) });
   }
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    return jsonServerError(error, {
+      defaultMessage: "We could not load compliance records right now.",
+      logLabel: "Compliance domain load failed",
+    });
+  }
   return NextResponse.json({ items: data || [] });
 }
 
@@ -87,8 +96,13 @@ export async function POST(request: NextRequest, { params }: Params) {
 
   const body = (await request.json()) as Record<string, unknown>;
   const parsed = sanitizeDomainPayload(domain, body, "create");
-  if ("error" in parsed) {
-    return NextResponse.json({ error: parsed.error }, { status: 400 });
+  if ("error" in parsed && typeof parsed.error === "string") {
+    const errorMessage = parsed.error;
+    const fieldKey = errorMessage.match(/^([a-zA-Z0-9_.]+)/)?.[1];
+    return jsonValidationError({
+      message: "Please correct the highlighted fields and try again.",
+      fields: fieldKey ? { [fieldKey]: errorMessage } : undefined,
+    });
   }
 
   const supabase = await createClient();
@@ -100,7 +114,12 @@ export async function POST(request: NextRequest, { params }: Params) {
     .select(cfg.select)
     .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    return jsonServerError(error, {
+      defaultMessage: "We could not create this compliance record right now.",
+      logLabel: "Compliance domain create failed",
+    });
+  }
 
   const refresh = await safeRefreshComplianceSnapshot(workspace_id);
   return NextResponse.json({

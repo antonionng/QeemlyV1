@@ -323,12 +323,12 @@ export default function TenantEmployeesPage({ params }: { params: Promise<{ id: 
                       </td>
                       <td className="py-3 px-5 text-[#64748b]">{emp.department}</td>
                       <td className="py-3 px-5">
-                        <span className="font-mono text-xs bg-[#f5f3ff] text-[#5C45FD] px-2 py-1 rounded">
+                        <span className="text-xs bg-[#f5f3ff] text-[#5C45FD] px-2 py-1 rounded">
                           {emp.role_id}
                         </span>
                       </td>
                       <td className="py-3 px-5">
-                        <span className="font-mono text-xs bg-[#f0fdf4] text-emerald-700 px-2 py-1 rounded">
+                        <span className="text-xs bg-[#f0fdf4] text-emerald-700 px-2 py-1 rounded">
                           {emp.level_id}
                         </span>
                       </td>

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Plus, Calendar, ExternalLink } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DashboardPageHeader } from "@/components/dashboard/page-header";
 import { ReportStatusBar } from "@/components/dashboard/reports/report-status-bar";
 import { ReportKpiCards } from "@/components/dashboard/reports/report-kpi-cards";
 import { ReportGrid } from "@/components/dashboard/reports/report-grid";
@@ -12,8 +13,10 @@ import { ReportDetailPanel } from "@/components/dashboard/reports/report-detail-
 import { useReportsStore } from "@/lib/reports/store";
 import type { Report, ReportTemplate } from "@/lib/reports/types";
 import { exportReportsWorkbook } from "@/lib/reports/export";
+import { useWorkspaceChangeVersion } from "@/lib/workspace-client";
 
 export default function ReportsPage() {
+  const workspaceChangeVersion = useWorkspaceChangeVersion();
   const [showNewReport, setShowNewReport] = useState(false);
   const [showTemplateLibrary, setShowTemplateLibrary] = useState(false);
   const [isCreatingFromTemplate, setIsCreatingFromTemplate] = useState(false);
@@ -32,7 +35,7 @@ export default function ReportsPage() {
   useEffect(() => {
     loadReports();
     loadTemplates();
-  }, [loadReports, loadTemplates]);
+  }, [loadReports, loadTemplates, workspaceChangeVersion]);
 
   const handleSelectTemplate = () => {
     setShowNewReport(false);
@@ -85,43 +88,42 @@ export default function ReportsPage() {
 
   return (
     <div className="bench-results space-y-6 relative z-10">
-      {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <h1 className="text-2xl font-bold tracking-tight text-accent-800 sm:text-3xl">
-          Reports &amp; Analytics
-        </h1>
-        <div className="flex items-center gap-3">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleExportAll}
-            className="h-10 gap-2 rounded-full border-border bg-white px-5 text-sm font-semibold text-brand-900"
-          >
-            <ExternalLink className="h-4 w-4" />
-            Export
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              const scheduledReport = reports.find(r => r.status === "Scheduled");
-              if (scheduledReport) setSelectedReport(scheduledReport);
-            }}
-            className="h-10 gap-2 rounded-full border-border bg-white px-5 text-sm font-semibold text-brand-900"
-          >
-            <Calendar className="h-4 w-4" />
-            Schedule
-          </Button>
-          <Button
-            size="sm"
-            className="h-10 gap-2 rounded-full bg-brand-500 px-5 text-sm font-semibold text-white shadow-sm hover:bg-brand-600"
-            onClick={() => setShowNewReport(true)}
-          >
-            <Plus className="h-4 w-4" />
-            New Report
-          </Button>
-        </div>
-      </div>
+      <DashboardPageHeader
+        title="Reports & Analytics"
+        actions={
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleExportAll}
+              className="h-10 gap-2 rounded-full border-border bg-white px-5 text-sm font-semibold text-brand-900"
+            >
+              <ExternalLink className="h-4 w-4" />
+              Export
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                const scheduledReport = reports.find(r => r.status === "Scheduled");
+                if (scheduledReport) setSelectedReport(scheduledReport);
+              }}
+              className="h-10 gap-2 rounded-full border-border bg-white px-5 text-sm font-semibold text-brand-900"
+            >
+              <Calendar className="h-4 w-4" />
+              Schedule
+            </Button>
+            <Button
+              size="sm"
+              className="h-10 gap-2 rounded-full bg-brand-500 px-5 text-sm font-semibold text-white shadow-sm hover:bg-brand-600"
+              onClick={() => setShowNewReport(true)}
+            >
+              <Plus className="h-4 w-4" />
+              New Report
+            </Button>
+          </>
+        }
+      />
 
       {/* Status strip */}
       <ReportStatusBar />

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getWorkspaceContext } from "@/lib/workspace-context";
 import { DEFAULT_REPORT_TEMPLATE_SEEDS } from "@/lib/reports/default-template-seeds";
+import { jsonServerError } from "@/lib/errors/http";
 
 const ALLOWED_TYPES = new Set(["overview", "benchmark", "compliance", "custom"]);
 
@@ -87,7 +88,10 @@ export async function GET() {
   const { data, error } = await fetchTemplatesForWorkspace(supabase, workspace_id);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonServerError(error, {
+      defaultMessage: "We could not load your report templates right now.",
+      logLabel: "Report templates load failed",
+    });
   }
 
   return NextResponse.json({ templates: data || [], source: "database" });
@@ -147,7 +151,10 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonServerError(error, {
+      defaultMessage: "We could not create this report template right now.",
+      logLabel: "Report template create failed",
+    });
   }
 
   return NextResponse.json({ template: data }, { status: 201 });

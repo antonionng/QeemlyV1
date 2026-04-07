@@ -3,6 +3,8 @@ import { authenticateApiKey } from "../middleware";
 import { refreshPlatformMarketPoolBestEffort } from "@/lib/benchmarks/platform-market-sync";
 import { createServiceClient } from "@/lib/supabase/service";
 import { refreshComplianceSnapshot } from "@/lib/compliance/snapshot-service";
+import { jsonServerError, jsonValidationError } from "@/lib/errors/http";
+import { toClientSafeError } from "@/lib/errors/client-safe";
 
 /**
  * GET /api/v1/employees
@@ -35,7 +37,10 @@ export async function GET(request: NextRequest) {
   const { data, count, error } = await query;
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonServerError(error, {
+      defaultMessage: "We could not load employees right now.",
+      logLabel: "V1 employees list failed",
+    });
   }
 
   return NextResponse.json({
@@ -62,17 +67,21 @@ export async function POST(request: NextRequest) {
   const { employees } = body;
 
   if (!Array.isArray(employees) || employees.length === 0) {
-    return NextResponse.json(
-      { error: "Request body must contain a non-empty 'employees' array" },
-      { status: 400 }
-    );
+    return jsonValidationError({
+      message: "Please correct the request and try again.",
+      fields: {
+        employees: "Provide at least one employee row and try again.",
+      },
+    });
   }
 
   if (employees.length > 500) {
-    return NextResponse.json(
-      { error: "Maximum 500 employees per request" },
-      { status: 400 }
-    );
+    return jsonValidationError({
+      message: "Please correct the request and try again.",
+      fields: {
+        employees: "You can upload up to 500 employees per request.",
+      },
+    });
   }
 
   const supabase = createServiceClient();
@@ -111,7 +120,12 @@ export async function POST(request: NextRequest) {
           .eq("id", existing.id);
 
         if (error) {
-          errors.push({ index: i, error: error.message });
+          errors.push({
+            index: i,
+            error: toClientSafeError(error, {
+              defaultMessage: "This employee row could not be updated right now.",
+            }).message,
+          });
           failed++;
         } else {
           updated++;
@@ -127,7 +141,12 @@ export async function POST(request: NextRequest) {
     });
 
     if (error) {
-      errors.push({ index: i, error: error.message });
+      errors.push({
+        index: i,
+        error: toClientSafeError(error, {
+          defaultMessage: "This employee row could not be created right now.",
+        }).message,
+      });
       failed++;
     } else {
       created++;

@@ -70,7 +70,7 @@ describe("validateData", () => {
       { sourceColumn: "role", sourceIndex: 3, targetField: "role", confidence: 1, sampleValues: [] },
       { sourceColumn: "level", sourceIndex: 4, targetField: "level", confidence: 1, sampleValues: [] },
       { sourceColumn: "location", sourceIndex: 5, targetField: "location", confidence: 1, sampleValues: [] },
-      { sourceColumn: "base_salary", sourceIndex: 6, targetField: "baseSalary", confidence: 1, sampleValues: [] },
+      { sourceColumn: "total_salary", sourceIndex: 6, targetField: "totalSalary", confidence: 1, sampleValues: [] },
     ];
 
     const result = validateData(rows, mappings, "employees");
@@ -82,7 +82,7 @@ describe("validateData", () => {
         expect.objectContaining({
           field: "role",
           severity: "error",
-          message: "Role could not be mapped to a supported Qeemly job title",
+          message: "Role could not be confidently mapped and needs review",
         }),
       ]),
     );
@@ -97,7 +97,7 @@ describe("validateData", () => {
       { sourceColumn: "role", sourceIndex: 3, targetField: "role", confidence: 1, sampleValues: [] },
       { sourceColumn: "level", sourceIndex: 4, targetField: "level", confidence: 1, sampleValues: [] },
       { sourceColumn: "location", sourceIndex: 5, targetField: "location", confidence: 1, sampleValues: [] },
-      { sourceColumn: "base_salary", sourceIndex: 6, targetField: "baseSalary", confidence: 1, sampleValues: [] },
+      { sourceColumn: "total_salary", sourceIndex: 6, targetField: "totalSalary", confidence: 1, sampleValues: [] },
     ];
 
     const result = validateData(rows, mappings, "employees");
@@ -125,7 +125,7 @@ describe("validateData", () => {
       { sourceColumn: "role", sourceIndex: 3, targetField: "role", confidence: 1, sampleValues: [] },
       { sourceColumn: "level", sourceIndex: 4, targetField: "level", confidence: 1, sampleValues: [] },
       { sourceColumn: "location", sourceIndex: 5, targetField: "location", confidence: 1, sampleValues: [] },
-      { sourceColumn: "base_salary", sourceIndex: 6, targetField: "baseSalary", confidence: 1, sampleValues: [] },
+      { sourceColumn: "total_salary", sourceIndex: 6, targetField: "totalSalary", confidence: 1, sampleValues: [] },
     ];
 
     const result = validateData(rows, mappings, "employees");
@@ -152,7 +152,7 @@ describe("validateData", () => {
       { sourceColumn: "role", sourceIndex: 3, targetField: "role", confidence: 1, sampleValues: [] },
       { sourceColumn: "level", sourceIndex: 4, targetField: "level", confidence: 1, sampleValues: [] },
       { sourceColumn: "location", sourceIndex: 5, targetField: "location", confidence: 1, sampleValues: [] },
-      { sourceColumn: "base_salary", sourceIndex: 6, targetField: "baseSalary", confidence: 1, sampleValues: [] },
+      { sourceColumn: "total_salary", sourceIndex: 6, targetField: "totalSalary", confidence: 1, sampleValues: [] },
       { sourceColumn: "employment_type", sourceIndex: 7, targetField: "employmentType", confidence: 1, sampleValues: [] },
       { sourceColumn: "performance_rating", sourceIndex: 8, targetField: "performanceRating", confidence: 1, sampleValues: [] },
     ];
@@ -174,7 +174,7 @@ describe("validateData", () => {
       { sourceColumn: "role", sourceIndex: 3, targetField: "role", confidence: 1, sampleValues: [] },
       { sourceColumn: "level", sourceIndex: 4, targetField: "level", confidence: 1, sampleValues: [] },
       { sourceColumn: "location", sourceIndex: 5, targetField: "location", confidence: 1, sampleValues: [] },
-      { sourceColumn: "base_salary", sourceIndex: 6, targetField: "baseSalary", confidence: 1, sampleValues: [] },
+      { sourceColumn: "total_salary", sourceIndex: 6, targetField: "totalSalary", confidence: 1, sampleValues: [] },
     ];
 
     const result = validateData(rows, mappings, "employees");
@@ -183,5 +183,121 @@ describe("validateData", () => {
     expect(result.warningRows).toBe(0);
     expect(result.rows[0]?.isValid).toBe(true);
     expect(result.rows[0]?.hasWarnings).toBe(false);
+  });
+
+  it("blocks rows with base salary only", () => {
+    const rows = [["Ava", "Stone", "Engineering", "Software Engineer", "IC3", "Dubai", "120000"]];
+    const mappings: ColumnMapping[] = [
+      { sourceColumn: "first_name", sourceIndex: 0, targetField: "firstName", confidence: 1, sampleValues: [] },
+      { sourceColumn: "last_name", sourceIndex: 1, targetField: "lastName", confidence: 1, sampleValues: [] },
+      { sourceColumn: "department", sourceIndex: 2, targetField: "department", confidence: 1, sampleValues: [] },
+      { sourceColumn: "role", sourceIndex: 3, targetField: "role", confidence: 1, sampleValues: [] },
+      { sourceColumn: "level", sourceIndex: 4, targetField: "level", confidence: 1, sampleValues: [] },
+      { sourceColumn: "location", sourceIndex: 5, targetField: "location", confidence: 1, sampleValues: [] },
+      { sourceColumn: "base_salary", sourceIndex: 6, targetField: "baseSalary", confidence: 1, sampleValues: [] },
+    ];
+
+    const result = validateData(rows, mappings, "employees");
+    expect(result.errorRows).toBe(1);
+    expect(result.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: "baseSalary",
+          severity: "error",
+        }),
+      ]),
+    );
+  });
+
+  it("warns when total salary and base salary are both provided without allowances", () => {
+    const rows = [["Ava", "Stone", "Engineering", "Software Engineer", "IC3", "Dubai", "150000", "120000"]];
+    const mappings: ColumnMapping[] = [
+      { sourceColumn: "first_name", sourceIndex: 0, targetField: "firstName", confidence: 1, sampleValues: [] },
+      { sourceColumn: "last_name", sourceIndex: 1, targetField: "lastName", confidence: 1, sampleValues: [] },
+      { sourceColumn: "department", sourceIndex: 2, targetField: "department", confidence: 1, sampleValues: [] },
+      { sourceColumn: "role", sourceIndex: 3, targetField: "role", confidence: 1, sampleValues: [] },
+      { sourceColumn: "level", sourceIndex: 4, targetField: "level", confidence: 1, sampleValues: [] },
+      { sourceColumn: "location", sourceIndex: 5, targetField: "location", confidence: 1, sampleValues: [] },
+      { sourceColumn: "total_salary", sourceIndex: 6, targetField: "totalSalary", confidence: 1, sampleValues: [] },
+      { sourceColumn: "base_salary", sourceIndex: 7, targetField: "baseSalary", confidence: 1, sampleValues: [] },
+    ];
+
+    const result = validateData(rows, mappings, "employees");
+    expect(result.errorRows).toBe(0);
+    expect(result.warningRows).toBe(1);
+    expect(result.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: "salary",
+          severity: "warning",
+        }),
+      ]),
+    );
+  });
+
+  it("warns when equity units are provided without explicit equity value", () => {
+    const rows = [["Ava", "Stone", "Engineering", "Software Engineer", "IC3", "Dubai", "150000", "1200"]];
+    const mappings: ColumnMapping[] = [
+      { sourceColumn: "first_name", sourceIndex: 0, targetField: "firstName", confidence: 1, sampleValues: [] },
+      { sourceColumn: "last_name", sourceIndex: 1, targetField: "lastName", confidence: 1, sampleValues: [] },
+      { sourceColumn: "department", sourceIndex: 2, targetField: "department", confidence: 1, sampleValues: [] },
+      { sourceColumn: "role", sourceIndex: 3, targetField: "role", confidence: 1, sampleValues: [] },
+      { sourceColumn: "level", sourceIndex: 4, targetField: "level", confidence: 1, sampleValues: [] },
+      { sourceColumn: "location", sourceIndex: 5, targetField: "location", confidence: 1, sampleValues: [] },
+      { sourceColumn: "total_salary", sourceIndex: 6, targetField: "totalSalary", confidence: 1, sampleValues: [] },
+      { sourceColumn: "equity_units", sourceIndex: 7, targetField: "equityUnits", confidence: 1, sampleValues: [] },
+    ];
+
+    const result = validateData(rows, mappings, "employees");
+    expect(result.warningRows).toBe(1);
+    expect(result.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          field: "equity",
+          severity: "warning",
+        }),
+      ]),
+    );
+  });
+
+  it("flags duplicate employee rows as warnings", () => {
+    const rows = [
+      ["Ava", "Stone", "Engineering", "Software Engineer", "IC3", "Dubai", "150000", "ava@example.com"],
+      ["Ava", "Stone", "Engineering", "Software Engineer", "IC3", "Dubai", "150000", "ava@example.com"],
+    ];
+    const mappings: ColumnMapping[] = [
+      { sourceColumn: "first_name", sourceIndex: 0, targetField: "firstName", confidence: 1, sampleValues: [] },
+      { sourceColumn: "last_name", sourceIndex: 1, targetField: "lastName", confidence: 1, sampleValues: [] },
+      { sourceColumn: "department", sourceIndex: 2, targetField: "department", confidence: 1, sampleValues: [] },
+      { sourceColumn: "role", sourceIndex: 3, targetField: "role", confidence: 1, sampleValues: [] },
+      { sourceColumn: "level", sourceIndex: 4, targetField: "level", confidence: 1, sampleValues: [] },
+      { sourceColumn: "location", sourceIndex: 5, targetField: "location", confidence: 1, sampleValues: [] },
+      { sourceColumn: "total_salary", sourceIndex: 6, targetField: "totalSalary", confidence: 1, sampleValues: [] },
+      { sourceColumn: "email", sourceIndex: 7, targetField: "email", confidence: 1, sampleValues: [] },
+    ];
+
+    const result = validateData(rows, mappings, "employees");
+    expect(result.meta?.duplicateRows).toBe(1);
+    expect(result.warningRows).toBe(1);
+  });
+
+  it("collects currency set in validation metadata", () => {
+    const rows = [
+      ["Ava", "Stone", "Engineering", "Software Engineer", "IC3", "Dubai", "150000", "AED"],
+      ["Lina", "Ray", "Engineering", "Software Engineer", "IC3", "London", "150000", "GBP"],
+    ];
+    const mappings: ColumnMapping[] = [
+      { sourceColumn: "first_name", sourceIndex: 0, targetField: "firstName", confidence: 1, sampleValues: [] },
+      { sourceColumn: "last_name", sourceIndex: 1, targetField: "lastName", confidence: 1, sampleValues: [] },
+      { sourceColumn: "department", sourceIndex: 2, targetField: "department", confidence: 1, sampleValues: [] },
+      { sourceColumn: "role", sourceIndex: 3, targetField: "role", confidence: 1, sampleValues: [] },
+      { sourceColumn: "level", sourceIndex: 4, targetField: "level", confidence: 1, sampleValues: [] },
+      { sourceColumn: "location", sourceIndex: 5, targetField: "location", confidence: 1, sampleValues: [] },
+      { sourceColumn: "total_salary", sourceIndex: 6, targetField: "totalSalary", confidence: 1, sampleValues: [] },
+      { sourceColumn: "currency", sourceIndex: 7, targetField: "currency", confidence: 1, sampleValues: [] },
+    ];
+
+    const result = validateData(rows, mappings, "employees");
+    expect(result.meta?.currencies.sort()).toEqual(["AED", "GBP"]);
   });
 });

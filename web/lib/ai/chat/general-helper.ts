@@ -452,7 +452,7 @@ function rankMatchedEmployees(
       gapPct: Math.round(((marketP50 - baseSalary) / marketP50) * 100),
       belowP25: baseSalary < marketP25,
       matchQuality: exactBenchmark ? "exact" : "role_level_fallback",
-      sampleSize: benchmark.sample_size,
+      sampleSize: benchmark.sample_size ?? null,
       hireDate: employee.hire_date || null,
       lastReviewDate: employee.last_review_date || null,
       performanceRating: employee.performance_rating || null,

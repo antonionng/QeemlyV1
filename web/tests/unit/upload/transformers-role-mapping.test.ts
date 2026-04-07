@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   matchLevel,
   matchRole,
+  matchRoleWithConfidence,
   normalizeDepartment,
   normalizeEmploymentType,
   normalizePerformanceRating,
@@ -16,14 +17,14 @@ describe("transformEmployee role mapping", () => {
       role: "Founder's Associate",
       level: "IC3",
       location: "Dubai",
-      baseSalary: "120000",
+      totalSalary: "120000",
     });
 
     expect(result).toMatchObject({
       roleId: null,
       canonicalRoleId: null,
       originalRoleText: "Founder's Associate",
-      roleMappingStatus: "pending",
+      roleMappingStatus: "needs_review",
       roleMappingSource: "upload",
     });
   });
@@ -35,14 +36,14 @@ describe("transformEmployee role mapping", () => {
       role: "Software Engineer",
       level: "Career Track Purple",
       location: "Dubai",
-      baseSalary: "120000",
+      totalSalary: "120000",
     });
 
     expect(result).toMatchObject({
       roleId: "swe",
       levelId: null,
       originalLevelText: "Career Track Purple",
-      roleMappingStatus: "pending",
+      roleMappingStatus: "needs_review",
     });
   });
 
@@ -53,7 +54,7 @@ describe("transformEmployee role mapping", () => {
       role: "Software Engineer",
       level: "IC3",
       location: "Dubai",
-      baseSalary: "120000",
+      totalSalary: "120000",
     });
 
     expect(result).toMatchObject({
@@ -106,6 +107,19 @@ describe("transformEmployee role mapping", () => {
     expect(matchLevel("Executive")).toBe("vp");
   });
 
+  it("does not over-map broad support and marketing titles to COO", () => {
+    expect(matchRole("Customer Support")).not.toBe("coo");
+    expect(matchRole("Customer Support")).not.toBe("coo-exec");
+    expect(matchRole("Marketing")).not.toBe("coo");
+    expect(matchRole("Marketing")).not.toBe("coo-exec");
+  });
+
+  it("falls back to review for low-confidence broad role titles", () => {
+    const confidence = matchRoleWithConfidence("Marketing")?.confidence;
+    expect(confidence === "low" || confidence === "medium").toBe(true);
+    expect(matchRole("Marketing")).not.toBe("coo");
+  });
+
   it("maps London and Executive department values from the CSV", () => {
     const result = transformEmployee({
       firstName: "John",
@@ -114,7 +128,7 @@ describe("transformEmployee role mapping", () => {
       role: "CTO",
       level: "Executive",
       location: "London",
-      baseSalary: "600000",
+      totalSalary: "600000",
     });
 
     expect(result).toMatchObject({
@@ -122,6 +136,25 @@ describe("transformEmployee role mapping", () => {
       roleId: "cto",
       levelId: "vp",
       locationId: "london",
+    });
+  });
+
+  it("standardizes equity comparable value from units when value is not provided", () => {
+    const result = transformEmployee({
+      firstName: "Lina",
+      lastName: "Ray",
+      department: "Engineering",
+      role: "Software Engineer",
+      level: "IC3",
+      location: "Dubai",
+      totalSalary: "200000",
+      equityUnits: "1000",
+    });
+
+    expect(result).toMatchObject({
+      equityUnits: 1000,
+      equityComparableValue: 100000,
+      equity: 100000,
     });
   });
 });

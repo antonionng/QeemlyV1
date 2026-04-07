@@ -5,6 +5,8 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BenchmarkResult } from "@/lib/benchmarks/benchmark-state";
+import { buildDetailSurface } from "@/lib/benchmarks/detail-surface";
+import type { BenchmarkDetailSupportData } from "@/lib/benchmarks/detail-ai";
 
 const {
   getBenchmarkMock,
@@ -106,7 +108,29 @@ const baseResult: BenchmarkResult = {
   },
   isOverridden: false,
   createdAt: new Date("2026-03-12T00:00:00.000Z"),
+  detailSurfaceStatus: "ready" as const,
 };
+
+const fallbackSupportData: BenchmarkDetailSupportData = {
+  levelTableBenchmarks: {},
+  offerBuilderBenchmarks: {},
+  industryBenchmarks: {},
+  industryFallbackBenchmark: baseResult.benchmark,
+  companySizeBenchmarks: {},
+  companySizeFallbackBenchmark: baseResult.benchmark,
+  geoBenchmarksByLocation: {},
+};
+
+baseResult.detailSurface = buildDetailSurface({
+  aiBriefing: null,
+  supportData: fallbackSupportData,
+  benchmark: baseResult.benchmark,
+  roleTitle: "Product Manager",
+  levelName: "Senior (IC3)",
+  location: baseResult.location,
+  industry: "Fintech",
+  companySize: "1-50",
+});
 
 describe("segmented benchmark breakdown fallbacks", () => {
   beforeEach(() => {

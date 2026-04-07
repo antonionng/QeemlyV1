@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getWorkspaceContext } from "@/lib/workspace-context";
 import { refreshComplianceSnapshot } from "@/lib/compliance/snapshot-service";
+import { jsonServerError } from "@/lib/errors/http";
 
 async function emitTimelineEvent(
   queryClient: Awaited<ReturnType<typeof createClient>> | ReturnType<typeof createServiceClient>,
@@ -69,7 +70,10 @@ export async function GET(
   ]);
 
   if (employeeResult.error) {
-    return NextResponse.json({ error: employeeResult.error.message }, { status: 500 });
+    return jsonServerError(employeeResult.error, {
+      defaultMessage: "We could not load this employee right now.",
+      logLabel: "Employee detail load failed",
+    });
   }
 
   return NextResponse.json({
@@ -104,7 +108,10 @@ export async function PATCH(
     .single();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonServerError(error, {
+      defaultMessage: "We could not update this employee right now.",
+      logLabel: "Employee update failed",
+    });
   }
 
   try {
@@ -144,7 +151,10 @@ export async function DELETE(
     .eq("workspace_id", wsContext.context.workspace_id);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonServerError(error, {
+      defaultMessage: "We could not delete this employee right now.",
+      logLabel: "Employee delete failed",
+    });
   }
 
   try {

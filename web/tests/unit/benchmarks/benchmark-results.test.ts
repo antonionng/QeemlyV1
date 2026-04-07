@@ -12,6 +12,7 @@ const {
   getBenchmarkEnrichedMock,
   fetchAiBriefingMock,
   fetchBenchmarkDetailSupportDataMock,
+  fetchDetailSurfaceMock,
   useCompanySettingsMock,
   useSalaryViewMock,
 } = vi.hoisted(() => ({
@@ -21,6 +22,7 @@ const {
   getBenchmarkEnrichedMock: vi.fn(),
   fetchAiBriefingMock: vi.fn(),
   fetchBenchmarkDetailSupportDataMock: vi.fn(),
+  fetchDetailSurfaceMock: vi.fn(),
   useCompanySettingsMock: vi.fn(),
   useSalaryViewMock: vi.fn(),
 }));
@@ -55,6 +57,7 @@ vi.mock("@/lib/benchmarks/data-service", () => ({
   getBenchmarkEnriched: getBenchmarkEnrichedMock,
   fetchAiBriefing: fetchAiBriefingMock,
   fetchBenchmarkDetailSupportData: fetchBenchmarkDetailSupportDataMock,
+  fetchDetailSurface: fetchDetailSurfaceMock,
   makeBenchmarkLookupKey: ({
     roleId,
     locationId,
@@ -102,6 +105,16 @@ vi.mock("@/lib/utils/currency", () => ({
 }));
 
 import { BenchmarkResults } from "@/components/dashboard/benchmarks/benchmark-results";
+
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
 
 const baseBenchmark = {
   roleId: "pm",
@@ -235,9 +248,10 @@ describe("BenchmarkResults", () => {
       aiSummary: null,
     }));
     fetchBenchmarkDetailSupportDataMock.mockResolvedValue(detailSupportData);
+    fetchDetailSurfaceMock.mockResolvedValue(null);
   });
 
-  it("marks the results entry as loading while the AI detail briefing is prefetched", async () => {
+  it("does not mutate drilldown detail state before users request loading", async () => {
     getBenchmarkEnrichedMock.mockImplementation(async (_roleId: string, _locationId: string, levelId: string) => ({
       benchmark: { ...baseBenchmark, levelId },
       aiSummary: "Fintech compensation remains above the broader market in Riyadh.",
@@ -306,7 +320,7 @@ describe("BenchmarkResults", () => {
       await Promise.resolve();
     });
 
-    expect(useBenchmarkStateMock.setState).toHaveBeenCalled();
+    expect(useBenchmarkStateMock.setState).not.toHaveBeenCalled();
 
     await act(async () => {
       root.unmount();
@@ -314,7 +328,7 @@ describe("BenchmarkResults", () => {
     vi.unstubAllGlobals();
   });
 
-  it("prefetches the AI detail briefing from the results page and stores it for drilldown reuse", async () => {
+  it("does not prefetch AI detail briefing until users request the detailed breakdown", async () => {
     fetchAiBriefingMock.mockResolvedValue(aiDetailBriefing);
     vi.stubGlobal(
       "fetch",
@@ -383,11 +397,7 @@ describe("BenchmarkResults", () => {
       await Promise.resolve();
     });
 
-    expect(fetchAiBriefingMock).toHaveBeenCalledWith("pm", "riyadh", "ic3", {
-      industry: "Fintech",
-      companySize: "1-50",
-    });
-    expect(useBenchmarkStateMock.setState).toHaveBeenCalled();
+    expect(fetchAiBriefingMock).not.toHaveBeenCalled();
 
     await act(async () => {
       root.unmount();
@@ -457,6 +467,8 @@ describe("BenchmarkResults", () => {
             aiDetailBriefingStatus: "loading",
             detailSupportData: null,
             detailSupportStatus: "loading",
+            detailSurface: null,
+            detailSurfaceStatus: "loading",
             createdAt: new Date("2026-03-12T00:00:00.000Z"),
           },
         }),
@@ -471,6 +483,321 @@ describe("BenchmarkResults", () => {
     expect(breakdownButton).toBeTruthy();
     expect((breakdownButton as HTMLButtonElement).disabled).toBe(true);
     expect(container.textContent).toContain("Preparing detailed breakdown");
+
+    await act(async () => {
+      root.unmount();
+    });
+    vi.unstubAllGlobals();
+  });
+
+  it("shows preparing state immediately after clicking detailed breakdown while data is in flight", async () => {
+    const briefingDeferred = createDeferred<typeof aiDetailBriefing | null>();
+    const supportDeferred = createDeferred<typeof detailSupportData | null>();
+    const surfaceDeferred = createDeferred<typeof minimalDetailSurface | null>();
+    fetchAiBriefingMock.mockReturnValue(briefingDeferred.promise);
+    fetchBenchmarkDetailSupportDataMock.mockReturnValue(supportDeferred.promise as Promise<typeof detailSupportData>);
+    fetchDetailSurfaceMock.mockReturnValue(surfaceDeferred.promise);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          benchmarkSource: "market",
+          bandLow: 120000,
+          bandHigh: 180000,
+          matchingEmployeeCount: 0,
+          inBandCount: 0,
+        }),
+      })),
+    );
+
+    const container = document.createElement("div");
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        React.createElement(BenchmarkResults, {
+          result: {
+            formData: {
+              context: "existing",
+              roleId: "pm",
+              levelId: "ic3",
+              locationId: "riyadh",
+              employmentType: "national",
+              currentSalaryLow: null,
+              currentSalaryHigh: null,
+              industry: "Fintech",
+              companySize: "1-50",
+              fundingStage: null,
+              targetPercentile: 50,
+            },
+            benchmark: baseBenchmark,
+            role: {
+              id: "pm",
+              title: "Product Manager",
+              family: "Product",
+              icon: "PM",
+            },
+            level: {
+              id: "ic3",
+              name: "Senior (IC3)",
+              category: "IC",
+            },
+            location: {
+              id: "riyadh",
+              city: "Riyadh",
+              country: "Saudi Arabia",
+              countryCode: "SA",
+              currency: "AED",
+              flag: "SA",
+            },
+            isOverridden: false,
+            aiDetailBriefing: null,
+            aiDetailBriefingStatus: "idle",
+            detailSupportData: null,
+            detailSupportStatus: "idle",
+            createdAt: new Date("2026-03-12T00:00:00.000Z"),
+          },
+        }),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const breakdownButton = Array.from(container.querySelectorAll("button")).find((button) =>
+      button.textContent?.toLowerCase().includes("detailed breakdown"),
+    ) as HTMLButtonElement;
+    expect(breakdownButton).toBeTruthy();
+
+    await act(async () => {
+      breakdownButton.click();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain("Preparing detailed breakdown");
+    expect(breakdownButton.disabled).toBe(true);
+
+    briefingDeferred.resolve(aiDetailBriefing);
+    supportDeferred.resolve(detailSupportData);
+    surfaceDeferred.resolve(minimalDetailSurface);
+
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      root.unmount();
+    });
+    vi.unstubAllGlobals();
+  });
+
+  it("shows retry state after a detailed breakdown load attempt returns no usable payloads", async () => {
+    fetchAiBriefingMock.mockResolvedValue(null);
+    fetchBenchmarkDetailSupportDataMock.mockResolvedValue(null as unknown as typeof detailSupportData);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          benchmarkSource: "market",
+          bandLow: 120000,
+          bandHigh: 180000,
+          matchingEmployeeCount: 0,
+          inBandCount: 0,
+        }),
+      })),
+    );
+
+    const container = document.createElement("div");
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        React.createElement(BenchmarkResults, {
+          result: {
+            formData: {
+              context: "existing",
+              roleId: "pm",
+              levelId: "ic3",
+              locationId: "riyadh",
+              employmentType: "national",
+              currentSalaryLow: null,
+              currentSalaryHigh: null,
+              industry: "Fintech",
+              companySize: "1-50",
+              fundingStage: null,
+              targetPercentile: 50,
+            },
+            benchmark: baseBenchmark,
+            role: {
+              id: "pm",
+              title: "Product Manager",
+              family: "Product",
+              icon: "PM",
+            },
+            level: {
+              id: "ic3",
+              name: "Senior (IC3)",
+              category: "IC",
+            },
+            location: {
+              id: "riyadh",
+              city: "Riyadh",
+              country: "Saudi Arabia",
+              countryCode: "SA",
+              currency: "AED",
+              flag: "SA",
+            },
+            isOverridden: false,
+            aiDetailBriefing: null,
+            aiDetailBriefingStatus: "idle",
+            detailSupportData: null,
+            detailSupportStatus: "idle",
+            createdAt: new Date("2026-03-12T00:00:00.000Z"),
+          },
+        }),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const breakdownButton = Array.from(container.querySelectorAll("button")).find((button) =>
+      button.textContent?.toLowerCase().includes("detailed breakdown"),
+    ) as HTMLButtonElement;
+
+    await act(async () => {
+      breakdownButton.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain("Retry Detailed Breakdown");
+    expect(container.textContent).toContain("We could not prepare the detailed breakdown. Please retry.");
+    expect(breakdownButton.disabled).toBe(false);
+
+    await act(async () => {
+      root.unmount();
+    });
+    vi.unstubAllGlobals();
+  });
+
+  const minimalDetailSurface = {
+    summary: { executiveBriefing: null, hiringSignal: null, negotiationPosture: null },
+    modules: {
+      levelTable: { status: "empty", source: "derived", title: "", subtitle: "", data: { rows: [], breakdown: null }, narrative: { summary: "", action: null }, message: null },
+      industry: { status: "empty", source: "derived", title: "", subtitle: "", data: { rows: [], fallbackLabel: null }, narrative: { summary: "", action: null }, message: null },
+      companySize: { status: "empty", source: "derived", title: "", subtitle: "", data: { rows: [], fallbackLabel: null }, narrative: { summary: "", action: null }, message: null },
+      trend: { status: "empty", source: "derived", title: "", subtitle: "", data: { points: [], periodChange: null, currentMedian: null, startMedian: null }, narrative: { summary: "", action: null }, message: null },
+      geoComparison: { status: "empty", source: "derived", title: "", subtitle: "", data: { rows: [] }, narrative: { summary: "", action: null }, message: null },
+      compMix: { status: "empty", source: "derived", title: "", subtitle: "", data: { breakdown: { basicSalaryPct: 0, housingPct: 0, transportPct: 0, otherAllowancesPct: 0 } }, narrative: { summary: "", action: null }, message: null },
+      salaryBreakdown: { status: "empty", source: "derived", title: "", subtitle: "", data: { breakdown: { basicSalaryPct: 0, housingPct: 0, transportPct: 0, otherAllowancesPct: 0 } }, narrative: { summary: "", action: null }, message: null },
+      aiInsights: { status: "empty", source: "derived", title: "", subtitle: "", data: { executiveBriefing: "", hiringSignal: "", negotiationPosture: "" }, narrative: { summary: "", action: null }, message: null },
+      offerBuilder: { status: "empty", source: "derived", title: "", subtitle: "", data: { breakdown: null, adjacentLevels: [] }, narrative: { summary: "", action: null }, message: null },
+    },
+  };
+
+  it("navigates to detail when one detailed breakdown source is usable", async () => {
+    const goToStepMock = vi.fn();
+    useBenchmarkStateMock.mockReturnValue({
+      clearResult: vi.fn(),
+      goToStep: goToStepMock,
+      saveCurrentFilter: vi.fn(),
+      formData: {
+        roleId: "pm",
+        levelId: "ic3",
+        locationId: "riyadh",
+        employmentType: "national",
+        industry: "Fintech",
+        companySize: "1-50",
+        fundingStage: null,
+        targetPercentile: 50,
+      },
+      updateFormField: vi.fn(),
+      runBenchmark: vi.fn(),
+      isSubmitting: false,
+    });
+    fetchAiBriefingMock.mockResolvedValue(null);
+    fetchBenchmarkDetailSupportDataMock.mockResolvedValue(detailSupportData);
+    fetchDetailSurfaceMock.mockResolvedValue(minimalDetailSurface);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          benchmarkSource: "market",
+          bandLow: 120000,
+          bandHigh: 180000,
+          matchingEmployeeCount: 0,
+          inBandCount: 0,
+        }),
+      })),
+    );
+
+    const container = document.createElement("div");
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        React.createElement(BenchmarkResults, {
+          result: {
+            formData: {
+              context: "existing",
+              roleId: "pm",
+              levelId: "ic3",
+              locationId: "riyadh",
+              employmentType: "national",
+              currentSalaryLow: null,
+              currentSalaryHigh: null,
+              industry: "Fintech",
+              companySize: "1-50",
+              fundingStage: null,
+              targetPercentile: 50,
+            },
+            benchmark: baseBenchmark,
+            role: {
+              id: "pm",
+              title: "Product Manager",
+              family: "Product",
+              icon: "PM",
+            },
+            level: {
+              id: "ic3",
+              name: "Senior (IC3)",
+              category: "IC",
+            },
+            location: {
+              id: "riyadh",
+              city: "Riyadh",
+              country: "Saudi Arabia",
+              countryCode: "SA",
+              currency: "AED",
+              flag: "SA",
+            },
+            isOverridden: false,
+            aiDetailBriefing: null,
+            aiDetailBriefingStatus: "idle",
+            detailSupportData: null,
+            detailSupportStatus: "idle",
+            createdAt: new Date("2026-03-12T00:00:00.000Z"),
+          },
+        }),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const breakdownButton = Array.from(container.querySelectorAll("button")).find((button) =>
+      button.textContent?.toLowerCase().includes("detailed breakdown"),
+    ) as HTMLButtonElement;
+
+    await act(async () => {
+      breakdownButton.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(goToStepMock).toHaveBeenCalledWith("detail");
 
     await act(async () => {
       root.unmount();
@@ -547,7 +874,7 @@ describe("BenchmarkResults", () => {
     });
 
     expect(container.textContent).not.toContain("Preparing detailed breakdown");
-    expect(container.textContent).toContain("Detailed breakdown unavailable");
+    expect(container.textContent).toContain("Load Detailed Breakdown");
 
     await act(async () => {
       root.unmount();
@@ -921,7 +1248,8 @@ describe("BenchmarkResults", () => {
       await Promise.resolve();
     });
 
-    expect(container.textContent).toContain("Fintech compensation remains above the broader market in Riyadh.");
+    expect(container.textContent).not.toContain("Fintech compensation remains above the broader market in Riyadh.");
+    expect(container.textContent).toContain("View Detailed Breakdown");
 
     await act(async () => {
       root.unmount();
@@ -1498,6 +1826,84 @@ describe("BenchmarkResults", () => {
     expect(document.body.textContent).toContain("Comparing market cohorts and preparing the advisory");
     expect(document.body.querySelector('[role="dialog"]')).not.toBeNull();
     expect(document.body.querySelector('[data-testid="qeemly-loading-icon"]')).not.toBeNull();
+
+    await act(async () => {
+      root.unmount();
+    });
+    vi.unstubAllGlobals();
+  });
+
+  it("renders salary advice, data quality tier explanation, and date clarification copy", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: true,
+        json: async () => ({
+          benchmarkSource: "market",
+          bandLow: 120000,
+          bandHigh: 180000,
+          matchingEmployeeCount: 0,
+          inBandCount: 0,
+        }),
+      })),
+    );
+    useSalaryViewMock.mockReturnValue({
+      salaryView: "monthly",
+      setSalaryView: vi.fn(),
+    });
+
+    const container = document.createElement("div");
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        React.createElement(BenchmarkResults, {
+          result: {
+            formData: {
+              context: "existing",
+              roleId: "pm",
+              levelId: "ic3",
+              locationId: "riyadh",
+              employmentType: "national",
+              currentSalaryLow: null,
+              currentSalaryHigh: null,
+              industry: "Fintech",
+              companySize: "1-50",
+              fundingStage: null,
+              targetPercentile: 50,
+            },
+            benchmark: baseBenchmark,
+            role: {
+              id: "pm",
+              title: "Product Manager",
+              family: "Product",
+              icon: "PM",
+            },
+            level: {
+              id: "ic3",
+              name: "Senior (IC3)",
+              category: "IC",
+            },
+            location: {
+              id: "riyadh",
+              city: "Riyadh",
+              country: "Saudi Arabia",
+              countryCode: "SA",
+              currency: "AED",
+              flag: "SA",
+            },
+            isOverridden: false,
+            createdAt: new Date("2026-03-12T00:00:00.000Z"),
+          },
+        }),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain("Monthly view");
+    expect(container.textContent).toContain("Tier guide");
+    expect(container.textContent).toContain("Date of joining");
 
     await act(async () => {
       root.unmount();

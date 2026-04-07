@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getWorkspaceContext } from "@/lib/workspace-context";
 import { runEmployeeAdvisoryChat } from "@/lib/ai/chat/employee";
+import { jsonServerError, jsonValidationError } from "@/lib/errors/http";
 
 function sanitizeQuestion(question: string): string {
   return question.replace(/\s+/g, " ").trim().slice(0, 1200);
@@ -18,12 +19,23 @@ export async function POST(request: NextRequest) {
   const rawQuestion = body?.question as string | undefined;
 
   if (!employeeId || !rawQuestion) {
-    return NextResponse.json({ error: "employeeId and question are required" }, { status: 400 });
+    return jsonValidationError({
+      message: "Please correct the highlighted fields and try again.",
+      fields: {
+        ...(!employeeId ? { employeeId: "Choose an employee before asking a question." } : {}),
+        ...(!rawQuestion ? { question: "Enter a question to continue." } : {}),
+      },
+    });
   }
 
   const question = sanitizeQuestion(rawQuestion);
   if (!question) {
-    return NextResponse.json({ error: "question cannot be empty" }, { status: 400 });
+    return jsonValidationError({
+      message: "Please correct the highlighted fields and try again.",
+      fields: {
+        question: "Enter a question to continue.",
+      },
+    });
   }
 
   try {
@@ -36,8 +48,11 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown advisory error";
     if (message === "Employee not found") {
-      return NextResponse.json({ error: message }, { status: 404 });
+      return NextResponse.json({ error: "Employee not found" }, { status: 404 });
     }
-    return NextResponse.json({ error: message }, { status: 500 });
+    return jsonServerError(error, {
+      defaultMessage: "We could not answer that employee question right now.",
+      logLabel: "Employee advisory chat failed",
+    });
   }
 }

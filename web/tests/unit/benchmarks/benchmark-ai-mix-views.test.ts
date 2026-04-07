@@ -50,6 +50,7 @@ vi.mock("@/lib/benchmarks/data-service", async (importOriginal) => {
 
 import { OfferBuilderView } from "@/components/dashboard/benchmarks/drilldown/views/offer-builder-view";
 import { CompMixView } from "@/components/dashboard/benchmarks/drilldown/views/comp-mix-view";
+import { buildDetailSurface } from "@/lib/benchmarks/detail-surface";
 
 const baseBenchmark = {
   roleId: "swe-fe",
@@ -109,7 +110,27 @@ const aiDetailBriefing = {
   },
 };
 
+const resultLocation = {
+  id: "riyadh",
+  city: "Riyadh",
+  country: "Saudi Arabia",
+  countryCode: "SA",
+  currency: "AED" as const,
+  flag: "SA",
+};
+
 function makeResult() {
+  const detailSurface = buildDetailSurface({
+    aiBriefing: aiDetailBriefing,
+    supportData: null,
+    benchmark: baseBenchmark,
+    roleTitle: "Frontend Engineer",
+    levelName: "Staff (IC4)",
+    location: resultLocation,
+    industry: "Technology",
+    companySize: "201-500",
+  });
+
   return {
     formData: {
       context: "existing" as const,
@@ -136,17 +157,12 @@ function makeResult() {
       name: "Staff (IC4)",
       category: "IC",
     },
-    location: {
-      id: "riyadh",
-      city: "Riyadh",
-      country: "Saudi Arabia",
-      countryCode: "SA",
-      currency: "AED",
-      flag: "SA",
-    },
+    location: resultLocation,
     isOverridden: false,
     aiDetailBriefing,
     aiDetailBriefingStatus: "ready" as const,
+    detailSurface,
+    detailSurfaceStatus: "ready" as const,
     createdAt: new Date("2026-03-31T00:00:00.000Z"),
   };
 }
@@ -225,6 +241,7 @@ describe("benchmark AI mix views", () => {
     expect(container.textContent).toContain("Basic Salary");
     expect(container.textContent).toContain("Housing");
     expect(container.textContent).toContain("Transport");
+    expect(container.textContent).toContain("Accommodation");
     expect(container.textContent).toContain("Other Allowances");
     expect(container.textContent).toContain("70%");
     expect(container.textContent).toContain("15%");
@@ -246,8 +263,8 @@ describe("benchmark AI mix views", () => {
         React.createElement(OfferBuilderView, {
           result: {
             ...makeResult(),
-            aiDetailBriefing: null,
-            aiDetailBriefingStatus: "loading",
+            detailSurface: null,
+            detailSurfaceStatus: "loading",
           },
         }),
       );
@@ -274,8 +291,8 @@ describe("benchmark AI mix views", () => {
         React.createElement(CompMixView, {
           result: {
             ...makeResult(),
-            aiDetailBriefing: null,
-            aiDetailBriefingStatus: "loading",
+            detailSurface: null,
+            detailSurfaceStatus: "loading",
           },
         }),
       );

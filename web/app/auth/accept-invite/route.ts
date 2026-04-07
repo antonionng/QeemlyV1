@@ -46,23 +46,33 @@ export async function GET(request: Request) {
           .eq("email", invitation.email.toLowerCase())
           .maybeSingle();
 
-        await supabase
+        const { error: profileUpdateError } = await supabase
           .from("profiles")
           .update({
             role: "employee",
             employee_id: employee?.id ?? null,
           })
           .eq("id", user.id);
+
+        if (profileUpdateError) {
+          return NextResponse.redirect(`${origin}/login?error=invite_accept_failed`);
+        }
       }
 
       // Mark invitation accepted
-      await supabase
+      const { error: invitationUpdateError } = await supabase
         .from("team_invitations")
         .update({ status: "accepted" })
         .eq("id", invitation.id);
 
+      if (invitationUpdateError) {
+        return NextResponse.redirect(`${origin}/login?error=invite_accept_failed`);
+      }
+
       return NextResponse.redirect(`${origin}/dashboard/me`);
     }
+
+    return NextResponse.redirect(`${origin}/login?error=invite_wrong_workspace`);
   }
 
   // Not logged in — redirect to employee signup with token

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
+import { jsonServerError, jsonValidationError } from "@/lib/errors/http";
 
 type SyncPayload = {
   integration_id?: string;
@@ -37,10 +38,14 @@ export async function POST(request: NextRequest) {
 
   const body = (await request.json()) as SyncPayload;
   if (!body.integration_id || !body.event_key || !body.event_type) {
-    return NextResponse.json(
-      { error: "integration_id, event_key, and event_type are required" },
-      { status: 400 }
-    );
+    return jsonValidationError({
+      message: "Please correct the request and try again.",
+      fields: {
+        ...(body.integration_id ? {} : { integration_id: "Provide an integration id." }),
+        ...(body.event_key ? {} : { event_key: "Provide an event key." }),
+        ...(body.event_type ? {} : { event_type: "Provide an event type." }),
+      },
+    });
   }
 
   const supabase = createServiceClient();
@@ -71,7 +76,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, deduped: true });
   }
   if (inboundError || !inbound?.id) {
-    return NextResponse.json({ error: inboundError?.message || "Failed to save inbound event" }, { status: 500 });
+    return jsonServerError(inboundError ?? new Error("Failed to save inbound event"), {
+      defaultMessage: "We could not process this sync event right now.",
+      logLabel: "Integration profile sync inbound save failed",
+    });
   }
 
   try {
@@ -273,6 +281,9 @@ export async function POST(request: NextRequest) {
       .from("integration_inbound_events")
       .update({ status: "failed", processed_at: new Date().toISOString(), error_message: message })
       .eq("id", inbound.id);
-    return NextResponse.json({ error: message }, { status: 500 });
+    return jsonServerError(error, {
+      defaultMessage: "We could not process this sync event right now.",
+      logLabel: "Integration profile sync processing failed",
+    });
   }
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getWorkspaceContext } from "@/lib/workspace-context";
+import { jsonServerError, jsonValidationError } from "@/lib/errors/http";
 
 const ALLOWED_TYPES = new Set(["overview", "benchmark", "compliance", "custom"]);
 const ALLOWED_FORMATS = new Set(["PDF", "XLSX", "Slides"]);
@@ -57,7 +58,10 @@ export async function GET() {
     .order("updated_at", { ascending: false });
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonServerError(error, {
+      defaultMessage: "We could not load your reports right now.",
+      logLabel: "Reports load failed",
+    });
   }
 
   const existingReports = (data || []) as Array<Record<string, unknown>>;
@@ -191,7 +195,14 @@ export async function POST(request: NextRequest) {
   }
 
   if (!resolvedTitle || !resolvedTypeId || !resolvedOwner) {
-    return NextResponse.json({ error: "title, type_id, and owner are required" }, { status: 400 });
+    return jsonValidationError({
+      message: "Please correct the highlighted fields and try again.",
+      fields: {
+        ...(!resolvedTitle ? { title: "Enter a report title and try again." } : {}),
+        ...(!resolvedTypeId ? { type_id: "Choose a report type and try again." } : {}),
+        ...(!resolvedOwner ? { owner: "Choose an owner and try again." } : {}),
+      },
+    });
   }
 
   if (!ALLOWED_TYPES.has(resolvedTypeId)) {
@@ -223,7 +234,10 @@ export async function POST(request: NextRequest) {
     .single();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonServerError(error, {
+      defaultMessage: "We could not create this report right now.",
+      logLabel: "Report create failed",
+    });
   }
   return NextResponse.json({ report: data }, { status: 201 });
 }

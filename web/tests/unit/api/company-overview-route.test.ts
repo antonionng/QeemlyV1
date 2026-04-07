@@ -360,4 +360,38 @@ describe("GET /api/dashboard/company-overview", () => {
       coveragePct: 75,
     });
   });
+
+  it("returns a safe server error when employee data cannot be loaded", async () => {
+    const failingSupabase = createSessionSupabase();
+    const originalFrom = failingSupabase.from;
+    failingSupabase.from = (table: string) => {
+      if (table === "employees") {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              neq: vi.fn(() => ({
+                order: vi.fn().mockResolvedValue({
+                  data: null,
+                  error: { message: "relation employees exploded with secret details" },
+                }),
+              })),
+            })),
+          })),
+        };
+      }
+
+      return originalFrom(table);
+    };
+
+    createClientMock.mockResolvedValue(failingSupabase);
+    createServiceClientMock.mockReturnValue(failingSupabase);
+
+    const response = await GET(new Request("http://localhost/api/dashboard/company-overview"));
+    const payload = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(payload.error).toBe("We could not load your company overview right now.");
+    expect(payload.message).toBe("We could not load your company overview right now.");
+    expect(payload.code).toBe("unknown_error");
+  });
 });

@@ -19,7 +19,9 @@ type BenchmarkStateLike = PersistableBenchmarkState & {
 
 export type RoleSelectionState = "empty" | "searching" | "selected";
 
-const SUPPORTED_BENCHMARK_LOCATION_IDS = new Set(LOCATIONS.map((location) => location.id));
+const SUPPORTED_BENCHMARK_LOCATION_IDS = new Set(
+  LOCATIONS.filter((location) => location.countryCode !== "GB").map((location) => location.id),
+);
 
 export function getRoleSelectionState(input: {
   roleId: string | null;

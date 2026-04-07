@@ -1,11 +1,10 @@
 "use client";
 
 import { Sparkles } from "lucide-react";
-import type { BenchmarkDetailAiSection } from "@/lib/benchmarks/detail-ai";
 
 interface SharedAiCalloutProps {
   title?: string;
-  section: BenchmarkDetailAiSection | null | undefined;
+  section: { summary: string; action: string | null } | null | undefined;
 }
 
 export function SharedAiCallout({

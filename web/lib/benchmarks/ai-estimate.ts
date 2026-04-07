@@ -7,7 +7,11 @@
  * instant.
  */
 
-import { getOpenAIClient, getBenchmarkBriefingModel } from "@/lib/ai/openai";
+import {
+  getOpenAIClient,
+  getBenchmarkBriefingModel,
+  getBenchmarkBriefingModelCandidates,
+} from "@/lib/ai/openai";
 import { unstable_cache } from "next/cache";
 import type { BenchmarkDetailAiBriefing } from "@/lib/benchmarks/detail-ai";
 import { LEVELS, LOCATIONS, ROLES } from "@/lib/dashboard/dummy-data";
@@ -59,11 +63,11 @@ const lightCache = new Map<string, LightCacheEntry>();
 const lightInFlight = new Map<string, Promise<AiBenchmarkAdvisoryLight | null>>();
 const detailBriefingCache = new Map<string, DetailBriefingCacheEntry>();
 const detailBriefingInFlight = new Map<string, Promise<BenchmarkDetailAiBriefing | null>>();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-const SHARED_CACHE_TTL_SECONDS = 5 * 60;
+const CACHE_TTL = 30 * 60 * 1000; // 30 minutes
+const SHARED_CACHE_TTL_SECONDS = 30 * 60;
 const AI_ADVISORY_SCHEMA_VERSION = "detail-numbers-v2";
 const AI_LIGHT_ADVISORY_SCHEMA_VERSION = "summary-v1";
-const AI_DETAIL_BRIEFING_SCHEMA_VERSION = "detail-briefing-v1";
+const AI_DETAIL_BRIEFING_SCHEMA_VERSION = "detail-briefing-v3";
 
 const getSharedAiBenchmarkAdvisory = unstable_cache(
   async (
@@ -421,6 +425,112 @@ const LIGHT_JSON_SCHEMA = {
   },
 };
 
+const BREAKDOWN_SCHEMA = {
+  type: ["object", "null"] as const,
+  properties: {
+    basicSalaryPct: { type: "number" as const },
+    housingPct: { type: "number" as const },
+    transportPct: { type: "number" as const },
+    otherAllowancesPct: { type: "number" as const },
+  },
+  required: ["basicSalaryPct", "housingPct", "transportPct", "otherAllowancesPct"] as const,
+  additionalProperties: false,
+};
+
+const LEVEL_BAND_ITEM_SCHEMA = {
+  type: "object" as const,
+  properties: {
+    levelId: { type: "string" as const },
+    levelName: { type: "string" as const },
+    p10: { type: "number" as const },
+    p25: { type: "number" as const },
+    p50: { type: "number" as const },
+    p75: { type: "number" as const },
+    p90: { type: "number" as const },
+  },
+  required: ["levelId", "levelName", "p10", "p25", "p50", "p75", "p90"] as const,
+  additionalProperties: false,
+};
+
+const COMPARISON_POINT_ITEM_SCHEMA = {
+  type: "object" as const,
+  properties: {
+    id: { type: "string" as const },
+    label: { type: "string" as const },
+    median: { type: "number" as const },
+    currency: { type: ["string", "null"] as const },
+    sampleSize: { type: ["number", "null"] as const },
+    yoyChange: { type: ["number", "null"] as const },
+    relativeValue: { type: ["number", "null"] as const },
+  },
+  required: ["id", "label", "median", "currency", "sampleSize", "yoyChange", "relativeValue"] as const,
+  additionalProperties: false,
+};
+
+const TREND_POINT_ITEM_SCHEMA = {
+  type: "object" as const,
+  properties: {
+    month: { type: "string" as const },
+    p25: { type: "number" as const },
+    p50: { type: "number" as const },
+    p75: { type: "number" as const },
+  },
+  required: ["month", "p25", "p50", "p75"] as const,
+  additionalProperties: false,
+};
+
+function detailBriefingSectionSchema(options: {
+  includePackageBreakdown?: boolean;
+  includeCompensationMix?: boolean;
+  includeLevelBands?: boolean;
+  includeComparisonPoints?: boolean;
+  includeTrendPoints?: boolean;
+} = {}) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const properties: Record<string, any> = {
+    summary: { type: "string" as const },
+    action: { type: ["string", "null"] as const },
+  };
+  const required: string[] = ["summary", "action"];
+
+  if (options.includePackageBreakdown) {
+    properties.packageBreakdown = BREAKDOWN_SCHEMA;
+    required.push("packageBreakdown");
+  }
+  if (options.includeCompensationMix) {
+    properties.compensationMix = BREAKDOWN_SCHEMA;
+    required.push("compensationMix");
+  }
+  if (options.includeLevelBands) {
+    properties.levelBands = {
+      type: ["array", "null"] as const,
+      items: LEVEL_BAND_ITEM_SCHEMA,
+    };
+    required.push("levelBands");
+  }
+  if (options.includeComparisonPoints) {
+    properties.comparisonPoints = {
+      type: ["array", "null"] as const,
+      items: COMPARISON_POINT_ITEM_SCHEMA,
+    };
+    required.push("comparisonPoints");
+  }
+  if (options.includeTrendPoints) {
+    properties.trendPoints = {
+      type: ["array", "null"] as const,
+      items: TREND_POINT_ITEM_SCHEMA,
+    };
+    required.push("trendPoints");
+  }
+
+  return {
+    type: "object" as const,
+    properties,
+    required,
+    additionalProperties: false,
+  };
+}
+
 const DETAIL_BRIEFING_JSON_SCHEMA = {
   name: "compensation_detail_briefing",
   strict: true,
@@ -433,15 +543,15 @@ const DETAIL_BRIEFING_JSON_SCHEMA = {
       views: {
         type: "object" as const,
         properties: {
-          levelTable: detailBriefingSectionSchema(),
+          levelTable: detailBriefingSectionSchema({ includeLevelBands: true }),
           aiInsights: detailBriefingSectionSchema(),
-          trend: detailBriefingSectionSchema(),
+          trend: detailBriefingSectionSchema({ includeTrendPoints: true }),
           salaryBreakdown: detailBriefingSectionSchema({ includePackageBreakdown: true }),
-          industry: detailBriefingSectionSchema(),
-          companySize: detailBriefingSectionSchema(),
-          geoComparison: detailBriefingSectionSchema(),
+          industry: detailBriefingSectionSchema({ includeComparisonPoints: true }),
+          companySize: detailBriefingSectionSchema({ includeComparisonPoints: true }),
+          geoComparison: detailBriefingSectionSchema({ includeComparisonPoints: true }),
           compMix: detailBriefingSectionSchema({ includeCompensationMix: true }),
-          offerBuilder: detailBriefingSectionSchema({ includePackageBreakdown: true }),
+          offerBuilder: detailBriefingSectionSchema({ includePackageBreakdown: true, includeLevelBands: true }),
         },
         required: [
           "levelTable",
@@ -552,75 +662,6 @@ function sectionSchema() {
   };
 }
 
-function detailBriefingSectionSchema(options: {
-  includePackageBreakdown?: boolean;
-  includeCompensationMix?: boolean;
-} = {}) {
-  const properties: {
-    summary: { type: "string" };
-    action: { type: ["string", "null"] };
-    packageBreakdown?: {
-      type: ["object", "null"];
-      properties: {
-        basicSalaryPct: { type: "number" };
-        housingPct: { type: "number" };
-        transportPct: { type: "number" };
-        otherAllowancesPct: { type: "number" };
-      };
-      required: ["basicSalaryPct", "housingPct", "transportPct", "otherAllowancesPct"];
-      additionalProperties: false;
-    };
-    compensationMix?: {
-      type: ["object", "null"];
-      properties: {
-        basicSalaryPct: { type: "number" };
-        housingPct: { type: "number" };
-        transportPct: { type: "number" };
-        otherAllowancesPct: { type: "number" };
-      };
-      required: ["basicSalaryPct", "housingPct", "transportPct", "otherAllowancesPct"];
-      additionalProperties: false;
-    };
-  } = {
-    summary: { type: "string" as const },
-    action: { type: ["string", "null"] as const },
-  };
-
-  if (options.includePackageBreakdown) {
-    properties.packageBreakdown = {
-      type: ["object", "null"] as const,
-      properties: {
-        basicSalaryPct: { type: "number" as const },
-        housingPct: { type: "number" as const },
-        transportPct: { type: "number" as const },
-        otherAllowancesPct: { type: "number" as const },
-      },
-      required: ["basicSalaryPct", "housingPct", "transportPct", "otherAllowancesPct"],
-      additionalProperties: false,
-    };
-  }
-
-  if (options.includeCompensationMix) {
-    properties.compensationMix = {
-      type: ["object", "null"] as const,
-      properties: {
-        basicSalaryPct: { type: "number" as const },
-        housingPct: { type: "number" as const },
-        transportPct: { type: "number" as const },
-        otherAllowancesPct: { type: "number" as const },
-      },
-      required: ["basicSalaryPct", "housingPct", "transportPct", "otherAllowancesPct"],
-      additionalProperties: false,
-    };
-  }
-
-  return {
-    type: "object" as const,
-    properties,
-    required: ["summary", "action"],
-    additionalProperties: false,
-  };
-}
 
 function buildPrompt(
   roleId: string,
@@ -743,9 +784,18 @@ function buildDetailBriefingPrompt(
     ? `Company size: ${companySize} employees`
     : "Company size: Broad market";
 
+  const levelList = LEVELS
+    .map((entry) => `  - ${entry.id}: ${entry.name}`)
+    .join("\n");
+
+  const gccLocationList = LOCATIONS
+    .filter((loc) => loc.countryCode !== "GB")
+    .map((loc) => `  - ${loc.id}: ${loc.city}, ${loc.country} (${loc.currency})`)
+    .join("\n");
+
   return `You are a senior compensation and rewards analyst with deep expertise in GCC labour markets.
 
-Create a concise shared AI drilldown briefing for this benchmark:
+Create a comprehensive AI drilldown briefing for this benchmark:
 
 Role: ${roleTitle} (${role?.family ?? "General"})
 Location: ${city}, ${country}
@@ -753,15 +803,39 @@ Currency: ${currency}
 ${industryLine}
 ${sizeLine}
 
-Important constraints:
-- The numeric charts, comparisons, trend lines, and level tables are populated separately from Qeemly market data.
-- Do not invent comparison tables, level arrays, geo arrays, or trend arrays.
-- Focus on narrative interpretation and package guidance only.
-- Keep each summary short, specific, and useful for compensation decisions.
+Available seniority levels:
+${levelList}
+
+Available GCC locations:
+${gccLocationList}
+
+For each view section, provide both a short narrative (summary + action) AND the requested numeric data:
+
+1. levelTable: Provide levelBands with annual ${currency} salary percentiles (p10, p25, p50, p75, p90) for at least 4-6 levels relevant to this role. Use levelId and levelName from the list above.
+
+2. industry: Provide comparisonPoints for 3-5 relevant industries. Each needs id (industry name), label (display name), median annual ${currency} salary, currency, sampleSize (estimate or null), yoyChange (percentage or null), relativeValue (null is fine).
+
+3. companySize: Provide comparisonPoints for 3-5 company size brackets (e.g. "1-50", "51-200", "201-500", "501-1000", "1001-5000"). Same shape as industry.
+
+4. geoComparison: Provide comparisonPoints for 4-8 GCC locations using the exact locationId values from the list above. Include median salary in each location's local currency.
+
+5. trend: Provide trendPoints with 12 monthly entries (most recent 12 months, format "Mon YYYY"). Each needs month, p25, p50, p75 in ${currency}. Reflect realistic market movement.
+
+6. salaryBreakdown: Provide packageBreakdown with percentage splits (basicSalaryPct, housingPct, transportPct, otherAllowancesPct) that total 100.
+
+7. compMix: Provide compensationMix with the same four percentage splits totaling 100.
+
+8. offerBuilder: Provide packageBreakdown (same shape) and levelBands for 2-3 adjacent levels to help anchor offers.
+
+9. aiInsights: Narrative only (summary + action).
+
+Guidelines:
+- All salary figures must be annual in the specified currency.
+- Keep summaries short, specific, and useful for compensation decisions.
 - Each action should be short and direct. Use null only if no action is needed.
-- For salaryBreakdown and offerBuilder, include a realistic packageBreakdown percentage split across basic salary, housing, transport, and other allowances that totals 100.
-- For compMix, include a realistic compensationMix percentage split across the same four categories that totals 100.
-- For all other sections, only provide summary and action.`;
+- Ensure level bands show realistic progressive gaps between levels.
+- Trend points should reflect plausible market movement, not flat lines.
+- Return null for any numeric array you truly cannot estimate.`;
 }
 
 async function callGpt(
@@ -857,32 +931,41 @@ async function callGptDetailBriefing(
   companySize: string | null,
 ): Promise<BenchmarkDetailAiBriefing> {
   const client = getOpenAIClient();
-  const model = getBenchmarkBriefingModel();
+  const candidates = getBenchmarkBriefingModelCandidates();
+  let lastError: unknown = null;
 
-  const response = await client.chat.completions.create({
-    model,
-    temperature: 0.3,
-    messages: [
-      {
-        role: "system",
-        content:
-          "You are a compensation benchmarking engine. Respond only with the requested JSON schema. Do not include markdown formatting.",
-      },
-      {
-        role: "user",
-        content: buildDetailBriefingPrompt(roleId, locationId, industry, companySize),
-      },
-    ],
-    response_format: {
-      type: "json_schema",
-      json_schema: DETAIL_BRIEFING_JSON_SCHEMA,
-    },
-  });
+  for (const model of candidates) {
+    try {
+      const response = await client.chat.completions.create({
+        model,
+        temperature: 0.3,
+        messages: [
+          {
+            role: "system",
+            content:
+              "You are a compensation benchmarking engine. Respond only with the requested JSON schema. Do not include markdown formatting.",
+          },
+          {
+            role: "user",
+            content: buildDetailBriefingPrompt(roleId, locationId, industry, companySize),
+          },
+        ],
+        response_format: {
+          type: "json_schema",
+          json_schema: DETAIL_BRIEFING_JSON_SCHEMA,
+        },
+      });
 
-  const content = response.choices[0]?.message?.content;
-  if (!content) {
-    throw new Error("Empty GPT response");
+      const content = response.choices[0]?.message?.content;
+      if (!content) {
+        throw new Error("Empty GPT response");
+      }
+
+      return JSON.parse(content) as BenchmarkDetailAiBriefing;
+    } catch (error) {
+      lastError = error;
+    }
   }
 
-  return JSON.parse(content) as BenchmarkDetailAiBriefing;
+  throw lastError instanceof Error ? lastError : new Error("Detail briefing generation failed");
 }

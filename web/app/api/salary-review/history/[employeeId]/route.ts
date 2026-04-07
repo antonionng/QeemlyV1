@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getWorkspaceContext } from "@/lib/workspace-context";
+import { jsonServerError } from "@/lib/errors/http";
 
 export async function GET(
   _request: Request,
@@ -34,7 +35,10 @@ export async function GET(
     .order("effective_date", { ascending: false });
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonServerError(error, {
+      defaultMessage: "We could not load salary review history right now.",
+      logLabel: "Salary review history load failed",
+    });
   }
 
   return NextResponse.json({

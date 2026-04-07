@@ -75,9 +75,9 @@ export function ViewSelector({
         {/* ── Settings ── */}
         <div className="border-t border-border pt-4 space-y-3">
           {/* Salary view toggle */}
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col items-stretch gap-2">
             <span className="text-xs font-medium text-brand-700">Salary View</span>
-            <div className="bench-toggle text-xs">
+            <div className="bench-toggle w-full text-xs">
               <button
                 type="button"
                 data-active={salaryView === "annual"}

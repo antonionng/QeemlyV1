@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import { Logo } from "@/components/logo";
 import { createClient } from "@/lib/supabase/client";
-import { useCompanySettings } from "@/lib/company";
+import { normalizeSavedBonusPercentage, useCompanySettings } from "@/lib/company";
 import { getDashboardOverviewRoutes } from "@/lib/company-vs-market";
 import { isFeatureEnabled, type FeatureKey } from "@/lib/release/ga-scope";
 import { useWorkspaceChangeVersion } from "@/lib/workspace-client";
@@ -231,7 +231,7 @@ export function DashboardSidebar({
             reviewCycle: s.review_cycle || "annual",
             defaultCurrency: s.default_currency || "AED",
             fiscalYearStart: s.fiscal_year_start || 1,
-            defaultBonusPercentage: Number(s.default_bonus_percentage) || 15,
+            defaultBonusPercentage: normalizeSavedBonusPercentage(s.default_bonus_percentage),
             equityVestingSchedule: s.equity_vesting_schedule || "4-year-1-cliff",
             benefitsTier: s.benefits_tier || "standard",
           });

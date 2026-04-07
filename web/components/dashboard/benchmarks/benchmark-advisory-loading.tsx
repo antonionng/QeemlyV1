@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { Logo } from "@/components/logo";
 
 type BenchmarkAdvisoryLoadingProps = {
-  variant: "search" | "refresh";
+  variant: "search" | "refresh" | "detail";
 };
 
 const COPY = {
@@ -29,6 +29,17 @@ const COPY = {
       "Refreshing the benchmark with your latest filters",
       "Comparing market cohorts and preparing the advisory",
       "Updating the result view with the latest benchmark story",
+    ],
+  },
+  detail: {
+    eyebrow: "Qeemly Advisory AI",
+    title: "Preparing your detailed breakdown",
+    description:
+      "We are generating AI-powered insights, salary breakdowns, industry comparisons, and trend analysis for this benchmark.",
+    steps: [
+      "Generating AI salary bands and level comparisons",
+      "Building industry, company size, and geographic breakdowns",
+      "Preparing trend analysis, compensation mix, and offer guidance",
     ],
   },
 } as const;

@@ -14,6 +14,7 @@ import {
   type OverviewSyncLog,
 } from "@/lib/dashboard/company-overview";
 import { loadLatestBenchmarkCoverageSnapshot } from "@/lib/benchmarks/coverage-snapshots";
+import { jsonServerError } from "@/lib/errors/http";
 
 function isMissingRelationError(error: { code?: string; message?: string } | null | undefined): boolean {
   if (!error) return false;
@@ -78,22 +79,40 @@ export async function GET(request: Request) {
   ]);
 
   if (employeesResult.error) {
-    return NextResponse.json({ error: employeesResult.error.message }, { status: 500 });
+    return jsonServerError(employeesResult.error, {
+      defaultMessage: "We could not load your company overview right now.",
+      logLabel: "Company overview employees load failed",
+    });
   }
   if (benchmarksResult.error) {
-    return NextResponse.json({ error: benchmarksResult.error.message }, { status: 500 });
+    return jsonServerError(benchmarksResult.error, {
+      defaultMessage: "We could not load company overview benchmark data right now.",
+      logLabel: "Company overview benchmarks load failed",
+    });
   }
   if (freshnessResult.error && !isMissingRelationError(freshnessResult.error)) {
-    return NextResponse.json({ error: freshnessResult.error.message }, { status: 500 });
+    return jsonServerError(freshnessResult.error, {
+      defaultMessage: "We could not load company overview freshness details right now.",
+      logLabel: "Company overview freshness load failed",
+    });
   }
   if (integrationsResult.error && !isMissingRelationError(integrationsResult.error)) {
-    return NextResponse.json({ error: integrationsResult.error.message }, { status: 500 });
+    return jsonServerError(integrationsResult.error, {
+      defaultMessage: "We could not load company overview integrations right now.",
+      logLabel: "Company overview integrations load failed",
+    });
   }
   if (enrichmentResult.error && !isMissingRelationError(enrichmentResult.error)) {
-    return NextResponse.json({ error: enrichmentResult.error.message }, { status: 500 });
+    return jsonServerError(enrichmentResult.error, {
+      defaultMessage: "We could not load company overview profile details right now.",
+      logLabel: "Company overview enrichment load failed",
+    });
   }
   if (visaResult.error && !isMissingRelationError(visaResult.error)) {
-    return NextResponse.json({ error: visaResult.error.message }, { status: 500 });
+    return jsonServerError(visaResult.error, {
+      defaultMessage: "We could not load company overview visa details right now.",
+      logLabel: "Company overview visa load failed",
+    });
   }
 
   const integrationIds = ((integrationsResult.data ?? []) as Array<{ id: string }>).map(
@@ -110,7 +129,10 @@ export async function GET(request: Request) {
       .limit(10);
 
     if (syncLogsResult.error && !isMissingRelationError(syncLogsResult.error)) {
-      return NextResponse.json({ error: syncLogsResult.error.message }, { status: 500 });
+      return jsonServerError(syncLogsResult.error, {
+        defaultMessage: "We could not load recent integration sync activity right now.",
+        logLabel: "Company overview sync logs load failed",
+      });
     }
 
     syncLogs = (syncLogsResult.data ?? []).map((row) => ({

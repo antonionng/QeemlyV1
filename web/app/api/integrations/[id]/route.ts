@@ -1,19 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-
-async function getWorkspaceContext(supabase: Awaited<ReturnType<typeof createClient>>, userId: string) {
-  const { data: profile, error } = await supabase
-    .from("profiles")
-    .select("workspace_id")
-    .eq("id", userId)
-    .single();
-
-  if (error || !profile?.workspace_id) {
-    return null;
-  }
-
-  return profile.workspace_id as string;
-}
+import { getWorkspaceContextOrError } from "@/lib/workspace-access";
+import { jsonServerError } from "@/lib/errors/http";
 
 /**
  * GET /api/integrations/:id
@@ -26,16 +14,11 @@ export async function GET(
   try {
     const { id } = await params;
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const workspaceContext = await getWorkspaceContextOrError();
+    if (workspaceContext.error) {
+      return workspaceContext.error;
     }
-
-    const workspaceId = await getWorkspaceContext(supabase, user.id);
-    if (!workspaceId) {
-      return NextResponse.json({ error: "No workspace found" }, { status: 404 });
-    }
+    const workspaceId = workspaceContext.context.workspace_id;
 
     const { data: integration } = await supabase
       .from("integrations")
@@ -83,16 +66,11 @@ export async function PATCH(
   try {
     const { id } = await params;
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const workspaceContext = await getWorkspaceContextOrError();
+    if (workspaceContext.error) {
+      return workspaceContext.error;
     }
-
-    const workspaceId = await getWorkspaceContext(supabase, user.id);
-    if (!workspaceId) {
-      return NextResponse.json({ error: "No workspace found" }, { status: 404 });
-    }
+    const workspaceId = workspaceContext.context.workspace_id;
 
     const body = await request.json();
     const { config, sync_frequency, status } = body;
@@ -111,7 +89,10 @@ export async function PATCH(
       .single();
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return jsonServerError(error, {
+        defaultMessage: "We could not update this integration right now.",
+        logLabel: "Integration update failed",
+      });
     }
 
     return NextResponse.json({ integration });
@@ -131,16 +112,11 @@ export async function DELETE(
   try {
     const { id } = await params;
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const workspaceContext = await getWorkspaceContextOrError();
+    if (workspaceContext.error) {
+      return workspaceContext.error;
     }
-
-    const workspaceId = await getWorkspaceContext(supabase, user.id);
-    if (!workspaceId) {
-      return NextResponse.json({ error: "No workspace found" }, { status: 404 });
-    }
+    const workspaceId = workspaceContext.context.workspace_id;
 
     // Verify ownership before deletion
     const { data: integration } = await supabase
@@ -165,7 +141,10 @@ export async function DELETE(
       .eq("workspace_id", workspaceId);
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return jsonServerError(error, {
+        defaultMessage: "We could not remove this integration right now.",
+        logLabel: "Integration delete failed",
+      });
     }
 
     return NextResponse.json({ deleted: true, provider: integration.provider });

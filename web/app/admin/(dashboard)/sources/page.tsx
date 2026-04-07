@@ -281,7 +281,7 @@ export function SourcesPageContent({ embedded = false }: { embedded?: boolean })
                           </div>
                           <div>
                             <p className="font-medium text-text-primary">{s.name}</p>
-                            <p className="font-mono text-xs text-text-tertiary">{s.slug}</p>
+                            <p className="text-xs text-text-tertiary">{s.slug}</p>
                           </div>
                         </div>
                       </td>

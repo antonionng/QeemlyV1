@@ -11,13 +11,17 @@ type CreateOfferResult = {
   exportPayload: OfferExportPayload | null;
 };
 
+type CreateOfferError = {
+  error: string;
+};
+
 interface OffersStore {
   offers: Offer[];
   isLoading: boolean;
   selectedOffer: Offer | null;
 
   loadOffers: () => Promise<void>;
-  createOffer: (payload: CreateOfferPayload) => Promise<CreateOfferResult | null>;
+  createOffer: (payload: CreateOfferPayload) => Promise<CreateOfferResult | CreateOfferError>;
   updateOffer: (id: string, payload: UpdateOfferPayload) => Promise<Offer | null>;
   deleteOffer: (id: string) => Promise<boolean>;
   selectOffer: (offer: Offer | null) => void;
@@ -47,9 +51,13 @@ export const useOffersStore = create<OffersStore>((set) => ({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) return null;
 
       const data = await res.json();
+
+      if (!res.ok) {
+        return { error: data?.error || "Failed to create offer." };
+      }
+
       const offer = data.offer as Offer;
       set((state) => ({ offers: [offer, ...state.offers] }));
 
@@ -58,7 +66,7 @@ export const useOffersStore = create<OffersStore>((set) => ({
         exportPayload: (data.export_payload as OfferExportPayload | undefined) || null,
       };
     } catch {
-      return null;
+      return { error: "Network error. Please try again." };
     }
   },
 

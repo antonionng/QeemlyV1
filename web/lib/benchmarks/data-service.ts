@@ -7,6 +7,7 @@ import type {
   BenchmarkDetailAiBriefing,
   BenchmarkDetailSupportData,
 } from "@/lib/benchmarks/detail-ai";
+import type { DetailSurfaceContract } from "@/lib/benchmarks/detail-surface";
 import type { SalaryBenchmark, Currency } from "@/lib/dashboard/dummy-data";
 import { COMPANY_SIZES, INDUSTRIES, LEVELS, LOCATIONS } from "@/lib/dashboard/dummy-data";
 import {
@@ -66,6 +67,7 @@ let cacheTimestamp = 0;
 const CACHE_TTL = 5000;
 const briefingRequests = new Map<string, Promise<BenchmarkDetailAiBriefing | null>>();
 const detailSupportRequests = new Map<string, Promise<BenchmarkDetailSupportData>>();
+const detailSurfaceRequests = new Map<string, Promise<DetailSurfaceContract | null>>();
 
 export type DbBenchmark = {
   id: string;
@@ -399,6 +401,44 @@ export async function fetchAiBriefing(
   return request;
 }
 
+export async function fetchDetailSurface(
+  roleId: string,
+  locationId: string,
+  levelId: string,
+  filters: BenchmarkLookupFilters = {},
+): Promise<DetailSurfaceContract | null> {
+  const params = new URLSearchParams({ roleId, locationId, levelId });
+  if (filters.industry) params.set("industry", filters.industry);
+  if (filters.companySize) params.set("companySize", filters.companySize);
+  const requestUrl = `/api/benchmarks/detail-surface?${params.toString()}`;
+  const inFlightKey = `surface::${params.toString()}`;
+
+  const existingRequest = detailSurfaceRequests.get(inFlightKey);
+  if (existingRequest) {
+    return existingRequest;
+  }
+
+  const request = (async () => {
+    try {
+      const response = await fetch(requestUrl, { cache: "no-store" });
+      if (!response.ok) {
+        return null;
+      }
+      const payload = (await response.json()) as {
+        detailSurface: DetailSurfaceContract | null;
+      };
+      return payload.detailSurface ?? null;
+    } catch {
+      return null;
+    } finally {
+      detailSurfaceRequests.delete(inFlightKey);
+    }
+  })();
+
+  detailSurfaceRequests.set(inFlightKey, request);
+  return request;
+}
+
 export async function fetchBenchmarkDetailSupportData(args: {
   roleId: string;
   locationId: string;
@@ -432,13 +472,20 @@ export async function fetchBenchmarkDetailSupportData(args: {
         .filter((entry): entry is string => Boolean(entry))
         .slice(0, 5);
 
-      const uniqueEntries = new Map<string, BenchmarkLookupEntry>();
-      const addEntry = (entry: BenchmarkLookupEntry) => {
-        uniqueEntries.set(makeBenchmarkLookupKey(entry), entry);
+      const primaryEntries = new Map<string, BenchmarkLookupEntry>();
+      const comparisonEntries = new Map<string, BenchmarkLookupEntry>();
+      const addPrimary = (entry: BenchmarkLookupEntry) => {
+        primaryEntries.set(makeBenchmarkLookupKey(entry), entry);
+      };
+      const addComparison = (entry: BenchmarkLookupEntry) => {
+        const key = makeBenchmarkLookupKey(entry);
+        if (!primaryEntries.has(key)) {
+          comparisonEntries.set(key, entry);
+        }
       };
 
       for (const level of levelTableLevels) {
-        addEntry({
+        addPrimary({
           roleId: args.roleId,
           locationId: levelTableLocationId,
           levelId: level.id,
@@ -448,7 +495,7 @@ export async function fetchBenchmarkDetailSupportData(args: {
       }
 
       for (const level of adjacentLevels) {
-        addEntry({
+        addPrimary({
           roleId: args.roleId,
           locationId: args.locationId,
           levelId: level.id,
@@ -458,7 +505,7 @@ export async function fetchBenchmarkDetailSupportData(args: {
       }
 
       for (const industry of industriesToLoad) {
-        addEntry({
+        addComparison({
           roleId: args.roleId,
           locationId: args.locationId,
           levelId: args.levelId,
@@ -468,7 +515,7 @@ export async function fetchBenchmarkDetailSupportData(args: {
       }
 
       for (const companySize of companySizesToLoad) {
-        addEntry({
+        addComparison({
           roleId: args.roleId,
           locationId: args.locationId,
           levelId: args.levelId,
@@ -478,7 +525,7 @@ export async function fetchBenchmarkDetailSupportData(args: {
       }
 
       for (const location of LOCATIONS) {
-        addEntry({
+        addComparison({
           roleId: args.roleId,
           locationId: location.id,
           levelId: args.levelId,
@@ -487,7 +534,12 @@ export async function fetchBenchmarkDetailSupportData(args: {
         });
       }
 
-      const batchResults = await getBenchmarksBatch([...uniqueEntries.values()]);
+      const [primaryResults, comparisonResults] = await Promise.all([
+        getBenchmarksBatch([...primaryEntries.values()]),
+        getBenchmarksBatch([...comparisonEntries.values()], { marketOnly: true }),
+      ]);
+
+      const batchResults = { ...comparisonResults, ...primaryResults };
 
       const levelTableBenchmarks = Object.fromEntries(
         levelTableLevels
@@ -654,6 +706,7 @@ export async function getBenchmark(
 
 export async function getBenchmarksBatch(
   entries: BenchmarkLookupEntry[],
+  options?: { marketOnly?: boolean },
 ): Promise<Record<string, SalaryBenchmark | null>> {
   if (entries.length === 0) return {};
 
@@ -662,7 +715,7 @@ export async function getBenchmarksBatch(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       cache: "no-store",
-      body: JSON.stringify({ entries }),
+      body: JSON.stringify({ entries, marketOnly: options?.marketOnly }),
     });
 
     if (response.ok) {

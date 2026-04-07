@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getWorkspaceContext } from "@/lib/workspace-context";
 import { refreshComplianceSnapshot } from "@/lib/compliance/snapshot-service";
+import { jsonServerError } from "@/lib/errors/http";
 
 type QueryClient = Awaited<ReturnType<typeof createClient>> | ReturnType<typeof createServiceClient>;
 
@@ -115,8 +116,10 @@ export async function GET(
     const aggregate = await loadProfileAggregate(queryClient, wsContext.context.workspace_id, id);
     return NextResponse.json({ ok: true, ...aggregate });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Failed to load profile";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return jsonServerError(error, {
+      defaultMessage: "We could not load this employee profile right now.",
+      logLabel: "Employee profile load failed",
+    });
   }
 }
 
@@ -159,7 +162,12 @@ export async function PATCH(
       .update({ ...employeeUpdates, updated_at: new Date().toISOString() })
       .eq("id", id)
       .eq("workspace_id", workspaceId);
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) {
+      return jsonServerError(error, {
+        defaultMessage: "We could not update this employee profile right now.",
+        logLabel: "Employee profile employee update failed",
+      });
+    }
 
     await emitTimelineEvent(queryClient, workspaceId, id, "profile_updated", {
       changed_fields: Object.keys(employeeUpdates),
@@ -176,7 +184,12 @@ export async function PATCH(
       },
       { onConflict: "employee_id" }
     );
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) {
+      return jsonServerError(error, {
+        defaultMessage: "We could not update this employee profile right now.",
+        logLabel: "Employee profile enrichment update failed",
+      });
+    }
 
     await emitTimelineEvent(queryClient, workspaceId, id, "profile_updated", {
       section: "profileEnrichment",
@@ -190,7 +203,12 @@ export async function PATCH(
       .delete()
       .eq("workspace_id", workspaceId)
       .eq("employee_id", id);
-    if (deleteError) return NextResponse.json({ error: deleteError.message }, { status: 500 });
+    if (deleteError) {
+      return jsonServerError(deleteError, {
+        defaultMessage: "We could not update visa records right now.",
+        logLabel: "Employee visa delete failed",
+      });
+    }
 
     if (visaRecords.length > 0) {
       const payload = visaRecords.map((record) => ({
@@ -200,7 +218,12 @@ export async function PATCH(
         updated_at: new Date().toISOString(),
       }));
       const { error } = await queryClient.from("employee_visa_records").insert(payload);
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      if (error) {
+        return jsonServerError(error, {
+          defaultMessage: "We could not update visa records right now.",
+          logLabel: "Employee visa insert failed",
+        });
+      }
     }
 
     await emitTimelineEvent(queryClient, workspaceId, id, "visa_updated", {
@@ -214,7 +237,12 @@ export async function PATCH(
       .delete()
       .eq("workspace_id", workspaceId)
       .eq("employee_id", id);
-    if (deleteError) return NextResponse.json({ error: deleteError.message }, { status: 500 });
+    if (deleteError) {
+      return jsonServerError(deleteError, {
+        defaultMessage: "We could not update contribution records right now.",
+        logLabel: "Employee contribution delete failed",
+      });
+    }
 
     if (contributionSnapshots.length > 0) {
       const payload = contributionSnapshots.map((snapshot) => ({
@@ -223,7 +251,12 @@ export async function PATCH(
         workspace_id: workspaceId,
       }));
       const { error } = await queryClient.from("employee_contribution_snapshots").insert(payload);
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      if (error) {
+        return jsonServerError(error, {
+          defaultMessage: "We could not update contribution records right now.",
+          logLabel: "Employee contribution insert failed",
+        });
+      }
     }
 
     await emitTimelineEvent(queryClient, workspaceId, id, "contribution_updated", {
@@ -237,7 +270,12 @@ export async function PATCH(
       .delete()
       .eq("workspace_id", workspaceId)
       .eq("employee_id", id);
-    if (deleteError) return NextResponse.json({ error: deleteError.message }, { status: 500 });
+    if (deleteError) {
+      return jsonServerError(deleteError, {
+        defaultMessage: "We could not update equity grant records right now.",
+        logLabel: "Employee equity delete failed",
+      });
+    }
 
     if (equityGrants.length > 0) {
       const payload = equityGrants.map((grant) => ({
@@ -247,7 +285,12 @@ export async function PATCH(
         updated_at: new Date().toISOString(),
       }));
       const { error } = await queryClient.from("equity_grants").insert(payload);
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      if (error) {
+        return jsonServerError(error, {
+          defaultMessage: "We could not update equity grant records right now.",
+          logLabel: "Employee equity insert failed",
+        });
+      }
     }
 
     await emitTimelineEvent(queryClient, workspaceId, id, "equity_grant_updated", {

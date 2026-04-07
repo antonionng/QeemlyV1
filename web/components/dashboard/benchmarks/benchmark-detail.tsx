@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { ArrowLeft, ArrowRight, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useBenchmarkState, type BenchmarkResult } from "@/lib/benchmarks/benchmark-state";
@@ -10,8 +11,9 @@ import {
   getOrderedEnabledViews,
   type DrilldownViewId,
 } from "@/lib/benchmarks/drilldown-views";
-import { fetchAiBriefing, fetchBenchmarkDetailSupportData } from "@/lib/benchmarks/data-service";
+import { fetchDetailSurface } from "@/lib/benchmarks/data-service";
 import { ViewSelector } from "./drilldown/view-selector";
+import { ModuleStateBanner } from "./drilldown/module-state-banner";
 import {
   LevelTableView,
   IndustryView,
@@ -45,6 +47,7 @@ const VIEW_COMPONENTS: Record<
 };
 
 export function BenchmarkDetail({ result, hasCompanyData = true }: BenchmarkDetailProps) {
+  const router = useRouter();
   const { goToStep } = useBenchmarkState();
   const { enabledViews, viewOrder } = useDrilldownPreferences();
 
@@ -54,11 +57,28 @@ export function BenchmarkDetail({ result, hasCompanyData = true }: BenchmarkDeta
     hasCompanyData,
   );
 
+  const isDetailLoading = result.detailSurfaceStatus === "loading";
+  const isDetailUnavailable = result.detailSurfaceStatus === "unavailable";
+
+  const retryDetailLoads = () => {
+    useBenchmarkState.setState((state) => {
+      if (!state.currentResult) return state;
+      return {
+        ...state,
+        currentResult: {
+          ...state.currentResult,
+          detailSurface: null,
+          detailSurfaceStatus: "idle",
+        },
+      };
+    });
+  };
+
   useEffect(() => {
     if (
-      result.aiDetailBriefing ||
-      result.aiDetailBriefingStatus === "loading" ||
-      result.aiDetailBriefingStatus === "unavailable"
+      result.detailSurface ||
+      result.detailSurfaceStatus === "loading" ||
+      result.detailSurfaceStatus === "unavailable"
     ) {
       return;
     }
@@ -71,13 +91,13 @@ export function BenchmarkDetail({ result, hasCompanyData = true }: BenchmarkDeta
         ...state,
         currentResult: {
           ...state.currentResult,
-          aiDetailBriefingStatus: "loading",
+          detailSurfaceStatus: "loading",
         },
       };
     });
 
-    const loadBriefing = async () => {
-      const briefing = await fetchAiBriefing(role.id, location.id, level.id, {
+    const loadSurface = async () => {
+      const surface = await fetchDetailSurface(role.id, location.id, level.id, {
         industry: result.formData.industry,
         companySize: result.formData.companySize,
       });
@@ -90,15 +110,15 @@ export function BenchmarkDetail({ result, hasCompanyData = true }: BenchmarkDeta
           ...state,
           currentResult: {
             ...state.currentResult,
-            aiDetailBriefing: briefing,
-            aiDetailBriefingStatus: briefing ? "ready" : "unavailable",
+            detailSurface: surface,
+            detailSurfaceStatus: surface ? "ready" : "unavailable",
           },
           recentResults: state.recentResults.map((entry) =>
             entry.createdAt === result.createdAt
               ? {
                   ...entry,
-                  aiDetailBriefing: briefing,
-                  aiDetailBriefingStatus: briefing ? "ready" : "unavailable",
+                  detailSurface: surface,
+                  detailSurfaceStatus: surface ? "ready" : "unavailable",
                 }
               : entry,
           ),
@@ -106,103 +126,7 @@ export function BenchmarkDetail({ result, hasCompanyData = true }: BenchmarkDeta
       });
     };
 
-    void loadBriefing();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [
-    level.id,
-    location.id,
-    result.aiDetailBriefing,
-    result.aiDetailBriefingStatus,
-    result.createdAt,
-    result.formData.companySize,
-    result.formData.industry,
-    role.id,
-  ]);
-
-  useEffect(() => {
-    if (
-      result.detailSupportData ||
-      result.detailSupportStatus === "loading" ||
-      result.detailSupportStatus === "unavailable"
-    ) {
-      return;
-    }
-
-    let isCancelled = false;
-
-    useBenchmarkState.setState((state) => {
-      if (!state.currentResult) return state;
-      return {
-        ...state,
-        currentResult: {
-          ...state.currentResult,
-          detailSupportStatus: "loading",
-        },
-      };
-    });
-
-    const loadDetailSupport = async () => {
-      try {
-        const detailSupportData = await fetchBenchmarkDetailSupportData({
-          roleId: role.id,
-          locationId: location.id,
-          levelId: level.id,
-          industry: result.formData.industry ?? null,
-          companySize: result.formData.companySize ?? null,
-        });
-
-        if (isCancelled) return;
-
-        useBenchmarkState.setState((state) => {
-          if (!state.currentResult) return state;
-          return {
-            ...state,
-            currentResult: {
-              ...state.currentResult,
-              detailSupportData,
-              detailSupportStatus: "ready",
-            },
-            recentResults: state.recentResults.map((entry) =>
-              entry.createdAt === result.createdAt
-                ? {
-                    ...entry,
-                    detailSupportData,
-                    detailSupportStatus: "ready",
-                  }
-                : entry,
-            ),
-          };
-        });
-      } catch {
-        if (isCancelled) return;
-
-        useBenchmarkState.setState((state) => {
-          if (!state.currentResult) return state;
-          return {
-            ...state,
-            currentResult: {
-              ...state.currentResult,
-              detailSupportData: null,
-              detailSupportStatus: "unavailable",
-            },
-            recentResults: state.recentResults.map((entry) =>
-              entry.createdAt === result.createdAt
-                ? {
-                    ...entry,
-                    detailSupportData: null,
-                    detailSupportStatus: "unavailable",
-                  }
-                : entry,
-            ),
-          };
-        });
-      }
-    };
-
-    void loadDetailSupport();
+    void loadSurface();
 
     return () => {
       isCancelled = true;
@@ -211,8 +135,8 @@ export function BenchmarkDetail({ result, hasCompanyData = true }: BenchmarkDeta
     level.id,
     location.id,
     result.createdAt,
-    result.detailSupportData,
-    result.detailSupportStatus,
+    result.detailSurface,
+    result.detailSurfaceStatus,
     result.formData.companySize,
     result.formData.industry,
     role.id,
@@ -245,6 +169,20 @@ export function BenchmarkDetail({ result, hasCompanyData = true }: BenchmarkDeta
             {result.formData.employmentType === "expat" ? "Expat" : "National"}
           </span>
         </div>
+        {isDetailLoading ? (
+          <ModuleStateBanner
+            variant="loading"
+            message="Qeemly AI is preparing detailed modules. Sections will appear as they become ready."
+          />
+        ) : null}
+        {isDetailUnavailable ? (
+          <ModuleStateBanner
+            variant="error"
+            message="Some detailed modules are unavailable right now. You can retry loading all modules."
+            actionLabel="Retry Modules"
+            onAction={retryDetailLoads}
+          />
+        ) : null}
 
         {orderedViews.length > 0 ? (
           <div className="space-y-6">
@@ -269,15 +207,7 @@ export function BenchmarkDetail({ result, hasCompanyData = true }: BenchmarkDeta
           {hasCompanyData && (
             <button
               onClick={() => {
-                const prefs = useDrilldownPreferences.getState();
-                if (!prefs.enabledViews.includes("offer-builder")) {
-                  prefs.enableView("offer-builder");
-                }
-                setTimeout(() => {
-                  document
-                    .getElementById("offer-builder-view")
-                    ?.scrollIntoView({ behavior: "smooth" });
-                }, 100);
+                router.push("/dashboard/offers/builder?from=current");
               }}
               className="bench-cta max-w-xs"
             >

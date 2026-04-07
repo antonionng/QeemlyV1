@@ -2,11 +2,17 @@ import { NextResponse } from "next/server";
 // The client you created in Step 1
 import { createClient } from "@/lib/supabase/server";
 
+function getSafeNextPath(candidate: string | null): string {
+  if (!candidate) return "/dashboard";
+  if (!candidate.startsWith("/") || candidate.startsWith("//")) return "/dashboard";
+  return candidate;
+}
+
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
   // if "next" is in search params, use it as the redirection URL
-  const next = searchParams.get("next") ?? "/dashboard";
+  const next = getSafeNextPath(searchParams.get("next"));
 
   if (code) {
     const supabase = await createClient();
@@ -26,5 +32,5 @@ export async function GET(request: Request) {
   }
 
   // return the user to an error page with instructions
-  return NextResponse.redirect(`${origin}/auth/auth-code-error`);
+  return NextResponse.redirect(`${origin}/login?error=auth_callback_failed`);
 }

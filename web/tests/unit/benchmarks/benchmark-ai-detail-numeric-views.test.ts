@@ -90,6 +90,7 @@ import { LevelTableView } from "@/components/dashboard/benchmarks/drilldown/view
 import { OfferBuilderView } from "@/components/dashboard/benchmarks/drilldown/views/offer-builder-view";
 import { SalaryBreakdownView } from "@/components/dashboard/benchmarks/drilldown/views/salary-breakdown-view";
 import { TrendView } from "@/components/dashboard/benchmarks/drilldown/views/trend-view";
+import { buildDetailSurface } from "@/lib/benchmarks/detail-surface";
 
 const baseBenchmark = {
   roleId: "swe-fe",
@@ -242,7 +243,34 @@ const aiDetailBriefing = {
   },
 };
 
+const defaultLocation = {
+  id: "riyadh",
+  city: "Riyadh",
+  country: "Saudi Arabia",
+  countryCode: "SA",
+  currency: "AED" as const,
+  flag: "SA",
+};
+
+function makeSurface(
+  briefing: typeof aiDetailBriefing = aiDetailBriefing,
+  benchmark = baseBenchmark,
+  supportData: Parameters<typeof buildDetailSurface>[0]["supportData"] = null,
+) {
+  return buildDetailSurface({
+    aiBriefing: briefing,
+    supportData,
+    benchmark,
+    roleTitle: "Frontend Engineer",
+    levelName: "Staff (IC4)",
+    location: defaultLocation,
+    industry: "Technology",
+    companySize: "201-500",
+  });
+}
+
 function makeResult(): BenchmarkResult {
+  const detailSurface = makeSurface();
   return {
     formData: {
       context: "existing",
@@ -269,17 +297,12 @@ function makeResult(): BenchmarkResult {
       name: "Staff (IC4)",
       category: "IC",
     },
-    location: {
-      id: "riyadh",
-      city: "Riyadh",
-      country: "Saudi Arabia",
-      countryCode: "SA",
-      currency: "AED",
-      flag: "SA",
-    },
+    location: defaultLocation,
     isOverridden: false,
     aiDetailBriefing,
     aiDetailBriefingStatus: "ready",
+    detailSurface,
+    detailSurfaceStatus: "ready",
     createdAt: new Date("2026-03-31T00:00:00.000Z"),
   };
 }
@@ -368,6 +391,7 @@ describe("benchmark AI detail numeric views", () => {
     expect(container.textContent).toContain("Basic Salary");
     expect(container.textContent).toContain("Housing");
     expect(container.textContent).toContain("Transport");
+    expect(container.textContent).toContain("Accommodation");
     expect(container.textContent).toContain("Other Allowances");
     expect(container.textContent).toContain("70%");
     expect(container.textContent).not.toContain("Cash Compensation");
@@ -481,23 +505,27 @@ describe("benchmark AI detail numeric views", () => {
   it("builds a numeric fallback trend when the AI series is missing", async () => {
     const container = document.createElement("div");
     const root = createRoot(container);
-    const resultWithoutAiTrend: BenchmarkResult = {
-      ...makeResult(),
-      aiDetailBriefing: {
-        ...aiDetailBriefing,
-        views: {
-          ...aiDetailBriefing.views,
-          trend: {
-            ...aiDetailBriefing.views.trend,
-            trendPoints: null,
-          },
+    const briefingWithoutTrend = {
+      ...aiDetailBriefing,
+      views: {
+        ...aiDetailBriefing.views,
+        trend: {
+          ...aiDetailBriefing.views.trend,
+          trendPoints: null,
         },
       },
-      benchmark: {
-        ...baseBenchmark,
-        yoyChange: 8,
-        trend: [],
-      },
+    };
+    const benchmarkWithYoy = {
+      ...baseBenchmark,
+      yoyChange: 8,
+      trend: [],
+    };
+    const resultWithoutAiTrend: BenchmarkResult = {
+      ...makeResult(),
+      aiDetailBriefing: briefingWithoutTrend,
+      benchmark: benchmarkWithYoy,
+      detailSurface: makeSurface(briefingWithoutTrend, benchmarkWithYoy),
+      detailSurfaceStatus: "ready",
     };
 
     await act(async () => {
@@ -527,58 +555,49 @@ describe("benchmark AI detail numeric views", () => {
       await Promise.resolve();
     });
 
-    expect(container.textContent).toContain("AI-derived adjacent-level anchors are being used for this market view.");
+    expect(container.textContent).toContain("Offer guidance");
+    expect(container.textContent).toContain("Lead with the strongest cash anchor.");
 
     await act(async () => {
       root.unmount();
     });
   });
 
-  it("uses batched benchmark lookups when fallback numeric views need live market rows", async () => {
+  it("shows empty module state when AI comparisons are missing and no support data is provided", async () => {
     const container = document.createElement("div");
     const root = createRoot(container);
-    const resultWithoutAiComparisons: BenchmarkResult = {
-      ...makeResult(),
-      aiDetailBriefing: {
-        ...aiDetailBriefing,
-        views: {
-          ...aiDetailBriefing.views,
-          levelTable: {
-            ...aiDetailBriefing.views.levelTable,
-            levelBands: null,
-          },
-          industry: {
-            ...aiDetailBriefing.views.industry,
-            comparisonPoints: null,
-          },
-          companySize: {
-            ...aiDetailBriefing.views.companySize,
-            comparisonPoints: null,
-          },
-          geoComparison: {
-            ...aiDetailBriefing.views.geoComparison,
-            comparisonPoints: null,
-          },
-          offerBuilder: {
-            ...aiDetailBriefing.views.offerBuilder,
-            levelBands: null,
-          },
+    const briefingWithoutComparisons = {
+      ...aiDetailBriefing,
+      views: {
+        ...aiDetailBriefing.views,
+        levelTable: {
+          ...aiDetailBriefing.views.levelTable,
+          levelBands: null,
+        },
+        industry: {
+          ...aiDetailBriefing.views.industry,
+          comparisonPoints: null,
+        },
+        companySize: {
+          ...aiDetailBriefing.views.companySize,
+          comparisonPoints: null,
+        },
+        geoComparison: {
+          ...aiDetailBriefing.views.geoComparison,
+          comparisonPoints: null,
+        },
+        offerBuilder: {
+          ...aiDetailBriefing.views.offerBuilder,
+          levelBands: null,
         },
       },
     };
-
-    getBenchmarksBatchMock.mockImplementation(async (entries: Array<{ roleId: string; locationId: string; levelId: string; industry?: string | null; companySize?: string | null }>) =>
-      Object.fromEntries(
-        entries.map((entry) => [
-          `${entry.roleId}::${entry.locationId}::${entry.levelId}::${entry.industry ?? ""}::${entry.companySize ?? ""}`,
-          {
-            ...baseBenchmark,
-            locationId: entry.locationId,
-            levelId: entry.levelId,
-          },
-        ]),
-      ),
-    );
+    const resultWithoutAiComparisons: BenchmarkResult = {
+      ...makeResult(),
+      aiDetailBriefing: briefingWithoutComparisons,
+      detailSurface: makeSurface(briefingWithoutComparisons),
+      detailSurfaceStatus: "ready",
+    };
 
     await act(async () => {
       root.render(
@@ -595,8 +614,11 @@ describe("benchmark AI detail numeric views", () => {
       await Promise.resolve();
     });
 
-    expect(getBenchmarksBatchMock).toHaveBeenCalled();
+    expect(getBenchmarksBatchMock).not.toHaveBeenCalled();
     expect(getBenchmarkMock).not.toHaveBeenCalled();
+
+    expect(container.textContent).toContain("No level data available for this role.");
+    expect(container.textContent).toContain("No geographic comparison data available.");
 
     await act(async () => {
       root.unmount();

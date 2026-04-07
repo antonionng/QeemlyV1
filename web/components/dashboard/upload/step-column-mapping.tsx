@@ -44,10 +44,10 @@ export function StepColumnMapping() {
 
   const handleContinue = () => {
     if (!file || !dataType || missingRequired.length > 0) return;
-
-    // Run validation
-    const result = validateData(file.rows, mappings, dataType);
-    setValidationResult(result);
+    if (dataType !== "employees") {
+      const result = validateData(file.rows, mappings, dataType);
+      setValidationResult(result);
+    }
     nextStep();
   };
 
@@ -238,7 +238,7 @@ export function StepColumnMapping() {
               : "bg-brand-100 text-brand-400 cursor-not-allowed"
           )}
         >
-          Validate Data
+          Continue
           <ArrowRight className="h-4 w-4" />
         </button>
       </div>

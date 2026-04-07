@@ -273,7 +273,7 @@ export function AdminRunsPageContent({
               runnableSources.map((source) => (
                 <div key={source.id} className="rounded-xl border border-border bg-surface-2 p-4">
                   <p className="text-sm font-semibold text-text-primary">{source.name}</p>
-                  <p className="mt-1 font-mono text-xs text-text-tertiary">{source.slug}</p>
+                  <p className="mt-1 text-xs text-text-tertiary">{source.slug}</p>
                   <p className="mt-2 text-xs text-text-secondary">
                     {source.config?.health ? `Health: ${source.config.health}` : "Health unknown"}
                   </p>
@@ -327,7 +327,7 @@ export function AdminRunsPageContent({
                       </td>
                       <td className="px-5 py-3">
                         <p className="font-medium text-text-primary">{source?.name ?? "Unknown"}</p>
-                        <p className="font-mono text-xs text-text-tertiary">{source?.slug ?? job.source_id}</p>
+                        <p className="text-xs text-text-tertiary">{source?.slug ?? job.source_id}</p>
                       </td>
                       <td className="px-5 py-3">
                         <span

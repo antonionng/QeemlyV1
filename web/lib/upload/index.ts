@@ -8,3 +8,4 @@ export * from "./upload-state";
 export * from "./templates";
 export * from "./api";
 export * from "./presentation";
+export * from "./mappings";

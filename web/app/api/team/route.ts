@@ -2,6 +2,35 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getWorkspaceContext } from "@/lib/workspace-context";
+import { jsonServerError, jsonValidationError } from "@/lib/errors/http";
+
+const READ_ONLY_OVERRIDE_ERROR =
+  "Team management is read-only while viewing another workspace as super admin.";
+
+async function requireTeamManagementAccess(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  context: NonNullable<Awaited<ReturnType<typeof getWorkspaceContext>>["context"]>,
+) {
+  if (context.is_super_admin && context.is_override) {
+    return NextResponse.json({ error: READ_ONLY_OVERRIDE_ERROR }, { status: 403 });
+  }
+
+  if (context.is_super_admin) {
+    return null;
+  }
+
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("role")
+    .eq("id", context.user_id)
+    .single();
+
+  if (profile?.role !== "admin") {
+    return NextResponse.json({ error: "Admin access required" }, { status: 403 });
+  }
+
+  return null;
+}
 
 /**
  * GET /api/team
@@ -36,7 +65,10 @@ export async function GET() {
     .order("full_name", { ascending: true });
 
   if (membersError) {
-    return NextResponse.json({ error: membersError.message }, { status: 500 });
+    return jsonServerError(membersError, {
+      defaultMessage: "We could not load your team right now.",
+      logLabel: "Team list failed",
+    });
   }
 
   // Get the current user's profile to determine their role
@@ -64,7 +96,9 @@ export async function GET() {
   return NextResponse.json({
     members: enrichedMembers,
     invitations: invitations || [],
-    current_user_role: is_super_admin ? "admin" : (currentProfile?.role || "member"),
+    current_user_role: currentProfile?.role || "member",
+    can_manage_team: !(is_super_admin && is_override) && (is_super_admin || currentProfile?.role === "admin"),
+    management_notice: is_super_admin && is_override ? READ_ONLY_OVERRIDE_ERROR : null,
     is_viewing_as_admin: is_override,
   });
 }
@@ -82,25 +116,19 @@ export async function DELETE(request: NextRequest) {
     return NextResponse.json({ error: wsContext.error }, { status: wsContext.status });
   }
 
-  const { workspace_id, is_super_admin, user_id } = wsContext.context;
-
-  // Check admin access
-  if (!is_super_admin) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user_id)
-      .single();
-
-    if (profile?.role !== "admin") {
-      return NextResponse.json({ error: "Admin access required" }, { status: 403 });
-    }
+  const { workspace_id, user_id } = wsContext.context;
+  const accessError = await requireTeamManagementAccess(supabase, wsContext.context);
+  if (accessError) {
+    return accessError;
   }
 
   const { member_id } = await request.json();
 
   if (!member_id) {
-    return NextResponse.json({ error: "Member ID required" }, { status: 400 });
+    return jsonValidationError({
+      message: "Please correct the highlighted fields and try again.",
+      fields: { member_id: "Select a team member and try again." },
+    });
   }
 
   // Can't remove yourself
@@ -129,7 +157,10 @@ export async function DELETE(request: NextRequest) {
     .eq("id", member_id);
 
   if (updateError) {
-    return NextResponse.json({ error: updateError.message }, { status: 500 });
+    return jsonServerError(updateError, {
+      defaultMessage: "We could not remove this team member right now.",
+      logLabel: "Team member removal failed",
+    });
   }
 
   return NextResponse.json({ success: true });
@@ -148,30 +179,30 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: wsContext.error }, { status: wsContext.status });
   }
 
-  const { workspace_id, is_super_admin, user_id } = wsContext.context;
-
-  // Check admin access
-  if (!is_super_admin) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user_id)
-      .single();
-
-    if (profile?.role !== "admin") {
-      return NextResponse.json({ error: "Admin access required" }, { status: 403 });
-    }
+  const { workspace_id, user_id } = wsContext.context;
+  const accessError = await requireTeamManagementAccess(supabase, wsContext.context);
+  if (accessError) {
+    return accessError;
   }
 
   const { member_id, role } = await request.json();
 
   if (!member_id || !role) {
-    return NextResponse.json({ error: "Member ID and role required" }, { status: 400 });
+    return jsonValidationError({
+      message: "Please correct the highlighted fields and try again.",
+      fields: {
+        ...(member_id ? {} : { member_id: "Select a team member and try again." }),
+        ...(role ? {} : { role: "Choose a role and try again." }),
+      },
+    });
   }
 
   // Validate role
   if (!["admin", "member", "employee"].includes(role)) {
-    return NextResponse.json({ error: "Invalid role" }, { status: 400 });
+    return jsonValidationError({
+      message: "Please correct the highlighted fields and try again.",
+      fields: { role: "Choose a valid role and try again." },
+    });
   }
 
   // Can't change your own role
@@ -200,7 +231,10 @@ export async function PATCH(request: NextRequest) {
     .eq("id", member_id);
 
   if (updateError) {
-    return NextResponse.json({ error: updateError.message }, { status: 500 });
+    return jsonServerError(updateError, {
+      defaultMessage: "We could not update this team member right now.",
+      logLabel: "Team role update failed",
+    });
   }
 
   return NextResponse.json({ success: true });

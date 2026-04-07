@@ -1,12 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
 import { type BenchmarkResult } from "@/lib/benchmarks/benchmark-state";
 import { useCompanySettings } from "@/lib/company";
-import { getBenchmarksBatch, makeBenchmarkLookupKey } from "@/lib/benchmarks/data-service";
-import { COMPANY_SIZES, type SalaryBenchmark } from "@/lib/dashboard/dummy-data";
-import { formatBenchmarkCompact, toBenchmarkDisplayValue } from "@/lib/utils/currency";
-import { useSalaryView } from "@/lib/salary-view-store";
+import { formatBenchmarkCompact } from "@/lib/utils/currency";
+import { ModuleStateBanner } from "../module-state-banner";
 import { SharedAiCallout } from "../shared-ai-callout";
 
 interface CompanySizeViewProps {
@@ -14,150 +11,15 @@ interface CompanySizeViewProps {
 }
 
 export function CompanySizeView({ result }: CompanySizeViewProps) {
-  const { role, level, location } = result;
+  const { location } = result;
   const companySettings = useCompanySettings();
-  const { salaryView } = useSalaryView();
   const companySize = result.formData.companySize || companySettings.companySize;
-  const [companySizeBenchmarks, setCompanySizeBenchmarks] = useState<Record<string, SalaryBenchmark>>({});
-  const [fallbackBenchmark, setFallbackBenchmark] = useState<SalaryBenchmark | null>(null);
-
   const targetCurrency = location.currency;
-  const sizesToLoad = useMemo(() => {
-    const ordered = [companySize, ...COMPANY_SIZES.filter((size) => size !== companySize)];
-    return ordered.filter(Boolean).slice(0, 5);
-  }, [companySize]);
-  const aiComparisonPoints = result.aiDetailBriefing?.views.companySize.comparisonPoints ?? null;
-  const prefetchedCompanySizeBenchmarks = result.detailSupportData?.companySizeBenchmarks ?? {};
-  const prefetchedFallbackBenchmark = result.detailSupportData?.companySizeFallbackBenchmark ?? null;
 
-  const aiCompanySizeData = useMemo(
-    () =>
-      aiComparisonPoints?.map((point) => ({
-        size: point.label,
-        median: point.median,
-        isCompanySize: point.id === companySize || point.label === companySize,
-        sampleSize: point.sampleSize,
-        isFallback: false,
-      })) ?? [],
-    [aiComparisonPoints, companySize],
-  );
-
-  useEffect(() => {
-    if (aiCompanySizeData.length > 0) {
-      setCompanySizeBenchmarks({});
-      setFallbackBenchmark(null);
-      return;
-    }
-
-    if (Object.keys(prefetchedCompanySizeBenchmarks).length > 0 || prefetchedFallbackBenchmark) {
-      setCompanySizeBenchmarks(prefetchedCompanySizeBenchmarks);
-      setFallbackBenchmark(prefetchedFallbackBenchmark);
-      return;
-    }
-
-    const run = async () => {
-      const batchResults = await getBenchmarksBatch(
-        sizesToLoad.map((size) => ({
-          roleId: role.id,
-          locationId: location.id,
-          levelId: level.id,
-          industry: result.formData.industry,
-          companySize: size,
-        })),
-      );
-      const entries = sizesToLoad.map((size) => {
-          const nextBenchmark = batchResults[makeBenchmarkLookupKey({
-            roleId: role.id,
-            locationId: location.id,
-            levelId: level.id,
-            industry: result.formData.industry,
-            companySize: size,
-          })];
-          if (!nextBenchmark) return null;
-          if (
-            nextBenchmark.benchmarkSegmentation?.matchedCompanySize &&
-            nextBenchmark.benchmarkSegmentation.matchedCompanySize === size
-          ) {
-            return { size, benchmark: nextBenchmark, fallback: false };
-          }
-
-          if (nextBenchmark.benchmarkSegmentation?.isFallback) {
-            return { size, benchmark: nextBenchmark, fallback: true };
-          }
-
-          return null;
-        });
-
-      const next: Record<string, SalaryBenchmark> = {};
-      let nextFallback: SalaryBenchmark | null = null;
-      for (const entry of entries) {
-        if (!entry) continue;
-        if (entry.fallback) {
-          nextFallback ??= entry.benchmark;
-          continue;
-        }
-        next[entry.size] = entry.benchmark;
-      }
-      setCompanySizeBenchmarks(next);
-      setFallbackBenchmark(nextFallback);
-    };
-
-    void run();
-  }, [
-    aiCompanySizeData.length,
-    level.id,
-    location.id,
-    prefetchedCompanySizeBenchmarks,
-    prefetchedFallbackBenchmark,
-    result.formData.industry,
-    role.id,
-    sizesToLoad,
-  ]);
-
-  const companySizeData = aiCompanySizeData.length > 0
-    ? aiCompanySizeData
-    : sizesToLoad
-    .map((size) => {
-      const nextBenchmark = companySizeBenchmarks[size];
-      if (!nextBenchmark) return null;
-      return {
-        size,
-        median: toBenchmarkDisplayValue(nextBenchmark.percentiles.p50, {
-          salaryView,
-          sourceCurrency: nextBenchmark.currency,
-          targetCurrency,
-          payPeriod: nextBenchmark.payPeriod,
-        }),
-        isCompanySize: size === companySize,
-        sampleSize: nextBenchmark.sampleSize,
-      };
-    })
-    .filter(Boolean) as Array<{
-    size: string;
-    median: number;
-    isCompanySize: boolean;
-    sampleSize: number;
-    isFallback?: boolean;
-  }>;
-  const showSampleSize = (sampleSize: number | null | undefined) =>
-    typeof sampleSize === "number" && sampleSize > 0;
-  const fallbackRow =
-    aiCompanySizeData.length === 0 && companySizeData.length === 0 && fallbackBenchmark
-      ? {
-          size: "Broader market",
-          median: toBenchmarkDisplayValue(fallbackBenchmark.percentiles.p50, {
-            salaryView,
-            sourceCurrency: fallbackBenchmark.currency,
-            targetCurrency,
-            payPeriod: fallbackBenchmark.payPeriod,
-          }),
-          isCompanySize: false,
-          sampleSize: fallbackBenchmark.sampleSize,
-          isFallback: true,
-        }
-      : null;
-  const displayedCompanySizeData = fallbackRow ? [fallbackRow] : companySizeData;
-  const maxMedian = Math.max(...displayedCompanySizeData.map((item) => item.median), 1);
+  const mod = result.detailSurface?.modules.companySize;
+  const rows = mod?.data.rows ?? [];
+  const isLoading = !mod || result.detailSurfaceStatus === "loading";
+  const maxMedian = Math.max(...rows.map((r) => r.median), 1);
 
   return (
     <div className="bench-section">
@@ -168,20 +30,24 @@ export function CompanySizeView({ result }: CompanySizeViewProps) {
         )}
       </div>
       <div className="space-y-3">
-        {displayedCompanySizeData.map((item) => {
+        {isLoading ? <ModuleStateBanner variant="loading" message="Loading company-size comparisons..." /> : null}
+        {mod?.status === "error" ? (
+          <ModuleStateBanner variant="error" message={mod.message ?? "Unable to load company-size comparisons."} />
+        ) : null}
+        {rows.map((item) => {
           const percentage = (item.median / maxMedian) * 100;
-          
+
           return (
-            <div 
-              key={item.size} 
+            <div
+              key={item.id}
               className={`flex items-center gap-4 p-2 rounded-lg transition-colors ${
-                item.isCompanySize ? "bg-brand-50 ring-1 ring-brand-200" : ""
+                item.isHighlighted ? "bg-brand-50 ring-1 ring-brand-200" : ""
               }`}
             >
               <div className="w-32 text-sm font-medium text-brand-700 flex items-center gap-2">
-                {item.size}
-                {item.isCompanySize && (
-                  <span 
+                {item.label}
+                {item.isHighlighted && (
+                  <span
                     className="h-2 w-2 rounded-full flex-shrink-0"
                     style={{ backgroundColor: companySettings.primaryColor }}
                   />
@@ -190,13 +56,13 @@ export function CompanySizeView({ result }: CompanySizeViewProps) {
               <div className="flex-1 h-8 bg-brand-50 rounded-full overflow-hidden">
                 <div
                   className="h-full rounded-full transition-all"
-                  style={{ 
+                  style={{
                     width: `${percentage}%`,
-                    backgroundColor: item.isCompanySize
+                    backgroundColor: item.isHighlighted
                       ? companySettings.primaryColor
-                      : item.isFallback
+                      : item.id === "broader-market"
                         ? "#94a3b8"
-                        : "#34d399"
+                        : "#34d399",
                   }}
                 />
               </div>
@@ -204,29 +70,31 @@ export function CompanySizeView({ result }: CompanySizeViewProps) {
                 {formatBenchmarkCompact(item.median, targetCurrency)}
               </div>
               <div className="w-16 text-right text-xs text-brand-500">
-                {showSampleSize(item.sampleSize) ? `n=${item.sampleSize}` : "AI cohort"}
+                {typeof item.sampleSize === "number" && item.sampleSize > 0
+                  ? `n=${item.sampleSize}`
+                  : "AI cohort"}
               </div>
             </div>
           );
         })}
       </div>
-      {fallbackRow ? (
+      {mod?.data.fallbackLabel ? (
         <p className="mt-4 text-xs text-brand-500">
           No company-size-specific cohort is available for this role yet. Showing the broader market benchmark instead.
         </p>
-      ) : companySizeData.length === 0 ? (
+      ) : rows.length === 0 && !isLoading ? (
         <p className="mt-4 text-xs text-brand-500">
-          No company-size-specific cohort is available for this role yet. Qeemly is using the broader market row.
+          {mod?.message ?? "No company-size-specific cohort is available for this role yet."}
         </p>
-      ) : (
+      ) : rows.length > 0 ? (
         <p className="mt-4 text-xs text-brand-500">
-          {aiCompanySizeData.length > 0
+          {mod?.source === "ai"
             ? "Company-size medians are being shown from the shared Qeemly AI Advisory briefing."
             : "Only cohorts with real segmented market matches are shown here. Missing cohorts fall back to the broader market row."}
         </p>
-      )}
+      ) : null}
 
-      <SharedAiCallout section={result.aiDetailBriefing?.views.companySize} />
+      <SharedAiCallout section={mod?.narrative} />
     </div>
   );
 }

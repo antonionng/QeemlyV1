@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { getAdminWorkspaceContextOrError } from "@/lib/workspace-access";
+import { jsonServerError } from "@/lib/errors/http";
 
 export async function DELETE(
   request: NextRequest,
@@ -8,34 +10,22 @@ export async function DELETE(
   try {
     const { id } = await params;
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("workspace_id, role")
-      .eq("id", user.id)
-      .single();
-
-    if (!profile?.workspace_id) {
-      return NextResponse.json({ error: "No workspace found" }, { status: 404 });
-    }
-
-    if (profile.role !== "admin") {
-      return NextResponse.json({ error: "Only admins can delete webhooks" }, { status: 403 });
+    const workspaceContext = await getAdminWorkspaceContextOrError();
+    if (workspaceContext.error) {
+      return workspaceContext.error;
     }
 
     const { error } = await supabase
       .from("outgoing_webhooks")
       .delete()
       .eq("id", id)
-      .eq("workspace_id", profile.workspace_id);
+      .eq("workspace_id", workspaceContext.context.workspace_id);
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return jsonServerError(error, {
+        defaultMessage: "We could not delete this webhook right now.",
+        logLabel: "Webhook delete failed",
+      });
     }
 
     return NextResponse.json({ deleted: true });

@@ -88,4 +88,19 @@ describe("GET /api/benchmarks/briefing", () => {
     expect(response.status).toBe(401);
     expect(payload.error).toBe("Unauthorized");
   });
+
+  it("returns a 503 when AI detail briefing cannot be generated", async () => {
+    getAiBenchmarkDetailBriefingMock.mockResolvedValue(null);
+
+    const request = new Request(
+      "http://localhost/api/benchmarks/briefing?roleId=swe-devops&locationId=dubai&levelId=ic2",
+    ) as unknown as Parameters<typeof GET>[0];
+
+    const response = await GET(request);
+    const payload = await response.json();
+
+    expect(response.status).toBe(503);
+    expect(payload.error).toBe("AI detail briefing unavailable");
+    expect(payload.reasonCode).toBe("briefing_generation_failed");
+  });
 });

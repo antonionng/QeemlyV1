@@ -42,11 +42,13 @@ import {
   type TargetPercentile,
   type VestingSchedule,
   type BenefitsTier,
+  normalizeSavedBonusPercentage,
 } from "@/lib/company";
 import { INDUSTRIES, COMPANY_SIZES } from "@/lib/dashboard/dummy-data";
 import { getEmployees, type Employee } from "@/lib/employees";
 import { getBenchmark } from "@/lib/benchmarks/data-service";
 import clsx from "clsx";
+import { useWorkspaceChangeVersion } from "@/lib/workspace-client";
 
 type SettingsTab = "profile" | "compensation" | "indices" | "compliance";
 type IndexView = "family" | "family-level";
@@ -78,6 +80,7 @@ function SettingsPageLoading() {
 }
 
 function SettingsPageContent() {
+  const workspaceChangeVersion = useWorkspaceChangeVersion();
   const searchParams = useSearchParams();
   const updateCompanySettings = useCompanySettings((state) => state.updateSettings);
   const markCompanyConfigured = useCompanySettings((state) => state.markAsConfigured);
@@ -140,7 +143,7 @@ function SettingsPageContent() {
       setReviewCycle((s.review_cycle as ReviewCycle) || "annual");
       setDefaultCurrency(s.default_currency || "AED");
       setFiscalYearStart(s.fiscal_year_start || 1);
-      setDefaultBonusPercentage(Number(s.default_bonus_percentage) || 15);
+      setDefaultBonusPercentage(normalizeSavedBonusPercentage(s.default_bonus_percentage));
       setEquityVestingSchedule((s.equity_vesting_schedule as VestingSchedule) || "4-year-1-cliff");
       setBenefitsTier((s.benefits_tier as BenefitsTier) || "standard");
       setCompSplitBasicPct(s.comp_split_basic_pct ?? 60);
@@ -164,7 +167,7 @@ function SettingsPageContent() {
         reviewCycle: (s.review_cycle as ReviewCycle) || "annual",
         defaultCurrency: s.default_currency || "AED",
         fiscalYearStart: s.fiscal_year_start || 1,
-        defaultBonusPercentage: Number(s.default_bonus_percentage) || 15,
+        defaultBonusPercentage: normalizeSavedBonusPercentage(s.default_bonus_percentage),
         equityVestingSchedule: (s.equity_vesting_schedule as VestingSchedule) || "4-year-1-cliff",
         benefitsTier: (s.benefits_tier as BenefitsTier) || "standard",
         compSplitBasicPct: s.comp_split_basic_pct ?? 60,
@@ -184,7 +187,7 @@ function SettingsPageContent() {
 
   useEffect(() => {
     loadSettings();
-  }, [loadSettings]);
+  }, [loadSettings, workspaceChangeVersion]);
 
   useEffect(() => {
     const tab = searchParams.get("tab");
@@ -458,7 +461,7 @@ function SettingsPageContent() {
                     value={primaryColor}
                     onChange={(e) => setPrimaryColor(e.target.value)}
                     placeholder="#6366f1"
-                    className="rounded-xl w-32 font-mono text-sm"
+                    className="rounded-xl w-32 text-sm"
                   />
                   <div 
                     className="flex-1 h-12 rounded-xl flex items-center justify-center text-white text-sm font-medium"
@@ -993,6 +996,7 @@ const SENIORITY_LEVELS = [
 ];
 
 function CompensationIndexPanel({ targetPercentile }: { targetPercentile: number }) {
+  const workspaceChangeVersion = useWorkspaceChangeVersion();
   type PercentileKey = "p10" | "p25" | "p50" | "p75" | "p90";
   const resolvePercentileKey = (percentile: number): PercentileKey => {
     if (percentile >= 90) return "p90";
@@ -1013,7 +1017,7 @@ function CompensationIndexPanel({ targetPercentile }: { targetPercentile: number
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [workspaceChangeVersion]);
 
   const [indexData, setIndexData] = useState<
     {

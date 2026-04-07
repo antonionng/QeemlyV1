@@ -26,10 +26,8 @@ import {
 import {
   getBenchmarksBatch,
   getBenchmarkEnriched,
-  fetchAiBriefing,
-  fetchBenchmarkDetailSupportData,
+  fetchDetailSurface,
 } from "@/lib/benchmarks/data-service";
-import { isBenchmarkDetailSurfaceReady } from "@/lib/benchmarks/detail-ai";
 import { getRoleDescription } from "@/lib/benchmarks/role-descriptions";
 import {
   getBenchmarkMarkerLabel,
@@ -107,6 +105,9 @@ export function BenchmarkResults({ result, hasCompanyData = true }: BenchmarkRes
   const [isLoadingLevelBenchmarks, setIsLoadingLevelBenchmarks] = useState(true);
   const [showLevelOverrides, setShowLevelOverrides] = useState<Record<string, boolean>>({});
   const [aiSummary, setAiSummary] = useState<string | null>(null);
+  const [detailBreakdownAttemptState, setDetailBreakdownAttemptState] = useState<
+    "idle" | "loading" | "failed"
+  >("idle");
   const [isRolePickerOpen, setIsRolePickerOpen] = useState(false);
   const [orgPeerSummariesByLevel, setOrgPeerSummariesByLevel] = useState<Record<string, OrgPeerSummary>>({});
   const [orgPeerSummaryLoadingByLevel, setOrgPeerSummaryLoadingByLevel] = useState<Record<string, boolean>>({});
@@ -136,19 +137,100 @@ export function BenchmarkResults({ result, hasCompanyData = true }: BenchmarkRes
   };
 
   const resultCreatedAtMs = new Date(result.createdAt).getTime();
-  const detailSurfaceReady = isBenchmarkDetailSurfaceReady({
-    aiDetailBriefing: result.aiDetailBriefing,
-    aiDetailBriefingStatus: result.aiDetailBriefingStatus,
-    detailSupportData: result.detailSupportData,
-    detailSupportStatus: result.detailSupportStatus,
-  });
-  const detailSurfaceUnavailable =
-    result.aiDetailBriefingStatus === "unavailable" || result.detailSupportStatus === "unavailable";
+  const detailSurfaceReady = result.detailSurfaceStatus === "ready" && Boolean(result.detailSurface);
+  const detailSurfaceLoading = result.detailSurfaceStatus === "loading";
+  const detailBreakdownLoading =
+    detailBreakdownAttemptState === "loading" || detailSurfaceLoading;
   const detailBreakdownCtaLabel = detailSurfaceReady
     ? "View Detailed Breakdown"
-    : detailSurfaceUnavailable
-      ? "Detailed breakdown unavailable"
-      : "Preparing detailed breakdown...";
+    : detailBreakdownLoading
+      ? "Preparing detailed breakdown..."
+      : detailBreakdownAttemptState === "failed"
+        ? "Retry Detailed Breakdown"
+      : "Load Detailed Breakdown";
+
+  const requestDetailBreakdown = useCallback(async () => {
+    if (detailBreakdownLoading || detailSurfaceReady) {
+      if (detailSurfaceReady) {
+        goToStep("detail");
+      }
+      return;
+    }
+    setDetailBreakdownAttemptState("loading");
+
+    const filters = {
+      industry: stateFormData.industry || resultFormData.industry,
+      companySize: stateFormData.companySize || resultFormData.companySize,
+    };
+
+    useBenchmarkState.setState((state) => {
+      if (!state.currentResult) return state;
+      if (new Date(state.currentResult.createdAt).getTime() !== resultCreatedAtMs) {
+        return state;
+      }
+      return {
+        ...state,
+        currentResult: {
+          ...state.currentResult,
+          detailSurfaceStatus: "loading",
+        },
+        recentResults: state.recentResults.map((entry) =>
+          new Date(entry.createdAt).getTime() === resultCreatedAtMs
+            ? { ...entry, detailSurfaceStatus: "loading" as const }
+            : entry,
+        ),
+      };
+    });
+
+    const surface = await fetchDetailSurface(role.id, location.id, level.id, filters);
+
+    useBenchmarkState.setState((state) => {
+      if (!state.currentResult) return state;
+      if (new Date(state.currentResult.createdAt).getTime() !== resultCreatedAtMs) {
+        return state;
+      }
+      return {
+        ...state,
+        currentResult: {
+          ...state.currentResult,
+          detailSurface: surface,
+          detailSurfaceStatus: surface ? "ready" : "unavailable",
+        },
+        recentResults: state.recentResults.map((entry) =>
+          new Date(entry.createdAt).getTime() === resultCreatedAtMs
+            ? {
+                ...entry,
+                detailSurface: surface,
+                detailSurfaceStatus: surface ? ("ready" as const) : ("unavailable" as const),
+              }
+            : entry,
+        ),
+      };
+    });
+
+    if (surface) {
+      setDetailBreakdownAttemptState("idle");
+      goToStep("detail");
+      return;
+    }
+    setDetailBreakdownAttemptState("failed");
+  }, [
+    detailBreakdownLoading,
+    detailSurfaceReady,
+    goToStep,
+    level.id,
+    location.id,
+    resultCreatedAtMs,
+    resultFormData.companySize,
+    resultFormData.industry,
+    role.id,
+    stateFormData.companySize,
+    stateFormData.industry,
+  ]);
+
+  useEffect(() => {
+    setDetailBreakdownAttemptState("idle");
+  }, [resultCreatedAtMs]);
 
   useEffect(() => {
     const filters = {
@@ -242,212 +324,6 @@ export function BenchmarkResults({ result, hasCompanyData = true }: BenchmarkRes
     benchmark,
     level.id,
     location.id,
-    resultFormData.companySize,
-    resultFormData.industry,
-    role.id,
-    stateFormData.companySize,
-    stateFormData.industry,
-  ]);
-
-  useEffect(() => {
-    if (
-      result.aiDetailBriefing ||
-      result.aiDetailBriefingStatus === "loading" ||
-      result.aiDetailBriefingStatus === "unavailable"
-    ) {
-      return;
-    }
-
-    const filters = {
-      industry: stateFormData.industry || resultFormData.industry,
-      companySize: stateFormData.companySize || resultFormData.companySize,
-    };
-    let isCancelled = false;
-
-    useBenchmarkState.setState((state) => {
-      if (!state.currentResult) return state;
-      if (new Date(state.currentResult.createdAt).getTime() !== resultCreatedAtMs) {
-        return state;
-      }
-
-      return {
-        ...state,
-        currentResult: {
-          ...state.currentResult,
-          aiDetailBriefingStatus: "loading",
-        },
-        recentResults: state.recentResults.map((entry) =>
-          new Date(entry.createdAt).getTime() === resultCreatedAtMs
-            ? {
-                ...entry,
-                aiDetailBriefingStatus: "loading",
-              }
-            : entry,
-        ),
-      };
-    });
-
-    const prefetchAiBriefing = async () => {
-      const briefing = await fetchAiBriefing(role.id, location.id, level.id, filters);
-      if (isCancelled) return;
-
-      useBenchmarkState.setState((state) => {
-        if (!state.currentResult) return state;
-        if (new Date(state.currentResult.createdAt).getTime() !== resultCreatedAtMs) {
-          return state;
-        }
-
-        return {
-          ...state,
-          currentResult: {
-            ...state.currentResult,
-            aiDetailBriefing: briefing,
-            aiDetailBriefingStatus: briefing ? "ready" : "unavailable",
-          },
-          recentResults: state.recentResults.map((entry) =>
-            new Date(entry.createdAt).getTime() === resultCreatedAtMs
-              ? {
-                  ...entry,
-                  aiDetailBriefing: briefing,
-                  aiDetailBriefingStatus: briefing ? "ready" : "unavailable",
-                }
-              : entry,
-          ),
-        };
-      });
-    };
-
-    void prefetchAiBriefing();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [
-    level.id,
-    location.id,
-    result.aiDetailBriefing,
-    result.aiDetailBriefingStatus,
-    resultCreatedAtMs,
-    resultFormData.companySize,
-    resultFormData.industry,
-    role.id,
-    stateFormData.companySize,
-    stateFormData.industry,
-  ]);
-
-  useEffect(() => {
-    if (
-      result.detailSupportData ||
-      result.detailSupportStatus === "loading" ||
-      result.detailSupportStatus === "unavailable"
-    ) {
-      return;
-    }
-
-    const filters = {
-      industry: stateFormData.industry || resultFormData.industry,
-      companySize: stateFormData.companySize || resultFormData.companySize,
-    };
-    let isCancelled = false;
-
-    useBenchmarkState.setState((state) => {
-      if (!state.currentResult) return state;
-      if (new Date(state.currentResult.createdAt).getTime() !== resultCreatedAtMs) {
-        return state;
-      }
-
-      return {
-        ...state,
-        currentResult: {
-          ...state.currentResult,
-          detailSupportStatus: "loading",
-        },
-        recentResults: state.recentResults.map((entry) =>
-          new Date(entry.createdAt).getTime() === resultCreatedAtMs
-            ? {
-                ...entry,
-                detailSupportStatus: "loading",
-              }
-            : entry,
-        ),
-      };
-    });
-
-    const prefetchDetailSupport = async () => {
-      try {
-        const detailSupportData = await fetchBenchmarkDetailSupportData({
-          roleId: role.id,
-          locationId: location.id,
-          levelId: level.id,
-          industry: filters.industry ?? null,
-          companySize: filters.companySize ?? null,
-        });
-        if (isCancelled) return;
-
-        useBenchmarkState.setState((state) => {
-          if (!state.currentResult) return state;
-          if (new Date(state.currentResult.createdAt).getTime() !== resultCreatedAtMs) {
-            return state;
-          }
-
-          return {
-            ...state,
-            currentResult: {
-              ...state.currentResult,
-              detailSupportData,
-              detailSupportStatus: "ready",
-            },
-            recentResults: state.recentResults.map((entry) =>
-              new Date(entry.createdAt).getTime() === resultCreatedAtMs
-                ? {
-                    ...entry,
-                    detailSupportData,
-                    detailSupportStatus: "ready",
-                  }
-                : entry,
-            ),
-          };
-        });
-      } catch {
-        if (isCancelled) return;
-        useBenchmarkState.setState((state) => {
-          if (!state.currentResult) return state;
-          if (new Date(state.currentResult.createdAt).getTime() !== resultCreatedAtMs) {
-            return state;
-          }
-
-          return {
-            ...state,
-            currentResult: {
-              ...state.currentResult,
-              detailSupportData: null,
-              detailSupportStatus: "unavailable",
-            },
-            recentResults: state.recentResults.map((entry) =>
-              new Date(entry.createdAt).getTime() === resultCreatedAtMs
-                ? {
-                    ...entry,
-                    detailSupportData: null,
-                    detailSupportStatus: "unavailable",
-                  }
-                : entry,
-            ),
-          };
-        });
-      }
-    };
-
-    void prefetchDetailSupport();
-
-    return () => {
-      isCancelled = true;
-    };
-  }, [
-    level.id,
-    location.id,
-    result.detailSupportData,
-    result.detailSupportStatus,
-    resultCreatedAtMs,
     resultFormData.companySize,
     resultFormData.industry,
     role.id,
@@ -656,6 +532,7 @@ export function BenchmarkResults({ result, hasCompanyData = true }: BenchmarkRes
       </div>
 
       {isSubmitting ? <BenchmarkAdvisoryLoading variant="refresh" /> : null}
+      {detailBreakdownAttemptState === "loading" ? <BenchmarkAdvisoryLoading variant="detail" /> : null}
 
       <div className="bench-section space-y-4" data-testid="benchmark-results-editable-filters">
         <div className="space-y-1">
@@ -830,6 +707,12 @@ export function BenchmarkResults({ result, hasCompanyData = true }: BenchmarkRes
           </Button>
         </div>
 
+        <p className="text-xs text-brand-500">
+          {salaryView === "monthly"
+            ? "Monthly view advice: use this for run-rate and offer-level comparisons."
+            : "Annual view advice: use this for planning cycles and budget approvals."}
+        </p>
+
         <div className="rounded-2xl border border-brand-100 bg-brand-50/50 px-4 py-3 text-xs text-brand-700 break-words">
           {selectedRole.title} · {location.city}, {location.country} · {level.name}
         </div>
@@ -985,7 +868,10 @@ export function BenchmarkResults({ result, hasCompanyData = true }: BenchmarkRes
             <div className="min-w-[720px]">
               <div className="mb-6 flex items-center gap-6">
                 <div className="w-40 shrink-0 text-sm font-semibold text-brand-900">Level</div>
-                <div className="w-40 shrink-0 text-sm font-semibold text-brand-900">Data Quality</div>
+                <div className="w-40 shrink-0">
+                  <div className="text-sm font-semibold text-brand-900">Data Quality</div>
+                  <div className="text-[10px] text-brand-500">Tier guide: High, Medium, and Low confidence.</div>
+                </div>
                 <div className="flex-1" />
                 <div className="w-32 shrink-0 text-right text-sm font-semibold text-brand-900">
                   {hasCompanyData ? `Your Target (P${targetPercentile})` : `Target (P${targetPercentile})`}
@@ -1113,39 +999,38 @@ export function BenchmarkResults({ result, hasCompanyData = true }: BenchmarkRes
       <div className="bench-section" data-testid="benchmark-results-summary">
         <h3 className="bench-section-header">Summary</h3>
 
-        {aiSummary ? (
-          <div className="rounded-xl bg-gradient-to-br from-violet-50 to-brand-50 p-5 text-sm leading-relaxed text-brand-800">
-            <div className="mb-3 flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-violet-600" />
-              <span className="font-semibold text-brand-900">Market Summary</span>
+        <div className="space-y-2">
+          {insights.map((insight, index) => (
+            <div
+              key={`${insight.type}-${index}`}
+              className={`flex items-center gap-3 rounded-lg px-4 py-2.5 text-sm ${
+                insight.type === "success"
+                  ? "bg-emerald-50 text-emerald-700"
+                  : insight.type === "warning"
+                    ? "bg-amber-50 text-amber-700"
+                    : "bg-blue-50 text-blue-700"
+              }`}
+            >
+              {insight.type === "success" ? (
+                <CheckCircle className="h-4 w-4 shrink-0" />
+              ) : insight.type === "warning" ? (
+                <AlertCircle className="h-4 w-4 shrink-0" />
+              ) : (
+                <Info className="h-4 w-4 shrink-0" />
+              )}
+              <span className="font-medium">{insight.message}</span>
             </div>
-            <p>{aiSummary}</p>
+          ))}
+        </div>
+
+        {aiSummary ? (
+          <div className="mt-3 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs text-violet-700">
+            <span className="inline-flex items-center gap-1 font-medium">
+              <Sparkles className="h-3.5 w-3.5" />
+              AI summary is available in View Detailed Breakdown.
+            </span>
           </div>
-        ) : (
-          <div className="space-y-2">
-            {insights.map((insight, index) => (
-              <div
-                key={`${insight.type}-${index}`}
-                className={`flex items-center gap-3 rounded-lg px-4 py-2.5 text-sm ${
-                  insight.type === "success"
-                    ? "bg-emerald-50 text-emerald-700"
-                    : insight.type === "warning"
-                      ? "bg-amber-50 text-amber-700"
-                      : "bg-blue-50 text-blue-700"
-                }`}
-              >
-                {insight.type === "success" ? (
-                  <CheckCircle className="h-4 w-4 shrink-0" />
-                ) : insight.type === "warning" ? (
-                  <AlertCircle className="h-4 w-4 shrink-0" />
-                ) : (
-                  <Info className="h-4 w-4 shrink-0" />
-                )}
-                <span className="font-medium">{insight.message}</span>
-              </div>
-            ))}
-          </div>
-        )}
+        ) : null}
 
         <div className="mt-3 flex items-center gap-3 text-xs text-brand-500">
           <BenchmarkSourceBadge source={selectedBenchmark.benchmarkSource} />
@@ -1155,6 +1040,8 @@ export function BenchmarkResults({ result, hasCompanyData = true }: BenchmarkRes
               <span>{selectedBenchmark.sampleSize} data points</span>
               <span className="text-brand-300">·</span>
               <span>{selectedBenchmark.confidence} confidence</span>
+              <span className="text-brand-300">·</span>
+              <span>Date means Date of joining when employee records are matched.</span>
             </>
           )}
         </div>
@@ -1171,14 +1058,19 @@ export function BenchmarkResults({ result, hasCompanyData = true }: BenchmarkRes
         </Button>
         <div className="flex-1" />
         <button
-          onClick={() => goToStep("detail")}
-          disabled={!detailSurfaceReady}
+          onClick={() => void requestDetailBreakdown()}
+          disabled={detailBreakdownLoading}
           className="bench-cta max-w-xs disabled:cursor-not-allowed disabled:opacity-70"
         >
           {detailBreakdownCtaLabel}{" "}
           <ArrowRight className="h-4 w-4" />
         </button>
       </div>
+      {detailBreakdownAttemptState === "failed" && !detailBreakdownLoading ? (
+        <p className="pt-2 text-right text-xs text-brand-500">
+          We could not prepare the detailed breakdown. Please retry.
+        </p>
+      ) : null}
       <RolePickerModal
         open={isRolePickerOpen}
         selectedRoleId={selectedRole.id}

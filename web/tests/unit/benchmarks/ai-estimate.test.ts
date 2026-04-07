@@ -16,6 +16,7 @@ vi.mock("@/lib/ai/openai", () => ({
   }),
   getBenchmarkModel: () => "gpt-5.4",
   getBenchmarkBriefingModel: () => "gpt-5.4-mini",
+  getBenchmarkBriefingModelCandidates: () => ["gpt-5.4-mini", "gpt-4o-mini"],
 }));
 
 vi.mock("next/cache", () => ({
@@ -267,5 +268,26 @@ describe("AI benchmark advisory", () => {
     const result = await getAiBenchmarkDetailBriefing("swe", "abu-dhabi", "Fintech", "201-500");
 
     expect(result).toEqual(MOCK_DETAIL_BRIEFING);
+  });
+
+  it("retries detail briefing generation with fallback model candidates", async () => {
+    mockCreate
+      .mockRejectedValueOnce(new Error("model_not_found"))
+      .mockResolvedValueOnce({
+        choices: [{ message: { content: JSON.stringify(MOCK_DETAIL_BRIEFING) } }],
+      });
+
+    const result = await getAiBenchmarkDetailBriefing("swe", "abu-dhabi", "Fintech", "201-500");
+
+    expect(result).toEqual(MOCK_DETAIL_BRIEFING);
+    expect(mockCreate).toHaveBeenCalledTimes(2);
+    expect(mockCreate).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ model: "gpt-5.4-mini" }),
+    );
+    expect(mockCreate).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ model: "gpt-4o-mini" }),
+    );
   });
 });

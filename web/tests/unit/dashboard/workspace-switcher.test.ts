@@ -50,12 +50,14 @@ function createJsonResponse(payload: unknown) {
 
 describe("WorkspaceSwitcher", () => {
   let container: HTMLDivElement;
+  let activeWorkspaceId: "ws-1" | "ws-2";
 
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true;
     container = document.createElement("div");
     document.body.appendChild(container);
     refreshMock.mockReset();
+    activeWorkspaceId = "ws-1";
 
     vi.stubGlobal(
       "fetch",
@@ -83,13 +85,14 @@ describe("WorkspaceSwitcher", () => {
 
         if (url === "/api/settings") {
           return createJsonResponse({
-            workspace_id: "ws-1",
-            workspace_name: "Workspace One",
-            workspace_slug: "workspace-one",
+            workspace_id: activeWorkspaceId,
+            workspace_name: activeWorkspaceId === "ws-1" ? "Workspace One" : "Workspace Two",
+            workspace_slug: activeWorkspaceId === "ws-1" ? "workspace-one" : "workspace-two",
           });
         }
 
         if (url === "/api/admin/workspace-override" && method === "POST") {
+          activeWorkspaceId = "ws-2";
           return createJsonResponse({
             success: true,
             workspace: { id: "ws-2", name: "Workspace Two", slug: "workspace-two" },
@@ -142,10 +145,12 @@ describe("WorkspaceSwitcher", () => {
     });
 
     expect(refreshMock).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(globalThis.fetch)).toHaveBeenCalledWith("/api/settings");
     expect(eventSpy).toHaveBeenCalledWith({
       workspaceId: "ws-2",
       source: "override",
     });
+    expect(container.textContent).toContain("Workspace Two");
 
     await act(async () => {
       root.unmount();

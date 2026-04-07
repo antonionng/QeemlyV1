@@ -10,6 +10,13 @@ import type {
 import { normalize } from "./transformers";
 import type { UploadDataType } from "./column-detection";
 import type { UploadImportMode } from "./upload-state";
+import { parseClientError } from "@/lib/errors/client-safe";
+
+export type UploadIssueRow = {
+  row: number;
+  field?: string;
+  message: string;
+};
 
 export type UploadResult = {
   success: boolean;
@@ -19,6 +26,20 @@ export type UploadResult = {
   skippedCount: number;
   failedCount: number;
   errors: string[];
+  importPolicyApplied?: {
+    excludedRowCount: number;
+    multiCurrencyDetected: boolean;
+    multiCurrencyConfirmed: boolean;
+    mappingSummary?: {
+      departmentsMapped?: number;
+      rolesMapped?: number;
+      levelsMapped?: number;
+    };
+  };
+  rows?: UploadIssueRow[];
+  message?: string;
+  action?: string;
+  code?: string;
   processedEmployees?: UploadProcessedEmployee[];
   processedBenchmarks?: UploadProcessedBenchmark[];
 };
@@ -40,6 +61,16 @@ export type UploadProcessedBenchmark = {
 
 type UploadOptions = {
   mode?: UploadImportMode;
+  importPolicy?: {
+    excludedRowIndices?: number[];
+    multiCurrencyDetected?: boolean;
+    multiCurrencyConfirmed?: boolean;
+    mappingSummary?: {
+      departmentsMapped?: number;
+      rolesMapped?: number;
+      levelsMapped?: number;
+    };
+  };
 };
 
 export type UploadVerificationSummary = {
@@ -105,11 +136,12 @@ async function importViaServerRoute(
       uploadType,
       rows,
       mode: options?.mode ?? "upsert",
+      importPolicy: options?.importPolicy,
     }),
   });
   const payload = (await response.json()) as UploadResult & { error?: string };
   if (!response.ok) {
-    throw new Error(payload.error || "Failed to import upload batch");
+    throw new Error(parseClientError(payload).message || "Failed to import upload batch");
   }
   return payload;
 }
@@ -150,6 +182,7 @@ function createInitialUploadResult(): UploadResult {
     skippedCount: 0,
     failedCount: 0,
     errors: [],
+    importPolicyApplied: undefined,
     processedEmployees: [],
     processedBenchmarks: [],
   };
@@ -161,7 +194,9 @@ async function applyCanonicalRoleAliases(
   employees: TransformedEmployee[],
 ): Promise<TransformedEmployee[]> {
   const unresolvedEmployees = employees.filter(
-    (employee) => employee.roleMappingStatus === "pending" && employee.originalRoleText,
+    (employee) =>
+      (employee.roleMappingStatus === "pending" || employee.roleMappingStatus === "needs_review")
+      && employee.originalRoleText,
   );
   if (unresolvedEmployees.length === 0) {
     return employees;
@@ -197,7 +232,10 @@ async function applyCanonicalRoleAliases(
   }
 
   return employees.map((employee) => {
-    if (employee.roleMappingStatus !== "pending" || !employee.originalRoleText) {
+    if (
+      (employee.roleMappingStatus !== "pending" && employee.roleMappingStatus !== "needs_review")
+      || !employee.originalRoleText
+    ) {
       return employee;
     }
 
@@ -247,6 +285,16 @@ export async function uploadEmployees(
   onProgress?: (progress: number) => void,
   options?: UploadOptions,
 ): Promise<UploadResult> {
+  if (options?.importPolicy?.multiCurrencyDetected && !options.importPolicy.multiCurrencyConfirmed) {
+    return {
+      ...createInitialUploadResult(),
+      success: false,
+      errors: ["Please confirm multi-currency handling before importing this file."],
+      message: "Please confirm multi-currency handling before importing this file.",
+      code: "MULTI_CURRENCY_CONFIRMATION_REQUIRED",
+    };
+  }
+
   const override = await getWorkspaceOverrideInfo();
   if (override.isOverriding && override.workspaceId) {
     const result = await importViaServerRoute("employees", employees, options);
@@ -267,6 +315,14 @@ export async function uploadEmployees(
   }
 
   const result = createInitialUploadResult();
+  if (options?.importPolicy) {
+    result.importPolicyApplied = {
+      excludedRowCount: options.importPolicy.excludedRowIndices?.length ?? 0,
+      multiCurrencyDetected: options.importPolicy.multiCurrencyDetected === true,
+      multiCurrencyConfirmed: options.importPolicy.multiCurrencyConfirmed === true,
+      mappingSummary: options.importPolicy.mappingSummary,
+    };
+  }
   const batchSize = 50;
   const pendingReviewRows: Array<{
     workspace_id: string;
@@ -413,7 +469,11 @@ export async function uploadEmployees(
           const sourceEmployee = batch.find(
             (employee) => String(employee.email || "").toLowerCase() === normalizedEmail,
           );
-          if (sourceEmployee?.roleMappingStatus === "pending" && sourceEmployee.originalRoleText) {
+          if (
+            (sourceEmployee?.roleMappingStatus === "pending"
+              || sourceEmployee?.roleMappingStatus === "needs_review")
+            && sourceEmployee.originalRoleText
+          ) {
             pendingReviewRows.push({
               workspace_id: workspaceId,
               subject_type: "employee",
@@ -455,7 +515,11 @@ export async function uploadEmployees(
               const sourceEmployee = batch.find(
                 (employee) => String(employee.email || "").toLowerCase() === normalizedEmail,
               );
-              if (sourceEmployee?.roleMappingStatus === "pending" && sourceEmployee.originalRoleText) {
+              if (
+                (sourceEmployee?.roleMappingStatus === "pending"
+                  || sourceEmployee?.roleMappingStatus === "needs_review")
+                && sourceEmployee.originalRoleText
+              ) {
                 pendingReviewRows.push({
                   workspace_id: workspaceId,
                   subject_type: "employee",

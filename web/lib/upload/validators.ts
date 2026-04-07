@@ -38,6 +38,10 @@ export type ValidationResult = {
   errorRows: number;
   issues: ValidationIssue[];
   rows: RowValidationResult[];
+  meta?: {
+    duplicateRows: number;
+    currencies: string[];
+  };
 };
 
 // Email regex pattern
@@ -306,7 +310,7 @@ function validateEmployeeRow(
       column: "role",
       field: "role",
       value: roleValue,
-      message: "Role could not be mapped to a supported Qeemly job title",
+      message: "Role could not be confidently mapped and needs review",
       severity: "error",
     });
   }
@@ -332,6 +336,62 @@ function validateEmployeeRow(
       value: locationValue,
       message: "Location could not be mapped to a supported Qeemly location",
       severity: "error",
+    });
+  }
+
+  const totalSalary = typeof data.totalSalary === "number" ? data.totalSalary : null;
+  const baseSalary = typeof data.baseSalary === "number" ? data.baseSalary : null;
+  const transportAllowance =
+    typeof data.transportAllowance === "number" ? data.transportAllowance : null;
+  const accommodationAllowance =
+    typeof data.accommodationAllowance === "number" ? data.accommodationAllowance : null;
+  const hasAllowances = transportAllowance !== null || accommodationAllowance !== null;
+
+  if (baseSalary !== null && totalSalary === null && !hasAllowances) {
+    issues.push({
+      row: rowIndex,
+      column: "base_salary",
+      field: "baseSalary",
+      value: String(baseSalary),
+      message: "Base salary only is not allowed. Provide total salary or include allowances.",
+      severity: "error",
+    });
+  }
+
+  if (totalSalary === null && baseSalary === null && !hasAllowances) {
+    issues.push({
+      row: rowIndex,
+      column: "total_salary",
+      field: "totalSalary",
+      value: "",
+      message: "Missing salary data. Add total salary or provide base plus allowances.",
+      severity: "error",
+    });
+  }
+
+  if (totalSalary !== null && baseSalary !== null && !hasAllowances) {
+    issues.push({
+      row: rowIndex,
+      column: "total_salary/base_salary",
+      field: "salary",
+      value: `${totalSalary}/${baseSalary}`,
+      message: "Total salary and base salary are both provided. We will keep total salary as source of truth.",
+      severity: "warning",
+    });
+  }
+
+  const equityValue = typeof data.equityValue === "number" ? data.equityValue : null;
+  const equityUnits = typeof data.equityUnits === "number" ? data.equityUnits : null;
+  const equityPercent = typeof data.equityPercent === "number" ? data.equityPercent : null;
+  if (equityValue === null && (equityUnits !== null || equityPercent !== null)) {
+    issues.push({
+      row: rowIndex,
+      column: "equity",
+      field: "equity",
+      value: `${equityUnits ?? ""}/${equityPercent ?? ""}`,
+      message:
+        "Equity units or percent provided without explicit value. A comparable value estimate will be applied.",
+      severity: "warning",
     });
   }
 
@@ -411,6 +471,8 @@ export function validateData(
   const fieldMap = new Map(fields.map((f) => [f.key, f]));
   const allIssues: ValidationIssue[] = [];
   const rowResults: RowValidationResult[] = [];
+  const seenKeys = new Set<string>();
+  let duplicateRows = 0;
 
   for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
     const row = rows[rowIndex];
@@ -443,6 +505,31 @@ export function validateData(
       const filteredIssues = filterEmployeeEnumWarnings(rowIssues, data);
       rowIssues.length = 0;
       rowIssues.push(...filteredIssues);
+
+      const emailKey = String(data.email ?? "").trim().toLowerCase();
+      const compositeKey = [
+        String(data.firstName ?? "").trim().toLowerCase(),
+        String(data.lastName ?? "").trim().toLowerCase(),
+        String(data.role ?? "").trim().toLowerCase(),
+        String(data.level ?? "").trim().toLowerCase(),
+        String(data.location ?? "").trim().toLowerCase(),
+      ].join("|");
+      const duplicateKey = emailKey || compositeKey;
+      if (duplicateKey.replace(/\|/g, "").length > 0) {
+        if (seenKeys.has(duplicateKey)) {
+          duplicateRows += 1;
+          rowIssues.push({
+            row: rowIndex + 1,
+            column: "row",
+            field: "row",
+            value: duplicateKey,
+            message: "Possible duplicate row detected",
+            severity: "warning",
+          });
+        } else {
+          seenKeys.add(duplicateKey);
+        }
+      }
     }
 
     const hasErrors = rowIssues.some((i) => i.severity === "error");
@@ -470,6 +557,16 @@ export function validateData(
     errorRows,
     issues: allIssues,
     rows: rowResults,
+    meta: {
+      duplicateRows,
+      currencies: Array.from(
+        new Set(
+          rowResults
+            .map((row) => String(row.data.currency ?? "").trim().toUpperCase())
+            .filter((value) => value.length > 0),
+        ),
+      ),
+    },
   };
 }
 

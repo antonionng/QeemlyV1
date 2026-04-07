@@ -3,6 +3,45 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { createClientError, toClientErrorBody } from "@/lib/errors/client-safe";
+import { serverActionError } from "@/lib/errors/http";
+
+const EMPLOYEE_SIGNUP_RECOVERY_ERROR =
+  "We created your account but could not finish linking your invitation. Please contact your workspace admin.";
+
+function getEmployeeSignupAuthError(error: unknown) {
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error ?? "").toLowerCase();
+
+  if (message.includes("already registered")) {
+    return toClientErrorBody(
+      createClientError({
+        code: "email_in_use",
+        message: "Please correct the highlighted fields and try again.",
+        action: "Use the invited email address or sign in instead.",
+        fields: {
+          email: "This email is already linked to an account.",
+        },
+      }),
+    );
+  }
+
+  if (message.includes("password") && (message.includes("least") || message.includes("weak"))) {
+    return toClientErrorBody(
+      createClientError({
+        code: "weak_password",
+        message: "Please correct the highlighted fields and try again.",
+        action: "Choose a stronger password and try again.",
+        fields: {
+          password: "Password must meet the minimum security requirements.",
+        },
+      }),
+    );
+  }
+
+  return serverActionError(error, {
+    defaultMessage: "We could not create your account right now. Please try again.",
+  });
+}
 
 export async function employeeSignup(formData: FormData) {
   const supabase = await createClient();
@@ -44,7 +83,7 @@ export async function employeeSignup(formData: FormData) {
   });
 
   if (error) {
-    return { error: error.message };
+    return getEmployeeSignupAuthError(error);
   }
 
   if (data.user) {
@@ -57,7 +96,7 @@ export async function employeeSignup(formData: FormData) {
       .maybeSingle();
 
     // Create profile linked to workspace and employee record
-    await supabase.from("profiles").insert({
+    const { error: profileError } = await supabase.from("profiles").insert({
       id: data.user.id,
       workspace_id: invitation.workspace_id,
       full_name: fullName,
@@ -65,11 +104,21 @@ export async function employeeSignup(formData: FormData) {
       employee_id: employee?.id ?? null,
     });
 
+    if (profileError) {
+      return { error: EMPLOYEE_SIGNUP_RECOVERY_ERROR };
+    }
+
     // Mark invitation as accepted
-    await supabase
+    const { error: invitationUpdateError } = await supabase
       .from("team_invitations")
       .update({ status: "accepted" })
       .eq("id", invitation.id);
+
+    if (invitationUpdateError) {
+      return { error: EMPLOYEE_SIGNUP_RECOVERY_ERROR };
+    }
+  } else {
+    return { error: "We could not create your account. Please try again." };
   }
 
   revalidatePath("/", "layout");

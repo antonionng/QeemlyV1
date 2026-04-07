@@ -154,6 +154,19 @@ describe("uploadEmployees", () => {
     );
   });
 
+  it("blocks imports when multi-currency confirmation is missing", async () => {
+    const { uploadEmployees } = await import("@/lib/upload/api");
+    const result = await uploadEmployees([], undefined, {
+      mode: "upsert",
+      importPolicy: {
+        multiCurrencyDetected: true,
+        multiCurrencyConfirmed: false,
+      },
+    });
+    expect(result.success).toBe(false);
+    expect(result.code).toBe("MULTI_CURRENCY_CONFIRMATION_REQUIRED");
+  });
+
   it("clears the current roster before reimporting in replace mode", async () => {
     const profileQuery = {
       select: vi.fn().mockReturnThis(),

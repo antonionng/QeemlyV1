@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
-import { Poppins } from "next/font/google";
+import { Parkinsans } from "next/font/google";
 import "./globals.css";
 
-const poppins = Poppins({
+const parkinsans = Parkinsans({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
-  variable: "--font-poppins",
+  variable: "--font-parkinsans",
   display: "swap",
+  fallback: ["sans-serif"],
+  adjustFontFallback: false,
 });
 
 export const metadata: Metadata = {
@@ -22,7 +24,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" data-scroll-behavior="smooth">
-      <body className={`${poppins.variable} bg-background text-foreground`}>
+      <body className={`${parkinsans.variable} bg-background text-foreground`}>
         {children}
       </body>
     </html>

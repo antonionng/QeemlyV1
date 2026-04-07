@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeBenchmarkRow } from "@/lib/ingestion/normalizer";
+import { mapRole, normalizeBenchmarkRow } from "@/lib/ingestion/normalizer";
 
 describe("normalizeBenchmarkRow", () => {
   it("returns error for unmapped role", () => {
@@ -55,5 +55,9 @@ describe("normalizeBenchmarkRow", () => {
       expect(result.ok.industry).toBe("Fintech");
       expect(result.ok.companySize).toBe("201-500");
     }
+  });
+
+  it("marks broad role titles for review by returning no role mapping", () => {
+    expect(mapRole("Marketing")).toBeNull();
   });
 });

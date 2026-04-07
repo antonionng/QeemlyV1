@@ -1,30 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-
-async function getAdminWorkspaceContext(supabase: Awaited<ReturnType<typeof createClient>>, userId: string) {
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("workspace_id, role")
-    .eq("id", userId)
-    .single();
-  if (!profile?.workspace_id) return null;
-  if (profile.role !== "admin") return null;
-  return profile.workspace_id as string;
-}
+import { getAdminWorkspaceContextOrError } from "@/lib/workspace-access";
+import { jsonServerError, jsonValidationError } from "@/lib/errors/http";
 
 export async function GET(request: NextRequest) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const workspaceId = await getAdminWorkspaceContext(supabase, user.id);
-  if (!workspaceId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const workspaceContext = await getAdminWorkspaceContextOrError();
+  if (workspaceContext.error) return workspaceContext.error;
+  const workspaceId = workspaceContext.context.workspace_id;
 
   const integrationId = request.nextUrl.searchParams.get("integration_id");
   if (!integrationId) {
-    return NextResponse.json({ error: "integration_id is required" }, { status: 400 });
+    return jsonValidationError({
+      message: "Please correct the highlighted fields and try again.",
+      fields: { integration_id: "Choose an integration and try again." },
+    });
   }
 
   const [mappings, syncState] = await Promise.all([
@@ -43,8 +33,18 @@ export async function GET(request: NextRequest) {
       .maybeSingle(),
   ]);
 
-  if (mappings.error) return NextResponse.json({ error: mappings.error.message }, { status: 500 });
-  if (syncState.error) return NextResponse.json({ error: syncState.error.message }, { status: 500 });
+  if (mappings.error) {
+    return jsonServerError(mappings.error, {
+      defaultMessage: "We could not load integration field mappings right now.",
+      logLabel: "Integration contracts mappings load failed",
+    });
+  }
+  if (syncState.error) {
+    return jsonServerError(syncState.error, {
+      defaultMessage: "We could not load integration sync settings right now.",
+      logLabel: "Integration contracts sync state load failed",
+    });
+  }
 
   return NextResponse.json({
     mappings: mappings.data || [],
@@ -54,13 +54,9 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-
-  const workspaceId = await getAdminWorkspaceContext(supabase, user.id);
-  if (!workspaceId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const workspaceContext = await getAdminWorkspaceContextOrError();
+  if (workspaceContext.error) return workspaceContext.error;
+  const workspaceId = workspaceContext.context.workspace_id;
 
   const body = (await request.json()) as {
     integration_id?: string;
@@ -69,7 +65,10 @@ export async function POST(request: NextRequest) {
   };
 
   if (!body.integration_id) {
-    return NextResponse.json({ error: "integration_id is required" }, { status: 400 });
+    return jsonValidationError({
+      message: "Please correct the highlighted fields and try again.",
+      fields: { integration_id: "Choose an integration and try again." },
+    });
   }
 
   if (Array.isArray(body.mappings)) {
@@ -87,7 +86,12 @@ export async function POST(request: NextRequest) {
         updated_at: new Date().toISOString(),
       }));
       const { error } = await supabase.from("integration_field_mappings").insert(payload);
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      if (error) {
+        return jsonServerError(error, {
+          defaultMessage: "We could not save field mappings right now.",
+          logLabel: "Integration contracts mappings save failed",
+        });
+      }
     }
   }
 
@@ -101,7 +105,12 @@ export async function POST(request: NextRequest) {
       },
       { onConflict: "integration_id" }
     );
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error) {
+      return jsonServerError(error, {
+        defaultMessage: "We could not save sync source settings right now.",
+        logLabel: "Integration contracts sync state save failed",
+      });
+    }
   }
 
   return NextResponse.json({ ok: true });

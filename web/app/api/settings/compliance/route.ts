@@ -8,6 +8,7 @@ import {
 import {
   DEFAULT_COMPLIANCE_SETTINGS,
 } from "@/lib/compliance/settings-schema";
+import { jsonServerError, jsonValidationError } from "@/lib/errors/http";
 
 function isMissingRelationError(error: { message?: string | null; code?: string | null } | null) {
   if (!error) return false;
@@ -52,7 +53,10 @@ export async function GET() {
           "Compliance settings tables are not available yet. Run the latest database migrations to persist settings.",
       });
     }
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonServerError(error, {
+      defaultMessage: "We could not load compliance settings right now.",
+      logLabel: "Compliance settings load failed",
+    });
   }
 
   return NextResponse.json({
@@ -78,10 +82,19 @@ export async function PATCH(request: NextRequest) {
 
   const body = (await request.json()) as Record<string, unknown>;
   const parsed = sanitizeComplianceSettingsPayload(body);
-  if ("error" in parsed) {
-    return NextResponse.json({ error: parsed.error }, { status: 400 });
+  if ("error" in parsed && typeof parsed.error === "string") {
+    const errorMessage = parsed.error;
+    const fieldKey = errorMessage.match(/^([a-zA-Z0-9_.]+)/)?.[1];
+    return jsonValidationError({
+      message: "Please correct the highlighted fields and try again.",
+      fields: fieldKey ? { [fieldKey]: errorMessage } : undefined,
+    });
   }
-  const updates = { ...parsed.updates, updated_at: new Date().toISOString() };
+  const updates = {
+    ...parsed.updates,
+    is_compliance_configured: true,
+    updated_at: new Date().toISOString(),
+  };
 
   const supabase = await createClient();
   const { workspace_id } = resolved.context;
@@ -91,6 +104,11 @@ export async function PATCH(request: NextRequest) {
     .select("*")
     .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    return jsonServerError(error, {
+      defaultMessage: "We could not save compliance settings right now.",
+      logLabel: "Compliance settings save failed",
+    });
+  }
   return NextResponse.json({ success: true, settings: data });
 }

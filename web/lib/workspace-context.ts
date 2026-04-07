@@ -1,13 +1,11 @@
 import { cookies } from "next/headers";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
-
-const SUPERADMIN_ALLOWLIST = (process.env.QEEMLY_SUPERADMINS || "ag@experrt.com")
-  .split(",")
-  .map((e) => e.trim().toLowerCase());
+import { getSuperAdminAllowlist, isSuperAdminEmail } from "@/lib/admin/super-admins";
 
 const WORKSPACE_OVERRIDE_COOKIE = "qeemly_workspace_override";
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
+const SUPERADMIN_ALLOWLIST = getSuperAdminAllowlist();
 
 export type WorkspaceContext = {
   workspace_id: string;
@@ -25,7 +23,7 @@ async function ensureExperrtWorkspaceForUser(
   email: string
 ): Promise<string | null> {
   const isExperrtUser = email.endsWith("@experrt.com");
-  const isAllowlisted = SUPERADMIN_ALLOWLIST.includes(email);
+  const isAllowlisted = isSuperAdminEmail(email, SUPERADMIN_ALLOWLIST);
   if (!isExperrtUser && !isAllowlisted) {
     return null;
   }
@@ -112,7 +110,7 @@ export async function getWorkspaceContext(): Promise<
   }
 
   const email = user.email?.toLowerCase() || "";
-  const isSuperAdmin = SUPERADMIN_ALLOWLIST.includes(email);
+  const isSuperAdmin = isSuperAdminEmail(email, SUPERADMIN_ALLOWLIST);
 
   // Check for workspace override cookie (super admins only)
   let overrideWorkspaceId: string | null = null;
@@ -128,7 +126,12 @@ export async function getWorkspaceContext(): Promise<
         .eq("id", overrideWorkspaceId)
         .single();
 
-      if (!wsError && !workspace) {
+      const missingWorkspace =
+        !workspace &&
+        (!wsError ||
+          /no rows|0 rows|json object requested/i.test(wsError.message || ""));
+
+      if (missingWorkspace) {
         overrideWorkspaceId = null;
       }
     }
@@ -191,7 +194,7 @@ export async function isSuperAdmin(): Promise<boolean> {
   if (!user) return false;
 
   const email = user.email?.toLowerCase() || "";
-  return SUPERADMIN_ALLOWLIST.includes(email);
+  return isSuperAdminEmail(email, SUPERADMIN_ALLOWLIST);
 }
 
 /**

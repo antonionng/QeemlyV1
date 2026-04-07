@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getWorkspaceContext } from "@/lib/workspace-context";
 import { generateReportResult } from "@/lib/reports/generation";
+import { jsonServerError } from "@/lib/errors/http";
 
 type GenerateRequestBody = {
   trigger_source?: "manual" | "schedule" | "api" | "template";
@@ -47,7 +48,10 @@ export async function POST(
     .single();
 
   if (runInsertError || !run) {
-    return NextResponse.json({ error: runInsertError?.message || "Failed to create run" }, { status: 500 });
+    return jsonServerError(runInsertError, {
+      defaultMessage: "We could not start this report run right now.",
+      logLabel: "Report run create failed",
+    });
   }
 
   await supabase
@@ -81,10 +85,10 @@ export async function POST(
       .single();
 
     if (runUpdateError || !completedRun) {
-      return NextResponse.json(
-        { error: runUpdateError?.message || "Failed to finalize run" },
-        { status: 500 }
-      );
+      return jsonServerError(runUpdateError, {
+        defaultMessage: "We could not finish this report run right now.",
+        logLabel: "Report run finalize failed",
+      });
     }
 
     const { data: updatedReport, error: reportUpdateError } = await supabase
@@ -103,10 +107,10 @@ export async function POST(
       .single();
 
     if (reportUpdateError || !updatedReport) {
-      return NextResponse.json(
-        { error: reportUpdateError?.message || "Failed to update report status" },
-        { status: 500 }
-      );
+      return jsonServerError(reportUpdateError, {
+        defaultMessage: "We could not update this report after generation.",
+        logLabel: "Report status update after generation failed",
+      });
     }
 
     return NextResponse.json({ run: completedRun, report: updatedReport });
@@ -137,6 +141,9 @@ export async function POST(
       .eq("id", report.id)
       .eq("workspace_id", workspace_id);
 
-    return NextResponse.json({ error: message }, { status: 500 });
+    return jsonServerError(error, {
+      defaultMessage: "We could not generate this report right now.",
+      logLabel: "Report generation failed",
+    });
   }
 }

@@ -25,6 +25,8 @@ import {
   Briefcase,
   Search,
 } from "lucide-react";
+import { useWorkspaceChangeVersion } from "@/lib/workspace-client";
+import { parseClientError } from "@/lib/errors/client-safe";
 
 type Member = {
   id: string;
@@ -49,13 +51,16 @@ type Toast = {
 };
 
 export default function TeamPage() {
+  const workspaceChangeVersion = useWorkspaceChangeVersion();
   const [loading, setLoading] = useState(true);
   const [inviting, setInviting] = useState(false);
   const [members, setMembers] = useState<Member[]>([]);
   const [invitations, setInvitations] = useState<Invitation[]>([]);
-  const [currentUserRole, setCurrentUserRole] = useState<string>("member");
+  const [canManageTeam, setCanManageTeam] = useState(false);
+  const [managementNotice, setManagementNotice] = useState<string | null>(null);
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteRole, setInviteRole] = useState<string>("member");
+  const [inviteFieldErrors, setInviteFieldErrors] = useState<Record<string, string>>({});
   const [toast, setToast] = useState<Toast | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [roleMenuOpen, setRoleMenuOpen] = useState<string | null>(null);
@@ -69,12 +74,13 @@ export default function TeamPage() {
   const loadTeamData = useCallback(async () => {
     try {
       const res = await fetch("/api/team");
-      if (!res.ok) throw new Error("Failed to load team data");
-      
       const data = await res.json();
+      if (!res.ok) throw new Error(parseClientError(data).message);
+
       setMembers(data.members || []);
       setInvitations(data.invitations || []);
-      setCurrentUserRole(data.current_user_role || "member");
+      setCanManageTeam(data.can_manage_team === true);
+      setManagementNotice(data.management_notice || null);
     } catch (err) {
       showToast("error", err instanceof Error ? err.message : "Failed to load team");
     } finally {
@@ -84,13 +90,14 @@ export default function TeamPage() {
 
   useEffect(() => {
     loadTeamData();
-  }, [loadTeamData]);
+  }, [loadTeamData, workspaceChangeVersion]);
 
   const sendInvite = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inviteEmail.trim()) return;
     
     setInviting(true);
+    setInviteFieldErrors({});
     try {
       const res = await fetch("/api/team/invite", {
         method: "POST",
@@ -100,7 +107,9 @@ export default function TeamPage() {
       
       if (!res.ok) {
         const data = await res.json();
-        throw new Error(data.error || "Failed to send invitation");
+        const problem = parseClientError(data);
+        setInviteFieldErrors(problem.fields ?? {});
+        throw new Error(problem.message);
       }
       
       showToast("success", `Invitation sent to ${inviteEmail}`);
@@ -125,7 +134,10 @@ export default function TeamPage() {
         body: JSON.stringify({ member_id: memberId }),
       });
       
-      if (!res.ok) throw new Error("Failed to remove member");
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(parseClientError(data).message);
+      }
       
       showToast("success", "Team member removed successfully");
       loadTeamData();
@@ -146,7 +158,10 @@ export default function TeamPage() {
         body: JSON.stringify({ member_id: memberId, role: newRole }),
       });
       
-      if (!res.ok) throw new Error("Failed to change role");
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(parseClientError(data).message);
+      }
       
       showToast("success", "Role updated successfully");
       loadTeamData();
@@ -168,7 +183,7 @@ export default function TeamPage() {
       
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Failed to resend invitation");
+        throw new Error(parseClientError(data).message);
       }
       
       showToast("success", "Invitation resent successfully");
@@ -193,7 +208,7 @@ export default function TeamPage() {
       
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Failed to cancel invitation");
+        throw new Error(parseClientError(data).message);
       }
       
       showToast("success", "Invitation cancelled");
@@ -235,7 +250,7 @@ export default function TeamPage() {
     }
   };
 
-  const isAdmin = currentUserRole === "admin";
+  const isAdmin = canManageTeam;
 
   // Stats
   const adminCount = members.filter(m => m.role === "admin").length;
@@ -300,10 +315,19 @@ export default function TeamPage() {
               : "bg-gray-50 text-gray-700 ring-gray-200"
           }`}>
             <ShieldCheck size={16} />
-            {isAdmin ? "Administrator" : "Member"}
+            {isAdmin ? "Administrator" : managementNotice ? "Read-only override" : "Member"}
           </div>
         </div>
       </div>
+
+      {managementNotice && (
+        <Card className="border-amber-200 bg-amber-50/70 p-4 text-sm text-amber-900">
+          <div className="flex items-start gap-3">
+            <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-600" />
+            <p>{managementNotice}</p>
+          </div>
+        </Card>
+      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -378,6 +402,9 @@ export default function TeamPage() {
                   fullWidth
                   required
                 />
+                {inviteFieldErrors.email && (
+                  <p className="text-xs font-medium text-rose-600">{inviteFieldErrors.email}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <label htmlFor="role" className="text-sm font-semibold text-brand-900">
@@ -398,6 +425,9 @@ export default function TeamPage() {
                   {inviteRole === "member" && "Members can view benchmarks, reports, and analyze compensation."}
                   {inviteRole === "employee" && "Employees can view their own compensation details."}
                 </p>
+                {inviteFieldErrors.role && (
+                  <p className="text-xs font-medium text-rose-600">{inviteFieldErrors.role}</p>
+                )}
               </div>
               <Button type="submit" fullWidth isLoading={inviting} className="mt-2">
                 <Mail className="h-4 w-4 mr-2" />

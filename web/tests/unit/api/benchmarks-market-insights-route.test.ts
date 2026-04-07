@@ -3,10 +3,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const {
   createClientMock,
   createServiceClientMock,
+  getWorkspaceContextMock,
   fetchMarketBenchmarksMock,
 } = vi.hoisted(() => ({
   createClientMock: vi.fn(),
   createServiceClientMock: vi.fn(),
+  getWorkspaceContextMock: vi.fn(),
   fetchMarketBenchmarksMock: vi.fn(),
 }));
 
@@ -18,6 +20,10 @@ vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: createServiceClientMock,
 }));
 
+vi.mock("@/lib/workspace-context", () => ({
+  getWorkspaceContext: getWorkspaceContextMock,
+}));
+
 vi.mock("@/lib/benchmarks/platform-market", () => ({
   fetchMarketBenchmarks: fetchMarketBenchmarksMock,
 }));
@@ -25,10 +31,8 @@ vi.mock("@/lib/benchmarks/platform-market", () => ({
 import { GET } from "@/app/api/benchmarks/market-insights/route";
 
 function createSessionSupabase({
-  workspaceId = "workspace-1",
   workspaceBenchmarks = [],
 }: {
-  workspaceId?: string | null;
   workspaceBenchmarks?: Array<{
     id: string;
     role_id: string;
@@ -38,25 +42,7 @@ function createSessionSupabase({
   }>;
 }) {
   return {
-    auth: {
-      getUser: vi.fn().mockResolvedValue({
-        data: { user: { id: "user-1" } },
-        error: null,
-      }),
-    },
     from: vi.fn((table: string) => {
-      if (table === "profiles") {
-        return {
-          select: vi.fn(() => ({
-            eq: vi.fn(() => ({
-              single: vi.fn().mockResolvedValue({
-                data: workspaceId ? { workspace_id: workspaceId } : null,
-              }),
-            })),
-          })),
-        };
-      }
-
       if (table === "salary_benchmarks") {
         return {
           select: vi.fn(() => ({
@@ -78,6 +64,17 @@ describe("GET /api/benchmarks/market-insights", () => {
     vi.clearAllMocks();
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-10T12:00:00.000Z"));
+    getWorkspaceContextMock.mockResolvedValue({
+      context: {
+        workspace_id: "workspace-1",
+        is_override: false,
+        override_workspace_id: null,
+        profile_workspace_id: "workspace-1",
+        is_super_admin: false,
+        user_id: "user-1",
+        user_email: "user@example.com",
+      },
+    });
   });
 
   afterEach(() => {
@@ -282,7 +279,18 @@ describe("GET /api/benchmarks/market-insights", () => {
   });
 
   it("returns an empty status when no visible market rows are available", async () => {
-    createClientMock.mockResolvedValue(createSessionSupabase({ workspaceId: null }));
+    getWorkspaceContextMock.mockResolvedValue({
+      context: {
+        workspace_id: "workspace-1",
+        is_override: false,
+        override_workspace_id: null,
+        profile_workspace_id: "workspace-1",
+        is_super_admin: false,
+        user_id: "user-1",
+        user_email: "user@example.com",
+      },
+    });
+    createClientMock.mockResolvedValue(createSessionSupabase({ workspaceBenchmarks: [] }));
     createServiceClientMock.mockReturnValue({ from: vi.fn() });
     fetchMarketBenchmarksMock.mockResolvedValue([]);
 
@@ -300,7 +308,7 @@ describe("GET /api/benchmarks/market-insights", () => {
   });
 
   it("returns a customer-safe warning summary when visible cohorts do not meet the trust bar", async () => {
-    createClientMock.mockResolvedValue(createSessionSupabase({ workspaceId: null }));
+    createClientMock.mockResolvedValue(createSessionSupabase({ workspaceBenchmarks: [] }));
     createServiceClientMock.mockReturnValue({ from: vi.fn() });
     fetchMarketBenchmarksMock.mockResolvedValue([
       {
@@ -355,7 +363,7 @@ describe("GET /api/benchmarks/market-insights", () => {
   });
 
   it("falls back to the session client when the service client query fails with an invalid API key", async () => {
-    createClientMock.mockResolvedValue(createSessionSupabase({ workspaceId: null }));
+    createClientMock.mockResolvedValue(createSessionSupabase({ workspaceBenchmarks: [] }));
     createServiceClientMock.mockReturnValue({ from: vi.fn() });
     fetchMarketBenchmarksMock
       .mockRejectedValueOnce(new Error("Invalid API key"))
@@ -389,5 +397,43 @@ describe("GET /api/benchmarks/market-insights", () => {
     expect(payload.diagnostics.market.error).toBeNull();
     expect(payload.diagnostics.market.clientWarning).toBeNull();
     expect(fetchMarketBenchmarksMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("loads the workspace overlay from the effective override workspace", async () => {
+    const salaryBenchmarksEqMock = vi.fn().mockResolvedValue({
+      data: [],
+      error: null,
+    });
+
+    getWorkspaceContextMock.mockResolvedValue({
+      context: {
+        workspace_id: "workspace-override",
+        is_override: true,
+        override_workspace_id: "workspace-override",
+        profile_workspace_id: "workspace-home",
+        is_super_admin: true,
+        user_id: "user-1",
+        user_email: "admin@example.com",
+      },
+    });
+    createClientMock.mockResolvedValue({
+      from: vi.fn((table: string) => {
+        if (table === "salary_benchmarks") {
+          return {
+            select: vi.fn(() => ({
+              eq: salaryBenchmarksEqMock,
+            })),
+          };
+        }
+
+        throw new Error(`Unexpected table: ${table}`);
+      }),
+    });
+    createServiceClientMock.mockReturnValue({ from: vi.fn() });
+    fetchMarketBenchmarksMock.mockResolvedValue([]);
+
+    const response = await GET();
+    expect(response.status).toBe(200);
+    expect(salaryBenchmarksEqMock).toHaveBeenCalledWith("workspace_id", "workspace-override");
   });
 });

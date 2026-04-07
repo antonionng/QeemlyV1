@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { jsonServerError } from "@/lib/errors/http";
 
 export async function GET() {
   const supabase = await createClient();
@@ -12,7 +13,10 @@ export async function GET() {
     .single();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonServerError(error, {
+      defaultMessage: "We could not load the public benchmark snapshot right now.",
+      logLabel: "Public benchmark snapshot load failed",
+    });
   }
 
   return NextResponse.json({ snapshot: data });

@@ -1,43 +1,33 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { upsertBenchmarksFreshness } from "@/lib/ingestion/freshness";
+import { getWorkspaceContextOrError } from "@/lib/workspace-access";
+import { jsonServerError, jsonValidationError } from "@/lib/errors/http";
 
 export async function POST(request: Request) {
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const workspaceContext = await getWorkspaceContextOrError();
+    if (workspaceContext.error) {
+      return workspaceContext.error;
     }
 
     const body = await request.json();
     const recordCount = Number(body?.recordCount ?? 0);
     if (!Number.isFinite(recordCount) || recordCount <= 0) {
-      return NextResponse.json({ error: "recordCount must be a positive number" }, { status: 400 });
+      return jsonValidationError({
+        message: "Please correct the highlighted fields and try again.",
+        fields: {
+          recordCount: "Enter a positive record count and try again.",
+        },
+      });
     }
 
-    const { data: profile, error } = await supabase
-      .from("profiles")
-      .select("workspace_id")
-      .eq("id", user.id)
-      .single();
-
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-    if (!profile?.workspace_id) {
-      return NextResponse.json({ error: "No workspace found for current user" }, { status: 400 });
-    }
-
-    await upsertBenchmarksFreshness(profile.workspace_id, recordCount, null);
+    await upsertBenchmarksFreshness(workspaceContext.context.workspace_id, recordCount, null);
     return NextResponse.json({ ok: true });
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to update benchmark freshness" },
-      { status: 500 }
-    );
+    return jsonServerError(error, {
+      defaultMessage: "We could not update benchmark freshness right now.",
+      logLabel: "Benchmark freshness update failed",
+    });
   }
 }

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authenticateApiKey } from "../../middleware";
 import { createServiceClient } from "@/lib/supabase/service";
 import { refreshComplianceSnapshot } from "@/lib/compliance/snapshot-service";
+import { jsonServerError } from "@/lib/errors/http";
 
 /**
  * PATCH /api/v1/employees/:id
@@ -46,7 +47,10 @@ export async function PATCH(
     .single();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonServerError(error, {
+      defaultMessage: "We could not update this employee right now.",
+      logLabel: "V1 employee update failed",
+    });
   }
 
   try {
@@ -94,7 +98,10 @@ export async function DELETE(
     .eq("id", id);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonServerError(error, {
+      defaultMessage: "We could not delete this employee right now.",
+      logLabel: "V1 employee delete failed",
+    });
   }
 
   try {

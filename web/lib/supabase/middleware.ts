@@ -1,12 +1,30 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { isSuperAdminEmail } from "@/lib/admin/super-admins";
+
+function redirectForProtectedArea(request: NextRequest, pathname: string) {
+  const url = request.nextUrl.clone();
+
+  if (pathname.startsWith("/dashboard")) {
+    url.pathname = "/login";
+    return NextResponse.redirect(url);
+  }
+
+  if (pathname.startsWith("/admin") && pathname !== "/admin/login" && !pathname.startsWith("/auth")) {
+    url.pathname = "/admin/login";
+    return NextResponse.redirect(url);
+  }
+
+  return NextResponse.next();
+}
 
 export async function updateSession(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  
+
   if (!supabaseUrl || !supabaseAnonKey) {
-    return NextResponse.next();
+    return redirectForProtectedArea(request, pathname);
   }
 
   const response = NextResponse.next();
@@ -45,7 +63,6 @@ export async function updateSession(request: NextRequest) {
       data: { user },
     } = await supabase.auth.getUser();
 
-    const pathname = request.nextUrl.pathname;
     const isDashboard = pathname.startsWith("/dashboard");
     const isPublic =
       pathname.startsWith("/login") ||
@@ -86,10 +103,7 @@ export async function updateSession(request: NextRequest) {
         return NextResponse.redirect(url);
       }
       const email = user.email?.toLowerCase();
-      const allowlist = (process.env.QEEMLY_SUPERADMINS || "ag@experrt.com")
-        .split(",")
-        .map((e) => e.trim().toLowerCase());
-      if (!allowlist.includes(email || "")) {
+      if (!isSuperAdminEmail(email)) {
         await supabase.auth.signOut();
         const url = request.nextUrl.clone();
         url.pathname = "/admin/login";
@@ -101,6 +115,6 @@ export async function updateSession(request: NextRequest) {
     return response;
   } catch (error) {
     console.error("Middleware auth error:", error);
-    return NextResponse.next();
+    return redirectForProtectedArea(request, pathname);
   }
 }

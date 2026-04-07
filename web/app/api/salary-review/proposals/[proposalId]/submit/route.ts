@@ -6,6 +6,7 @@ import {
   loadSalaryReviewProposalDetail,
   rebuildApprovalStepsForItems,
 } from "@/lib/salary-review/proposal-server";
+import { jsonServerError } from "@/lib/errors/http";
 
 export async function POST(
   _request: NextRequest,
@@ -53,7 +54,10 @@ export async function POST(
     .delete()
     .eq("cycle_id", proposalId);
   if (deleteError) {
-    return NextResponse.json({ error: deleteError.message }, { status: 500 });
+    return jsonServerError(deleteError, {
+      defaultMessage: "We could not prepare this proposal for submission.",
+      logLabel: "Salary review proposal approval reset failed",
+    });
   }
 
   const { error: insertError } = await supabase
@@ -65,7 +69,10 @@ export async function POST(
       }))
     );
   if (insertError) {
-    return NextResponse.json({ error: insertError.message }, { status: 500 });
+    return jsonServerError(insertError, {
+      defaultMessage: "We could not submit this proposal right now.",
+      logLabel: "Salary review proposal approval insert failed",
+    });
   }
 
   const proposalStatus = rebuilt.steps.length > 0 ? "in_review" : "submitted";
@@ -79,7 +86,10 @@ export async function POST(
     })
     .eq("id", proposalId);
   if (cycleUpdateError) {
-    return NextResponse.json({ error: cycleUpdateError.message }, { status: 500 });
+    return jsonServerError(cycleUpdateError, {
+      defaultMessage: "We could not update this proposal right now.",
+      logLabel: "Salary review proposal status update failed",
+    });
   }
 
   const { error: auditError } = await supabase.from("salary_review_audit_events").insert({
@@ -93,7 +103,10 @@ export async function POST(
     },
   });
   if (auditError) {
-    return NextResponse.json({ error: auditError.message }, { status: 500 });
+    return jsonServerError(auditError, {
+      defaultMessage: "We could not finish submitting this proposal right now.",
+      logLabel: "Salary review proposal audit insert failed",
+    });
   }
 
   const updatedDetail = await loadSalaryReviewProposalDetail(supabase, proposalId);

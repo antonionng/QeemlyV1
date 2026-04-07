@@ -330,7 +330,7 @@ export default function TenantsPage() {
                           </div>
                           <div>
                             <span className="font-medium text-[#0f0f1a]">{w.name}</span>
-                            <span className="block text-xs text-[#94a3b8] font-mono">{w.slug}</span>
+                            <span className="block text-xs text-[#94a3b8]">{w.slug}</span>
                           </div>
                         </div>
                       </td>
@@ -386,7 +386,7 @@ export default function TenantsPage() {
                   </div>
                   <div>
                     <h3 className="font-semibold text-[#0f0f1a]">{selectedTenant.name}</h3>
-                    <p className="text-xs text-[#94a3b8] font-mono">{selectedTenant.slug}</p>
+                    <p className="text-xs text-[#94a3b8]">{selectedTenant.slug}</p>
                   </div>
                 </div>
                 <button

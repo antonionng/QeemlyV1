@@ -4,6 +4,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchDbEmployees } from "@/lib/employees/data-service";
 import type { BandPosition, Department, Employee, PerformanceRating } from "@/lib/employees";
 import { LOCATIONS } from "@/lib/dashboard/dummy-data";
+import { useWorkspaceChangeVersion } from "@/lib/workspace-client";
+import { parseClientError } from "@/lib/errors/client-safe";
 
 export type PeopleViewMode = "table" | "grid";
 export type PeopleSortKey = "name" | "department" | "totalComp" | "marketComparison" | "hireDate";
@@ -194,6 +196,7 @@ export function buildEmployeeProfilePayload(input: UpdateEmployeeProfileInput) {
 }
 
 export function usePeople() {
+  const workspaceChangeVersion = useWorkspaceChangeVersion();
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [mutating, setMutating] = useState(false);
@@ -212,14 +215,17 @@ export function usePeople() {
 
   useEffect(() => {
     void loadEmployees();
-  }, [loadEmployees]);
+  }, [loadEmployees, workspaceChangeVersion]);
 
   const triggerComplianceRefresh = useCallback(async () => {
     try {
       const response = await fetch("/api/compliance/refresh", { method: "POST" });
-      const payload = (await response.json()) as { ok?: boolean; error?: string };
+      const payload = await response.json();
       if (!response.ok || payload.ok === false) {
-        setWarnings((prev) => [...prev, payload.error || "Compliance refresh is currently unavailable."]);
+        setWarnings((prev) => [
+          ...prev,
+          parseClientError(payload).message || "Compliance refresh is currently unavailable.",
+        ]);
       }
     } catch {
       setWarnings((prev) => [...prev, "Compliance refresh is currently unavailable."]);
@@ -257,8 +263,7 @@ export function usePeople() {
           body: JSON.stringify(payload),
         });
         if (!response.ok) {
-          const err = (await response.json()) as { error?: string };
-          throw new Error(err.error || "Failed to create employee");
+          throw new Error(parseClientError(await response.json()).message || "Failed to create employee");
         }
 
         await Promise.all([loadEmployees(), triggerComplianceRefresh()]);
@@ -298,8 +303,7 @@ export function usePeople() {
           body: JSON.stringify(payload),
         });
         if (!response.ok) {
-          const err = (await response.json()) as { error?: string };
-          throw new Error(err.error || "Failed to update employee");
+          throw new Error(parseClientError(await response.json()).message || "Failed to update employee");
         }
 
         await Promise.all([loadEmployees(), triggerComplianceRefresh()]);
@@ -333,8 +337,9 @@ export function usePeople() {
           body: JSON.stringify(payload),
         });
         if (!response.ok) {
-          const err = (await response.json()) as { error?: string };
-          throw new Error(err.error || "Failed to update employee profile");
+          throw new Error(
+            parseClientError(await response.json()).message || "Failed to update employee profile",
+          );
         }
 
         await loadEmployees();
@@ -351,8 +356,7 @@ export function usePeople() {
       try {
         const response = await fetch(`/api/people/${employeeId}`, { method: "DELETE" });
         if (!response.ok) {
-          const err = (await response.json()) as { error?: string };
-          throw new Error(err.error || "Failed to delete employee");
+          throw new Error(parseClientError(await response.json()).message || "Failed to delete employee");
         }
 
         await Promise.all([loadEmployees(), triggerComplianceRefresh()]);
@@ -399,8 +403,7 @@ export function usePeople() {
           body: JSON.stringify({ action: "archive_many", ids: employeeIds }),
         });
         if (!response.ok) {
-          const err = (await response.json()) as { error?: string };
-          throw new Error(err.error || "Failed to archive employees");
+          throw new Error(parseClientError(await response.json()).message || "Failed to archive employees");
         }
         await Promise.all([loadEmployees(), triggerComplianceRefresh()]);
       } catch (error) {

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import crypto from "crypto";
+import { getAdminWorkspaceContextOrError, getWorkspaceContextOrError } from "@/lib/workspace-access";
+import { jsonServerError, jsonValidationError } from "@/lib/errors/http";
 
 /**
  * GET /api/developer/webhooks
@@ -9,21 +11,11 @@ import crypto from "crypto";
 export async function GET(request: NextRequest) {
   try {
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const workspaceContext = await getWorkspaceContextOrError();
+    if (workspaceContext.error) {
+      return workspaceContext.error;
     }
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("workspace_id")
-      .eq("id", user.id)
-      .single();
-
-    if (!profile?.workspace_id) {
-      return NextResponse.json({ error: "No workspace found" }, { status: 404 });
-    }
+    const profile = { workspace_id: workspaceContext.context.workspace_id };
 
     const { data: webhooks, error } = await supabase
       .from("outgoing_webhooks")
@@ -32,7 +24,10 @@ export async function GET(request: NextRequest) {
       .order("created_at", { ascending: false });
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return jsonServerError(error, {
+        defaultMessage: "We could not load webhooks right now.",
+        logLabel: "Webhooks list failed",
+      });
     }
 
     return NextResponse.json({ webhooks: webhooks || [] });
@@ -54,41 +49,35 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const workspaceContext = await getAdminWorkspaceContextOrError();
+    if (workspaceContext.error) {
+      return workspaceContext.error;
     }
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("workspace_id, role")
-      .eq("id", user.id)
-      .single();
-
-    if (!profile?.workspace_id) {
-      return NextResponse.json({ error: "No workspace found" }, { status: 404 });
-    }
-
-    if (profile.role !== "admin") {
-      return NextResponse.json({ error: "Only admins can create webhooks" }, { status: 403 });
-    }
+    const profile = { workspace_id: workspaceContext.context.workspace_id };
 
     const body = await request.json();
     const { url, events } = body;
 
     if (!url || !Array.isArray(events) || events.length === 0) {
-      return NextResponse.json(
-        { error: "Missing required fields: url, events (non-empty array)" },
-        { status: 400 }
-      );
+      return jsonValidationError({
+        message: "Please correct the highlighted fields and try again.",
+        fields: {
+          ...(url ? {} : { url: "Enter a webhook URL and try again." }),
+          ...(!Array.isArray(events) || events.length === 0
+            ? { events: "Choose at least one event and try again." }
+            : {}),
+        },
+      });
     }
 
     // Validate URL
     try {
       new URL(url);
     } catch {
-      return NextResponse.json({ error: "Invalid URL format" }, { status: 400 });
+      return jsonValidationError({
+        message: "Please correct the highlighted fields and try again.",
+        fields: { url: "Enter a valid webhook URL." },
+      });
     }
 
     // Generate webhook secret for signature verification
@@ -107,7 +96,10 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return jsonServerError(error, {
+        defaultMessage: "We could not create this webhook right now.",
+        logLabel: "Webhook create failed",
+      });
     }
 
     return NextResponse.json({
@@ -135,31 +127,20 @@ export async function POST(request: NextRequest) {
 export async function PATCH(request: NextRequest) {
   try {
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const workspaceContext = await getAdminWorkspaceContextOrError();
+    if (workspaceContext.error) {
+      return workspaceContext.error;
     }
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("workspace_id, role")
-      .eq("id", user.id)
-      .single();
-
-    if (!profile?.workspace_id) {
-      return NextResponse.json({ error: "No workspace found" }, { status: 404 });
-    }
-
-    if (profile.role !== "admin") {
-      return NextResponse.json({ error: "Only admins can update webhooks" }, { status: 403 });
-    }
+    const profile = { workspace_id: workspaceContext.context.workspace_id };
 
     const body = await request.json();
     const { id, url, events, enabled } = body;
 
     if (!id) {
-      return NextResponse.json({ error: "Missing webhook id" }, { status: 400 });
+      return jsonValidationError({
+        message: "Please correct the highlighted fields and try again.",
+        fields: { id: "Choose a webhook and try again." },
+      });
     }
 
     const updates: Record<string, unknown> = { updated_at: new Date().toISOString() };
@@ -176,7 +157,10 @@ export async function PATCH(request: NextRequest) {
       .single();
 
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return jsonServerError(error, {
+        defaultMessage: "We could not update this webhook right now.",
+        logLabel: "Webhook update failed",
+      });
     }
 
     return NextResponse.json({ webhook });

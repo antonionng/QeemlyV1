@@ -150,7 +150,7 @@ export function WebhookConfig() {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <Webhook className="h-3.5 w-3.5 text-brand-500 shrink-0" />
-                    <code className="text-xs font-mono text-brand-800 truncate">
+                    <code className="text-xs text-brand-800 truncate">
                       {webhook.url}
                     </code>
                   </div>

@@ -3,12 +3,13 @@
 import { useState, useEffect, useCallback } from "react";
 import { Upload, ArrowRight, Bookmark, ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DashboardPageHeader } from "@/components/dashboard/page-header";
 import { BenchmarkForm } from "@/components/dashboard/benchmarks/benchmark-form";
 import { BenchmarkResults } from "@/components/dashboard/benchmarks/benchmark-results";
 import { BenchmarkDetail } from "@/components/dashboard/benchmarks/benchmark-detail";
 import { UploadModal } from "@/components/dashboard/upload";
 import { useBenchmarkState } from "@/lib/benchmarks/benchmark-state";
-import { useCompanySettings } from "@/lib/company";
+import { normalizeSavedBonusPercentage, useCompanySettings } from "@/lib/company";
 import type { FundingStage } from "@/lib/company/settings";
 import { hasDbEmployees } from "@/lib/employees/data-service";
 import { getBenchmarkPageTitle } from "@/lib/benchmarks/results-presentation";
@@ -32,54 +33,6 @@ type BenchmarkStats = {
     };
   };
 };
-
-function getSourceBadgeLabel(sources: string[]) {
-  const hasMarket = sources.includes("market");
-  const hasUploaded = sources.includes("uploaded");
-
-  if (hasMarket && hasUploaded) {
-    return "Qeemly Market Data + Your Data";
-  }
-  if (hasMarket) {
-    return "Qeemly Market Data";
-  }
-  if (hasUploaded) {
-    return "Your Data";
-  }
-  return "N/A";
-}
-
-function getFreshnessBadge(stats: BenchmarkStats | null) {
-  if (!stats) {
-    return { label: "Published", value: "Loading..." };
-  }
-
-  const hasMarket = stats.sources.includes("market");
-  if (hasMarket) {
-    if (!stats.lastUpdated) {
-      return { label: "Published", value: "Not published yet" };
-    }
-
-    const publishedAt = new Date(stats.lastUpdated);
-    return {
-      label: "Published",
-      value: publishedAt.toLocaleDateString("en-GB", {
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      }),
-    };
-  }
-
-  if (!stats.lastUpdated) {
-    return { label: "Updated", value: "Date unavailable" };
-  }
-
-  return {
-    label: "Updated",
-    value: new Date(stats.lastUpdated).toLocaleDateString("en-GB"),
-  };
-}
 
 export default function BenchmarksPage() {
   const [showUploadModal, setShowUploadModal] = useState(false);
@@ -111,7 +64,6 @@ export default function BenchmarksPage() {
     }
   }, []);
 
-  const freshnessBadge = getFreshnessBadge(stats);
   const marketDiagnosticMessage =
     stats?.diagnostics?.market.error || stats?.diagnostics?.market.clientWarning;
 
@@ -187,7 +139,7 @@ export default function BenchmarksPage() {
           reviewCycle: (settings.review_cycle as "monthly" | "quarterly" | "biannual" | "annual" | null) || "annual",
           defaultCurrency: settings.default_currency || "AED",
           fiscalYearStart: settings.fiscal_year_start || 1,
-          defaultBonusPercentage: settings.default_bonus_percentage ?? 15,
+          defaultBonusPercentage: normalizeSavedBonusPercentage(settings.default_bonus_percentage),
           equityVestingSchedule:
             (settings.equity_vesting_schedule as
               | "4-year-1-cliff"
@@ -227,55 +179,43 @@ export default function BenchmarksPage() {
 
   return (
     <div className="space-y-8">
-      {/* ── Header ── */}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-accent-800 sm:text-3xl">
-            {getBenchmarkPageTitle(step)}
-          </h1>
-          {stats && step === "form" && isWorkspaceReady && (
-            <p className="mt-1 text-xs text-accent-500">
-              {stats.total} market benchmark rows across {stats.uniqueRoles} roles and {stats.uniqueLocations} locations
-            </p>
-          )}
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          {step !== "form" && (
+      <DashboardPageHeader
+        title={getBenchmarkPageTitle(step)}
+        subtitle={
+          stats && step === "form" && isWorkspaceReady
+            ? `${stats.total} market benchmark rows across ${stats.uniqueRoles} roles and ${stats.uniqueLocations} locations`
+            : undefined
+        }
+        actions={
+          <>
+            {step !== "form" && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={resetForm}
+                className="h-9 rounded-full border-border bg-white px-5 text-accent-700 hover:bg-accent-50"
+              >
+                New Search
+              </Button>
+            )}
             <Button
               variant="outline"
               size="sm"
-              onClick={resetForm}
+              onClick={() => setShowUploadModal(true)}
               className="h-9 rounded-full border-border bg-white px-5 text-accent-700 hover:bg-accent-50"
             >
-              New Search
+              <Upload className="mr-2 h-4 w-4" />
+              Upload Benchmark
             </Button>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowUploadModal(true)}
-            className="h-9 rounded-full border-border bg-white px-5 text-accent-700 hover:bg-accent-50"
-          >
-            <Upload className="mr-2 h-4 w-4" />
-            Upload Benchmark
-          </Button>
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {stats && (
         <div className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border bg-surface-1 px-4 py-3 text-xs text-accent-600">
-            <span className="rounded-full bg-brand-100 px-2.5 py-1 text-brand-700">
-              Source: {getSourceBadgeLabel(stats.sources)}
-            </span>
-            <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-emerald-700">
-              {freshnessBadge.label}: {freshnessBadge.value}
-            </span>
-          </div>
-
           {marketDiagnosticMessage && (
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-900">
-              Market dataset diagnostics: {marketDiagnosticMessage}
+              Market benchmark updates: {marketDiagnosticMessage}
             </div>
           )}
         </div>

@@ -34,6 +34,16 @@ export async function GET(request: NextRequest) {
     companySize,
   );
 
+  if (!detailBriefing) {
+    return NextResponse.json(
+      {
+        error: "AI detail briefing unavailable",
+        reasonCode: "briefing_generation_failed",
+      },
+      { status: 503 },
+    );
+  }
+
   return NextResponse.json({
     detailBriefing,
   });

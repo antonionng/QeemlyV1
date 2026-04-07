@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getWorkspaceContext } from "@/lib/workspace-context";
+import { jsonServerError } from "@/lib/errors/http";
 
 export async function GET(
   request: NextRequest,
@@ -65,7 +66,10 @@ export async function PATCH(
     .single();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonServerError(error, {
+      defaultMessage: "We could not update this report right now.",
+      logLabel: "Report update failed",
+    });
   }
   return NextResponse.json({ report: data });
 }
@@ -89,7 +93,10 @@ export async function DELETE(
     .eq("workspace_id", workspace_id);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonServerError(error, {
+      defaultMessage: "We could not delete this report right now.",
+      logLabel: "Report delete failed",
+    });
   }
   return NextResponse.json({ success: true });
 }

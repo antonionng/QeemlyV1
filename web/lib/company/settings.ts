@@ -22,6 +22,7 @@ export type ReviewCycle = "monthly" | "quarterly" | "biannual" | "annual";
 export type TargetPercentile = 25 | 50 | 75 | 90;
 
 export type VestingSchedule = "4-year-1-cliff" | "4-year-no-cliff" | "3-year" | "5-year" | "custom" | "none";
+export type EquitySchemeType = "rsu" | "options" | "phantom" | "custom" | "none";
 
 export type BenefitsTier = "basic" | "standard" | "premium" | "custom";
 
@@ -44,7 +45,9 @@ export interface CompanySettings {
   defaultCurrency: string;
   fiscalYearStart: number; // Month (1-12)
   defaultBonusPercentage: number | null; // Target bonus as % of base, null = no bonus
+  equitySchemeType: EquitySchemeType;
   equityVestingSchedule: VestingSchedule;
+  equityCliffMonths: number;
   benefitsTier: BenefitsTier;
 
   // Compensation Split (base vs allowances)
@@ -84,7 +87,9 @@ const DEFAULT_SETTINGS: CompanySettings = {
   defaultCurrency: "AED",
   fiscalYearStart: 1, // January
   defaultBonusPercentage: null, // No bonus by default
+  equitySchemeType: "options",
   equityVestingSchedule: "4-year-1-cliff",
+  equityCliffMonths: 12,
   benefitsTier: "standard",
   // Compensation Split
   compSplitBasicPct: 60,
@@ -120,6 +125,18 @@ export const useCompanySettings = create<CompanySettingsStore>()(
     }
   )
 );
+
+export function normalizeSavedBonusPercentage(
+  value: unknown,
+  fallback = 15,
+): number | null {
+  if (value === null) return null;
+  if (value === undefined) return fallback;
+  if (typeof value === "string" && value.trim() === "") return fallback;
+
+  const parsed = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
 
 // Helper to get percentile label
 export function getPercentileLabel(percentile: TargetPercentile): string {

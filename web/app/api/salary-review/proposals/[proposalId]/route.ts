@@ -7,6 +7,7 @@ import {
 } from "@/lib/salary-review/proposal-server";
 import { summarizeProposalDraft } from "@/lib/salary-review/proposal-workflow";
 import type { SalaryReviewProposalCreateBody } from "@/lib/salary-review/proposals";
+import { jsonServerError, jsonValidationError } from "@/lib/errors/http";
 
 type ProposalPatchBody = {
   action?: "approve" | "reject" | "return";
@@ -76,7 +77,9 @@ export async function PATCH(
 
   const body = (await request.json().catch(() => null)) as ProposalPatchBody | null;
   if (!body) {
-    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+    return jsonValidationError({
+      message: "Please correct the request and try again.",
+    });
   }
 
   if (Array.isArray(body.items)) {
@@ -102,7 +105,10 @@ export async function PATCH(
         .eq("cycle_id", proposalId)
         .eq("employee_id", item.employeeId);
       if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return jsonServerError(error, {
+          defaultMessage: "We could not update this proposal right now.",
+          logLabel: "Salary review proposal items update failed",
+        });
       }
     }
 
@@ -132,7 +138,10 @@ export async function PATCH(
       })
       .eq("id", proposalId);
     if (cycleUpdateError) {
-      return NextResponse.json({ error: cycleUpdateError.message }, { status: 500 });
+      return jsonServerError(cycleUpdateError, {
+        defaultMessage: "We could not update this proposal right now.",
+        logLabel: "Salary review proposal summary update failed",
+      });
     }
 
     const { error: auditError } = await supabase.from("salary_review_audit_events").insert({
@@ -146,7 +155,10 @@ export async function PATCH(
       },
     });
     if (auditError) {
-      return NextResponse.json({ error: auditError.message }, { status: 500 });
+      return jsonServerError(auditError, {
+        defaultMessage: "We could not save proposal activity right now.",
+        logLabel: "Salary review proposal draft audit failed",
+      });
     }
   }
 
@@ -174,7 +186,10 @@ export async function PATCH(
         })
         .eq("id", proposalId);
       if (cycleUpdateError) {
-        return NextResponse.json({ error: cycleUpdateError.message }, { status: 500 });
+        return jsonServerError(cycleUpdateError, {
+          defaultMessage: "We could not update this allocation right now.",
+          logLabel: "Salary review allocation cycle update failed",
+        });
       }
 
       const { error: allocationUpdateError } = await supabase
@@ -185,7 +200,10 @@ export async function PATCH(
         })
         .eq("master_cycle_id", proposalId);
       if (allocationUpdateError) {
-        return NextResponse.json({ error: allocationUpdateError.message }, { status: 500 });
+        return jsonServerError(allocationUpdateError, {
+          defaultMessage: "We could not update this allocation right now.",
+          logLabel: "Salary review allocation rows update failed",
+        });
       }
 
       const { error: childCycleUpdateError } = await supabase
@@ -196,7 +214,10 @@ export async function PATCH(
         })
         .eq("parent_cycle_id", proposalId);
       if (childCycleUpdateError) {
-        return NextResponse.json({ error: childCycleUpdateError.message }, { status: 500 });
+        return jsonServerError(childCycleUpdateError, {
+          defaultMessage: "We could not update split review allocations right now.",
+          logLabel: "Salary review child allocation update failed",
+        });
       }
 
       const { error: auditError } = await supabase.from("salary_review_audit_events").insert({
@@ -214,7 +235,10 @@ export async function PATCH(
         },
       });
       if (auditError) {
-        return NextResponse.json({ error: auditError.message }, { status: 500 });
+        return jsonServerError(auditError, {
+          defaultMessage: "We could not save proposal activity right now.",
+          logLabel: "Salary review allocation audit failed",
+        });
       }
 
       const detail = await loadSalaryReviewProposalDetail(supabase, proposalId);
@@ -230,7 +254,10 @@ export async function PATCH(
       .eq("cycle_id", proposalId)
       .order("step_order", { ascending: true });
     if (stepsError) {
-      return NextResponse.json({ error: stepsError.message }, { status: 500 });
+      return jsonServerError(stepsError, {
+        defaultMessage: "We could not load approval steps right now.",
+        logLabel: "Salary review approval steps load failed",
+      });
     }
 
     const applied = applyApprovalActionToSteps(steps || [], {
@@ -252,7 +279,10 @@ export async function PATCH(
         .eq("cycle_id", proposalId)
         .eq("step_order", step.step_order);
       if (error) {
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        return jsonServerError(error, {
+          defaultMessage: "We could not update approval steps right now.",
+          logLabel: "Salary review approval step update failed",
+        });
       }
     }
 
@@ -264,7 +294,10 @@ export async function PATCH(
       })
       .eq("id", proposalId);
     if (cycleUpdateError) {
-      return NextResponse.json({ error: cycleUpdateError.message }, { status: 500 });
+      return jsonServerError(cycleUpdateError, {
+        defaultMessage: "We could not update this proposal right now.",
+        logLabel: "Salary review proposal status update failed",
+      });
     }
 
     const { error: auditError } = await supabase.from("salary_review_audit_events").insert({
@@ -282,7 +315,10 @@ export async function PATCH(
       },
     });
     if (auditError) {
-      return NextResponse.json({ error: auditError.message }, { status: 500 });
+      return jsonServerError(auditError, {
+        defaultMessage: "We could not save proposal activity right now.",
+        logLabel: "Salary review proposal action audit failed",
+      });
     }
   } else if (
     body.cycle ||
@@ -303,7 +339,10 @@ export async function PATCH(
       })
       .eq("id", proposalId);
     if (cycleUpdateError) {
-      return NextResponse.json({ error: cycleUpdateError.message }, { status: 500 });
+      return jsonServerError(cycleUpdateError, {
+        defaultMessage: "We could not update this proposal right now.",
+        logLabel: "Salary review proposal metadata update failed",
+      });
     }
 
     const { error: auditError } = await supabase.from("salary_review_audit_events").insert({
@@ -318,7 +357,10 @@ export async function PATCH(
       },
     });
     if (auditError) {
-      return NextResponse.json({ error: auditError.message }, { status: 500 });
+      return jsonServerError(auditError, {
+        defaultMessage: "We could not save proposal activity right now.",
+        logLabel: "Salary review proposal metadata audit failed",
+      });
     }
   }
 

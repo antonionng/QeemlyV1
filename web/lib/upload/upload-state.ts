@@ -10,7 +10,12 @@ export type WizardStep =
   | "data-type"
   | "file-upload"
   | "column-mapping"
+  | "department-mapping"
+  | "role-mapping"
+  | "level-mapping"
   | "validation"
+  | "auto-fix"
+  | "error-review"
   | "confirm"
   | "success";
 
@@ -29,6 +34,9 @@ export type UploadState = {
   
   // Step 3: Column mapping
   mappings: ColumnMapping[];
+  departmentMappings: Record<string, string>;
+  roleMappings: Record<string, string>;
+  levelMappings: Record<string, string>;
   
   // Step 4: Validation
   validationResult: ValidationResult | null;
@@ -40,14 +48,19 @@ export type UploadState = {
   importError: string | null;
   importedCount: number;
   importMode: UploadImportMode;
+  multiCurrencyConfirmed: boolean;
   
   // Actions
   setMode: (mode: "page" | "modal") => void;
   setDataType: (type: UploadDataType) => void;
   setFile: (file: ParsedFile | null) => void;
   setMappings: (mappings: ColumnMapping[]) => void;
+  setDepartmentMapping: (sourceValue: string, targetValue: string) => void;
+  setRoleMapping: (sourceValue: string, targetValue: string) => void;
+  setLevelMapping: (sourceValue: string, targetValue: string) => void;
   updateMapping: (sourceIndex: number, targetField: string | null) => void;
   setValidationResult: (result: ValidationResult) => void;
+  setExcludedRows: (rows: Set<number>) => void;
   toggleRowExclusion: (rowIndex: number) => void;
   excludeAllErrors: () => void;
   setImporting: (isImporting: boolean) => void;
@@ -55,6 +68,7 @@ export type UploadState = {
   setImportError: (error: string | null) => void;
   setImportedCount: (count: number) => void;
   setImportMode: (mode: UploadImportMode) => void;
+  setMultiCurrencyConfirmed: (confirmed: boolean) => void;
   goToStep: (step: WizardStep) => void;
   nextStep: () => void;
   prevStep: () => void;
@@ -65,7 +79,12 @@ const STEP_ORDER: WizardStep[] = [
   "data-type",
   "file-upload",
   "column-mapping",
+  "department-mapping",
+  "role-mapping",
+  "level-mapping",
   "validation",
+  "auto-fix",
+  "error-review",
   "confirm",
   "success",
 ];
@@ -76,6 +95,9 @@ const initialState = {
   dataType: null,
   file: null,
   mappings: [],
+  departmentMappings: {},
+  roleMappings: {},
+  levelMappings: {},
   validationResult: null,
   excludedRows: new Set<number>(),
   isImporting: false,
@@ -83,6 +105,7 @@ const initialState = {
   importError: null,
   importedCount: 0,
   importMode: "upsert" as UploadImportMode,
+  multiCurrencyConfirmed: false,
 };
 
 export const useUploadStore = create<UploadState>()(
@@ -98,6 +121,30 @@ export const useUploadStore = create<UploadState>()(
 
       setMappings: (mappings) => set({ mappings }),
 
+      setDepartmentMapping: (sourceValue, targetValue) =>
+        set((state) => ({
+          departmentMappings: {
+            ...state.departmentMappings,
+            [sourceValue]: targetValue,
+          },
+        })),
+
+      setRoleMapping: (sourceValue, targetValue) =>
+        set((state) => ({
+          roleMappings: {
+            ...state.roleMappings,
+            [sourceValue]: targetValue,
+          },
+        })),
+
+      setLevelMapping: (sourceValue, targetValue) =>
+        set((state) => ({
+          levelMappings: {
+            ...state.levelMappings,
+            [sourceValue]: targetValue,
+          },
+        })),
+
       updateMapping: (sourceIndex, targetField) => {
         const { mappings } = get();
         const updated = mappings.map((m) =>
@@ -109,6 +156,8 @@ export const useUploadStore = create<UploadState>()(
       },
 
       setValidationResult: (result) => set({ validationResult: result }),
+
+      setExcludedRows: (rows) => set({ excludedRows: new Set(rows) }),
 
       toggleRowExclusion: (rowIndex) => {
         const { excludedRows } = get();
@@ -141,6 +190,8 @@ export const useUploadStore = create<UploadState>()(
 
       setImportMode: (mode) => set({ importMode: mode }),
 
+      setMultiCurrencyConfirmed: (confirmed) => set({ multiCurrencyConfirmed: confirmed }),
+
       goToStep: (step) => set({ currentStep: step }),
 
       nextStep: () => {
@@ -154,7 +205,16 @@ export const useUploadStore = create<UploadState>()(
         }
         
         if (currentIndex < STEP_ORDER.length - 1) {
-          set({ currentStep: STEP_ORDER[currentIndex + 1] });
+          let nextIndex = currentIndex + 1;
+          if (dataType !== "employees") {
+            while (
+              nextIndex < STEP_ORDER.length &&
+              ["department-mapping", "role-mapping", "level-mapping"].includes(STEP_ORDER[nextIndex])
+            ) {
+              nextIndex += 1;
+            }
+          }
+          set({ currentStep: STEP_ORDER[Math.min(nextIndex, STEP_ORDER.length - 1)] });
         }
       },
 
@@ -168,7 +228,16 @@ export const useUploadStore = create<UploadState>()(
         }
         
         if (currentIndex > 0) {
-          set({ currentStep: STEP_ORDER[currentIndex - 1] });
+          let prevIndex = currentIndex - 1;
+          if (dataType !== "employees") {
+            while (
+              prevIndex > 0 &&
+              ["department-mapping", "role-mapping", "level-mapping"].includes(STEP_ORDER[prevIndex])
+            ) {
+              prevIndex -= 1;
+            }
+          }
+          set({ currentStep: STEP_ORDER[Math.max(prevIndex, 0)] });
         }
       },
 

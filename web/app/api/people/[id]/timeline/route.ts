@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getWorkspaceContext } from "@/lib/workspace-context";
+import { jsonServerError } from "@/lib/errors/http";
 
 export async function GET(
   request: NextRequest,
@@ -34,7 +35,10 @@ export async function GET(
 
   const { data, error } = await query;
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonServerError(error, {
+      defaultMessage: "We could not load this employee timeline right now.",
+      logLabel: "Employee timeline load failed",
+    });
   }
 
   return NextResponse.json({ ok: true, events: data || [] });

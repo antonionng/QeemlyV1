@@ -28,13 +28,17 @@ export const EMPLOYEE_TEMPLATE: Template = {
     { header: "role", description: "Job title or role", required: true, example: "Software Engineer" },
     { header: "level", description: "Career level (e.g., IC3, M1)", required: true, example: "IC3" },
     { header: "location", description: "Office location or city", required: true, example: "Dubai" },
-    { header: "base_salary", description: "Annual base salary", required: true, example: "180000" },
+    { header: "total_salary", description: "Annual total compensation (required source of truth)", required: true, example: "240000" },
+    { header: "transport_allowance", description: "Transport allowance amount", required: false, example: "12000" },
+    { header: "accommodation_allowance", description: "Accommodation allowance amount", required: false, example: "48000" },
     { header: "bonus", description: "Annual bonus amount", required: false, example: "18000" },
-    { header: "equity", description: "Annual equity value", required: false, example: "50000" },
+    { header: "equity_value", description: "Estimated equity value", required: false, example: "50000" },
+    { header: "equity_units", description: "Granted equity units", required: false, example: "1200" },
+    { header: "equity_percent", description: "Ownership percentage", required: false, example: "0.15" },
     { header: "currency", description: "Currency code (e.g., AED, SAR)", required: false, example: "AED" },
     { header: "status", description: "Employment status (active/inactive)", required: false, example: "active" },
     { header: "employment_type", description: "Type (national/expat)", required: false, example: "national" },
-    { header: "hire_date", description: "Date of hire (YYYY-MM-DD)", required: false, example: "2023-01-15" },
+    { header: "hire_date", description: "Date of joining (YYYY-MM-DD)", required: false, example: "2023-01-15" },
     { header: "performance_rating", description: "Rating (low/meets/exceeds/exceptional)", required: false, example: "exceeds" },
     { header: "avatar_url", description: "Profile photo URL from ATS/HRIS", required: false, example: "https://cdn.company.com/avatars/john-smith.jpg" },
     { header: "visa_type", description: "Visa type (e.g., work_permit)", required: false, example: "work_permit" },
@@ -101,7 +105,9 @@ export function generateTemplateCsv(template: Template): string {
     examples.join(","),
     // Add a second example row for employees
     ...(template.type === "employees"
-      ? ["Jane,Doe,jane.doe@company.com,Product,Product Manager,IC4,Riyadh,220000,22000,60000,SAR,active,local,2022-06-01,meets"]
+      ? [
+          "Jane,Doe,jane.doe@company.com,Product,Product Manager,IC4,Riyadh,240000,12000,48000,22000,60000,1500,0.2,SAR,active,local,2022-06-01,meets",
+        ]
       : []),
     // Add a second example row for benchmarks
     ...(template.type === "benchmarks"
@@ -110,10 +116,48 @@ export function generateTemplateCsv(template: Template): string {
   ].join("\n");
 }
 
+function buildEmployeeInstructionsRows(): string[][] {
+  return [
+    ["Qeemly Employee Import Instructions", ""],
+    ["Required fields", "first_name, last_name, department, role, level, location, total_salary"],
+    ["Optional fields", "email, transport_allowance, accommodation_allowance, bonus, equity_value, equity_units, equity_percent, currency, status, employment_type, hire_date, performance_rating, visa fields"],
+    ["Accepted enums: status", "active, inactive"],
+    ["Accepted enums: employment_type", "national, expat"],
+    ["Accepted enums: performance_rating", "low, meets, exceeds, exceptional"],
+    ["Accepted enums: visa_status", "active, expiring, expired, pending, cancelled"],
+    ["Date format", "YYYY-MM-DD"],
+    ["Number format", "Use plain numbers only. No commas or currency symbols."],
+    ["Email format", "Use valid work email addresses when available."],
+    ["Salary rule", "total_salary is the source of truth. Do not add base_salary in this template."],
+    ["Common mistakes", "base_salary without total_salary, mixed date formats, and malformed emails."],
+  ];
+}
+
+async function downloadEmployeeTemplateXlsx(): Promise<void> {
+  const XLSX = await import("xlsx");
+  const workbook = XLSX.utils.book_new();
+  const employeeTemplate = getTemplate("employees");
+
+  const instructionSheet = XLSX.utils.aoa_to_sheet(buildEmployeeInstructionsRows());
+  XLSX.utils.book_append_sheet(workbook, instructionSheet, "Instructions");
+
+  const dataHeader = employeeTemplate.columns.map((column) => column.header);
+  const dataExampleRow = employeeTemplate.columns.map((column) => column.example);
+  const dataSheet = XLSX.utils.aoa_to_sheet([dataHeader, dataExampleRow]);
+  XLSX.utils.book_append_sheet(workbook, dataSheet, "Employee_Data");
+
+  XLSX.writeFile(workbook, "qeemly-employees-template.xlsx");
+}
+
 /**
  * Download a template as a CSV file
  */
-export function downloadTemplate(type: UploadDataType): void {
+export async function downloadTemplate(type: UploadDataType): Promise<void> {
+  if (type === "employees") {
+    await downloadEmployeeTemplateXlsx();
+    return;
+  }
+
   const template = getTemplate(type);
   const csv = generateTemplateCsv(template);
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });

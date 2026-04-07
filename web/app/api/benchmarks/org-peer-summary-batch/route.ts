@@ -4,6 +4,7 @@ import { getOrgPeerSummary } from "@/lib/benchmarks/org-peer-summary";
 import { createServiceClient } from "@/lib/supabase/service";
 import { createClient } from "@/lib/supabase/server";
 import { getWorkspaceContext } from "@/lib/workspace-context";
+import { jsonServerError, jsonValidationError } from "@/lib/errors/http";
 
 type SummaryEntry = {
   roleId: string;
@@ -32,7 +33,10 @@ export async function POST(request: NextRequest) {
   const entries = Array.isArray(body?.entries) ? body.entries : [];
 
   if (entries.length === 0) {
-    return NextResponse.json({ error: "entries are required." }, { status: 400 });
+    return jsonValidationError({
+      message: "Please correct the highlighted fields and try again.",
+      fields: { entries: "Add at least one benchmark entry and try again." },
+    });
   }
 
   const supabase = await createClient();
@@ -68,10 +72,16 @@ export async function POST(request: NextRequest) {
   ]);
 
   if (employeesResult.error) {
-    return NextResponse.json({ error: employeesResult.error.message }, { status: 500 });
+    return jsonServerError(employeesResult.error, {
+      defaultMessage: "We could not load your org peer summaries right now.",
+      logLabel: "Org peer employees load failed",
+    });
   }
   if (workspaceBenchmarksResult.error) {
-    return NextResponse.json({ error: workspaceBenchmarksResult.error.message }, { status: 500 });
+    return jsonServerError(workspaceBenchmarksResult.error, {
+      defaultMessage: "We could not load benchmark data for org peer summaries right now.",
+      logLabel: "Org peer benchmarks load failed",
+    });
   }
 
   const employeeRows = (employeesResult.data || []).map((employee) => ({

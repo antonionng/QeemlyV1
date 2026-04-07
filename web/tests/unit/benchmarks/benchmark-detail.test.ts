@@ -8,13 +8,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const {
   useBenchmarkStateMock,
   useDrilldownPreferencesMock,
-  fetchAiBriefingMock,
-  fetchBenchmarkDetailSupportDataMock,
+  fetchDetailSurfaceMock,
+  pushMock,
 } = vi.hoisted(() => ({
   useBenchmarkStateMock: vi.fn(),
   useDrilldownPreferencesMock: vi.fn(),
-  fetchAiBriefingMock: vi.fn(),
-  fetchBenchmarkDetailSupportDataMock: vi.fn(),
+  fetchDetailSurfaceMock: vi.fn(),
+  pushMock: vi.fn(),
+}));
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: pushMock }),
 }));
 
 vi.mock("@/components/ui/button", () => ({
@@ -33,8 +37,7 @@ vi.mock("@/lib/benchmarks/drilldown-views", () => ({
 }));
 
 vi.mock("@/lib/benchmarks/data-service", () => ({
-  fetchAiBriefing: fetchAiBriefingMock,
-  fetchBenchmarkDetailSupportData: fetchBenchmarkDetailSupportDataMock,
+  fetchDetailSurface: fetchDetailSurfaceMock,
 }));
 
 vi.mock("@/components/dashboard/benchmarks/drilldown/view-selector", () => ({
@@ -55,20 +58,18 @@ vi.mock("@/components/dashboard/benchmarks/drilldown/views", () => ({
 
 import { BenchmarkDetail } from "@/components/dashboard/benchmarks/benchmark-detail";
 
-const DETAIL_BRIEFING = {
-  executiveBriefing: "Shared AI executive market view.",
-  hiringSignal: "Hiring remains competitive for this role.",
-  negotiationPosture: "Keep room for movement at final offer stage.",
-  views: {
-    levelTable: { summary: "Level spacing remains healthy through IC4.", action: "Use the selected band as the anchor." },
-    aiInsights: { summary: "Above-median positioning will improve close rates.", action: "Stay disciplined around the target percentile." },
-    trend: { summary: "Momentum remains positive in the latest data window.", action: "Avoid assuming near-term cooling." },
-    salaryBreakdown: { summary: "Candidates react best to a clear cash-led package.", action: "Keep allowances easy to explain." },
-    industry: { summary: "Fintech keeps a persistent premium in this market.", action: "Expect comp references above general market norms." },
-    companySize: { summary: "Structured mid-market bands are still competitive.", action: "Use policy clarity as a differentiator." },
-    geoComparison: { summary: "Regional market gaps remain meaningful.", action: "Benchmark relocation cases separately." },
-    compMix: { summary: "Most value is concentrated in fixed cash.", action: "Avoid unnecessary package complexity." },
-    offerBuilder: { summary: "A decisive first offer still matters.", action: "Hold a small negotiation buffer in reserve." },
+const DETAIL_SURFACE = {
+  summary: { executiveBriefing: "Shared AI executive market view.", hiringSignal: "Hiring remains competitive for this role.", negotiationPosture: "Keep room for movement at final offer stage." },
+  modules: {
+    levelTable: { status: "ready", source: "ai", title: "", subtitle: "", data: { rows: [], breakdown: null }, narrative: { summary: "", action: null }, message: null },
+    industry: { status: "empty", source: "derived", title: "", subtitle: "", data: { rows: [], fallbackLabel: null }, narrative: { summary: "", action: null }, message: null },
+    companySize: { status: "empty", source: "derived", title: "", subtitle: "", data: { rows: [], fallbackLabel: null }, narrative: { summary: "", action: null }, message: null },
+    trend: { status: "empty", source: "derived", title: "", subtitle: "", data: { points: [], periodChange: null, currentMedian: null, startMedian: null }, narrative: { summary: "", action: null }, message: null },
+    geoComparison: { status: "empty", source: "derived", title: "", subtitle: "", data: { rows: [] }, narrative: { summary: "", action: null }, message: null },
+    compMix: { status: "empty", source: "derived", title: "", subtitle: "", data: { breakdown: { basicSalaryPct: 0, housingPct: 0, transportPct: 0, otherAllowancesPct: 0 } }, narrative: { summary: "", action: null }, message: null },
+    salaryBreakdown: { status: "empty", source: "derived", title: "", subtitle: "", data: { breakdown: { basicSalaryPct: 0, housingPct: 0, transportPct: 0, otherAllowancesPct: 0 } }, narrative: { summary: "", action: null }, message: null },
+    aiInsights: { status: "empty", source: "derived", title: "", subtitle: "", data: { executiveBriefing: "", hiringSignal: "", negotiationPosture: "" }, narrative: { summary: "", action: null }, message: null },
+    offerBuilder: { status: "empty", source: "derived", title: "", subtitle: "", data: { breakdown: null, adjacentLevels: [] }, narrative: { summary: "", action: null }, message: null },
   },
 };
 
@@ -129,8 +130,8 @@ function makeResult() {
       flag: "SA",
     },
     isOverridden: false,
-    aiDetailBriefing: null,
-    aiDetailBriefingStatus: "idle" as const,
+    detailSurface: null,
+    detailSurfaceStatus: "idle" as const,
     createdAt: new Date("2026-03-12T00:00:00.000Z"),
   };
 }
@@ -140,15 +141,7 @@ describe("BenchmarkDetail", () => {
     vi.clearAllMocks();
     globalThis.IS_REACT_ACT_ENVIRONMENT = true;
     useBenchmarkStateMock.setState = vi.fn();
-    fetchBenchmarkDetailSupportDataMock.mockResolvedValue({
-      levelTableBenchmarks: {},
-      offerBuilderBenchmarks: {},
-      industryBenchmarks: {},
-      industryFallbackBenchmark: null,
-      companySizeBenchmarks: {},
-      companySizeFallbackBenchmark: null,
-      geoBenchmarksByLocation: {},
-    });
+    fetchDetailSurfaceMock.mockResolvedValue(null);
     useBenchmarkStateMock.mockReturnValue({
       goToStep: vi.fn(),
     });
@@ -159,7 +152,7 @@ describe("BenchmarkDetail", () => {
   });
 
   it("lazy-loads the AI detail briefing when drilldown opens without one", async () => {
-    fetchAiBriefingMock.mockResolvedValue(DETAIL_BRIEFING);
+    fetchDetailSurfaceMock.mockResolvedValue(DETAIL_SURFACE);
 
     const container = document.createElement("div");
     const root = createRoot(container);
@@ -170,10 +163,45 @@ describe("BenchmarkDetail", () => {
       await Promise.resolve();
     });
 
-    expect(fetchAiBriefingMock).toHaveBeenCalledWith("pm", "riyadh", "ic3", {
+    expect(fetchDetailSurfaceMock).toHaveBeenCalledWith("pm", "riyadh", "ic3", {
       industry: "Fintech",
       companySize: "1-50",
     });
+    expect(useBenchmarkStateMock.setState).toHaveBeenCalled();
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("shows unavailable banner and retries detail loads", async () => {
+    const container = document.createElement("div");
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        React.createElement(BenchmarkDetail, {
+          result: {
+            ...makeResult(),
+            detailSurfaceStatus: "unavailable",
+          },
+        }),
+      );
+      await Promise.resolve();
+    });
+
+    expect(container.textContent).toContain("Some detailed modules are unavailable right now");
+
+    const retryButton = Array.from(container.querySelectorAll("button")).find(
+      (button) => button.textContent?.trim() === "Retry Modules",
+    );
+    expect(retryButton).toBeTruthy();
+
+    await act(async () => {
+      retryButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await Promise.resolve();
+    });
+
     expect(useBenchmarkStateMock.setState).toHaveBeenCalled();
 
     await act(async () => {

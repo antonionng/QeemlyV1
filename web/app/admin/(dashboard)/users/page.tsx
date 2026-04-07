@@ -371,7 +371,7 @@ export default function UsersPage() {
                 </div>
 
                 <div className="pt-3 border-t border-[#e0e3eb]">
-                  <p className="text-xs text-[#94a3b8] font-mono">{selectedUser.id?.slice(0, 20)}…</p>
+                  <p className="text-xs text-[#94a3b8]">{selectedUser.id?.slice(0, 20)}…</p>
                 </div>
               </div>
             </>

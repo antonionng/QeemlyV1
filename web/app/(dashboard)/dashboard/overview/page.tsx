@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { DashboardPageHeader } from "@/components/dashboard/page-header";
 import {
   StatCards,
   DataHealthCard,
@@ -216,36 +217,34 @@ export default function CompanyOverviewPage() {
   return (
     <>
       <div className="space-y-8">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="space-y-1">
-            <h1 className="page-title">Company Overview</h1>
-            <p className="page-subtitle">
-              Review {companyName || "your company"} pay health, actions, and benchmark coverage in one place.
-            </p>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={handleRefresh}
-              disabled={isRefreshing}
-              className="h-11 rounded-full px-5 text-[13px] font-semibold"
-            >
-              <span>Refresh</span>
-              <RefreshCw className={isRefreshing ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
-            </Button>
-            <Link href="/dashboard/settings">
+        <DashboardPageHeader
+          title="Company Overview"
+          subtitle={`Review ${companyName || "your company"} pay health, actions, and benchmark coverage in one place.`}
+          actions={
+            <>
               <Button
                 variant="secondary"
                 size="sm"
+                onClick={handleRefresh}
+                disabled={isRefreshing}
                 className="h-11 rounded-full px-5 text-[13px] font-semibold"
               >
-                <span>Settings</span>
-                <Settings className="h-4 w-4" />
+                <span>Refresh</span>
+                <RefreshCw className={isRefreshing ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
               </Button>
-            </Link>
-          </div>
-        </div>
+              <Link href="/dashboard/settings">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="h-11 rounded-full px-5 text-[13px] font-semibold"
+                >
+                  <span>Settings</span>
+                  <Settings className="h-4 w-4" />
+                </Button>
+              </Link>
+            </>
+          }
+        />
 
         {error && (
           <Card className="border-amber-200 bg-[#FFF4E5] p-6 text-sm text-amber-800">

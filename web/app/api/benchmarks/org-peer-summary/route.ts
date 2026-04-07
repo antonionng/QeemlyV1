@@ -4,6 +4,7 @@ import { getOrgPeerSummary } from "@/lib/benchmarks/org-peer-summary";
 import { createServiceClient } from "@/lib/supabase/service";
 import { createClient } from "@/lib/supabase/server";
 import { getWorkspaceContext } from "@/lib/workspace-context";
+import { jsonServerError, jsonValidationError } from "@/lib/errors/http";
 
 function getRequiredParam(searchParams: URLSearchParams, key: string): string | null {
   const value = searchParams.get(key)?.trim();
@@ -19,10 +20,14 @@ export async function GET(request: NextRequest) {
   const companySize = getRequiredParam(searchParams, "companySize");
 
   if (!roleId || !locationId || !levelId) {
-    return NextResponse.json(
-      { error: "roleId, locationId, and levelId are required." },
-      { status: 400 },
-    );
+    return jsonValidationError({
+      message: "Please correct the highlighted fields and try again.",
+      fields: {
+        ...(roleId ? {} : { roleId: "Choose a role and try again." }),
+        ...(locationId ? {} : { locationId: "Choose a location and try again." }),
+        ...(levelId ? {} : { levelId: "Choose a level and try again." }),
+      },
+    });
   }
 
   const supabase = await createClient();
@@ -58,10 +63,16 @@ export async function GET(request: NextRequest) {
   ]);
 
   if (employeesResult.error) {
-    return NextResponse.json({ error: employeesResult.error.message }, { status: 500 });
+    return jsonServerError(employeesResult.error, {
+      defaultMessage: "We could not load your org peer summary right now.",
+      logLabel: "Org peer summary employees load failed",
+    });
   }
   if (workspaceBenchmarksResult.error) {
-    return NextResponse.json({ error: workspaceBenchmarksResult.error.message }, { status: 500 });
+    return jsonServerError(workspaceBenchmarksResult.error, {
+      defaultMessage: "We could not load benchmark data for your org peer summary right now.",
+      logLabel: "Org peer summary benchmarks load failed",
+    });
   }
 
   const summary = getOrgPeerSummary({

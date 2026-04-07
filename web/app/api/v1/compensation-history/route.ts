@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { authenticateApiKey } from "../middleware";
 import { createServiceClient } from "@/lib/supabase/service";
 import { refreshComplianceSnapshot } from "@/lib/compliance/snapshot-service";
+import { jsonValidationError } from "@/lib/errors/http";
+import { toClientSafeError } from "@/lib/errors/client-safe";
 
 /**
  * POST /api/v1/compensation-history
@@ -18,10 +20,12 @@ export async function POST(request: NextRequest) {
   const { entries } = body;
 
   if (!Array.isArray(entries) || entries.length === 0) {
-    return NextResponse.json(
-      { error: "Request body must contain a non-empty 'entries' array" },
-      { status: 400 }
-    );
+    return jsonValidationError({
+      message: "Please correct the request and try again.",
+      fields: {
+        entries: "Provide at least one compensation history row and try again.",
+      },
+    });
   }
 
   const supabase = createServiceClient();
@@ -62,7 +66,12 @@ export async function POST(request: NextRequest) {
     });
 
     if (error) {
-      errors.push({ index: i, error: error.message });
+      errors.push({
+        index: i,
+        error: toClientSafeError(error, {
+          defaultMessage: "This compensation history row could not be saved right now.",
+        }).message,
+      });
     } else {
       await supabase.from("employee_timeline_events").insert({
         workspace_id: auth.workspaceId,

@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { fetchMarketBenchmarks } from "@/lib/benchmarks/platform-market";
 import { readMarketDataWithFallback } from "@/lib/benchmarks/market-read";
+import { getWorkspaceContextOrError } from "@/lib/workspace-access";
+import { toClientSafeError } from "@/lib/errors/client-safe";
 
 /**
  * GET /api/benchmarks/stats
@@ -9,17 +11,12 @@ import { readMarketDataWithFallback } from "@/lib/benchmarks/market-read";
  */
 export async function GET() {
   const supabase = await createClient();
-  
-  const { data: { user }, error: authError } = await supabase.auth.getUser();
-  if (authError || !user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("workspace_id")
-    .eq("id", user.id)
-    .single();
+  const workspaceContext = await getWorkspaceContextOrError();
+  if (workspaceContext.error) {
+    return workspaceContext.error;
+  }
+  const { workspace_id } = workspaceContext.context;
 
   // Market benchmarks (Qeemly data pool — always available)
   let marketBenchmarkCount = 0;
@@ -55,7 +52,10 @@ export async function GET() {
       diagnostics.market.warning = "No published shared-market benchmark rows were returned from the market pool.";
     }
   } catch (error) {
-    diagnostics.market.error = getErrorMessage(error);
+    diagnostics.market.error = toClientSafeError(error, {
+      defaultMessage: "Market benchmark data is temporarily unavailable.",
+      action: "Refresh the page or try again in a few minutes.",
+    }).message;
   }
 
   // Workspace benchmarks (company pay bands)
@@ -77,11 +77,11 @@ export async function GET() {
     latestMarketPublishedAt = String(publishEvents[0].published_at);
   }
 
-  if (profile?.workspace_id) {
+  if (workspace_id) {
     const { data: benchmarks, error: benchmarkError } = await supabase
       .from("salary_benchmarks")
       .select("id, role_id, location_id, source, updated_at")
-      .eq("workspace_id", profile.workspace_id);
+      .eq("workspace_id", workspace_id);
 
     if (!benchmarkError && benchmarks) {
       workspaceBenchmarkCount = benchmarks.length;
@@ -127,9 +127,4 @@ export async function GET() {
       sources: workspaceSources,
     },
   });
-}
-
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  return String(error);
 }

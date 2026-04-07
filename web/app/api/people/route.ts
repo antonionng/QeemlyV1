@@ -7,6 +7,7 @@ import { refreshComplianceSnapshot } from "@/lib/compliance/snapshot-service";
 import { fetchMarketBenchmarks, type MarketBenchmark } from "@/lib/benchmarks/platform-market";
 import { buildAiBenchmarkRows } from "@/lib/benchmarks/ai-benchmark-rows";
 import { refreshBenchmarkCoverageSnapshot } from "@/lib/benchmarks/coverage-snapshots";
+import { jsonServerError, jsonValidationError } from "@/lib/errors/http";
 
 function isMissingRelationError(error: { code?: string; message?: string } | null | undefined): boolean {
   if (!error) return false;
@@ -67,16 +68,28 @@ export async function GET() {
   ]);
 
   if (employeesResult.error) {
-    return NextResponse.json({ error: employeesResult.error.message }, { status: 500 });
+    return jsonServerError(employeesResult.error, {
+      defaultMessage: "We could not load your people data right now.",
+      logLabel: "People load failed",
+    });
   }
   if (benchmarksResult.error) {
-    return NextResponse.json({ error: benchmarksResult.error.message }, { status: 500 });
+    return jsonServerError(benchmarksResult.error, {
+      defaultMessage: "We could not load benchmark coverage for your people data right now.",
+      logLabel: "People benchmark load failed",
+    });
   }
   if (enrichmentResult.error && !isMissingRelationError(enrichmentResult.error)) {
-    return NextResponse.json({ error: enrichmentResult.error.message }, { status: 500 });
+    return jsonServerError(enrichmentResult.error, {
+      defaultMessage: "We could not load enriched people details right now.",
+      logLabel: "People enrichment load failed",
+    });
   }
   if (visaResult.error && !isMissingRelationError(visaResult.error)) {
-    return NextResponse.json({ error: visaResult.error.message }, { status: 500 });
+    return jsonServerError(visaResult.error, {
+      defaultMessage: "We could not load visa details right now.",
+      logLabel: "People visa load failed",
+    });
   }
 
   const avatarByEmployee = new Map<string, string>();
@@ -160,7 +173,10 @@ export async function POST(request: NextRequest) {
 
   const { data, error } = await queryClient.from("employees").insert(payload).select("*").single();
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonServerError(error, {
+      defaultMessage: "We could not create this employee right now.",
+      logLabel: "People create failed",
+    });
   }
 
   try {
@@ -198,7 +214,13 @@ export async function PATCH(request: NextRequest) {
   const ids = Array.isArray(body.ids) ? body.ids.filter(Boolean) : [];
 
   if (body.action !== "archive_many" || ids.length === 0) {
-    return NextResponse.json({ error: "Invalid bulk action payload" }, { status: 400 });
+    return jsonValidationError({
+      message: "Please correct the highlighted fields and try again.",
+      fields: {
+        action: "Choose a valid bulk action and try again.",
+        ids: "Select at least one employee and try again.",
+      },
+    });
   }
 
   const { error } = await queryClient
@@ -208,7 +230,10 @@ export async function PATCH(request: NextRequest) {
     .in("id", ids);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonServerError(error, {
+      defaultMessage: "We could not archive the selected employees right now.",
+      logLabel: "People bulk archive failed",
+    });
   }
 
   try {

@@ -1,17 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
 import { type BenchmarkResult } from "@/lib/benchmarks/benchmark-state";
-import { normalizeAiBreakdown } from "@/lib/benchmarks/detail-ai";
 import {
   annualizeBenchmarkValue,
   applyBenchmarkViewMode,
   resolveBenchmarkPayPeriod,
 } from "@/lib/benchmarks/pay-period";
 import { useCompanySettings } from "@/lib/company";
-import { LEVELS } from "@/lib/dashboard/dummy-data";
 import { useSalaryView } from "@/lib/salary-view-store";
-import { getBenchmarksBatch, makeBenchmarkLookupKey } from "@/lib/benchmarks/data-service";
+import { ModuleStateBanner } from "../module-state-banner";
 import { SharedAiCallout } from "../shared-ai-callout";
 
 interface LevelTableViewProps {
@@ -19,33 +17,19 @@ interface LevelTableViewProps {
 }
 
 export function LevelTableView({ result }: LevelTableViewProps) {
-  const { role, level, location } = result;
+  const { level } = result;
   const [showBasic, setShowBasic] = useState(false);
   const companySettings = useCompanySettings();
-  const [rows, setRows] = useState<
-    Array<{
-      level: Pick<(typeof LEVELS)[number], "id" | "name">;
-      p25: number;
-      p50: number;
-      p75: number;
-      p85: number;
-      p90: number;
-      isSelected: boolean;
-    }>
-  >([]);
   const { salaryView } = useSalaryView();
   const benchmarkPayPeriod = resolveBenchmarkPayPeriod(
     result.benchmark.payPeriod ?? result.benchmark.sourcePayPeriod,
     result.benchmark.percentiles,
   );
-  const aiLevelBands = result.aiDetailBriefing?.views.levelTable.levelBands ?? null;
-  const estimatedBreakdown = normalizeAiBreakdown(
-    result.aiDetailBriefing?.views.salaryBreakdown.packageBreakdown
-      ?? result.aiDetailBriefing?.views.offerBuilder.packageBreakdown
-      ?? result.aiDetailBriefing?.views.compMix.compensationMix
-      ?? null,
-  );
-  const basicSalaryPct = estimatedBreakdown?.basicSalaryPct ?? companySettings.compSplitBasicPct;
+
+  const mod = result.detailSurface?.modules.levelTable;
+  const rows = mod?.data.rows ?? [];
+  const breakdown = mod?.data.breakdown;
+  const basicSalaryPct = breakdown?.basicSalaryPct ?? companySettings.compSplitBasicPct;
   const basicMultiplier = basicSalaryPct / 100;
 
   const convertValue = (value: number, payPeriod = benchmarkPayPeriod) => {
@@ -62,100 +46,11 @@ export function LevelTableView({ result }: LevelTableViewProps) {
   };
   const getDisplayValue = (value: number) =>
     convertValue(showBasic ? value * basicMultiplier : value, "annual");
-  const basicModeDescription = estimatedBreakdown
+  const basicModeDescription = breakdown
     ? `Estimated basic salary using ${basicSalaryPct}% AI package split.`
     : `Estimated basic salary using your workspace ${basicSalaryPct}% package split.`;
 
-  const aiRows = useMemo(
-    () =>
-      aiLevelBands?.map((band) => {
-        const p85 = band.p75 + (band.p90 - band.p75) * 0.5;
-        return {
-          level: {
-            id: band.levelId,
-            name: band.levelName,
-          },
-          p25: band.p25,
-          p50: band.p50,
-          p75: band.p75,
-          p85,
-          p90: band.p90,
-          isSelected: band.levelId === level.id,
-        };
-      }) ?? [],
-    [aiLevelBands, level.id],
-  );
-  const prefetchedRows = useMemo(() => {
-    const prefetchedBenchmarks = result.detailSupportData?.levelTableBenchmarks ?? {};
-    const targetLevels = LEVELS.filter((entry) => entry.category === "IC" || entry.category === "Manager").slice(0, 6);
-
-    return targetLevels
-      .map((entry) => {
-        const benchmark = prefetchedBenchmarks[entry.id];
-        if (!benchmark) return null;
-        const p85 = benchmark.percentiles.p75 + (benchmark.percentiles.p90 - benchmark.percentiles.p75) * 0.5;
-        return {
-          level: entry,
-          p25: benchmark.percentiles.p25,
-          p50: benchmark.percentiles.p50,
-          p75: benchmark.percentiles.p75,
-          p85,
-          p90: benchmark.percentiles.p90,
-          isSelected: entry.id === level.id,
-        };
-      })
-      .filter(Boolean) as typeof rows;
-  }, [level.id, result.detailSupportData?.levelTableBenchmarks]);
-
-  useEffect(() => {
-    if (aiRows.length > 0) {
-      setRows(aiRows);
-      return;
-    }
-
-    if (prefetchedRows.length > 0) {
-      setRows(prefetchedRows);
-      return;
-    }
-
-    const run = async () => {
-      const sourceLocationId =
-        location.id === "london" || location.id === "manchester" ? "dubai" : location.id;
-      const targetLevels = LEVELS.filter((l) => l.category === "IC" || l.category === "Manager").slice(0, 6);
-      const batchEntries = targetLevels.map((lvl) => ({
-        roleId: role.id,
-        locationId: sourceLocationId,
-        levelId: lvl.id,
-        industry: result.formData.industry,
-        companySize: result.formData.companySize,
-      }));
-      const benchmarks = await getBenchmarksBatch(batchEntries);
-      const nextRows = targetLevels
-        .map((entry) => {
-          const benchmark = benchmarks[makeBenchmarkLookupKey({
-            roleId: role.id,
-            locationId: sourceLocationId,
-            levelId: entry.id,
-            industry: result.formData.industry,
-            companySize: result.formData.companySize,
-          })];
-          if (!benchmark) return null;
-          const p85 = benchmark.percentiles.p75 + (benchmark.percentiles.p90 - benchmark.percentiles.p75) * 0.5;
-          return {
-            level: entry,
-            p25: benchmark.percentiles.p25,
-            p50: benchmark.percentiles.p50,
-            p75: benchmark.percentiles.p75,
-            p85,
-            p90: benchmark.percentiles.p90,
-            isSelected: entry.id === level.id,
-          };
-        })
-        .filter(Boolean) as typeof rows;
-      setRows(nextRows);
-    };
-    void run();
-  }, [aiRows, level.id, location.id, prefetchedRows, result.formData.companySize, result.formData.industry, role.id]);
+  const isLoading = !mod || result.detailSurfaceStatus === "loading";
 
   return (
     <div className="bench-section p-0 overflow-hidden">
@@ -173,6 +68,17 @@ export function LevelTableView({ result }: LevelTableViewProps) {
 
       {showBasic && <p className="px-5 pt-2 text-xs text-brand-500">{basicModeDescription}</p>}
 
+      {isLoading ? <ModuleStateBanner variant="loading" message="Loading level data..." className="mx-5 mb-3" /> : null}
+      {mod?.status === "error" ? (
+        <ModuleStateBanner variant="error" message={mod.message ?? "Unable to load level data."} className="mx-5 mb-3" />
+      ) : null}
+      {mod?.status === "empty" ? (
+        <ModuleStateBanner
+          variant="info"
+          message={mod.message ?? "No level data is available for this module yet."}
+          className="mx-5 mb-3"
+        />
+      ) : null}
       <div className="overflow-x-auto mt-3">
         <table className="bench-table">
           <thead>
@@ -186,26 +92,29 @@ export function LevelTableView({ result }: LevelTableViewProps) {
             </tr>
           </thead>
           <tbody>
-            {rows.map((row) => (
-              <tr key={row.level.id} className={row.isSelected ? "bench-row-highlight" : ""}>
-                <td>
-                  <span className={`font-medium ${row.isSelected ? "text-brand-900" : "text-brand-700"}`}>
-                    {row.level.name}
-                  </span>
-                </td>
-                <td className="text-right">{formatAED(getDisplayValue(row.p25))}</td>
-                <td className="text-right font-medium">{formatAED(getDisplayValue(row.p50))}</td>
-                <td className="text-right">{formatAED(getDisplayValue(row.p75))}</td>
-                <td className="text-right">{formatAED(getDisplayValue(row.p85))}</td>
-                <td className="text-right">{formatAED(getDisplayValue(row.p90))}</td>
-              </tr>
-            ))}
+            {rows.map((row) => {
+              const isSelected = row.levelId === level.id;
+              return (
+                <tr key={row.levelId} className={isSelected ? "bench-row-highlight" : ""}>
+                  <td>
+                    <span className={`font-medium ${isSelected ? "text-brand-900" : "text-brand-700"}`}>
+                      {row.levelName}
+                    </span>
+                  </td>
+                  <td className="text-right">{formatAED(getDisplayValue(row.p25))}</td>
+                  <td className="text-right font-medium">{formatAED(getDisplayValue(row.p50))}</td>
+                  <td className="text-right">{formatAED(getDisplayValue(row.p75))}</td>
+                  <td className="text-right">{formatAED(getDisplayValue(row.p85))}</td>
+                  <td className="text-right">{formatAED(getDisplayValue(row.p90))}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
 
       <div className="px-5 pb-5">
-        <SharedAiCallout section={result.aiDetailBriefing?.views.levelTable} />
+        <SharedAiCallout section={mod?.narrative} />
       </div>
     </div>
   );

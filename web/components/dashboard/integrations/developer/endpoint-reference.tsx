@@ -288,7 +288,7 @@ export function EndpointReference() {
                     >
                       {endpoint.method}
                     </span>
-                    <code className="flex-1 text-xs font-mono text-brand-700">
+                    <code className="flex-1 text-xs text-brand-700">
                       {endpoint.path}
                     </code>
                     <span className="text-xs text-brand-500 hidden sm:inline">
@@ -326,7 +326,7 @@ export function EndpointReference() {
                                 {endpoint.params.map((param) => (
                                   <tr key={param.name} className="border-b border-border/50">
                                     <td className="py-1.5 pr-4">
-                                      <code className="text-[11px] font-mono text-brand-800">{param.name}</code>
+                                      <code className="text-[11px] text-brand-800">{param.name}</code>
                                     </td>
                                     <td className="py-1.5 pr-4 text-brand-500">{param.type}</td>
                                     <td className="py-1.5 pr-4">
@@ -363,7 +363,7 @@ export function EndpointReference() {
                               )}
                             </button>
                           </div>
-                          <pre className="rounded-lg bg-brand-900 p-3 text-[11px] font-mono text-brand-100 overflow-x-auto leading-relaxed">
+                          <pre className="rounded-lg bg-brand-900 p-3 text-[11px] text-brand-100 overflow-x-auto leading-relaxed">
                             {endpoint.requestBody}
                           </pre>
                         </div>
@@ -386,7 +386,7 @@ export function EndpointReference() {
                             )}
                           </button>
                         </div>
-                        <pre className="rounded-lg bg-brand-900 p-3 text-[11px] font-mono text-brand-100 overflow-x-auto leading-relaxed">
+                        <pre className="rounded-lg bg-brand-900 p-3 text-[11px] text-brand-100 overflow-x-auto leading-relaxed">
                           {endpoint.responseBody}
                         </pre>
                       </div>

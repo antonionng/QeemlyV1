@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getWorkspaceContext } from "@/lib/workspace-context";
+import { jsonServerError } from "@/lib/errors/http";
 
 export async function GET(
   _request: NextRequest,
@@ -21,7 +22,10 @@ export async function GET(
     .order("created_at", { ascending: false });
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonServerError(error, {
+      defaultMessage: "We could not load proposal activity right now.",
+      logLabel: "Salary review proposal audit load failed",
+    });
   }
 
   return NextResponse.json({ auditEvents: data || [] });

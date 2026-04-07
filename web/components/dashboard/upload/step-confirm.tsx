@@ -52,10 +52,16 @@ export function StepConfirm({ onSuccess, onClose }: StepConfirmProps) {
     importError,
     importedCount,
     importMode,
+    excludedRows,
+    departmentMappings,
+    roleMappings,
+    levelMappings,
+    multiCurrencyConfirmed,
     setImporting,
     setImportProgress,
     setImportError,
     setImportedCount,
+    setMultiCurrencyConfirmed,
     goToStep,
     reset,
   } = store;
@@ -88,7 +94,19 @@ export function StepConfirm({ onSuccess, onClose }: StepConfirmProps) {
           .map((row) => transformEmployee(row.data))
           .filter((employee): employee is TransformedEmployee => employee !== null);
 
-        result = await uploadEmployees(employees, setImportProgress, { mode: importMode });
+        result = await uploadEmployees(employees, setImportProgress, {
+          mode: importMode,
+          importPolicy: {
+            excludedRowIndices: Array.from(excludedRows.values()),
+            multiCurrencyDetected: hasMultiCurrency,
+            multiCurrencyConfirmed,
+            mappingSummary: {
+              departmentsMapped: Object.keys(departmentMappings).length,
+              rolesMapped: Object.keys(roleMappings).length,
+              levelsMapped: Object.keys(levelMappings).length,
+            },
+          },
+        });
       } else if (dataType === "benchmarks") {
         const benchmarks = rowsToImport
           .map((row) => transformBenchmark(row.data))
@@ -123,6 +141,32 @@ export function StepConfirm({ onSuccess, onClose }: StepConfirmProps) {
         ...result,
         skippedCount: result.skippedCount + summary.excluded,
       };
+      const auditVerificationSummary: Record<string, unknown> | null = verification
+        ? {
+            ...verification,
+            importPolicyApplied: resultWithSkips.importPolicyApplied ?? {
+              excludedRowCount: summary.excluded,
+              multiCurrencyDetected: hasMultiCurrency,
+              multiCurrencyConfirmed,
+              mappingSummary: {
+                departmentsMapped: Object.keys(departmentMappings).length,
+                rolesMapped: Object.keys(roleMappings).length,
+                levelsMapped: Object.keys(levelMappings).length,
+              },
+            },
+          }
+        : {
+            importPolicyApplied: resultWithSkips.importPolicyApplied ?? {
+              excludedRowCount: summary.excluded,
+              multiCurrencyDetected: hasMultiCurrency,
+              multiCurrencyConfirmed,
+              mappingSummary: {
+                departmentsMapped: Object.keys(departmentMappings).length,
+                rolesMapped: Object.keys(roleMappings).length,
+                levelsMapped: Object.keys(levelMappings).length,
+              },
+            },
+          };
 
       setLatestResult(resultWithSkips);
       setVerificationSummary(verification);
@@ -149,7 +193,7 @@ export function StepConfirm({ onSuccess, onClose }: StepConfirmProps) {
         createdCount: resultWithSkips.createdCount,
         updatedCount: resultWithSkips.updatedCount,
         skippedCount: resultWithSkips.skippedCount,
-        verificationSummary: verification,
+        verificationSummary: auditVerificationSummary,
       });
 
       if (resultWithSkips.success) {
@@ -157,7 +201,7 @@ export function StepConfirm({ onSuccess, onClose }: StepConfirmProps) {
         goToStep("success");
         onSuccess?.();
       } else {
-        setImportError(resultWithSkips.errors.join(", ") || "Import failed");
+        setImportError(resultWithSkips.message || resultWithSkips.errors[0] || "Import failed");
       }
     } catch (error) {
       setImportError(
@@ -181,6 +225,24 @@ export function StepConfirm({ onSuccess, onClose }: StepConfirmProps) {
 
   const Icon = getIcon();
 
+  const previewRows = getRowsToImport(store);
+  const distributionFromField = (field: string) => {
+    const counts = new Map<string, number>();
+    for (const row of previewRows) {
+      const value = String(row.data[field] ?? "").trim();
+      if (!value) continue;
+      counts.set(value, (counts.get(value) || 0) + 1);
+    }
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5);
+  };
+  const roleDistribution = distributionFromField("role");
+  const levelDistribution = distributionFromField("level");
+  const departmentDistribution = distributionFromField("department");
+  const currencyDistribution = distributionFromField("currency");
+  const hasMultiCurrency = currencyDistribution.length > 1;
+
   // Success state
   if (isSuccess) {
     return (
@@ -193,8 +255,17 @@ export function StepConfirm({ onSuccess, onClose }: StepConfirmProps) {
           Import Complete!
         </h2>
         <p className="text-brand-600 text-center max-w-md mb-6">
-          Successfully processed{" "}
-          <span className="font-semibold text-brand-900">{importedCount}</span>{" "}
+          <span className="font-semibold text-brand-900">{importedCount} rows imported</span>
+          {latestResult && (
+            <>
+              {" "}
+              and{" "}
+              <span className="font-semibold text-brand-900">
+                {latestResult.failedCount + latestResult.skippedCount} rows need review
+              </span>
+            </>
+          )}
+          {" "}
           {dataType === "employees" && "employees"}
           {dataType === "benchmarks" && "benchmark records"}
           {dataType === "compensation" && "compensation updates"}
@@ -446,6 +517,70 @@ export function StepConfirm({ onSuccess, onClose }: StepConfirmProps) {
         </div>
       </div>
 
+      {dataType === "employees" && (
+        <div className="rounded-xl border border-border bg-white p-4 mb-6">
+          <h4 className="text-sm font-semibold text-brand-900 mb-3">Import preview</h4>
+          <div className="grid gap-3 md:grid-cols-3 text-sm">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-brand-500 mb-1">Role distribution</p>
+              {roleDistribution.length === 0 ? (
+                <p className="text-brand-500">No mapped roles yet</p>
+              ) : (
+                roleDistribution.map(([value, count]) => (
+                  <p key={value} className="text-brand-700">
+                    {value}: <span className="font-medium text-brand-900">{count}</span>
+                  </p>
+                ))
+              )}
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wide text-brand-500 mb-1">Level distribution</p>
+              {levelDistribution.length === 0 ? (
+                <p className="text-brand-500">No mapped levels yet</p>
+              ) : (
+                levelDistribution.map(([value, count]) => (
+                  <p key={value} className="text-brand-700">
+                    {value}: <span className="font-medium text-brand-900">{count}</span>
+                  </p>
+                ))
+              )}
+            </div>
+            <div>
+              <p className="text-xs uppercase tracking-wide text-brand-500 mb-1">Department breakdown</p>
+              {departmentDistribution.length === 0 ? (
+                <p className="text-brand-500">No mapped departments yet</p>
+              ) : (
+                departmentDistribution.map(([value, count]) => (
+                  <p key={value} className="text-brand-700">
+                    {value}: <span className="font-medium text-brand-900">{count}</span>
+                  </p>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {hasMultiCurrency && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 mb-6">
+          <p className="text-sm font-medium text-amber-800">
+            Multiple currencies detected in this import.
+          </p>
+          <p className="text-xs text-amber-700 mt-1">
+            Confirm that salary values are already normalized per currency before importing.
+          </p>
+          <label className="mt-3 flex items-center gap-2 text-sm text-amber-800">
+            <input
+              type="checkbox"
+              checked={multiCurrencyConfirmed}
+              onChange={(e) => setMultiCurrencyConfirmed(e.target.checked)}
+              className="h-4 w-4 rounded border-amber-300 text-brand-500 focus:ring-brand-500"
+            />
+            I confirm multi-currency values are reviewed and ready to import.
+          </label>
+        </div>
+      )}
+
       {/* Error message */}
       {importError && (
         <div className="rounded-lg bg-red-50 border border-red-200 p-4 mb-6">
@@ -454,6 +589,16 @@ export function StepConfirm({ onSuccess, onClose }: StepConfirmProps) {
             <div>
               <p className="text-sm font-medium text-red-800">Import failed</p>
               <p className="text-sm text-red-600 mt-0.5">{importError}</p>
+              {latestResult && latestResult.errors.length > 1 && (
+                <ul className="mt-3 space-y-1 text-sm text-red-600">
+                  {latestResult.errors.slice(0, 6).map((message, index) => (
+                    <li key={`${message}-${index}`}>{message}</li>
+                  ))}
+                  {latestResult.errors.length > 6 && (
+                    <li>{latestResult.errors.length - 6} more issues need review.</li>
+                  )}
+                </ul>
+              )}
             </div>
           </div>
         </div>
@@ -488,7 +633,7 @@ export function StepConfirm({ onSuccess, onClose }: StepConfirmProps) {
         </button>
         <button
           onClick={handleImport}
-          disabled={isImporting || summary.importing === 0}
+          disabled={isImporting || summary.importing === 0 || (hasMultiCurrency && !multiCurrencyConfirmed)}
           className={clsx(
             "flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium transition-all",
             !isImporting && summary.importing > 0

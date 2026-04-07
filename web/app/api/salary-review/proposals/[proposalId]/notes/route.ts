@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { getWorkspaceContext } from "@/lib/workspace-context";
+import { jsonServerError, jsonValidationError } from "@/lib/errors/http";
 
 type NoteBody = {
   note?: string;
@@ -51,7 +52,10 @@ export async function GET(
     .order("created_at", { ascending: false });
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonServerError(error, {
+      defaultMessage: "We could not load proposal notes right now.",
+      logLabel: "Salary review proposal notes load failed",
+    });
   }
 
   return NextResponse.json({ notes: data || [] });
@@ -70,7 +74,10 @@ export async function POST(
   const { proposalId } = await params;
   const body = (await request.json().catch(() => null)) as NoteBody | null;
   if (!body?.note?.trim()) {
-    return NextResponse.json({ error: "note is required" }, { status: 400 });
+    return jsonValidationError({
+      message: "Please correct the highlighted fields and try again.",
+      fields: { note: "Enter a note and try again." },
+    });
   }
 
   const proposal = await ensureProposalAccess(supabase, wsContext.context.workspace_id, proposalId);
@@ -96,7 +103,10 @@ export async function POST(
     .single();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonServerError(error, {
+      defaultMessage: "We could not save this note right now.",
+      logLabel: "Salary review proposal note create failed",
+    });
   }
 
   const { error: auditError } = await supabase.from("salary_review_audit_events").insert({
@@ -110,7 +120,10 @@ export async function POST(
     },
   });
   if (auditError) {
-    return NextResponse.json({ error: auditError.message }, { status: 500 });
+    return jsonServerError(auditError, {
+      defaultMessage: "We could not save note activity right now.",
+      logLabel: "Salary review proposal note audit failed",
+    });
   }
 
   return NextResponse.json({ note: data }, { status: 201 });

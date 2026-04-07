@@ -84,7 +84,7 @@ type BenchmarkRow = BenchmarkResolverRow & {
 
 type BenchmarkMatch = {
   row: BenchmarkRow;
-  source: "market" | "uploaded";
+  source: "market" | "uploaded" | "ai-estimated";
   matchQuality: BenchmarkMatchQuality;
   matchType?: BenchmarkTrustMetadata["matchType"];
   matchedBenchmarkId?: string | null;

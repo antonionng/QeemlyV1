@@ -87,4 +87,45 @@ describe("GET /api/market-publish/latest", () => {
     expect(response.status).toBe(200);
     expect(payload).toEqual({ event: null });
   });
+
+  it("returns a safe error when the publish event query fails", async () => {
+    createClientMock.mockResolvedValue({
+      auth: {
+        getUser: vi.fn().mockResolvedValue({
+          data: { user: { id: "user-1" } },
+          error: null,
+        }),
+      },
+      from() {
+        return {
+          select() {
+            return {
+              eq() {
+                return {
+                  order() {
+                    return {
+                      limit() {
+                        return Promise.resolve({
+                          data: null,
+                          error: { message: "raw database outage details" },
+                        });
+                      },
+                    };
+                  },
+                };
+              },
+            };
+          },
+        };
+      },
+    });
+
+    const response = await GET();
+    const payload = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(payload.error).toBe("We could not load the latest market publish update right now.");
+    expect(payload.message).toBe("We could not load the latest market publish update right now.");
+    expect(payload.code).toBe("unknown_error");
+  });
 });

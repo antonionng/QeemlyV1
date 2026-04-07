@@ -96,8 +96,8 @@
   --color-accent-800: #1f2937;
   --color-accent-900: #111827;
   
-  --font-sans: var(--font-poppins);
-  --font-heading: var(--font-poppins);
+  --font-sans: var(--font-parkinsans);
+  --font-heading: var(--font-parkinsans);
   --radius-lg: 24px;
   --radius-md: 16px;
   --radius-card: 12px;
@@ -111,7 +111,7 @@ html {
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-poppins), system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: var(--font-parkinsans), sans-serif;
   min-height: 100vh;
   overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
@@ -1242,7 +1242,7 @@ body {
 
 /* Chart container styling */
 .tremor-Chart-root {
-  font-family: var(--font-poppins), system-ui, sans-serif !important;
+  font-family: var(--font-parkinsans), sans-serif !important;
 }
 
 /* Scrollbar styling for widget content */

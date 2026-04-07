@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { verifyOAuthState } from "@/lib/security/oauth-state";
+import { getAdminWorkspaceContextOrError } from "@/lib/workspace-access";
 
 /**
  * GET /api/integrations/callback
@@ -48,27 +49,14 @@ export async function GET(request: NextRequest) {
     }
 
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
+    const workspaceContext = await getAdminWorkspaceContextOrError();
+    if (workspaceContext.error) {
       return NextResponse.redirect(
         new URL("/dashboard/integrations?error=unauthorized", request.url)
       );
     }
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("workspace_id, role")
-      .eq("id", user.id)
-      .single();
-
-    if (!profile?.workspace_id || profile.role !== "admin") {
-      return NextResponse.redirect(
-        new URL("/dashboard/integrations?error=forbidden", request.url)
-      );
-    }
-
-    if (profile.workspace_id !== stateData.workspace_id) {
+    if (workspaceContext.context.workspace_id !== stateData.workspace_id) {
       return NextResponse.redirect(
         new URL("/dashboard/integrations?error=workspace_mismatch", request.url)
       );

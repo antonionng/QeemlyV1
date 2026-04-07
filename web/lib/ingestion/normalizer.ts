@@ -5,7 +5,7 @@
  */
 
 import {
-  matchRole,
+  matchRoleWithConfidence,
   matchLocation,
   matchLevel,
   getCurrencyForLocation,
@@ -43,15 +43,12 @@ export function mapRole(roleStr: string): RoleMappingResult | null {
   const original = (roleStr || "").trim();
   if (!original) return null;
 
-  const roleId = matchRole(original);
+  const matched = matchRoleWithConfidence(original);
+  const roleId = matched.roleId;
   if (!roleId) return null;
-
-  const normalized = normalize(original);
-  const normalizedId = normalize(roleId);
-  const exact = normalized === normalizedId || normalized.replace(/\s/g, "") === normalizedId;
   return {
     roleId,
-    confidence: exact ? "high" : "medium",
+    confidence: matched.confidence,
     original,
   };
 }

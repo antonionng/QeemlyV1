@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { mapMarketPublishEventRow } from "@/lib/benchmarks/market-publish";
+import { jsonServerError } from "@/lib/errors/http";
 
 export async function GET() {
   const supabase = await createClient();
@@ -21,7 +22,10 @@ export async function GET() {
     .limit(1);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonServerError(error, {
+      defaultMessage: "We could not load the latest market publish update right now.",
+      logLabel: "Latest market publish event load failed",
+    });
   }
 
   const latest = data?.[0];

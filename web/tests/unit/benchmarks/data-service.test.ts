@@ -254,6 +254,20 @@ describe("getBenchmark", () => {
     expect(secondResult).toEqual(aiDetailBriefing);
   });
 
+  it("returns null when the briefing API responds with non-OK status", async () => {
+    global.fetch = vi.fn().mockResolvedValue({
+      ok: false,
+      json: vi.fn().mockResolvedValue({
+        error: "AI detail briefing unavailable",
+        reasonCode: "briefing_generation_failed",
+      }),
+    }) as unknown as typeof fetch;
+
+    const result = await fetchAiBriefing("swe-devops", "dubai", "ic2");
+
+    expect(result).toBeNull();
+  });
+
   it("uses the batch lookup API for multi-entry market-backed requests", async () => {
     global.fetch = vi.fn().mockResolvedValue({
       ok: true,

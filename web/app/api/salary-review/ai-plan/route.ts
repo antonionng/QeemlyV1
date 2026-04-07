@@ -12,6 +12,7 @@ import {
 } from "@/lib/salary-review/ai-plan-engine";
 import { generateSalaryReviewAiRationale } from "@/lib/salary-review/ai-rationale";
 import { validateSalaryReviewAiPlanRequest } from "@/lib/salary-review";
+import { jsonServerError } from "@/lib/errors/http";
 
 type EmployeeRow = {
   id: string;
@@ -133,7 +134,10 @@ export async function POST(request: Request) {
     .eq("status", "active");
 
   if (employeesError) {
-    return NextResponse.json({ error: employeesError.message }, { status: 500 });
+    return jsonServerError(employeesError, {
+      defaultMessage: "We could not load employees for this salary review plan.",
+      logLabel: "Salary review AI plan employees load failed",
+    });
   }
 
   const employeeRows = (employees ?? []) as EmployeeRow[];
@@ -178,7 +182,10 @@ export async function POST(request: Request) {
     workspace_id
   );
   if (workspaceBenchmarkError) {
-    return NextResponse.json({ error: workspaceBenchmarkError.message }, { status: 500 });
+    return jsonServerError(workspaceBenchmarkError, {
+      defaultMessage: "We could not load benchmark data for this salary review plan.",
+      logLabel: "Salary review AI plan benchmarks load failed",
+    });
   }
 
   const marketBenchmarkRows = await (async () => {

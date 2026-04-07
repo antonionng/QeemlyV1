@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { runIntegrationSync } from "@/lib/ingestion/integration-sync";
+import { getWorkspaceContextOrError } from "@/lib/workspace-access";
 
 /**
  * POST /api/integrations/sync
@@ -17,11 +18,11 @@ import { runIntegrationSync } from "@/lib/ingestion/integration-sync";
 export async function POST(request: NextRequest) {
   try {
     const supabase = await createClient();
-    const { data: { user } } = await supabase.auth.getUser();
-
-    if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    const workspaceContext = await getWorkspaceContextOrError();
+    if (workspaceContext.error) {
+      return workspaceContext.error;
     }
+    const workspaceId = workspaceContext.context.workspace_id;
 
     const body = await request.json();
     const { integration_id, sync_type = "incremental" } = body;
@@ -30,21 +31,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing integration_id" }, { status: 400 });
     }
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("workspace_id")
-      .eq("id", user.id)
-      .single();
-
-    if (!profile?.workspace_id) {
-      return NextResponse.json({ error: "No workspace found" }, { status: 404 });
-    }
-
     const { data: integration } = await supabase
       .from("integrations")
       .select("*")
       .eq("id", integration_id)
-      .eq("workspace_id", profile?.workspace_id)
+      .eq("workspace_id", workspaceId)
       .single();
 
     if (!integration) {
@@ -55,7 +46,7 @@ export async function POST(request: NextRequest) {
       .from("integrations")
       .update({ status: "syncing", updated_at: new Date().toISOString() })
       .eq("id", integration_id)
-      .eq("workspace_id", profile.workspace_id);
+      .eq("workspace_id", workspaceId);
 
     const { data: syncLog } = await supabase
       .from("integration_sync_logs")
@@ -78,7 +69,7 @@ export async function POST(request: NextRequest) {
         updated_at: new Date().toISOString(),
       })
       .eq("id", integration_id)
-      .eq("workspace_id", profile.workspace_id);
+      .eq("workspace_id", workspaceId);
 
     if (syncLog) {
       await supabase

@@ -12,7 +12,12 @@ import {
 import { StepDataType } from "./step-data-type";
 import { StepFileUpload } from "./step-file-upload";
 import { StepColumnMapping } from "./step-column-mapping";
+import { StepDepartmentMapping } from "./step-department-mapping";
+import { StepRoleMapping } from "./step-role-mapping";
+import { StepLevelMapping } from "./step-level-mapping";
 import { StepValidation } from "./step-validation";
+import { StepAutoFix } from "./step-auto-fix";
+import { StepErrorReview } from "./step-error-review";
 import { StepConfirm } from "./step-confirm";
 
 type UploadWizardProps = {
@@ -26,7 +31,12 @@ const STEPS: { id: WizardStep; label: string }[] = [
   { id: "data-type", label: "Data Type" },
   { id: "file-upload", label: "Upload File" },
   { id: "column-mapping", label: "Map Columns" },
+  { id: "department-mapping", label: "Map Departments" },
+  { id: "role-mapping", label: "Map Roles" },
+  { id: "level-mapping", label: "Map Levels" },
   { id: "validation", label: "Validate" },
+  { id: "auto-fix", label: "Auto-fix" },
+  { id: "error-review", label: "Error Review" },
   { id: "confirm", label: "Import" },
 ];
 
@@ -170,7 +180,12 @@ export function UploadWizard({
         {currentStep === "data-type" && <StepDataType />}
         {currentStep === "file-upload" && <StepFileUpload />}
         {currentStep === "column-mapping" && <StepColumnMapping />}
+        {currentStep === "department-mapping" && <StepDepartmentMapping />}
+        {currentStep === "role-mapping" && <StepRoleMapping />}
+        {currentStep === "level-mapping" && <StepLevelMapping />}
         {currentStep === "validation" && <StepValidation />}
+        {currentStep === "auto-fix" && <StepAutoFix />}
+        {currentStep === "error-review" && <StepErrorReview />}
         {(currentStep === "confirm" || currentStep === "success") && (
           <StepConfirm onSuccess={onSuccess} onClose={handleClose} />
         )}

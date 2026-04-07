@@ -1,12 +1,12 @@
 "use client";
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useCallback, useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { FeatureNotEnabled } from "@/components/dashboard/feature-not-enabled";
 import { isFeatureEnabled } from "@/lib/release/ga-scope";
+import { useWorkspaceChangeVersion } from "@/lib/workspace-client";
 import { 
   CreditCard, 
   Check, 
@@ -20,37 +20,40 @@ import {
 
 export default function BillingPage() {
   const billingEnabled = isFeatureEnabled("billing");
-  const supabase = createClient();
+  const workspaceChangeVersion = useWorkspaceChangeVersion();
   const [loading, setLoading] = useState(true);
   const [workspace, setWorkspace] = useState<{ name?: string } | null>(null);
   const [plans, setPlans] = useState<any[]>([]);
   const [invoices, setInvoices] = useState<any[]>([]);
   const [subscription, setSubscription] = useState<any | null>(null);
 
-  useEffect(() => {
-    async function getData() {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("*, workspaces(*)")
-          .eq("id", user.id)
-          .single();
-        if (profile) {
-          setWorkspace(profile.workspaces);
-        }
+  const loadBillingData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [settingsRes, billingRes] = await Promise.all([
+        fetch("/api/settings"),
+        fetch("/api/billing"),
+      ]);
+
+      if (settingsRes.ok) {
+        const settingsData = await settingsRes.json();
+        setWorkspace({ name: settingsData.workspace_name || "Your Workspace" });
       }
-      const billingRes = await fetch("/api/billing");
+
       if (billingRes.ok) {
         const billingData = await billingRes.json();
         setPlans(billingData.plans || []);
         setInvoices(billingData.invoices || []);
-        setSubscription(billingData.subscription);
+        setSubscription(billingData.subscription || null);
       }
+    } finally {
       setLoading(false);
     }
-    getData();
-  }, [supabase]);
+  }, []);
+
+  useEffect(() => {
+    void loadBillingData();
+  }, [loadBillingData, workspaceChangeVersion]);
 
   if (!billingEnabled) {
     return <FeatureNotEnabled featureName="Billing" />;
@@ -63,6 +66,8 @@ export default function BillingPage() {
       </div>
     );
   }
+
+  const hasActiveSubscription = Boolean(subscription?.billing_plans?.name);
 
   return (
     <div className="max-w-6xl space-y-10">
@@ -82,7 +87,15 @@ export default function BillingPage() {
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-lg font-bold text-brand-900">{subscription?.billing_plans?.name || "No active plan"}</h2>
-                <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-bold text-green-700">Active</span>
+                <span
+                  className={`rounded-full px-2 py-0.5 text-xs font-bold ${
+                    hasActiveSubscription
+                      ? "bg-green-100 text-green-700"
+                      : "bg-slate-100 text-slate-600"
+                  }`}
+                >
+                  {hasActiveSubscription ? "Active" : "Not subscribed"}
+                </span>
               </div>
               <p className="text-sm text-brand-600">
                 Your next billing date is <strong>{subscription?.next_billing_at ? new Date(subscription.next_billing_at).toLocaleDateString("en-GB") : "Not scheduled"}</strong>
@@ -90,12 +103,9 @@ export default function BillingPage() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" disabled>
               <CreditCard size={16} className="mr-2" />
-              Update Payment
-            </Button>
-            <Button variant="ghost" size="sm">
-              Cancel Plan
+              Payment tools soon
             </Button>
           </div>
         </div>
@@ -124,7 +134,7 @@ export default function BillingPage() {
           {plans.map((plan) => {
             const isCurrent = subscription?.billing_plans?.code === plan.code;
             const monthly = Number(plan.monthly_price || 0);
-            const cta = isCurrent ? "Current Plan" : monthly > 0 ? "Upgrade" : "Contact Sales";
+            const cta = isCurrent ? "Current Plan" : monthly > 0 ? "Upgrade soon" : "Contact Sales";
             return (
             <Card 
               key={plan.id} 
@@ -158,10 +168,10 @@ export default function BillingPage() {
               <Button 
                 fullWidth 
                 variant={isCurrent ? "outline" : plan.code === "professional" ? "primary" : "ghost"}
-                disabled={isCurrent}
+                disabled
               >
                 {cta}
-                {!isCurrent && <ArrowUpRight size={16} className="ml-1" />}
+                {!isCurrent && monthly > 0 && <ArrowUpRight size={16} className="ml-1" />}
               </Button>
             </Card>
           )})}
@@ -196,10 +206,19 @@ export default function BillingPage() {
                       </span>
                     </td>
                     <td className="px-6 py-4 text-right">
-                      <button className="text-brand-500 hover:text-brand-700 font-medium text-xs">
-                        <Receipt size={14} className="inline mr-1" />
-                        Download
-                      </button>
+                      {invoice.download_url || invoice.hosted_invoice_url ? (
+                        <a
+                          href={invoice.download_url || invoice.hosted_invoice_url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-brand-500 hover:text-brand-700 font-medium text-xs"
+                        >
+                          <Receipt size={14} className="inline mr-1" />
+                          Download
+                        </a>
+                      ) : (
+                        <span className="text-xs font-medium text-brand-400">Unavailable</span>
+                      )}
                     </td>
                   </tr>
                 ))}

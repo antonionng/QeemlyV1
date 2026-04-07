@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { getWorkspaceContext } from "@/lib/workspace-context";
+import { jsonServerError } from "@/lib/errors/http";
 
 type OfferStatus = "draft" | "ready" | "sent" | "archived";
 type OfferFormat = "PDF" | "DOCX" | "JSON";
@@ -29,10 +31,11 @@ export async function GET(
     return NextResponse.json({ error: wsContext.error }, { status: wsContext.status });
   }
 
-  const { workspace_id } = wsContext.context;
+  const { workspace_id, is_override } = wsContext.context;
+  const queryClient = is_override ? createServiceClient() : supabase;
   const { id } = await params;
 
-  const { data, error } = await supabase
+  const { data, error } = await queryClient
     .from("offers")
     .select("*")
     .eq("id", id)
@@ -56,11 +59,12 @@ export async function PATCH(
     return NextResponse.json({ error: wsContext.error }, { status: wsContext.status });
   }
 
-  const { workspace_id } = wsContext.context;
+  const { workspace_id, is_override } = wsContext.context;
+  const queryClient = is_override ? createServiceClient() : supabase;
   const { id } = await params;
   const body = (await request.json()) as OfferUpdateBody;
 
-  const { data: existing } = await supabase
+  const { data: existing } = await queryClient
     .from("offers")
     .select("*")
     .eq("id", id)
@@ -111,15 +115,15 @@ export async function PATCH(
   if (hasManual && !isValidEmail(String(merged.recipient_email))) {
     return NextResponse.json({ error: "recipient_email is invalid." }, { status: 400 });
   }
-  if (updates.export_format && updates.export_format !== "JSON") {
+  if (updates.export_format && !["JSON", "PDF"].includes(updates.export_format as string)) {
     return NextResponse.json(
-      { error: "Only JSON offer exports are currently supported." },
+      { error: "Supported export formats are JSON and PDF." },
       { status: 400 },
     );
   }
 
   if (hasEmployee && merged.employee_id) {
-    const { data: employee } = await supabase
+    const { data: employee } = await queryClient
       .from("employees")
       .select("id")
       .eq("id", merged.employee_id)
@@ -135,7 +139,7 @@ export async function PATCH(
 
   updates.updated_at = new Date().toISOString();
 
-  const { data, error } = await supabase
+  const { data, error } = await queryClient
     .from("offers")
     .update(updates)
     .eq("id", id)
@@ -144,7 +148,10 @@ export async function PATCH(
     .single();
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonServerError(error, {
+      defaultMessage: "We could not update this offer right now.",
+      logLabel: "Offer update failed",
+    });
   }
 
   return NextResponse.json({ offer: data });
@@ -160,17 +167,21 @@ export async function DELETE(
     return NextResponse.json({ error: wsContext.error }, { status: wsContext.status });
   }
 
-  const { workspace_id } = wsContext.context;
+  const { workspace_id, is_override } = wsContext.context;
+  const queryClient = is_override ? createServiceClient() : supabase;
   const { id } = await params;
 
-  const { error } = await supabase
+  const { error } = await queryClient
     .from("offers")
     .delete()
     .eq("id", id)
     .eq("workspace_id", workspace_id);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return jsonServerError(error, {
+      defaultMessage: "We could not delete this offer right now.",
+      logLabel: "Offer delete failed",
+    });
   }
 
   return NextResponse.json({ success: true });

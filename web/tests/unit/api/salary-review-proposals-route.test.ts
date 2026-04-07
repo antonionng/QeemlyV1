@@ -228,6 +228,77 @@ describe("POST /api/salary-review/proposals", () => {
     ]);
   });
 
+  it("returns a safe error when draft creation fails", async () => {
+    createClientMock.mockResolvedValue({
+      from: vi.fn((table: string) => {
+        if (table === "salary_review_cycles") {
+          return {
+            insert: vi.fn(() => ({
+              select: vi.fn(() => ({
+                single: vi.fn().mockResolvedValue({
+                  data: null,
+                  error: { message: "duplicate key value violates unique constraint" },
+                }),
+              })),
+            })),
+          };
+        }
+
+        throw new Error(`Unexpected table: ${table}`);
+      }),
+    });
+    getWorkspaceContextMock.mockResolvedValue({
+      context: {
+        workspace_id: "ws-1",
+        is_override: false,
+        override_workspace_id: null,
+        profile_workspace_id: "ws-1",
+        is_super_admin: false,
+        user_id: "user-1",
+        user_email: "user@example.com",
+      },
+    });
+
+    const response = await POST(
+      new Request("http://localhost/api/salary-review/proposals", {
+        method: "POST",
+        body: JSON.stringify({
+          source: "ai",
+          cycle: "annual",
+          budgetType: "absolute",
+          budgetAbsolute: 10_000,
+          budgetPercentage: 0,
+          effectiveDate: "2026-04-01",
+          items: [
+            {
+              employeeId: "emp-1",
+              employeeName: "Ava Stone",
+              currentSalary: 100_000,
+              proposedIncrease: 6_000,
+              proposedSalary: 106_000,
+              proposedPercentage: 6,
+              selected: true,
+              reasonSummary: "Market adjustment",
+              changeReason: "market_adjustment",
+              recommendedLevelId: null,
+              recommendedLevelName: null,
+              benchmarkSnapshot: {
+                source: "market",
+                matchQuality: "exact",
+              },
+            },
+          ],
+        }),
+      }) as never,
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(500);
+    expect(payload.error).toBe("We could not create this proposal right now.");
+    expect(payload.message).toBe("We could not create this proposal right now.");
+    expect(payload.code).toBe("unknown_error");
+  });
+
   it("creates a department-split master cycle with allocation rows and child cycles", async () => {
     const cycleRecord = {
       id: "master-1",

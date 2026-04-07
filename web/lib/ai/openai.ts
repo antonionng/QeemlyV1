@@ -37,5 +37,23 @@ export function getBenchmarkModel(): string {
 }
 
 export function getBenchmarkBriefingModel(): string {
-  return process.env.OPENAI_BENCHMARK_BRIEFING_MODEL || DEFAULT_BENCHMARK_BRIEFING_MODEL;
+  return getBenchmarkBriefingModelCandidates()[0];
+}
+
+export function getBenchmarkBriefingModelCandidates(): string[] {
+  const candidates = [
+    process.env.OPENAI_BENCHMARK_BRIEFING_MODEL,
+    process.env.OPENAI_ADVISORY_MODEL,
+    process.env.OPENAI_CHAT_MODEL,
+    DEFAULT_BENCHMARK_BRIEFING_MODEL,
+    DEFAULT_ADVISORY_MODEL,
+  ];
+
+  const unique = new Set<string>();
+  for (const value of candidates) {
+    const normalized = value?.trim();
+    if (normalized) unique.add(normalized);
+  }
+
+  return [...unique];
 }

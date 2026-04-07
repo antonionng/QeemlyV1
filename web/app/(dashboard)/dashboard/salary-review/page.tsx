@@ -19,6 +19,7 @@ import { buildSalaryReviewCsv } from "@/lib/salary-review/export";
 import { buildSalaryReviewInsightModel } from "@/lib/salary-review/insights";
 import { parseSalaryReviewSearchParams } from "@/lib/salary-review/url-state";
 import { buildSalaryReviewBudgetModel } from "@/lib/salary-review/workspace-budget";
+import { DashboardPageHeader } from "@/components/dashboard/page-header";
 import { ReviewActionCards } from "@/components/dashboard/salary-review/review-action-cards";
 import { ReviewDataHealth } from "@/components/dashboard/salary-review/review-data-health";
 import { ReviewSummaryHero } from "@/components/dashboard/salary-review/review-summary-hero";
@@ -498,119 +499,117 @@ function SalaryReviewPageContent() {
         </div>
       )}
 
-      <div id="review-controls" className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-accent-800 sm:text-3xl">
-            Salary Review
-          </h1>
-          <p className="mt-1 text-sm text-accent-600">
-            {activeTab === "overview"
-              ? "Review employee coverage, watchouts, and budget context before opening a draft."
-              : activeTab === "drafts"
-                ? "Open saved draft cycles and continue the right review flow."
-              : activeTab === "review"
-                ? buildReviewFlow.activeStep === "setup"
-                  ? "Step 1 of 3. Set up the cycle, choose the employee scope, and decide whether to draft manually or with AI."
-                  : buildReviewFlow.activeStep === "draft"
-                    ? "Step 2 of 3. Adjust salary recommendations manually or refine the AI draft before final review."
-                    : "Step 3 of 3. Review the final budget, watchouts, and data health before submitting for approval."
-                : activeTab === "approvals"
-                  ? "Review proposals that are actively awaiting approval."
-                  : "Browse completed review cycles and inspect their history."}
-          </p>
-        </div>
-        {activeTab === "review" ? (
-          <div className="flex items-center gap-2 shrink-0">
-            {buildReviewFlow.activeStep === "setup" ? (
-              <>
-                <Button
-                  size="sm"
-                  onClick={() => setShowAddEmployeeModal(true)}
-                  className="h-9 rounded-full bg-brand-500 px-5 text-white hover:bg-brand-600"
-                >
-                  <UserPlus className="mr-2 h-4 w-4" />
-                  Add Employee
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowUploadModal(true)}
-                  className="h-9 rounded-full border-border bg-white px-5 text-accent-700 hover:bg-accent-50"
-                >
-                  <Upload className="mr-2 h-4 w-4" />
-                  Bulk Import
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleBuildManually}
-                  disabled={employees.length === 0}
-                  className="h-9 rounded-full border-border bg-white px-5 text-accent-700 hover:bg-accent-50"
-                >
-                  Build Manually
-                </Button>
-              </>
-            ) : buildReviewFlow.activeStep === "draft" ? (
-              <>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => void handleSaveDraft()}
-                  disabled={isProposalLoading || employees.length === 0}
-                  className="h-9 rounded-full border-border bg-white px-5 text-accent-700 hover:bg-accent-50"
-                >
-                  Save Draft
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={handleOpenFinalReview}
-                  disabled={!buildReviewFlow.canContinueToReview}
-                  className="h-9 rounded-full bg-brand-500 px-5 text-white hover:bg-brand-600"
-                >
-                  Continue To Final Review
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleBackToDraft}
-                  className="h-9 rounded-full border-border bg-white px-5 text-accent-700 hover:bg-accent-50"
-                >
-                  Back To Adjustments
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleExport}
-                  className="h-9 rounded-full border-border bg-white px-5 text-accent-700 hover:bg-accent-50"
-                >
-                  <Download className="mr-2 h-4 w-4" />
-                  Export
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={() => void handleSubmitProposal()}
-                  disabled={isProposalLoading || !activeProposal}
-                  className="h-9 rounded-full bg-brand-500 px-5 text-white hover:bg-brand-600"
-                >
-                  Submit For Approval
-                </Button>
-              </>
-            )}
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => void handleStartNewCycle()}
-              className="h-9 rounded-full border-border bg-white px-5 text-accent-700 hover:bg-accent-50"
-            >
-              <RefreshCw className="mr-2 h-4 w-4" />
-              New Cycle
-            </Button>
-          </div>
-        ) : null}
-      </div>
+      <DashboardPageHeader
+        title="Salary Review"
+        subtitle={
+          activeTab === "overview"
+            ? "Review employee coverage, watchouts, and budget context before opening a draft."
+            : activeTab === "drafts"
+              ? "Open saved draft cycles and continue the right review flow."
+            : activeTab === "review"
+              ? buildReviewFlow.activeStep === "setup"
+                ? "Step 1 of 3. Set up the cycle, choose the employee scope, and decide whether to draft manually or with AI."
+                : buildReviewFlow.activeStep === "draft"
+                  ? "Step 2 of 3. Adjust salary recommendations manually or refine the AI draft before final review."
+                  : "Step 3 of 3. Review the final budget, watchouts, and data health before submitting for approval."
+              : activeTab === "approvals"
+                ? "Review proposals that are actively awaiting approval."
+                : "Browse completed review cycles and inspect their history."
+        }
+        actions={
+          activeTab === "review" ? (
+            <>
+              {buildReviewFlow.activeStep === "setup" ? (
+                <>
+                  <Button
+                    size="sm"
+                    onClick={() => setShowAddEmployeeModal(true)}
+                    className="h-9 rounded-full bg-brand-500 px-5 text-white hover:bg-brand-600"
+                  >
+                    <UserPlus className="mr-2 h-4 w-4" />
+                    Add Employee
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowUploadModal(true)}
+                    className="h-9 rounded-full border-border bg-white px-5 text-accent-700 hover:bg-accent-50"
+                  >
+                    <Upload className="mr-2 h-4 w-4" />
+                    Bulk Import
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleBuildManually}
+                    disabled={employees.length === 0}
+                    className="h-9 rounded-full border-border bg-white px-5 text-accent-700 hover:bg-accent-50"
+                  >
+                    Build Manually
+                  </Button>
+                </>
+              ) : buildReviewFlow.activeStep === "draft" ? (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => void handleSaveDraft()}
+                    disabled={isProposalLoading || employees.length === 0}
+                    className="h-9 rounded-full border-border bg-white px-5 text-accent-700 hover:bg-accent-50"
+                  >
+                    Save Draft
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleOpenFinalReview}
+                    disabled={!buildReviewFlow.canContinueToReview}
+                    className="h-9 rounded-full bg-brand-500 px-5 text-white hover:bg-brand-600"
+                  >
+                    Continue To Final Review
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleBackToDraft}
+                    className="h-9 rounded-full border-border bg-white px-5 text-accent-700 hover:bg-accent-50"
+                  >
+                    Back To Adjustments
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExport}
+                    className="h-9 rounded-full border-border bg-white px-5 text-accent-700 hover:bg-accent-50"
+                  >
+                    <Download className="mr-2 h-4 w-4" />
+                    Export
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => void handleSubmitProposal()}
+                    disabled={isProposalLoading || !activeProposal}
+                    className="h-9 rounded-full bg-brand-500 px-5 text-white hover:bg-brand-600"
+                  >
+                    Submit For Approval
+                  </Button>
+                </>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void handleStartNewCycle()}
+                className="h-9 rounded-full border-border bg-white px-5 text-accent-700 hover:bg-accent-50"
+              >
+                <RefreshCw className="mr-2 h-4 w-4" />
+                New Cycle
+              </Button>
+            </>
+          ) : undefined
+        }
+      />
 
       <ReviewTabs activeTab={renderedTab} items={reviewTabs} onChange={handleTabChange} />
 
