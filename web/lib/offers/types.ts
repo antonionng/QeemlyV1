@@ -1,6 +1,7 @@
 export type OfferStatus = "draft" | "ready" | "sent" | "archived";
 export type OfferExportFormat = "PDF" | "DOCX" | "JSON";
 export type EmploymentType = "national" | "expat";
+export type OfferMode = "candidate_manual" | "candidate_advised" | "internal";
 
 export interface OfferBenchmarkSnapshot {
   benchmark_percentiles: Record<string, number>;
@@ -14,6 +15,23 @@ export interface OfferBenchmarkSnapshot {
   level: Record<string, unknown>;
   location: Record<string, unknown>;
   form_data: Record<string, unknown>;
+}
+
+export interface InternalOfferMetadata {
+  rationale?: string;
+  band_position?: "below" | "in-band" | "above";
+  negotiation_floor?: number;
+  negotiation_ceiling?: number;
+  risk_flags?: string[];
+  talking_points?: string[];
+  approval_notes?: string;
+}
+
+export interface AdvisedBaseline {
+  recommended_value: number;
+  recommended_low: number;
+  recommended_high: number;
+  recommended_percentile: number;
 }
 
 export interface Offer {
@@ -36,11 +54,15 @@ export interface Offer {
   benchmark_snapshot: OfferBenchmarkSnapshot;
   export_format: OfferExportFormat;
   status: OfferStatus;
+  offer_mode: OfferMode;
+  internal_metadata: InternalOfferMetadata;
+  advised_baseline: AdvisedBaseline | null;
   created_at: string;
   updated_at: string;
 }
 
 export interface CreateOfferPayload {
+  offer_mode: OfferMode;
   employee_id?: string | null;
   recipient_name?: string | null;
   recipient_email?: string | null;
@@ -57,6 +79,8 @@ export interface CreateOfferPayload {
   benchmark_snapshot?: OfferBenchmarkSnapshot;
   export_format?: OfferExportFormat;
   status?: OfferStatus;
+  internal_metadata?: InternalOfferMetadata;
+  advised_baseline?: AdvisedBaseline | null;
 }
 
 export interface UpdateOfferPayload {
@@ -67,6 +91,12 @@ export interface UpdateOfferPayload {
   export_format?: OfferExportFormat;
   salary_breakdown?: Record<string, unknown>;
   benchmark_snapshot?: OfferBenchmarkSnapshot;
+  target_percentile?: number;
+  offer_value?: number;
+  offer_low?: number;
+  offer_high?: number;
+  internal_metadata?: InternalOfferMetadata;
+  advised_baseline?: AdvisedBaseline | null;
 }
 
 export interface OfferExportPayload {

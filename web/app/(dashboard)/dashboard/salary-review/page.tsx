@@ -101,6 +101,7 @@ function SalaryReviewPageContent() {
     updateSettings,
     applyDefaultIncreases,
     applyAiProposal,
+    applyAiScenario,
     resetReview,
     loadEmployeesFromDb,
     loadCycles,
@@ -1377,6 +1378,15 @@ function SalaryReviewPageContent() {
           setFeedback({
             type: "success",
             message: "AI draft applied. Review the employee-level changes, then continue to final review.",
+          });
+        }}
+        onApproveScenario={async ({ scenario }) => {
+          applyAiScenario(scenario);
+          await handleSaveDraft("ai");
+          setRequestedBuildReviewStep("draft");
+          setFeedback({
+            type: "success",
+            message: `"${scenario.label}" scenario applied. Review the employee-level changes, then continue to final review.`,
           });
         }}
       />

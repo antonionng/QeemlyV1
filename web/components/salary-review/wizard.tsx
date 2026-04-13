@@ -99,6 +99,7 @@ export function SalaryReviewWizard({
     saveDraftProposal,
     submitActiveProposal,
     applyAiProposal,
+    applyAiScenario,
     applyDefaultIncreases,
     updateSettings,
     syncDepartmentAllocations,
@@ -565,6 +566,16 @@ export function SalaryReviewWizard({
           setActiveStep("draft");
           setShowAiModal(false);
           setFeedback({ type: "success", message: "AI draft applied. Review the changes in the workspace table." });
+        }}
+        onApproveScenario={async ({ scenario }) => {
+          applyAiScenario(scenario);
+          await saveDraftProposal("ai");
+          setActiveStep("draft");
+          setShowAiModal(false);
+          setFeedback({
+            type: "success",
+            message: `"${scenario.label}" scenario applied. Review the changes in the workspace table.`,
+          });
         }}
       />
     </div>

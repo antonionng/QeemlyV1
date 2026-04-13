@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getWorkspaceContext } from "@/lib/workspace-context";
 import { renderOfferPdf, type OfferPdfData } from "@/lib/offers/pdf-renderer";
+import type { AdvisedBaseline, InternalOfferMetadata, OfferMode } from "@/lib/offers/types";
 
 export async function GET(
   _request: NextRequest,
@@ -74,6 +75,9 @@ export async function GET(
   const level = (snapshot.level ?? {}) as Record<string, unknown>;
   const location = (snapshot.location ?? {}) as Record<string, unknown>;
 
+  const offerMode = (offer.offer_mode as OfferMode | null | undefined) ?? "candidate_manual";
+  const isInternal = offerMode === "internal";
+
   let recipientName = (offer.recipient_name as string) || "";
   if (!recipientName && offer.employee_id) {
     const { data: employee } = await queryClient
@@ -92,11 +96,11 @@ export async function GET(
     companyName: (settings.company_name as string) || "Your Company",
     companyLogo: (settings.company_logo as string) || null,
     primaryColor: (settings.primary_color as string) || "#5C45FD",
-    recipientName: recipientName || "Candidate",
+    recipientName: recipientName || (isInternal ? "Internal" : "Candidate"),
     recipientEmail: (offer.recipient_email as string) || null,
     roleTitle: (role.title as string) || offer.role_id,
     levelName: (level.name as string) || offer.level_id,
-    locationCity: (location.city as string) || "",
+    locationCity: (location.city as string) || (location.label as string) || "",
     locationCountry: (location.country as string) || "",
     employmentType: offer.employment_type || "national",
     targetPercentile: offer.target_percentile,
@@ -105,18 +109,30 @@ export async function GET(
     offerHigh: offer.offer_high,
     currency: offer.currency,
     salaryBreakdown: breakdown,
-    benchmarkSource:
-      (snapshot.benchmark_source as string) || "market",
+    benchmarkSource: (snapshot.benchmark_source as string) || "market",
     confidence: (snapshot.confidence as string) || "Medium",
     createdAt: offer.created_at,
+    offerMode,
+    internalMetadata: isInternal
+      ? ((offer.internal_metadata ?? {}) as InternalOfferMetadata)
+      : undefined,
+    advisedBaseline: offerMode === "candidate_advised"
+      ? ((offer.advised_baseline ?? null) as AdvisedBaseline | null)
+      : undefined,
   };
 
   try {
     const pdfBuffer = await renderOfferPdf(pdfData);
     const pdfBytes = new Uint8Array(pdfBuffer);
 
-    const safeName = recipientName.replace(/[^a-zA-Z0-9-_ ]/g, "").trim() || "offer";
-    const filename = `Qeemly_Offer_${safeName}_${id.substring(0, 8)}.pdf`;
+    let filename: string;
+    if (isInternal) {
+      const safeRole = (role.title as string || "brief").replace(/[^a-zA-Z0-9-_ ]/g, "").trim();
+      filename = `Qeemly_Internal_Brief_${safeRole}_${id.substring(0, 8)}.pdf`;
+    } else {
+      const safeName = recipientName.replace(/[^a-zA-Z0-9-_ ]/g, "").trim() || "offer";
+      filename = `Qeemly_Offer_${safeName}_${id.substring(0, 8)}.pdf`;
+    }
 
     return new NextResponse(pdfBytes, {
       status: 200,

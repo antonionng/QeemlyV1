@@ -2,12 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getWorkspaceContext } from "@/lib/workspace-context";
-import type { OfferBenchmarkSnapshot } from "@/lib/offers/types";
+import type { OfferBenchmarkSnapshot, OfferMode } from "@/lib/offers/types";
 import { jsonServerError } from "@/lib/errors/http";
 
 type RecipientMode = "employee" | "manual";
 
+const VALID_OFFER_MODES: OfferMode[] = [
+  "candidate_manual",
+  "candidate_advised",
+  "internal",
+];
+
 type OfferCreateBody = {
+  offer_mode?: OfferMode;
   employee_id?: string | null;
   recipient_name?: string | null;
   recipient_email?: string | null;
@@ -24,6 +31,8 @@ type OfferCreateBody = {
   benchmark_snapshot?: Partial<OfferBenchmarkSnapshot>;
   export_format?: "PDF" | "DOCX" | "JSON";
   status?: "draft" | "ready" | "sent" | "archived";
+  internal_metadata?: Record<string, unknown>;
+  advised_baseline?: Record<string, unknown> | null;
 };
 
 function isValidEmail(email: string): boolean {
@@ -97,6 +106,14 @@ export async function POST(request: NextRequest) {
   const queryClient = is_override ? createServiceClient() : supabase;
   const body = (await request.json()) as OfferCreateBody;
 
+  const offerMode: OfferMode = body.offer_mode || "candidate_advised";
+  if (!VALID_OFFER_MODES.includes(offerMode)) {
+    return NextResponse.json(
+      { error: "offer_mode must be candidate_manual, candidate_advised, or internal." },
+      { status: 400 },
+    );
+  }
+
   const requiredFields: Array<keyof OfferCreateBody> = [
     "role_id",
     "level_id",
@@ -114,15 +131,15 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  const mode = resolveRecipientMode(body);
-  if (!mode) {
+  const recipientMode = resolveRecipientMode(body);
+  if (offerMode !== "internal" && !recipientMode) {
     return NextResponse.json(
       { error: "Provide either employee_id or recipient_name + recipient_email." },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
-  if (mode === "manual" && body.recipient_email && !isValidEmail(body.recipient_email)) {
+  if (recipientMode === "manual" && body.recipient_email && !isValidEmail(body.recipient_email)) {
     return NextResponse.json({ error: "recipient_email is invalid." }, { status: 400 });
   }
   if (body.export_format && !["JSON", "PDF"].includes(body.export_format)) {
@@ -133,7 +150,7 @@ export async function POST(request: NextRequest) {
   }
 
   let employeeId: string | null = null;
-  if (mode === "employee" && body.employee_id) {
+  if (recipientMode === "employee" && body.employee_id) {
     const { data: employee } = await queryClient
       .from("employees")
       .select("id")
@@ -152,84 +169,135 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "target_percentile must be between 25 and 90." }, { status: 400 });
   }
 
-  const clientSnapshot = body.benchmark_snapshot ?? {};
-  const snapshotPercentiles = clientSnapshot.benchmark_percentiles as
-    | Record<string, number>
-    | undefined;
+  let offerValue: number;
+  let offerLow: number;
+  let offerHigh: number;
+  let benchmarkSnapshot: OfferBenchmarkSnapshot;
+  let advisedBaseline: Record<string, unknown> | null = null;
 
-  if (
-    !snapshotPercentiles ||
-    !Number.isFinite(snapshotPercentiles.p25) ||
-    !Number.isFinite(snapshotPercentiles.p50) ||
-    !Number.isFinite(snapshotPercentiles.p75) ||
-    !Number.isFinite(snapshotPercentiles.p90)
-  ) {
-    return NextResponse.json(
-      { error: "benchmark_snapshot must include valid percentile data (p25, p50, p75, p90)." },
-      { status: 400 },
-    );
-  }
+  if (offerMode === "candidate_manual") {
+    offerValue = Math.round(Number(body.offer_value));
+    offerLow = Math.round(Number(body.offer_low));
+    offerHigh = Math.round(Number(body.offer_high));
 
-  const percentiles = {
-    p10: Number(snapshotPercentiles.p10 ?? snapshotPercentiles.p25),
-    p25: Number(snapshotPercentiles.p25),
-    p50: Number(snapshotPercentiles.p50),
-    p75: Number(snapshotPercentiles.p75),
-    p90: Number(snapshotPercentiles.p90),
-  };
-
-  const offerValue = Math.round(getExpectedOfferValue(percentiles, targetPercentile));
-  const offerLow = Math.round(offerValue * 0.96);
-  const offerHigh = Math.round(offerValue * 1.04);
-
-  const benchmarkSnapshot: OfferBenchmarkSnapshot = {
-    benchmark_percentiles: percentiles,
-    benchmark_source:
-      clientSnapshot.benchmark_source === "uploaded" ? "uploaded" : "market",
-    sample_size:
-      typeof clientSnapshot.sample_size === "number"
-        ? clientSnapshot.sample_size
-        : 0,
-    confidence:
-      typeof clientSnapshot.confidence === "string"
-        ? clientSnapshot.confidence
-        : "Medium",
-    last_updated:
-      typeof clientSnapshot.last_updated === "string"
-        ? clientSnapshot.last_updated
-        : null,
-    freshness_at:
-      typeof clientSnapshot.freshness_at === "string"
-        ? clientSnapshot.freshness_at
-        : null,
-    provenance:
-      typeof clientSnapshot.provenance === "string"
-        ? clientSnapshot.provenance
-        : null,
-    role:
-      clientSnapshot.role && typeof clientSnapshot.role === "object"
+    const clientSnapshot = body.benchmark_snapshot ?? {};
+    benchmarkSnapshot = {
+      benchmark_percentiles: (clientSnapshot.benchmark_percentiles as Record<string, number>) || {},
+      benchmark_source: "market",
+      sample_size: 0,
+      confidence: "N/A",
+      last_updated: null,
+      freshness_at: null,
+      provenance: null,
+      role: clientSnapshot.role && typeof clientSnapshot.role === "object"
         ? (clientSnapshot.role as Record<string, unknown>)
         : { id: body.role_id },
-    level:
-      clientSnapshot.level && typeof clientSnapshot.level === "object"
+      level: clientSnapshot.level && typeof clientSnapshot.level === "object"
         ? (clientSnapshot.level as Record<string, unknown>)
         : { id: body.level_id },
-    location:
-      clientSnapshot.location && typeof clientSnapshot.location === "object"
+      location: clientSnapshot.location && typeof clientSnapshot.location === "object"
         ? (clientSnapshot.location as Record<string, unknown>)
         : { id: body.location_id },
-    form_data:
-      clientSnapshot.form_data && typeof clientSnapshot.form_data === "object"
+      form_data: clientSnapshot.form_data && typeof clientSnapshot.form_data === "object"
         ? (clientSnapshot.form_data as Record<string, unknown>)
         : {},
-  };
+    };
+  } else {
+    const clientSnapshot = body.benchmark_snapshot ?? {};
+    const snapshotPercentiles = clientSnapshot.benchmark_percentiles as
+      | Record<string, number>
+      | undefined;
+
+    if (
+      !snapshotPercentiles ||
+      !Number.isFinite(snapshotPercentiles.p25) ||
+      !Number.isFinite(snapshotPercentiles.p50) ||
+      !Number.isFinite(snapshotPercentiles.p75) ||
+      !Number.isFinite(snapshotPercentiles.p90)
+    ) {
+      return NextResponse.json(
+        { error: "benchmark_snapshot must include valid percentile data (p25, p50, p75, p90)." },
+        { status: 400 },
+      );
+    }
+
+    const percentiles = {
+      p10: Number(snapshotPercentiles.p10 ?? snapshotPercentiles.p25),
+      p25: Number(snapshotPercentiles.p25),
+      p50: Number(snapshotPercentiles.p50),
+      p75: Number(snapshotPercentiles.p75),
+      p90: Number(snapshotPercentiles.p90),
+    };
+
+    const recommendedValue = Math.round(getExpectedOfferValue(percentiles, targetPercentile));
+    const recommendedLow = Math.round(recommendedValue * 0.96);
+    const recommendedHigh = Math.round(recommendedValue * 1.04);
+
+    if (offerMode === "candidate_advised") {
+      advisedBaseline = body.advised_baseline ?? {
+        recommended_value: recommendedValue,
+        recommended_low: recommendedLow,
+        recommended_high: recommendedHigh,
+        recommended_percentile: targetPercentile,
+      };
+      offerValue = Number.isFinite(Number(body.offer_value)) ? Math.round(Number(body.offer_value)) : recommendedValue;
+      offerLow = Number.isFinite(Number(body.offer_low)) ? Math.round(Number(body.offer_low)) : recommendedLow;
+      offerHigh = Number.isFinite(Number(body.offer_high)) ? Math.round(Number(body.offer_high)) : recommendedHigh;
+    } else {
+      offerValue = Math.round(getExpectedOfferValue(percentiles, targetPercentile));
+      offerLow = Math.round(offerValue * 0.96);
+      offerHigh = Math.round(offerValue * 1.04);
+    }
+
+    benchmarkSnapshot = {
+      benchmark_percentiles: percentiles,
+      benchmark_source:
+        clientSnapshot.benchmark_source === "uploaded" ? "uploaded" : "market",
+      sample_size:
+        typeof clientSnapshot.sample_size === "number"
+          ? clientSnapshot.sample_size
+          : 0,
+      confidence:
+        typeof clientSnapshot.confidence === "string"
+          ? clientSnapshot.confidence
+          : "Medium",
+      last_updated:
+        typeof clientSnapshot.last_updated === "string"
+          ? clientSnapshot.last_updated
+          : null,
+      freshness_at:
+        typeof clientSnapshot.freshness_at === "string"
+          ? clientSnapshot.freshness_at
+          : null,
+      provenance:
+        typeof clientSnapshot.provenance === "string"
+          ? clientSnapshot.provenance
+          : null,
+      role:
+        clientSnapshot.role && typeof clientSnapshot.role === "object"
+          ? (clientSnapshot.role as Record<string, unknown>)
+          : { id: body.role_id },
+      level:
+        clientSnapshot.level && typeof clientSnapshot.level === "object"
+          ? (clientSnapshot.level as Record<string, unknown>)
+          : { id: body.level_id },
+      location:
+        clientSnapshot.location && typeof clientSnapshot.location === "object"
+          ? (clientSnapshot.location as Record<string, unknown>)
+          : { id: body.location_id },
+      form_data:
+        clientSnapshot.form_data && typeof clientSnapshot.form_data === "object"
+          ? (clientSnapshot.form_data as Record<string, unknown>)
+          : {},
+    };
+  }
 
   const insertPayload = {
     workspace_id,
     employee_id: employeeId,
     created_by: user_id,
-    recipient_name: mode === "manual" ? body.recipient_name ?? null : null,
-    recipient_email: mode === "manual" ? body.recipient_email ?? null : null,
+    recipient_name: recipientMode === "manual" ? body.recipient_name ?? null : null,
+    recipient_email: recipientMode === "manual" ? body.recipient_email ?? null : null,
     role_id: body.role_id!,
     level_id: body.level_id!,
     location_id: body.location_id!,
@@ -243,6 +311,9 @@ export async function POST(request: NextRequest) {
     benchmark_snapshot: benchmarkSnapshot,
     export_format: body.export_format || "JSON",
     status: body.status || "draft",
+    offer_mode: offerMode,
+    internal_metadata: offerMode === "internal" ? (body.internal_metadata || {}) : {},
+    advised_baseline: advisedBaseline,
   };
 
   const { data, error } = await queryClient

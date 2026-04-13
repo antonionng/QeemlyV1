@@ -4,19 +4,14 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
-  AlertCircle,
   Bookmark,
-  CheckCircle,
   ChevronDown,
   Download,
-  Info,
   Search,
-  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BenchmarkAdvisoryLoading } from "@/components/dashboard/benchmarks/benchmark-advisory-loading";
 import { RolePickerModal } from "@/components/dashboard/benchmarks/role-picker-modal";
-import { BenchmarkSourceBadge } from "@/components/ui/benchmark-source-badge";
 import type { OrgPeerSummary } from "@/lib/benchmarks/org-peer-summary";
 import {
   BENCHMARK_LOCATIONS,
@@ -33,7 +28,6 @@ import {
   getBenchmarkMarkerLabel,
   getBenchmarkConfidenceLabel,
   getOrgPeerHoverMessage,
-  getBenchmarkResultsInsights,
   shouldEnableOrgPeerHover,
 } from "@/lib/benchmarks/results-presentation";
 import { FUNDING_STAGES, useCompanySettings, type TargetPercentile } from "@/lib/company";
@@ -104,7 +98,6 @@ export function BenchmarkResults({ result, hasCompanyData = true }: BenchmarkRes
   });
   const [isLoadingLevelBenchmarks, setIsLoadingLevelBenchmarks] = useState(true);
   const [showLevelOverrides, setShowLevelOverrides] = useState<Record<string, boolean>>({});
-  const [aiSummary, setAiSummary] = useState<string | null>(null);
   const [detailBreakdownAttemptState, setDetailBreakdownAttemptState] = useState<
     "idle" | "loading" | "failed"
   >("idle");
@@ -310,10 +303,8 @@ export function BenchmarkResults({ result, hasCompanyData = true }: BenchmarkRes
         }));
       }
 
-      setAiSummary(enriched.aiSummary ?? null);
     };
 
-    setAiSummary(null);
     setSelectedBenchmark(benchmark);
     void loadAiSummary();
 
@@ -508,12 +499,6 @@ export function BenchmarkResults({ result, hasCompanyData = true }: BenchmarkRes
     p90: convertAndRound(selectedBenchmark.percentiles.p90),
   };
   const targetValue = percentiles[`p${targetPercentile}` as keyof typeof percentiles] || percentiles.p50;
-  const insights = getBenchmarkResultsInsights({
-    targetPercentile,
-    confidence: selectedBenchmark.confidence,
-    sampleSize: selectedBenchmark.sampleSize,
-  });
-
   const confColor = (confidence: string) => {
     if (confidence === "High") return "text-emerald-600";
     if (confidence === "Medium") return "text-amber-600";
@@ -995,57 +980,6 @@ export function BenchmarkResults({ result, hasCompanyData = true }: BenchmarkRes
           </div>
         </div>
       )}
-
-      <div className="bench-section" data-testid="benchmark-results-summary">
-        <h3 className="bench-section-header">Summary</h3>
-
-        <div className="space-y-2">
-          {insights.map((insight, index) => (
-            <div
-              key={`${insight.type}-${index}`}
-              className={`flex items-center gap-3 rounded-lg px-4 py-2.5 text-sm ${
-                insight.type === "success"
-                  ? "bg-emerald-50 text-emerald-700"
-                  : insight.type === "warning"
-                    ? "bg-amber-50 text-amber-700"
-                    : "bg-blue-50 text-blue-700"
-              }`}
-            >
-              {insight.type === "success" ? (
-                <CheckCircle className="h-4 w-4 shrink-0" />
-              ) : insight.type === "warning" ? (
-                <AlertCircle className="h-4 w-4 shrink-0" />
-              ) : (
-                <Info className="h-4 w-4 shrink-0" />
-              )}
-              <span className="font-medium">{insight.message}</span>
-            </div>
-          ))}
-        </div>
-
-        {aiSummary ? (
-          <div className="mt-3 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-xs text-violet-700">
-            <span className="inline-flex items-center gap-1 font-medium">
-              <Sparkles className="h-3.5 w-3.5" />
-              AI summary is available in View Detailed Breakdown.
-            </span>
-          </div>
-        ) : null}
-
-        <div className="mt-3 flex items-center gap-3 text-xs text-brand-500">
-          <BenchmarkSourceBadge source={selectedBenchmark.benchmarkSource} />
-          {selectedBenchmark.benchmarkSource !== "ai-estimated" && (
-            <>
-              <span className="text-brand-300">·</span>
-              <span>{selectedBenchmark.sampleSize} data points</span>
-              <span className="text-brand-300">·</span>
-              <span>{selectedBenchmark.confidence} confidence</span>
-              <span className="text-brand-300">·</span>
-              <span>Date means Date of joining when employee records are matched.</span>
-            </>
-          )}
-        </div>
-      </div>
 
       <div className="flex flex-wrap items-center gap-3 pt-2">
         <Button variant="ghost" onClick={() => saveCurrentFilter()}>

@@ -9,7 +9,7 @@ import {
   computeTenure,
 } from "../employees";
 import { type ReviewCycle } from "../company";
-import { type SalaryReviewAiPlanResponse } from "./ai-plan";
+import { type SalaryReviewAiPlanResponse, type SalaryReviewAiScenario } from "./ai-plan";
 import {
   addSalaryReviewProposalNote,
   createSalaryReviewProposal,
@@ -207,6 +207,7 @@ export interface SalaryReviewState {
   ) => void;
   applySuggestedIncrease: (employeeId: string) => void;
   applyAiProposal: (plan: SalaryReviewAiPlanResponse, selectedEmployeeIds?: string[]) => void;
+  applyAiScenario: (scenario: SalaryReviewAiScenario) => void;
   loadCycles: () => Promise<void>;
   selectCycle: (proposalId: string) => Promise<void>;
   loadLatestProposal: () => Promise<void>;
@@ -1102,6 +1103,42 @@ export const useSalaryReview = create<SalaryReviewState>()(
             const proposal = proposalMap.get(employee.id);
             if (!proposal) return employee;
             if (selectedSet && !selectedSet.has(employee.id)) return employee;
+
+            const proposedIncrease = Math.max(0, proposal.proposedIncrease);
+            const proposedPercentage =
+              employee.baseSalary > 0 ? (proposedIncrease / employee.baseSalary) * 100 : 0;
+
+            return {
+              ...employee,
+              proposedIncrease,
+              proposedPercentage,
+              newSalary: employee.baseSalary + proposedIncrease,
+              guidance: proposal.aiRationale
+                ? {
+                    type: employee.guidance?.type ?? "standard",
+                    message: proposal.aiRationale,
+                  }
+                : employee.guidance,
+            };
+          });
+
+          return {
+            employees,
+            draftChanges: Object.fromEntries(
+              employees
+                .filter((employee) => employee.proposedIncrease > 0)
+                .map((employee) => [employee.id, employee.proposedIncrease])
+            ),
+            ...computeReviewTotals(employees, state.totalCurrentPayroll, state.settings),
+          };
+        }),
+
+        applyAiScenario: (scenario) => set((state) => {
+          const proposalMap = new Map(scenario.items.map((item) => [item.employeeId, item]));
+
+          const employees = state.employees.map((employee) => {
+            const proposal = proposalMap.get(employee.id);
+            if (!proposal) return employee;
 
             const proposedIncrease = Math.max(0, proposal.proposedIncrease);
             const proposedPercentage =

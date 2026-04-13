@@ -13,6 +13,7 @@ import {
   CheckCircle2,
   AlertCircle,
   Pencil,
+  ShieldAlert,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { type BenchmarkResult } from "@/lib/benchmarks/benchmark-state";
@@ -26,11 +27,13 @@ import { useSalaryView } from "@/lib/salary-view-store";
 import { LEVELS } from "@/lib/dashboard/dummy-data";
 import { useOffersStore } from "@/lib/offers/store";
 import { fetchDbEmployees } from "@/lib/employees/data-service";
+import type { OfferMode } from "@/lib/offers/types";
 
-type BuilderStep = "context" | "recipient" | "review" | "complete";
+type BuilderStep = "context" | "recipient" | "internal_details" | "review" | "complete";
 
 interface OfferBuilderWorkspaceProps {
-  result: BenchmarkResult;
+  result: BenchmarkResult | null;
+  offerMode: OfferMode;
 }
 
 const BREAKDOWN_COLORS = [
@@ -40,31 +43,45 @@ const BREAKDOWN_COLORS = [
   { bg: "bg-pink-400", label: "text-pink-700", name: "Other Allowances" },
 ];
 
-const STEPS: { id: BuilderStep; label: string; number: number }[] = [
-  { id: "context", label: "Position", number: 1 },
-  { id: "recipient", label: "Recipient", number: 2 },
-  { id: "review", label: "Review", number: 3 },
-  { id: "complete", label: "Complete", number: 4 },
-];
-
 const PERCENTILE_OPTIONS = [25, 50, 75, 90] as const;
 
-export function OfferBuilderWorkspace({ result }: OfferBuilderWorkspaceProps) {
-  const { benchmark, role, level, location } = result;
+export function OfferBuilderWorkspace({ result, offerMode }: OfferBuilderWorkspaceProps) {
+  const isManual = offerMode === "candidate_manual";
+  const isInternal = offerMode === "internal";
+
+  const steps: { id: BuilderStep; label: string; number: number }[] = useMemo(() => {
+    if (isInternal) {
+      return [
+        { id: "context", label: "Position", number: 1 },
+        { id: "internal_details", label: "Internal Details", number: 2 },
+        { id: "review", label: "Review", number: 3 },
+        { id: "complete", label: "Complete", number: 4 },
+      ];
+    }
+    return [
+      { id: "context", label: "Position", number: 1 },
+      { id: "recipient", label: "Recipient", number: 2 },
+      { id: "review", label: "Review", number: 3 },
+      { id: "complete", label: "Complete", number: 4 },
+    ];
+  }, [isInternal]);
+
+  const benchmark = result?.benchmark ?? null;
+  const role = result?.role ?? null;
+  const level = result?.level ?? null;
+  const location = result?.location ?? null;
   const companySettings = useCompanySettings();
   const { salaryView } = useSalaryView();
   const { createOffer } = useOffersStore();
-  const targetCurrency = location.currency;
+  const targetCurrency = location?.currency ?? "SAR";
 
-  const mod = result.detailSurface?.modules.offerBuilder;
+  const mod = result?.detailSurface?.modules.offerBuilder;
   const breakdown = mod?.data.breakdown;
   const adjacentLevels = mod?.data.adjacentLevels ?? [];
 
   const [step, setStep] = useState<BuilderStep>("context");
   const [offerTarget, setOfferTarget] = useState<number>(companySettings.targetPercentile);
-  const [recipientMode, setRecipientMode] = useState<"employee" | "manual">(
-    "manual",
-  );
+  const [recipientMode, setRecipientMode] = useState<"employee" | "manual">("manual");
   const [employeeOptions, setEmployeeOptions] = useState<
     { id: string; name: string; email: string }[]
   >([]);
@@ -78,6 +95,23 @@ export function OfferBuilderWorkspace({ result }: OfferBuilderWorkspaceProps) {
   const [lastOfferId, setLastOfferId] = useState<string | null>(null);
   const [isPdfDownloading, setIsPdfDownloading] = useState(false);
 
+  // Manual mode fields
+  const [manualOfferValue, setManualOfferValue] = useState<string>("");
+  const [manualRoleTitle, setManualRoleTitle] = useState<string>("");
+  const [manualLevelName, setManualLevelName] = useState<string>("");
+  const [manualLocationCity, setManualLocationCity] = useState<string>("");
+  const [manualLocationCountry, setManualLocationCountry] = useState<string>("");
+  const [manualCurrency, setManualCurrency] = useState<string>("SAR");
+
+  // Internal mode fields
+  const [internalRationale, setInternalRationale] = useState<string>("");
+  const [internalBandPosition, setInternalBandPosition] = useState<"below" | "in-band" | "above">("in-band");
+  const [internalNegotiationFloor, setInternalNegotiationFloor] = useState<string>("");
+  const [internalNegotiationCeiling, setInternalNegotiationCeiling] = useState<string>("");
+  const [internalRiskFlags, setInternalRiskFlags] = useState<string>("");
+  const [internalTalkingPoints, setInternalTalkingPoints] = useState<string>("");
+  const [internalApprovalNotes, setInternalApprovalNotes] = useState<string>("");
+
   const navigateToStep = (target: BuilderStep) => {
     if (target === "complete") return;
     setSubmitError(null);
@@ -85,6 +119,7 @@ export function OfferBuilderWorkspace({ result }: OfferBuilderWorkspaceProps) {
   };
 
   useEffect(() => {
+    if (isInternal) return;
     const loadEmployees = async () => {
       setIsLoadingEmployees(true);
       setEmployeesError(null);
@@ -108,12 +143,12 @@ export function OfferBuilderWorkspace({ result }: OfferBuilderWorkspaceProps) {
       }
     };
     void loadEmployees();
-  }, []);
+  }, [isInternal]);
 
   const convertToMarket = (
     value: number,
-    sourceCurrency: string = benchmark.currency,
-    payPeriod = benchmark.payPeriod,
+    sourceCurrency: string = benchmark?.currency ?? "SAR",
+    payPeriod = benchmark?.payPeriod,
   ) =>
     toBenchmarkDisplayValue(value, {
       salaryView,
@@ -126,6 +161,7 @@ export function OfferBuilderWorkspace({ result }: OfferBuilderWorkspaceProps) {
   const formatShort = (v: number) => formatBenchmarkCompact(v, targetCurrency);
 
   const getRawOfferValue = (percentile: number): number => {
+    if (!benchmark) return 0;
     const { p25, p50, p75, p90 } = benchmark.percentiles;
     if (percentile <= 25) return p25;
     if (percentile <= 50) return p25 + ((p50 - p25) * (percentile - 25)) / 25;
@@ -134,11 +170,15 @@ export function OfferBuilderWorkspace({ result }: OfferBuilderWorkspaceProps) {
     return p90;
   };
 
-  const rawOfferValue = Math.round(getRawOfferValue(offerTarget));
+  const rawOfferValue = isManual
+    ? Math.round(Number(manualOfferValue) || 0)
+    : Math.round(getRawOfferValue(offerTarget));
   const rawOfferLow = Math.round(rawOfferValue * 0.96);
   const rawOfferHigh = Math.round(rawOfferValue * 1.04);
 
-  const offerValue = convertToMarket(getRawOfferValue(offerTarget));
+  const offerValue = isManual
+    ? (Number(manualOfferValue) || 0)
+    : convertToMarket(getRawOfferValue(offerTarget));
   const negotiationBuffer = 0.04;
   const offerRange = {
     low: Math.round(offerValue * (1 - negotiationBuffer)),
@@ -178,11 +218,12 @@ export function OfferBuilderWorkspace({ result }: OfferBuilderWorkspaceProps) {
   ];
 
   const shownLevels = useMemo(() => {
+    if (!level) return [];
     const idx = LEVELS.findIndex((l) => l.id === level.id);
     const start = Math.max(0, idx - 1);
     const end = Math.min(LEVELS.length, idx + 2);
     return LEVELS.slice(start, end);
-  }, [level.id]);
+  }, [level]);
 
   const downloadPdf = async (offerId: string) => {
     setIsPdfDownloading(true);
@@ -195,7 +236,9 @@ export function OfferBuilderWorkspace({ result }: OfferBuilderWorkspaceProps) {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `qeemly_offer_${offerId}.pdf`;
+      a.download = isInternal
+        ? `qeemly_internal_brief_${offerId}.pdf`
+        : `qeemly_offer_${offerId}.pdf`;
       a.click();
       URL.revokeObjectURL(url);
     } catch {
@@ -249,33 +292,146 @@ export function OfferBuilderWorkspace({ result }: OfferBuilderWorkspaceProps) {
       total_compensation: offerValue,
     };
 
+    if (isManual) {
+      if (!manualOfferValue || Number(manualOfferValue) <= 0) {
+        setSubmitError("Enter a valid offer value.");
+        setIsSubmitting(false);
+        return;
+      }
+      const val = Math.round(Number(manualOfferValue));
+      const result_ = await createOffer({
+        offer_mode: "candidate_manual",
+        employee_id: isEmployeeMode ? selectedEmployeeId : null,
+        recipient_name: isEmployeeMode ? null : recipientName.trim(),
+        recipient_email: isEmployeeMode ? null : recipientEmail.trim(),
+        role_id: role?.id ?? manualRoleTitle,
+        level_id: level?.id ?? manualLevelName,
+        location_id: location?.id ?? manualLocationCity,
+        employment_type: result?.formData.employmentType ?? "national",
+        target_percentile: offerTarget,
+        offer_value: val,
+        offer_low: Math.round(val * 0.96),
+        offer_high: Math.round(val * 1.04),
+        currency: manualCurrency || targetCurrency,
+        salary_breakdown: breakdownSnapshot,
+        benchmark_snapshot: benchmark
+          ? {
+              benchmark_percentiles: benchmark.percentiles,
+              benchmark_source: benchmark.benchmarkSource === "uploaded" ? "uploaded" : "market",
+              sample_size: benchmark.sampleSize,
+              confidence: benchmark.confidence,
+              last_updated: benchmark.lastUpdated,
+              role: role!,
+              level: level!,
+              location: location!,
+              form_data: result!.formData as unknown as Record<string, unknown>,
+            }
+          : undefined,
+        export_format: "JSON",
+        status: "ready",
+      });
+
+      setIsSubmitting(false);
+      if ("error" in result_) {
+        setSubmitError(result_.error);
+        return;
+      }
+      setLastOfferId(result_.offer.id);
+      setStep("complete");
+      return;
+    }
+
+    if (isInternal) {
+      const riskFlags = internalRiskFlags
+        .split("\n")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      const talkingPoints = internalTalkingPoints
+        .split("\n")
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+      const result_ = await createOffer({
+        offer_mode: "internal",
+        role_id: role!.id,
+        level_id: level!.id,
+        location_id: location!.id,
+        employment_type: result!.formData.employmentType,
+        target_percentile: offerTarget,
+        offer_value: rawOfferValue,
+        offer_low: rawOfferLow,
+        offer_high: rawOfferHigh,
+        currency: benchmark!.currency,
+        salary_breakdown: breakdownSnapshot,
+        benchmark_snapshot: {
+          benchmark_percentiles: benchmark!.percentiles,
+          benchmark_source: benchmark!.benchmarkSource === "uploaded" ? "uploaded" : "market",
+          sample_size: benchmark!.sampleSize,
+          confidence: benchmark!.confidence,
+          last_updated: benchmark!.lastUpdated,
+          role: role!,
+          level: level!,
+          location: location!,
+          form_data: result!.formData as unknown as Record<string, unknown>,
+        },
+        internal_metadata: {
+          rationale: internalRationale || undefined,
+          band_position: internalBandPosition,
+          negotiation_floor: internalNegotiationFloor ? Number(internalNegotiationFloor) : undefined,
+          negotiation_ceiling: internalNegotiationCeiling ? Number(internalNegotiationCeiling) : undefined,
+          risk_flags: riskFlags.length > 0 ? riskFlags : undefined,
+          talking_points: talkingPoints.length > 0 ? talkingPoints : undefined,
+          approval_notes: internalApprovalNotes || undefined,
+        },
+        export_format: "JSON",
+        status: "ready",
+      });
+
+      setIsSubmitting(false);
+      if ("error" in result_) {
+        setSubmitError(result_.error);
+        return;
+      }
+      setLastOfferId(result_.offer.id);
+      setStep("complete");
+      return;
+    }
+
+    // candidate_advised
     const snapshotBenchmarkSource =
-      benchmark.benchmarkSource === "uploaded" ? "uploaded" : "market";
+      benchmark!.benchmarkSource === "uploaded" ? "uploaded" : "market";
 
     const result_ = await createOffer({
+      offer_mode: "candidate_advised",
       employee_id: isEmployeeMode ? selectedEmployeeId : null,
       recipient_name: isEmployeeMode ? null : recipientName.trim(),
       recipient_email: isEmployeeMode ? null : recipientEmail.trim(),
-      role_id: role.id,
-      level_id: level.id,
-      location_id: location.id,
-      employment_type: result.formData.employmentType,
+      role_id: role!.id,
+      level_id: level!.id,
+      location_id: location!.id,
+      employment_type: result!.formData.employmentType,
       target_percentile: offerTarget,
       offer_value: rawOfferValue,
       offer_low: rawOfferLow,
       offer_high: rawOfferHigh,
-      currency: benchmark.currency,
+      currency: benchmark!.currency,
       salary_breakdown: breakdownSnapshot,
       benchmark_snapshot: {
-        benchmark_percentiles: benchmark.percentiles,
+        benchmark_percentiles: benchmark!.percentiles,
         benchmark_source: snapshotBenchmarkSource,
-        sample_size: benchmark.sampleSize,
-        confidence: benchmark.confidence,
-        last_updated: benchmark.lastUpdated,
-        role,
-        level,
-        location,
-        form_data: result.formData as unknown as Record<string, unknown>,
+        sample_size: benchmark!.sampleSize,
+        confidence: benchmark!.confidence,
+        last_updated: benchmark!.lastUpdated,
+        role: role!,
+        level: level!,
+        location: location!,
+        form_data: result!.formData as unknown as Record<string, unknown>,
+      },
+      advised_baseline: {
+        recommended_value: rawOfferValue,
+        recommended_low: rawOfferLow,
+        recommended_high: rawOfferHigh,
+        recommended_percentile: offerTarget,
       },
       export_format: "JSON",
       status: "ready",
@@ -291,32 +447,42 @@ export function OfferBuilderWorkspace({ result }: OfferBuilderWorkspaceProps) {
     setStep("complete");
   };
 
-  const goToRecipient = () => setStep("recipient");
+  const goToNextAfterContext = () => {
+    if (isInternal) {
+      setStep("internal_details");
+    } else {
+      setStep("recipient");
+    }
+  };
 
   const goToReview = () => {
-    const error = validateRecipient();
-    if (error) {
-      setSubmitError(error);
-      return;
+    if (!isInternal) {
+      const error = validateRecipient();
+      if (error) {
+        setSubmitError(error);
+        return;
+      }
     }
     setSubmitError(null);
     setStep("review");
   };
 
-  const recipientLabel =
-    recipientMode === "employee"
-      ? employeeOptions.find((e) => e.id === selectedEmployeeId)?.name ||
-        "Employee"
+  const recipientLabel = isInternal
+    ? "Internal Brief"
+    : recipientMode === "employee"
+      ? employeeOptions.find((e) => e.id === selectedEmployeeId)?.name || "Employee"
       : recipientName || "Manual recipient";
 
-  const currentStepIndex = STEPS.findIndex((s) => s.id === step);
+  const currentStepIndex = steps.findIndex((s) => s.id === step);
+
+  const ctaLabel = isInternal ? "Create Internal Brief" : "Create Offer";
 
   return (
     <div className="space-y-6">
       {/* Step indicator */}
       <div className="bench-section">
         <div className="flex items-center justify-between gap-2">
-          {STEPS.map((s, i) => {
+          {steps.map((s, i) => {
             const isActive = s.id === step;
             const isComplete = i < currentStepIndex;
             const canNavigate = isComplete && step !== "complete";
@@ -354,7 +520,7 @@ export function OfferBuilderWorkspace({ result }: OfferBuilderWorkspaceProps) {
                 >
                   {s.label}
                 </button>
-                {i < STEPS.length - 1 && (
+                {i < steps.length - 1 && (
                   <div
                     className={clsx(
                       "mx-2 h-px flex-1",
@@ -371,260 +537,307 @@ export function OfferBuilderWorkspace({ result }: OfferBuilderWorkspaceProps) {
       {/* Step 1: Position context */}
       {step === "context" && (
         <div className="space-y-6">
-          <div className="bench-section">
-            <h3 className="bench-section-header">Position details</h3>
-            <p className="mb-6 text-sm text-brand-600">
-              Review the benchmark position that will anchor this offer.
-            </p>
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="rounded-2xl border border-border bg-surface-1 p-4">
-                <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-brand-500">
-                  <Briefcase className="h-3.5 w-3.5" />
-                  Role
-                </div>
-                <p className="text-sm font-bold text-brand-900">
-                  {role.title}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-border bg-surface-1 p-4">
-                <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-brand-500">
-                  <Briefcase className="h-3.5 w-3.5" />
-                  Level
-                </div>
-                <p className="text-sm font-bold text-brand-900">
-                  {level.name}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-border bg-surface-1 p-4">
-                <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-brand-500">
-                  <MapPin className="h-3.5 w-3.5" />
-                  Location
-                </div>
-                <p className="text-sm font-bold text-brand-900">
-                  {location.city}, {location.country}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-border bg-surface-1 p-4">
-                <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-brand-500">
-                  <User className="h-3.5 w-3.5" />
-                  Type
-                </div>
-                <p className="text-sm font-bold text-brand-900">
-                  {result.formData.employmentType === "expat"
-                    ? "Expat"
-                    : "National"}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bench-section">
-            <div className="grid gap-4 lg:grid-cols-3">
-              <div className="rounded-2xl border border-brand-100 bg-brand-50 p-5">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-500">
-                  Target percentile
-                </p>
-                <div className="mt-3 flex items-center gap-2">
-                  {PERCENTILE_OPTIONS.map((p) => (
-                    <button
-                      key={p}
-                      type="button"
-                      onClick={() => setOfferTarget(p)}
-                      className={clsx(
-                        "rounded-lg px-3 py-1.5 text-sm font-bold transition-colors",
-                        offerTarget === p
-                          ? "bg-brand-500 text-white shadow-sm"
-                          : "bg-white text-brand-700 hover:bg-brand-100",
-                      )}
-                    >
-                      P{p}
-                    </button>
-                  ))}
-                </div>
-                <p className="mt-2 text-sm text-brand-600">
-                  Adjust to change the recommended package.
-                </p>
-              </div>
-              <div className="rounded-2xl border border-border bg-white p-5">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-500">
-                  Recommended package
-                </p>
-                <div className="mt-3 text-2xl font-bold text-brand-900">
-                  {formatValue(offerValue)}
-                </div>
-                <p className="mt-2 text-sm text-brand-600">
-                  Anchor point before negotiation or recruiter calibration.
-                </p>
-              </div>
-              <div className="rounded-2xl border border-border bg-white p-5">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-500">
-                  Negotiation range
-                </p>
-                <div className="mt-3 text-2xl font-bold text-brand-900">
-                  {formatValue(offerRange.low)} to {formatValue(offerRange.high)}
-                </div>
-                <p className="mt-2 text-sm text-brand-600">
-                  A 4% buffer on either side of the recommendation.
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Package breakdown */}
-          <div className="bench-section">
-            <div className="flex items-center justify-between gap-3 pb-4">
-              <div>
-                <h3 className="bench-section-header pb-0">
-                  Package breakdown
-                </h3>
-                <p className="mt-2 text-sm text-brand-600">
-                  The salary split across allowance categories for this market
-                  and location.
-                </p>
-              </div>
-              <div className="text-right">
-                <p className="text-xs text-brand-500">Total compensation</p>
-                <p className="text-lg font-bold text-brand-900">
-                  {formatValue(offerValue)}
-                </p>
-              </div>
-            </div>
-
-            <div className="mb-5 flex h-4 overflow-hidden rounded-full bg-brand-100">
-              {breakdownItems.map((item) => (
-                <div
-                  key={item.name}
-                  className={item.bg}
-                  style={{ width: `${item.percent}%` }}
-                  title={`${item.name}: ${formatValue(item.amount)} (${item.percent}%)`}
-                />
-              ))}
-            </div>
-
-            <div className="space-y-3">
-              {breakdownItems.map((item) => (
-                <div
-                  key={item.name}
-                  className="flex items-center justify-between rounded-2xl border border-border bg-surface-1 px-4 py-3 text-sm"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className={`h-3 w-3 rounded-full ${item.bg}`} />
-                    <div>
-                      <p className={`font-medium ${item.label}`}>
-                        {item.name}
-                      </p>
-                      <p className="text-xs text-brand-500">
-                        {item.percent}% of total package
-                      </p>
-                    </div>
-                  </div>
-                  <div className="font-semibold text-brand-900">
-                    {formatShort(item.amount)}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Adjacent levels */}
-          {adjacentLevels.length > 0 && (
-            <div className="bench-section">
-              <h3 className="bench-section-header">
-                Market anchor by adjacent levels
-              </h3>
-              <p className="mb-4 text-sm text-brand-600">
-                Check the proposed package against nearby seniority levels.
+          {/* Manual mode: direct input fields */}
+          {isManual && !result && (
+            <div className="bench-section space-y-4">
+              <h3 className="bench-section-header">Enter position details</h3>
+              <p className="text-sm text-brand-600">
+                Enter the role and compensation values manually.
               </p>
-              <div className="space-y-8">
-                {shownLevels.map((lvl) => {
-                  const band = adjacentLevels.find(
-                    (al) => al.levelId === lvl.id,
-                  );
-                  if (!band) return null;
-                  const p10 = convertToMarket(band.p25 * 0.85);
-                  const p25 = convertToMarket(band.p25);
-                  const p50 = convertToMarket(band.p50);
-                  const p75 = convertToMarket(band.p75);
-                  const p90 = convertToMarket(band.p90);
-
-                  const gMin = p10 * 0.85;
-                  const gMax = p90 * 1.15;
-                  const pct = (v: number) =>
-                    Math.max(
-                      0,
-                      Math.min(100, ((v - gMin) / (gMax - gMin)) * 100),
-                    );
-
-                  const isSelected = lvl.id === level.id;
-                  const tgtVal = isSelected
-                    ? convertToMarket(getRawOfferValue(offerTarget))
-                    : p50;
-
-                  return (
-                    <div key={lvl.id}>
-                      <div className="mb-2 text-xs font-medium text-brand-700">
-                        {lvl.name}
-                      </div>
-                      <div className="relative h-10">
-                        <div
-                          className="absolute top-1/2 h-[2px] -translate-y-1/2 bg-brand-300"
-                          style={{
-                            left: `${pct(p10)}%`,
-                            width: `${pct(p90) - pct(p10)}%`,
-                          }}
-                        />
-                        <div
-                          className="bench-boxplot-whisker"
-                          style={{ left: `${pct(p10)}%` }}
-                        />
-                        <div
-                          className="bench-boxplot-whisker"
-                          style={{ left: `${pct(p90)}%` }}
-                        />
-                        <div
-                          className="bench-boxplot-box"
-                          style={{
-                            left: `${pct(p25)}%`,
-                            width: `${pct(p75) - pct(p25)}%`,
-                          }}
-                        />
-                        <div
-                          className="bench-boxplot-median"
-                          style={{ left: `${pct(p50)}%` }}
-                        />
-                        {isSelected && (
-                          <div
-                            className="bench-boxplot-target"
-                            style={{ left: `${pct(tgtVal)}%` }}
-                          >
-                            {offerTarget}
-                          </div>
-                        )}
-                      </div>
-                      <div className="mt-1 flex justify-between text-[9px] text-brand-400">
-                        <span>{formatShort(p10)}</span>
-                        <span>{formatShort(p25)}</span>
-                        <span>{formatShort(p50)}</span>
-                        <span>{formatShort(p75)}</span>
-                        <span>{formatShort(p90)}</span>
-                      </div>
-                    </div>
-                  );
-                })}
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-brand-700">
+                    Role title
+                  </label>
+                  <input
+                    value={manualRoleTitle}
+                    onChange={(e) => setManualRoleTitle(e.target.value)}
+                    className="w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm text-brand-900"
+                    placeholder="e.g. Software Engineer"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-brand-700">
+                    Level
+                  </label>
+                  <input
+                    value={manualLevelName}
+                    onChange={(e) => setManualLevelName(e.target.value)}
+                    className="w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm text-brand-900"
+                    placeholder="e.g. Senior (P3)"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-brand-700">
+                    City
+                  </label>
+                  <input
+                    value={manualLocationCity}
+                    onChange={(e) => setManualLocationCity(e.target.value)}
+                    className="w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm text-brand-900"
+                    placeholder="e.g. Riyadh"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-brand-700">
+                    Country
+                  </label>
+                  <input
+                    value={manualLocationCountry}
+                    onChange={(e) => setManualLocationCountry(e.target.value)}
+                    className="w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm text-brand-900"
+                    placeholder="e.g. Saudi Arabia"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-brand-700">
+                    Currency
+                  </label>
+                  <select
+                    value={manualCurrency}
+                    onChange={(e) => setManualCurrency(e.target.value)}
+                    className="w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm text-brand-900"
+                  >
+                    <option value="SAR">SAR</option>
+                    <option value="AED">AED</option>
+                    <option value="USD">USD</option>
+                    <option value="GBP">GBP</option>
+                    <option value="EUR">EUR</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-brand-700">
+                    Total annual compensation
+                  </label>
+                  <input
+                    type="number"
+                    value={manualOfferValue}
+                    onChange={(e) => setManualOfferValue(e.target.value)}
+                    className="w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm text-brand-900"
+                    placeholder="e.g. 600000"
+                  />
+                </div>
               </div>
             </div>
           )}
 
+          {/* Benchmark-driven modes (advised and internal), or manual with existing benchmark */}
+          {result && benchmark && role && level && location && (
+            <>
+              <div className="bench-section">
+                <h3 className="bench-section-header">Position details</h3>
+                <p className="mb-6 text-sm text-brand-600">
+                  Review the benchmark position that will anchor this offer.
+                </p>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="rounded-2xl border border-border bg-surface-1 p-4">
+                    <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-brand-500">
+                      <Briefcase className="h-3.5 w-3.5" />
+                      Role
+                    </div>
+                    <p className="text-sm font-bold text-brand-900">{role.title}</p>
+                  </div>
+                  <div className="rounded-2xl border border-border bg-surface-1 p-4">
+                    <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-brand-500">
+                      <Briefcase className="h-3.5 w-3.5" />
+                      Level
+                    </div>
+                    <p className="text-sm font-bold text-brand-900">{level.name}</p>
+                  </div>
+                  <div className="rounded-2xl border border-border bg-surface-1 p-4">
+                    <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-brand-500">
+                      <MapPin className="h-3.5 w-3.5" />
+                      Location
+                    </div>
+                    <p className="text-sm font-bold text-brand-900">
+                      {location.city}, {location.country}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-border bg-surface-1 p-4">
+                    <div className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-brand-500">
+                      <User className="h-3.5 w-3.5" />
+                      Type
+                    </div>
+                    <p className="text-sm font-bold text-brand-900">
+                      {result.formData.employmentType === "expat" ? "Expat" : "National"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bench-section">
+                <div className="grid gap-4 lg:grid-cols-3">
+                  <div className="rounded-2xl border border-brand-100 bg-brand-50 p-5">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-500">
+                      Target percentile
+                    </p>
+                    <div className="mt-3 flex items-center gap-2">
+                      {PERCENTILE_OPTIONS.map((p) => (
+                        <button
+                          key={p}
+                          type="button"
+                          onClick={() => setOfferTarget(p)}
+                          className={clsx(
+                            "rounded-lg px-3 py-1.5 text-sm font-bold transition-colors",
+                            offerTarget === p
+                              ? "bg-brand-500 text-white shadow-sm"
+                              : "bg-white text-brand-700 hover:bg-brand-100",
+                          )}
+                        >
+                          P{p}
+                        </button>
+                      ))}
+                    </div>
+                    <p className="mt-2 text-sm text-brand-600">
+                      Adjust to change the recommended package.
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-border bg-white p-5">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-500">
+                      Recommended package
+                    </p>
+                    <div className="mt-3 text-2xl font-bold text-brand-900">
+                      {formatValue(offerValue)}
+                    </div>
+                    <p className="mt-2 text-sm text-brand-600">
+                      Anchor point before negotiation or recruiter calibration.
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border border-border bg-white p-5">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-500">
+                      Negotiation range
+                    </p>
+                    <div className="mt-3 text-2xl font-bold text-brand-900">
+                      {formatValue(offerRange.low)} to {formatValue(offerRange.high)}
+                    </div>
+                    <p className="mt-2 text-sm text-brand-600">
+                      A 4% buffer on either side of the recommendation.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Package breakdown */}
+              <div className="bench-section">
+                <div className="flex items-center justify-between gap-3 pb-4">
+                  <div>
+                    <h3 className="bench-section-header pb-0">Package breakdown</h3>
+                    <p className="mt-2 text-sm text-brand-600">
+                      The salary split across allowance categories for this market
+                      and location.
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-xs text-brand-500">Total compensation</p>
+                    <p className="text-lg font-bold text-brand-900">
+                      {formatValue(offerValue)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mb-5 flex h-4 overflow-hidden rounded-full bg-brand-100">
+                  {breakdownItems.map((item) => (
+                    <div
+                      key={item.name}
+                      className={item.bg}
+                      style={{ width: `${item.percent}%` }}
+                      title={`${item.name}: ${formatValue(item.amount)} (${item.percent}%)`}
+                    />
+                  ))}
+                </div>
+
+                <div className="space-y-3">
+                  {breakdownItems.map((item) => (
+                    <div
+                      key={item.name}
+                      className="flex items-center justify-between rounded-2xl border border-border bg-surface-1 px-4 py-3 text-sm"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`h-3 w-3 rounded-full ${item.bg}`} />
+                        <div>
+                          <p className={`font-medium ${item.label}`}>{item.name}</p>
+                          <p className="text-xs text-brand-500">{item.percent}% of total package</p>
+                        </div>
+                      </div>
+                      <div className="font-semibold text-brand-900">{formatShort(item.amount)}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Adjacent levels */}
+              {adjacentLevels.length > 0 && (
+                <div className="bench-section">
+                  <h3 className="bench-section-header">Market anchor by adjacent levels</h3>
+                  <p className="mb-4 text-sm text-brand-600">
+                    Check the proposed package against nearby seniority levels.
+                  </p>
+                  <div className="space-y-8">
+                    {shownLevels.map((lvl) => {
+                      const band = adjacentLevels.find((al) => al.levelId === lvl.id);
+                      if (!band) return null;
+                      const p10 = convertToMarket(band.p25 * 0.85);
+                      const p25 = convertToMarket(band.p25);
+                      const p50 = convertToMarket(band.p50);
+                      const p75 = convertToMarket(band.p75);
+                      const p90 = convertToMarket(band.p90);
+
+                      const gMin = p10 * 0.85;
+                      const gMax = p90 * 1.15;
+                      const pct = (v: number) =>
+                        Math.max(0, Math.min(100, ((v - gMin) / (gMax - gMin)) * 100));
+
+                      const isSelected = lvl.id === level!.id;
+                      const tgtVal = isSelected ? convertToMarket(getRawOfferValue(offerTarget)) : p50;
+
+                      return (
+                        <div key={lvl.id}>
+                          <div className="mb-2 text-xs font-medium text-brand-700">{lvl.name}</div>
+                          <div className="relative h-10">
+                            <div
+                              className="absolute top-1/2 h-[2px] -translate-y-1/2 bg-brand-300"
+                              style={{ left: `${pct(p10)}%`, width: `${pct(p90) - pct(p10)}%` }}
+                            />
+                            <div className="bench-boxplot-whisker" style={{ left: `${pct(p10)}%` }} />
+                            <div className="bench-boxplot-whisker" style={{ left: `${pct(p90)}%` }} />
+                            <div
+                              className="bench-boxplot-box"
+                              style={{ left: `${pct(p25)}%`, width: `${pct(p75) - pct(p25)}%` }}
+                            />
+                            <div className="bench-boxplot-median" style={{ left: `${pct(p50)}%` }} />
+                            {isSelected && (
+                              <div className="bench-boxplot-target" style={{ left: `${pct(tgtVal)}%` }}>
+                                {offerTarget}
+                              </div>
+                            )}
+                          </div>
+                          <div className="mt-1 flex justify-between text-[9px] text-brand-400">
+                            <span>{formatShort(p10)}</span>
+                            <span>{formatShort(p25)}</span>
+                            <span>{formatShort(p50)}</span>
+                            <span>{formatShort(p75)}</span>
+                            <span>{formatShort(p90)}</span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+
           <div className="flex justify-end">
-            <Button onClick={goToRecipient}>
-              Next: Select Recipient <ArrowRight className="ml-2 h-4 w-4" />
+            <Button onClick={goToNextAfterContext}>
+              Next: {isInternal ? "Internal Details" : "Select Recipient"}{" "}
+              <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </div>
         </div>
       )}
 
-      {/* Step 2: Recipient */}
-      {step === "recipient" && (
+      {/* Step 2a: Recipient (candidate modes only) */}
+      {step === "recipient" && !isInternal && (
         <div className="space-y-6">
           <div className="bench-section space-y-4">
             <div>
@@ -682,14 +895,11 @@ export function OfferBuilderWorkspace({ result }: OfferBuilderWorkspaceProps) {
                   className="w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm text-brand-900"
                 >
                   {employeeOptions.length === 0 ? (
-                    <option value="">
-                      No employees found. Use Manual recipient.
-                    </option>
+                    <option value="">No employees found. Use Manual recipient.</option>
                   ) : (
                     employeeOptions.map((employee) => (
                       <option key={employee.id} value={employee.id}>
-                        {employee.name}{" "}
-                        {employee.email ? `(${employee.email})` : ""}
+                        {employee.name} {employee.email ? `(${employee.email})` : ""}
                       </option>
                     ))
                   )}
@@ -745,20 +955,154 @@ export function OfferBuilderWorkspace({ result }: OfferBuilderWorkspaceProps) {
         </div>
       )}
 
+      {/* Step 2b: Internal Details (internal mode only) */}
+      {step === "internal_details" && isInternal && (
+        <div className="space-y-6">
+          <div className="bench-section space-y-4">
+            <div>
+              <h3 className="bench-section-header pb-0 flex items-center gap-2">
+                <ShieldAlert className="h-4 w-4 text-amber-600" />
+                Internal Details
+              </h3>
+              <p className="mt-2 text-sm text-brand-600">
+                Add internal-only context for this compensation decision.
+                This information will not be shared with the candidate.
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold text-brand-700">
+                  Band position
+                </label>
+                <div className="flex gap-2">
+                  {(["below", "in-band", "above"] as const).map((pos) => (
+                    <button
+                      key={pos}
+                      type="button"
+                      onClick={() => setInternalBandPosition(pos)}
+                      className={clsx(
+                        "rounded-lg px-4 py-2 text-sm font-semibold transition-colors",
+                        internalBandPosition === pos
+                          ? "bg-brand-500 text-white"
+                          : "bg-brand-50 text-brand-700 hover:bg-brand-100",
+                      )}
+                    >
+                      {pos === "below" ? "Below Band" : pos === "in-band" ? "In Band" : "Above Band"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-brand-700">
+                    Negotiation floor
+                  </label>
+                  <input
+                    type="number"
+                    value={internalNegotiationFloor}
+                    onChange={(e) => setInternalNegotiationFloor(e.target.value)}
+                    className="w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm text-brand-900"
+                    placeholder="Minimum acceptable value"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-semibold text-brand-700">
+                    Negotiation ceiling
+                  </label>
+                  <input
+                    type="number"
+                    value={internalNegotiationCeiling}
+                    onChange={(e) => setInternalNegotiationCeiling(e.target.value)}
+                    className="w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm text-brand-900"
+                    placeholder="Maximum acceptable value"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold text-brand-700">
+                  Rationale
+                </label>
+                <textarea
+                  value={internalRationale}
+                  onChange={(e) => setInternalRationale(e.target.value)}
+                  rows={3}
+                  className="w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm text-brand-900"
+                  placeholder="Why was this compensation level chosen?"
+                />
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold text-brand-700">
+                  Risk flags (one per line)
+                </label>
+                <textarea
+                  value={internalRiskFlags}
+                  onChange={(e) => setInternalRiskFlags(e.target.value)}
+                  rows={2}
+                  className="w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm text-brand-900"
+                  placeholder={"Candidate has competing offer\nAbove band for this level"}
+                />
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold text-brand-700">
+                  Talking points (one per line)
+                </label>
+                <textarea
+                  value={internalTalkingPoints}
+                  onChange={(e) => setInternalTalkingPoints(e.target.value)}
+                  rows={2}
+                  className="w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm text-brand-900"
+                  placeholder={"Emphasize career growth path\nHighlight relocation benefits"}
+                />
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold text-brand-700">
+                  Approval notes
+                </label>
+                <textarea
+                  value={internalApprovalNotes}
+                  onChange={(e) => setInternalApprovalNotes(e.target.value)}
+                  rows={2}
+                  className="w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm text-brand-900"
+                  placeholder="Notes for the approving manager or HR lead"
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-between gap-3">
+            <Button variant="ghost" onClick={() => setStep("context")}>
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back
+            </Button>
+            <Button onClick={goToReview}>
+              Next: Review Brief <ArrowRight className="ml-2 h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* Step 3: Review and create */}
       {step === "review" && (
         <div className="space-y-6">
           <div className="bench-section">
-            <h3 className="bench-section-header">Review offer</h3>
+            <h3 className="bench-section-header">
+              {isInternal ? "Review internal brief" : "Review offer"}
+            </h3>
             <p className="mb-6 text-sm text-brand-600">
-              Confirm the details below, then create the offer.
+              Confirm the details below, then {isInternal ? "create the brief" : "create the offer"}.
             </p>
 
             <div className="space-y-4">
               <div className="rounded-2xl border border-border bg-surface-1 p-5">
                 <div className="mb-3 flex items-center justify-between">
                   <p className="text-xs font-semibold uppercase tracking-wider text-brand-500">
-                    Position & Recipient
+                    Position {!isInternal && "& Recipient"}
                   </p>
                   <div className="flex gap-2">
                     <button
@@ -768,53 +1112,43 @@ export function OfferBuilderWorkspace({ result }: OfferBuilderWorkspaceProps) {
                     >
                       <Pencil className="h-3 w-3" /> Edit position
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setStep("recipient")}
-                      className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50"
-                    >
-                      <Pencil className="h-3 w-3" /> Edit recipient
-                    </button>
+                    {!isInternal && (
+                      <button
+                        type="button"
+                        onClick={() => setStep("recipient")}
+                        className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-brand-600 hover:bg-brand-50"
+                      >
+                        <Pencil className="h-3 w-3" /> Edit recipient
+                      </button>
+                    )}
                   </div>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-brand-500">
-                      Position
-                    </p>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-brand-500">Position</p>
                     <p className="mt-1 text-sm font-bold text-brand-900">
-                      {role.title} - {level.name}
+                      {role?.title ?? manualRoleTitle} - {level?.name ?? manualLevelName}
                     </p>
                   </div>
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-brand-500">
-                      Location
-                    </p>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-brand-500">Location</p>
                     <p className="mt-1 text-sm font-bold text-brand-900">
-                      {location.city}, {location.country}
+                      {location ? `${location.city}, ${location.country}` : `${manualLocationCity}, ${manualLocationCountry}`}
                     </p>
                   </div>
+                  {!isInternal && (
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wider text-brand-500">Recipient</p>
+                      <p className="mt-1 text-sm font-bold text-brand-900">{recipientLabel}</p>
+                      {recipientMode === "manual" && recipientEmail && (
+                        <p className="text-xs text-brand-500">{recipientEmail}</p>
+                      )}
+                    </div>
+                  )}
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-brand-500">
-                      Recipient
-                    </p>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-brand-500">Employment type</p>
                     <p className="mt-1 text-sm font-bold text-brand-900">
-                      {recipientLabel}
-                    </p>
-                    {recipientMode === "manual" && recipientEmail && (
-                      <p className="text-xs text-brand-500">
-                        {recipientEmail}
-                      </p>
-                    )}
-                  </div>
-                  <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-brand-500">
-                      Employment type
-                    </p>
-                    <p className="mt-1 text-sm font-bold text-brand-900">
-                      {result.formData.employmentType === "expat"
-                        ? "Expat"
-                        : "National"}
+                      {(result?.formData.employmentType ?? "national") === "expat" ? "Expat" : "National"}
                     </p>
                   </div>
                 </div>
@@ -823,61 +1157,63 @@ export function OfferBuilderWorkspace({ result }: OfferBuilderWorkspaceProps) {
               <div className="rounded-2xl border border-brand-100 bg-brand-50 p-5">
                 <div className="grid gap-4 sm:grid-cols-3">
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-brand-500">
-                      Target percentile
-                    </p>
-                    <p className="mt-1 text-xl font-bold text-brand-900">
-                      P{offerTarget}
-                    </p>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-brand-500">Target percentile</p>
+                    <p className="mt-1 text-xl font-bold text-brand-900">P{offerTarget}</p>
                   </div>
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-brand-500">
-                      Total compensation
-                    </p>
-                    <p className="mt-1 text-xl font-bold text-brand-900">
-                      {formatValue(offerValue)}
-                    </p>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-brand-500">Total compensation</p>
+                    <p className="mt-1 text-xl font-bold text-brand-900">{formatValue(offerValue)}</p>
                   </div>
                   <div>
-                    <p className="text-xs font-semibold uppercase tracking-wider text-brand-500">
-                      Negotiation range
-                    </p>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-brand-500">Negotiation range</p>
                     <p className="mt-1 text-xl font-bold text-brand-900">
-                      {formatValue(offerRange.low)} -{" "}
-                      {formatValue(offerRange.high)}
+                      {formatValue(offerRange.low)} - {formatValue(offerRange.high)}
                     </p>
                   </div>
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-border bg-surface-1 p-5">
-                <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-brand-500">
-                  Package breakdown
-                </p>
-                <div className="space-y-2">
-                  {breakdownItems
-                    .filter((item) => item.percent > 0)
-                    .map((item) => (
-                      <div
-                        key={item.name}
-                        className="flex items-center justify-between text-sm"
-                      >
-                        <div className="flex items-center gap-2">
-                          <div
-                            className={`h-2.5 w-2.5 rounded-full ${item.bg}`}
-                          />
-                          <span className="text-brand-700">{item.name}</span>
-                          <span className="text-xs text-brand-400">
-                            ({item.percent}%)
-                          </span>
+              {!isManual && (
+                <div className="rounded-2xl border border-border bg-surface-1 p-5">
+                  <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-brand-500">Package breakdown</p>
+                  <div className="space-y-2">
+                    {breakdownItems
+                      .filter((item) => item.percent > 0)
+                      .map((item) => (
+                        <div key={item.name} className="flex items-center justify-between text-sm">
+                          <div className="flex items-center gap-2">
+                            <div className={`h-2.5 w-2.5 rounded-full ${item.bg}`} />
+                            <span className="text-brand-700">{item.name}</span>
+                            <span className="text-xs text-brand-400">({item.percent}%)</span>
+                          </div>
+                          <span className="font-semibold text-brand-900">{formatValue(item.amount)}</span>
                         </div>
-                        <span className="font-semibold text-brand-900">
-                          {formatValue(item.amount)}
-                        </span>
-                      </div>
-                    ))}
+                      ))}
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {isInternal && (internalRationale || internalRiskFlags || internalTalkingPoints || internalApprovalNotes) && (
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+                  <div className="mb-3 flex items-center justify-between">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-amber-700">Internal Details</p>
+                    <button
+                      type="button"
+                      onClick={() => setStep("internal_details")}
+                      className="flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-medium text-amber-700 hover:bg-amber-100"
+                    >
+                      <Pencil className="h-3 w-3" /> Edit
+                    </button>
+                  </div>
+                  <div className="space-y-2 text-sm text-brand-800">
+                    <p><span className="font-semibold">Band:</span> {internalBandPosition === "below" ? "Below Band" : internalBandPosition === "in-band" ? "In Band" : "Above Band"}</p>
+                    {internalRationale && <p><span className="font-semibold">Rationale:</span> {internalRationale}</p>}
+                    {internalRiskFlags && <p><span className="font-semibold">Risk flags:</span> {internalRiskFlags.split("\n").filter(Boolean).join(", ")}</p>}
+                    {internalTalkingPoints && <p><span className="font-semibold">Talking points:</span> {internalTalkingPoints.split("\n").filter(Boolean).join(", ")}</p>}
+                    {internalApprovalNotes && <p><span className="font-semibold">Approval notes:</span> {internalApprovalNotes}</p>}
+                  </div>
+                </div>
+              )}
             </div>
 
             {submitError && (
@@ -889,7 +1225,10 @@ export function OfferBuilderWorkspace({ result }: OfferBuilderWorkspaceProps) {
           </div>
 
           <div className="flex items-center justify-between gap-3">
-            <Button variant="ghost" onClick={() => setStep("recipient")}>
+            <Button
+              variant="ghost"
+              onClick={() => setStep(isInternal ? "internal_details" : "recipient")}
+            >
               <ArrowLeft className="mr-2 h-4 w-4" />
               Back
             </Button>
@@ -898,7 +1237,7 @@ export function OfferBuilderWorkspace({ result }: OfferBuilderWorkspaceProps) {
               isLoading={isSubmitting}
               disabled={isSubmitting}
             >
-              Create Offer <ArrowRight className="ml-2 h-4 w-4" />
+              {ctaLabel} <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </div>
         </div>
@@ -912,12 +1251,13 @@ export function OfferBuilderWorkspace({ result }: OfferBuilderWorkspaceProps) {
               <CheckCircle2 className="h-8 w-8 text-emerald-600" />
             </div>
             <h3 className="text-xl font-bold text-brand-900">
-              Offer created successfully
+              {isInternal ? "Internal brief created successfully" : "Offer created successfully"}
             </h3>
             <p className="mx-auto mt-2 max-w-md text-sm text-brand-600">
-              The offer for{" "}
-              <span className="font-semibold">{recipientLabel}</span> has been
-              saved to your workspace. Download the branded PDF below.
+              {isInternal
+                ? "The internal compensation brief has been saved to your workspace."
+                : <>The offer for <span className="font-semibold">{recipientLabel}</span> has been saved to your workspace.</>}
+              {" "}Download the branded PDF below.
             </p>
 
             <div className="mx-auto mt-8 flex max-w-sm flex-col gap-3 sm:flex-row sm:max-w-md">
@@ -927,25 +1267,26 @@ export function OfferBuilderWorkspace({ result }: OfferBuilderWorkspaceProps) {
                 className="flex-1"
               >
                 <FileText className="mr-2 h-4 w-4" />
-                Download Branded PDF
+                {isInternal ? "Download Internal Brief PDF" : "Download Branded PDF"}
               </Button>
             </div>
           </div>
 
-          {/* Offer summary card */}
           <div className="bench-section">
-            <h3 className="bench-section-header">Offer summary</h3>
+            <h3 className="bench-section-header">
+              {isInternal ? "Brief summary" : "Offer summary"}
+            </h3>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               <div>
                 <p className="text-xs text-brand-500">Position</p>
                 <p className="mt-0.5 text-sm font-semibold text-brand-900">
-                  {role.title} - {level.name}
+                  {role?.title ?? manualRoleTitle} - {level?.name ?? manualLevelName}
                 </p>
               </div>
               <div>
                 <p className="text-xs text-brand-500">Location</p>
                 <p className="mt-0.5 text-sm font-semibold text-brand-900">
-                  {location.city}, {location.country}
+                  {location ? `${location.city}, ${location.country}` : `${manualLocationCity}, ${manualLocationCountry}`}
                 </p>
               </div>
               <div>
@@ -955,7 +1296,7 @@ export function OfferBuilderWorkspace({ result }: OfferBuilderWorkspaceProps) {
                 </p>
               </div>
               <div>
-                <p className="text-xs text-brand-500">Recipient</p>
+                <p className="text-xs text-brand-500">{isInternal ? "Type" : "Recipient"}</p>
                 <p className="mt-0.5 text-sm font-semibold text-brand-900">
                   {recipientLabel}
                 </p>

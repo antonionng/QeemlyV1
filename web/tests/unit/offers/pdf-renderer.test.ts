@@ -27,6 +27,7 @@ function makeOfferPdfData(overrides?: Partial<OfferPdfData>): OfferPdfData {
     benchmarkSource: "market",
     confidence: "High",
     createdAt: "2026-04-01T00:00:00.000Z",
+    offerMode: "candidate_manual",
     ...overrides,
   };
 }

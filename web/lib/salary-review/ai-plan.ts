@@ -2,6 +2,17 @@ export type SalaryReviewAiMode = "assistive";
 
 export type SalaryReviewAiBudgetType = "percentage" | "absolute";
 
+export type SalaryReviewAiObjective = "retention" | "performance" | "equity" | "balanced";
+
+export type SalaryReviewAiBudgetIntent = "strict_cap" | "target" | "show_ideal";
+
+export type SalaryReviewAiPopulationRules = {
+  excludeRecentHires?: boolean;
+  excludeLowPerformers?: boolean;
+  exactBenchmarkOnly?: boolean;
+  maxIncreasePercent?: number | null;
+};
+
 export type SalaryReviewAiPlanRequest = {
   mode: SalaryReviewAiMode;
   cycle: "annual" | "monthly";
@@ -9,6 +20,10 @@ export type SalaryReviewAiPlanRequest = {
   budgetPercentage?: number;
   budgetAbsolute?: number;
   selectedEmployeeIds?: string[];
+  objective?: SalaryReviewAiObjective;
+  budgetIntent?: SalaryReviewAiBudgetIntent;
+  populationRules?: SalaryReviewAiPopulationRules;
+  contextNotes?: string;
 };
 
 export type BenchmarkProvenance = "workspace" | "ingestion" | "none";
@@ -77,6 +92,40 @@ export type SalaryReviewAiPlanResponse = {
   warnings: string[];
 };
 
+export type SalaryReviewAiScenarioId = "hold" | "balanced" | "retention_first" | "market_alignment";
+
+export type SalaryReviewAiRiskSummary = {
+  belowMarketCount: number;
+  belowMarketTotalGap: number;
+  retentionRiskCount: number;
+  avgMarketGapPercent: number;
+};
+
+export type SalaryReviewAiScenario = {
+  id: SalaryReviewAiScenarioId;
+  label: string;
+  description: string;
+  isRecommended: boolean;
+  strategicSummary: string | null;
+  summary: SalaryReviewAiPlanSummary;
+  items: SalaryReviewAiProposalItem[];
+  warnings: string[];
+  riskSummary: SalaryReviewAiRiskSummary;
+};
+
+export type SalaryReviewAiCohortContext = {
+  totalEmployees: number;
+  totalCurrentPayroll: number;
+  benchmarkCoverage: number;
+  avgMarketGapPercent: number;
+};
+
+export type SalaryReviewAiScenarioResponse = {
+  generatedAt: string;
+  scenarios: SalaryReviewAiScenario[];
+  cohortContext: SalaryReviewAiCohortContext;
+};
+
 export type SalaryReviewAiPlanValidation =
   | { ok: true; value: SalaryReviewAiPlanRequest }
   | { ok: false; status: number; error: string };
@@ -139,6 +188,13 @@ export function validateSalaryReviewAiPlanRequest(body: unknown): SalaryReviewAi
     }
   }
 
+  const objective = validateObjective(candidate.objective);
+  const budgetIntent = validateBudgetIntent(candidate.budgetIntent);
+  const populationRules = validatePopulationRules(candidate.populationRules);
+  const contextNotes = typeof candidate.contextNotes === "string"
+    ? candidate.contextNotes.trim().slice(0, MAX_CONTEXT_NOTES_LENGTH) || undefined
+    : undefined;
+
   return {
     ok: true,
     value: {
@@ -148,7 +204,41 @@ export function validateSalaryReviewAiPlanRequest(body: unknown): SalaryReviewAi
       budgetPercentage: budgetPercentage ?? undefined,
       budgetAbsolute: budgetAbsolute ?? undefined,
       selectedEmployeeIds,
+      objective,
+      budgetIntent,
+      populationRules,
+      contextNotes,
     },
   };
+}
+
+const VALID_OBJECTIVES: SalaryReviewAiObjective[] = ["retention", "performance", "equity", "balanced"];
+const VALID_BUDGET_INTENTS: SalaryReviewAiBudgetIntent[] = ["strict_cap", "target", "show_ideal"];
+const MAX_CONTEXT_NOTES_LENGTH = 2000;
+
+function validateObjective(value: unknown): SalaryReviewAiObjective | undefined {
+  if (typeof value !== "string") return undefined;
+  return VALID_OBJECTIVES.includes(value as SalaryReviewAiObjective)
+    ? (value as SalaryReviewAiObjective)
+    : undefined;
+}
+
+function validateBudgetIntent(value: unknown): SalaryReviewAiBudgetIntent | undefined {
+  if (typeof value !== "string") return undefined;
+  return VALID_BUDGET_INTENTS.includes(value as SalaryReviewAiBudgetIntent)
+    ? (value as SalaryReviewAiBudgetIntent)
+    : undefined;
+}
+
+function validatePopulationRules(value: unknown): SalaryReviewAiPopulationRules | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const rules = value as Record<string, unknown>;
+  const result: SalaryReviewAiPopulationRules = {};
+  if (typeof rules.excludeRecentHires === "boolean") result.excludeRecentHires = rules.excludeRecentHires;
+  if (typeof rules.excludeLowPerformers === "boolean") result.excludeLowPerformers = rules.excludeLowPerformers;
+  if (typeof rules.exactBenchmarkOnly === "boolean") result.exactBenchmarkOnly = rules.exactBenchmarkOnly;
+  const maxPct = toFiniteNumber(rules.maxIncreasePercent);
+  if (maxPct != null && maxPct > 0) result.maxIncreasePercent = maxPct;
+  return Object.keys(result).length > 0 ? result : undefined;
 }
 

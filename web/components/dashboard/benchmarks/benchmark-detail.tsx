@@ -205,14 +205,24 @@ export function BenchmarkDetail({ result, hasCompanyData = true }: BenchmarkDeta
 
         <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
           {hasCompanyData && (
-            <button
-              onClick={() => {
-                router.push("/dashboard/offers/builder?from=current");
-              }}
-              className="bench-cta max-w-xs"
-            >
-              Open Offer Builder <ArrowRight className="h-4 w-4" />
-            </button>
+            <>
+              <button
+                onClick={() => {
+                  router.push("/dashboard/offers/builder?from=current&mode=candidate_advised");
+                }}
+                className="bench-cta max-w-xs"
+              >
+                Build Advised Offer <ArrowRight className="h-4 w-4" />
+              </button>
+              <button
+                onClick={() => {
+                  router.push("/dashboard/offers/builder?from=current&mode=internal");
+                }}
+                className="inline-flex items-center gap-2 rounded-xl border border-brand-200 bg-white px-5 py-2.5 text-sm font-semibold text-brand-700 transition-colors hover:bg-brand-50"
+              >
+                Build Internal Brief <ArrowRight className="h-4 w-4" />
+              </button>
+            </>
           )}
         </div>
       </div>

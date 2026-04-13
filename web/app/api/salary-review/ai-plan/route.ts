@@ -6,11 +6,12 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { getWorkspaceContext } from "@/lib/workspace-context";
 import {
   buildSalaryReviewAiPlan,
+  buildSalaryReviewAiScenarios,
   type SalaryReviewAiBenchmarkInput,
   type SalaryReviewAiEmployeeInput,
   type SalaryReviewAiFreshnessInput,
 } from "@/lib/salary-review/ai-plan-engine";
-import { generateSalaryReviewAiRationale } from "@/lib/salary-review/ai-rationale";
+import { generateSalaryReviewAiRationale, generateScenarioRationale } from "@/lib/salary-review/ai-rationale";
 import { validateSalaryReviewAiPlanRequest } from "@/lib/salary-review";
 import { jsonServerError } from "@/lib/errors/http";
 
@@ -275,9 +276,38 @@ export async function POST(request: Request) {
           : allowedIngestionFreshness?.ingestion_sources?.name) ?? "Qeemly Ingestion"
   );
 
+  const employeeInputs = filteredEmployees.map(toEmployeeInput);
+  const reviewContext = {
+    industry: workspaceSettings?.industry ?? null,
+    companySize: workspaceSettings?.company_size ?? inferCompanySize(employeeRows.length),
+  };
+
+  const hasStrategyInputs = Boolean(
+    validation.value.objective || validation.value.budgetIntent || validation.value.populationRules,
+  );
+
+  if (hasStrategyInputs) {
+    const scenarioResponse = buildSalaryReviewAiScenarios({
+      request: validation.value,
+      employees: employeeInputs,
+      workspaceBenchmarks,
+      ingestionBenchmarks,
+      freshness,
+    });
+
+    const enriched = await generateScenarioRationale({
+      request: validation.value,
+      employees: employeeInputs,
+      scenarioResponse,
+      reviewContext,
+    });
+
+    return NextResponse.json(enriched ?? scenarioResponse);
+  }
+
   const plan = buildSalaryReviewAiPlan({
     request: validation.value,
-    employees: filteredEmployees.map(toEmployeeInput),
+    employees: employeeInputs,
     workspaceBenchmarks,
     ingestionBenchmarks,
     freshness,
@@ -285,12 +315,9 @@ export async function POST(request: Request) {
 
   const aiRationale = await generateSalaryReviewAiRationale({
     request: validation.value,
-    employees: filteredEmployees.map(toEmployeeInput),
+    employees: employeeInputs,
     plan,
-    reviewContext: {
-      industry: workspaceSettings?.industry ?? null,
-      companySize: workspaceSettings?.company_size ?? inferCompanySize(employeeRows.length),
-    },
+    reviewContext,
   });
 
   if (!aiRationale) {

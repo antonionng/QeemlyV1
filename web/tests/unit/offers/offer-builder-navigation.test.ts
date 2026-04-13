@@ -116,7 +116,7 @@ describe("Offer Builder CTA navigation", () => {
     });
   });
 
-  it("navigates to offer builder route when CTA is clicked", async () => {
+  it("navigates to advised offer builder when Build Advised Offer is clicked", async () => {
     const container = document.createElement("div");
     const root = createRoot(container);
 
@@ -130,17 +130,17 @@ describe("Offer Builder CTA navigation", () => {
       await Promise.resolve();
     });
 
-    const cta = Array.from(container.querySelectorAll("button")).find((btn) =>
-      btn.textContent?.includes("Open Offer Builder"),
+    const advisedCta = Array.from(container.querySelectorAll("button")).find((btn) =>
+      btn.textContent?.includes("Build Advised Offer"),
     );
-    expect(cta).toBeTruthy();
+    expect(advisedCta).toBeTruthy();
 
     await act(async () => {
-      cta?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      advisedCta?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
     expect(pushMock).toHaveBeenCalledWith(
-      "/dashboard/offers/builder?from=current",
+      "/dashboard/offers/builder?from=current&mode=candidate_advised",
     );
 
     await act(async () => {
@@ -148,7 +148,39 @@ describe("Offer Builder CTA navigation", () => {
     });
   });
 
-  it("hides the CTA when hasCompanyData is false", async () => {
+  it("navigates to internal brief builder when Build Internal Brief is clicked", async () => {
+    const container = document.createElement("div");
+    const root = createRoot(container);
+
+    await act(async () => {
+      root.render(
+        React.createElement(BenchmarkDetail, {
+          result: makeResult(),
+          hasCompanyData: true,
+        }),
+      );
+      await Promise.resolve();
+    });
+
+    const internalCta = Array.from(container.querySelectorAll("button")).find((btn) =>
+      btn.textContent?.includes("Build Internal Brief"),
+    );
+    expect(internalCta).toBeTruthy();
+
+    await act(async () => {
+      internalCta?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    expect(pushMock).toHaveBeenCalledWith(
+      "/dashboard/offers/builder?from=current&mode=internal",
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("hides both CTAs when hasCompanyData is false", async () => {
     const container = document.createElement("div");
     const root = createRoot(container);
 
@@ -162,10 +194,14 @@ describe("Offer Builder CTA navigation", () => {
       await Promise.resolve();
     });
 
-    const cta = Array.from(container.querySelectorAll("button")).find((btn) =>
-      btn.textContent?.includes("Open Offer Builder"),
+    const advisedCta = Array.from(container.querySelectorAll("button")).find((btn) =>
+      btn.textContent?.includes("Build Advised Offer"),
     );
-    expect(cta).toBeUndefined();
+    const internalCta = Array.from(container.querySelectorAll("button")).find((btn) =>
+      btn.textContent?.includes("Build Internal Brief"),
+    );
+    expect(advisedCta).toBeUndefined();
+    expect(internalCta).toBeUndefined();
 
     await act(async () => {
       root.unmount();

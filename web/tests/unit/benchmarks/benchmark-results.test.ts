@@ -1249,7 +1249,7 @@ describe("BenchmarkResults", () => {
     });
 
     expect(container.textContent).not.toContain("Fintech compensation remains above the broader market in Riyadh.");
-    expect(container.textContent).toContain("View Detailed Breakdown");
+    expect(container.textContent).toContain("Load Detailed Breakdown");
 
     await act(async () => {
       root.unmount();
@@ -1427,7 +1427,7 @@ describe("BenchmarkResults", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders the summary after the table and boxplot rows", async () => {
+  it("does not render the summary section", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => ({
@@ -1493,17 +1493,7 @@ describe("BenchmarkResults", () => {
     });
 
     const summarySection = container.querySelector('[data-testid="benchmark-results-summary"]');
-    const graphSection = container.querySelector('[data-testid="benchmark-results-boxplot-section"]');
-    const tableSection = container.querySelector('[data-testid="benchmark-results-level-table"]');
-
-    expect(tableSection).not.toBeNull();
-    expect(graphSection).not.toBeNull();
-    expect(summarySection).not.toBeNull();
-    const summaryNode = summarySection as Node;
-    const tableNode = tableSection as Node;
-    const graphNode = graphSection as Node;
-    expect(tableNode.compareDocumentPosition(summaryNode) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(graphNode.compareDocumentPosition(summaryNode) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(summarySection).toBeNull();
 
     await act(async () => {
       root.unmount();
@@ -1833,7 +1823,7 @@ describe("BenchmarkResults", () => {
     vi.unstubAllGlobals();
   });
 
-  it("renders salary advice, data quality tier explanation, and date clarification copy", async () => {
+  it("renders salary advice and data quality tier explanation copy", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => ({
@@ -1903,8 +1893,6 @@ describe("BenchmarkResults", () => {
 
     expect(container.textContent).toContain("Monthly view");
     expect(container.textContent).toContain("Tier guide");
-    expect(container.textContent).toContain("Date of joining");
-
     await act(async () => {
       root.unmount();
     });

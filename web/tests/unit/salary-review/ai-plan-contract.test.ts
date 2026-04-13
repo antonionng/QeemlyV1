@@ -45,5 +45,106 @@ describe("validateSalaryReviewAiPlanRequest", () => {
       expect(result.error).toContain("assistive");
     }
   });
+
+  const validBase = {
+    mode: "assistive" as const,
+    cycle: "annual" as const,
+    budgetType: "percentage" as const,
+    budgetPercentage: 5,
+  };
+
+  it("passes through valid objective", () => {
+    const result = validateSalaryReviewAiPlanRequest({
+      ...validBase,
+      objective: "retention",
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.objective).toBe("retention");
+    }
+  });
+
+  it("ignores unknown objective", () => {
+    const result = validateSalaryReviewAiPlanRequest({
+      ...validBase,
+      objective: "foo",
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.objective).toBeUndefined();
+    }
+  });
+
+  it("passes through valid budgetIntent", () => {
+    const result = validateSalaryReviewAiPlanRequest({
+      ...validBase,
+      budgetIntent: "strict_cap",
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.budgetIntent).toBe("strict_cap");
+    }
+  });
+
+  it("validates populationRules with all fields", () => {
+    const result = validateSalaryReviewAiPlanRequest({
+      ...validBase,
+      populationRules: {
+        excludeRecentHires: true,
+        excludeLowPerformers: true,
+        maxIncreasePercent: 15,
+      },
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.populationRules).toEqual({
+        excludeRecentHires: true,
+        excludeLowPerformers: true,
+        maxIncreasePercent: 15,
+      });
+    }
+  });
+
+  it("ignores non-object populationRules", () => {
+    const result = validateSalaryReviewAiPlanRequest({
+      ...validBase,
+      populationRules: "invalid",
+    } as unknown);
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.populationRules).toBeUndefined();
+    }
+  });
+
+  it("truncates contextNotes to 2000 chars", () => {
+    const longNotes = "x".repeat(3000);
+    const result = validateSalaryReviewAiPlanRequest({
+      ...validBase,
+      contextNotes: longNotes,
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.contextNotes).toHaveLength(2000);
+      expect(result.value.contextNotes).toBe("x".repeat(2000));
+    }
+  });
+
+  it("accepts empty contextNotes without error", () => {
+    const result = validateSalaryReviewAiPlanRequest({
+      ...validBase,
+      contextNotes: "",
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value.contextNotes).toBeUndefined();
+    }
+  });
 });
 
