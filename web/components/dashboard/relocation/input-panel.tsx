@@ -44,11 +44,13 @@ function CitySelect({
   value,
   onChange,
   excludeId,
+  country,
 }: {
   label: string;
   value: string;
   onChange: (cityId: string) => void;
   excludeId?: string;
+  country?: string;
 }) {
   const [isOpen, setIsOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -71,9 +73,10 @@ function CitySelect({
 
   const filteredCities = useMemo(() => {
     let cities = searchCities(search);
+    if (country) cities = cities.filter((c) => c.country === country);
     if (excludeId) cities = cities.filter((c) => c.id !== excludeId);
     return cities;
-  }, [search, excludeId]);
+  }, [search, excludeId, country]);
 
   const groupedCities = useMemo(() => {
     const groups: Record<Region, City[]> = {
@@ -224,6 +227,45 @@ export function InputPanel({
   const currentApproach = COMP_APPROACHES.find(
     (a) => a.id === data.compApproach,
   );
+  const allCities = useMemo(() => getRelocationCities(), []);
+  const selectedHomeCity = useMemo(
+    () => allCities.find((city) => city.id === data.homeCityId),
+    [allCities, data.homeCityId],
+  );
+  const selectedTargetCity = useMemo(
+    () => allCities.find((city) => city.id === data.targetCityId),
+    [allCities, data.targetCityId],
+  );
+  const countryOptions = useMemo(
+    () =>
+      [...new Set(allCities.map((city) => city.country))].sort((left, right) =>
+        left.localeCompare(right),
+      ),
+    [allCities],
+  );
+
+  const selectCityForCountry = (
+    field: "homeCityId" | "targetCityId",
+    country: string,
+  ) => {
+    const oppositeCityId =
+      field === "homeCityId" ? data.targetCityId : data.homeCityId;
+    const currentCityId = field === "homeCityId" ? data.homeCityId : data.targetCityId;
+    const currentCity = allCities.find((city) => city.id === currentCityId);
+
+    if (currentCity?.country === country && currentCity.id !== oppositeCityId) {
+      updateField(field, currentCity.id);
+      return;
+    }
+
+    const nextCity = allCities.find(
+      (city) => city.country === country && city.id !== oppositeCityId,
+    );
+
+    if (nextCity) {
+      updateField(field, nextCity.id);
+    }
+  };
 
   const sliderMin = 50;
   const sliderMax = 150;
@@ -242,18 +284,57 @@ export function InputPanel({
         </div>
 
         <div className="space-y-6">
-          <CitySelect
-            label="Home Location"
-            value={data.homeCityId}
-            onChange={(id) => updateField("homeCityId", id)}
-            excludeId={data.targetCityId}
-          />
-          <CitySelect
-            label="Host Location"
-            value={data.targetCityId}
-            onChange={(id) => updateField("targetCityId", id)}
-            excludeId={data.homeCityId}
-          />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="relative">
+              <p className={FIELD_LABEL_CLASSES}>Home Country</p>
+              <select
+                name="home-country"
+                value={selectedHomeCity?.country ?? ""}
+                onChange={(e) => selectCityForCountry("homeCityId", e.target.value)}
+                className="w-full appearance-none rounded-2xl border border-border bg-white px-4 py-3 text-sm font-semibold text-accent-900 shadow-sm transition-all hover:border-brand-200 focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-500/10"
+              >
+                {countryOptions.map((country) => (
+                  <option key={country} value={country}>
+                    {country}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-4 top-[46px] h-5 w-5 text-accent-400" />
+            </div>
+            <CitySelect
+              label="Home City"
+              value={data.homeCityId}
+              onChange={(id) => updateField("homeCityId", id)}
+              excludeId={data.targetCityId}
+              country={selectedHomeCity?.country}
+            />
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="relative">
+              <p className={FIELD_LABEL_CLASSES}>Host Country</p>
+              <select
+                name="target-country"
+                value={selectedTargetCity?.country ?? ""}
+                onChange={(e) => selectCityForCountry("targetCityId", e.target.value)}
+                className="w-full appearance-none rounded-2xl border border-border bg-white px-4 py-3 text-sm font-semibold text-accent-900 shadow-sm transition-all hover:border-brand-200 focus:border-brand-300 focus:outline-none focus:ring-2 focus:ring-brand-500/10"
+              >
+                {countryOptions.map((country) => (
+                  <option key={country} value={country}>
+                    {country}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-4 top-[46px] h-5 w-5 text-accent-400" />
+            </div>
+            <CitySelect
+              label="Host City"
+              value={data.targetCityId}
+              onChange={(id) => updateField("targetCityId", id)}
+              excludeId={data.homeCityId}
+              country={selectedTargetCity?.country}
+            />
+          </div>
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
@@ -294,7 +375,9 @@ export function InputPanel({
         <div>
           <p className={FIELD_LABEL_CLASSES}>
             Current Annual Salary{" "}
-            <span className="font-normal text-accent-500">(AED)</span>
+            <span className="font-normal text-accent-500">
+              ({selectedHomeCity?.currency ?? "Local"})
+            </span>
           </p>
           <div className="rounded-2xl border border-border bg-white px-4 py-3 shadow-sm transition-all focus-within:border-brand-300 focus-within:ring-2 focus-within:ring-brand-500/10">
             <input
@@ -406,7 +489,8 @@ export function InputPanel({
             </p>
           ) : (
             <p className="text-sm text-accent-500">
-              Analysis is up to date with the current inputs.
+              Analysis is up to date with the current inputs. Local currency is
+              shown first, with AED references in the results.
             </p>
           )}
           <Button

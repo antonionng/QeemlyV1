@@ -58,7 +58,7 @@ export function ReportGrid({ onOpenReport }: ReportGridProps) {
 
   return (
     <div className="space-y-5">
-      <h2 className="text-lg font-bold text-brand-900">Your Reports</h2>
+      {/* Grid toolbar and cards */}
 
       {/* Toolbar */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -79,7 +79,6 @@ export function ReportGrid({ onOpenReport }: ReportGridProps) {
               className="h-11 appearance-none rounded-full border border-border bg-white pl-4 pr-10 text-sm font-medium text-brand-900 focus:border-brand-300 focus:outline-none"
             >
               <option value="all">Status</option>
-              <option value="Scheduled">Scheduled</option>
               <option value="Ready">Ready</option>
               <option value="In Review">In Review</option>
               <option value="Building">Building</option>

@@ -56,7 +56,7 @@ const adminNavSections: NavSection[] = [
   {
     label: "Analytics",
     items: [
-      { href: "/dashboard/reports", label: "Reports", icon: BarChart3 },
+      { href: "/dashboard/reports", label: "Analytics", icon: BarChart3 },
     ],
   },
   {

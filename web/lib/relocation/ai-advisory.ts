@@ -104,10 +104,11 @@ function buildCacheKey(input: RelocationAiGenerationInput) {
     v: RELOCATION_AI_SCHEMA_VERSION,
     request: input.request,
     deterministicResult: {
+      baseSalaryCurrency: input.deterministicResult.baseSalaryCurrency,
+      baseSalaryAed: input.deterministicResult.baseSalaryAed,
       recommendedSalary: input.deterministicResult.recommendedSalary,
       recommendedRange: input.deterministicResult.recommendedRange,
       purchasingPowerSalary: input.deterministicResult.purchasingPowerSalary,
-      localMarketSalary: input.deterministicResult.localMarketSalary,
       colRatio: input.deterministicResult.colRatio,
     },
     policyContext: input.policyContext,
@@ -180,7 +181,8 @@ Generate a relocation compensation recommendation in annual AED for this move.
 Relocation inputs:
 - Home city: ${deterministicResult.homeCity.name}, ${deterministicResult.homeCity.country}
 - Target city: ${deterministicResult.targetCity.name}, ${deterministicResult.targetCity.country}
-- Current annual salary: AED ${request.baseSalary}
+- Current annual salary: ${request.baseSalary} ${deterministicResult.baseSalaryCurrency}
+- Current annual salary converted to AED: AED ${deterministicResult.baseSalaryAed}
 - Compensation approach: ${request.compApproach}
 - Hybrid cap: ${request.hybridCap ?? "not provided"}
 - Rent override: ${request.rentOverride ?? "not provided"}
@@ -190,7 +192,6 @@ Relocation inputs:
 Deterministic calculator outputs:
 - Cost of living ratio: ${deterministicResult.colRatio.toFixed(2)}x
 - Purchasing power salary: AED ${deterministicResult.purchasingPowerSalary}
-- Local market salary placeholder: AED ${deterministicResult.localMarketSalary}
 - Deterministic recommendation: AED ${deterministicResult.recommendedSalary}
 - Deterministic range: AED ${deterministicResult.recommendedRange.min} to AED ${deterministicResult.recommendedRange.max}
 - Monthly cost difference: AED ${deterministicResult.monthlyDifference}

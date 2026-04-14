@@ -14,6 +14,9 @@ import {
   AlertCircle,
   Pencil,
   ShieldAlert,
+  Sparkles,
+  RefreshCw,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { type BenchmarkResult } from "@/lib/benchmarks/benchmark-state";
@@ -28,6 +31,13 @@ import { LEVELS } from "@/lib/dashboard/dummy-data";
 import { useOffersStore } from "@/lib/offers/store";
 import { fetchDbEmployees } from "@/lib/employees/data-service";
 import type { OfferMode } from "@/lib/offers/types";
+import {
+  fetchInternalOfferAiDraft,
+  type InternalOfferAiDraftRequest,
+  type RegeneratableField,
+} from "@/lib/offers/ai-draft";
+import { AiExplainTooltip } from "@/components/ui/ai-explain-tooltip";
+import { FieldTooltip } from "@/components/ui/field-tooltip";
 
 type BuilderStep = "context" | "recipient" | "internal_details" | "review" | "complete";
 
@@ -111,6 +121,119 @@ export function OfferBuilderWorkspace({ result, offerMode }: OfferBuilderWorkspa
   const [internalRiskFlags, setInternalRiskFlags] = useState<string>("");
   const [internalTalkingPoints, setInternalTalkingPoints] = useState<string>("");
   const [internalApprovalNotes, setInternalApprovalNotes] = useState<string>("");
+
+  // AI draft state
+  const [isAiDrafting, setIsAiDrafting] = useState(false);
+  const [aiDraftError, setAiDraftError] = useState<string | null>(null);
+  const [regeneratingField, setRegeneratingField] = useState<RegeneratableField | null>(null);
+
+  const buildAiDraftPayload = (
+    regenField?: RegeneratableField,
+  ): InternalOfferAiDraftRequest => ({
+    role_title: role?.title ?? manualRoleTitle,
+    level_name: level?.name ?? manualLevelName,
+    location_city: location?.city ?? manualLocationCity,
+    location_country: location?.country ?? manualLocationCountry,
+    employment_type: result?.formData.employmentType ?? "national",
+    currency: benchmark?.currency ?? manualCurrency ?? "SAR",
+    target_percentile: offerTarget,
+    offer_value: rawOfferValue,
+    offer_low: rawOfferLow,
+    offer_high: rawOfferHigh,
+    benchmark_source:
+      benchmark?.benchmarkSource === "uploaded"
+        ? "uploaded"
+        : benchmark?.benchmarkSource === "ai-estimated"
+          ? "ai-estimated"
+          : "market",
+    benchmark_percentiles: benchmark?.percentiles
+      ? {
+          p25: benchmark.percentiles.p25,
+          p50: benchmark.percentiles.p50,
+          p75: benchmark.percentiles.p75,
+          p90: benchmark.percentiles.p90,
+        }
+      : {},
+    package_breakdown: breakdown
+      ? {
+          basic_pct: breakdown.basicSalaryPct,
+          housing_pct: breakdown.housingPct,
+          transport_pct: breakdown.transportPct,
+          other_pct: breakdown.otherAllowancesPct,
+        }
+      : undefined,
+    regenerate_field: regenField,
+    existing_metadata: regenField
+      ? {
+          rationale: internalRationale || undefined,
+          band_position: internalBandPosition,
+          negotiation_floor: internalNegotiationFloor
+            ? Number(internalNegotiationFloor)
+            : undefined,
+          negotiation_ceiling: internalNegotiationCeiling
+            ? Number(internalNegotiationCeiling)
+            : undefined,
+          risk_flags: internalRiskFlags
+            .split("\n")
+            .map((s) => s.trim())
+            .filter(Boolean),
+          talking_points: internalTalkingPoints
+            .split("\n")
+            .map((s) => s.trim())
+            .filter(Boolean),
+          approval_notes: internalApprovalNotes || undefined,
+        }
+      : undefined,
+  });
+
+  const handleAiDraftAll = async () => {
+    setIsAiDrafting(true);
+    setAiDraftError(null);
+    try {
+      const draft = await fetchInternalOfferAiDraft(buildAiDraftPayload());
+      if (draft.band_position) setInternalBandPosition(draft.band_position);
+      if (draft.negotiation_floor != null)
+        setInternalNegotiationFloor(String(draft.negotiation_floor));
+      if (draft.negotiation_ceiling != null)
+        setInternalNegotiationCeiling(String(draft.negotiation_ceiling));
+      if (draft.rationale) setInternalRationale(draft.rationale);
+      if (draft.risk_flags?.length)
+        setInternalRiskFlags(draft.risk_flags.join("\n"));
+      if (draft.talking_points?.length)
+        setInternalTalkingPoints(draft.talking_points.join("\n"));
+      if (draft.approval_notes) setInternalApprovalNotes(draft.approval_notes);
+    } catch (err) {
+      setAiDraftError(
+        err instanceof Error ? err.message : "Unable to generate draft.",
+      );
+    } finally {
+      setIsAiDrafting(false);
+    }
+  };
+
+  const handleRegenerateField = async (field: RegeneratableField) => {
+    setRegeneratingField(field);
+    setAiDraftError(null);
+    try {
+      const draft = await fetchInternalOfferAiDraft(
+        buildAiDraftPayload(field),
+      );
+      if (field === "rationale" && draft.rationale != null)
+        setInternalRationale(draft.rationale);
+      if (field === "risk_flags" && draft.risk_flags)
+        setInternalRiskFlags(draft.risk_flags.join("\n"));
+      if (field === "talking_points" && draft.talking_points)
+        setInternalTalkingPoints(draft.talking_points.join("\n"));
+      if (field === "approval_notes" && draft.approval_notes != null)
+        setInternalApprovalNotes(draft.approval_notes);
+    } catch (err) {
+      setAiDraftError(
+        err instanceof Error ? err.message : "Unable to regenerate field.",
+      );
+    } finally {
+      setRegeneratingField(null);
+    }
+  };
 
   const navigateToStep = (target: BuilderStep) => {
     if (target === "complete") return;
@@ -959,21 +1082,54 @@ export function OfferBuilderWorkspace({ result, offerMode }: OfferBuilderWorkspa
       {step === "internal_details" && isInternal && (
         <div className="space-y-6">
           <div className="bench-section space-y-4">
-            <div>
-              <h3 className="bench-section-header pb-0 flex items-center gap-2">
-                <ShieldAlert className="h-4 w-4 text-amber-600" />
-                Internal Details
-              </h3>
-              <p className="mt-2 text-sm text-brand-600">
-                Add internal-only context for this compensation decision.
-                This information will not be shared with the candidate.
-              </p>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="bench-section-header pb-0 flex items-center gap-2">
+                  <ShieldAlert className="h-4 w-4 text-amber-600" />
+                  Internal Details
+                </h3>
+                <p className="mt-2 text-sm text-brand-600">
+                  Add internal-only context for this compensation decision.
+                  This information will not be shared with the candidate.
+                </p>
+              </div>
+              <div className="flex items-center gap-2 pt-1">
+                <AiExplainTooltip
+                  label="What is this?"
+                  message="The internal brief captures the reasoning, risk assessment, and negotiation guardrails behind a compensation decision. It is visible only to your team and helps managers and HR leads approve offers with full context. AI can draft all sections from the benchmark and position data you have already entered."
+                />
+                <button
+                  type="button"
+                  disabled={isAiDrafting}
+                  onClick={handleAiDraftAll}
+                  className={clsx(
+                    "inline-flex items-center gap-2 rounded-full border border-brand-200 bg-brand-50 px-4 py-2 text-xs font-semibold text-brand-700 transition-colors",
+                    "hover:bg-brand-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-400",
+                    "disabled:opacity-60 disabled:cursor-not-allowed",
+                  )}
+                >
+                  {isAiDrafting ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Sparkles className="h-4 w-4" />
+                  )}
+                  {isAiDrafting ? "Drafting..." : "Draft with AI"}
+                </button>
+              </div>
             </div>
+
+            {aiDraftError && (
+              <div className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                {aiDraftError}
+              </div>
+            )}
 
             <div className="space-y-4">
               <div>
-                <label className="mb-1.5 block text-xs font-semibold text-brand-700">
+                <label className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-brand-700">
                   Band position
+                  <FieldTooltip message="Where the offer sits relative to the market pay band (p25 to p75). Below band may require justification; above band typically needs director approval." />
                 </label>
                 <div className="flex gap-2">
                   {(["below", "in-band", "above"] as const).map((pos) => (
@@ -996,8 +1152,9 @@ export function OfferBuilderWorkspace({ result, offerMode }: OfferBuilderWorkspa
 
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="mb-1.5 block text-xs font-semibold text-brand-700">
+                  <label className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-brand-700">
                     Negotiation floor
+                    <FieldTooltip message="The minimum total compensation you are willing to offer. Set this at or slightly below the offer low to give the recruiter a hard boundary." />
                   </label>
                   <input
                     type="number"
@@ -1008,8 +1165,9 @@ export function OfferBuilderWorkspace({ result, offerMode }: OfferBuilderWorkspa
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-xs font-semibold text-brand-700">
+                  <label className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-brand-700">
                     Negotiation ceiling
+                    <FieldTooltip message="The maximum total compensation you would approve. Set this at or slightly above the offer high to cap recruiter discretion." />
                   </label>
                   <input
                     type="number"
@@ -1022,9 +1180,25 @@ export function OfferBuilderWorkspace({ result, offerMode }: OfferBuilderWorkspa
               </div>
 
               <div>
-                <label className="mb-1.5 block text-xs font-semibold text-brand-700">
-                  Rationale
-                </label>
+                <div className="mb-1.5 flex items-center justify-between">
+                  <label className="flex items-center gap-1.5 text-xs font-semibold text-brand-700">
+                    Rationale
+                    <FieldTooltip message="Explain why this compensation level was chosen. Reference market positioning, candidate experience, and any special factors. This helps approvers understand the decision." />
+                  </label>
+                  <button
+                    type="button"
+                    disabled={regeneratingField === "rationale"}
+                    onClick={() => handleRegenerateField("rationale")}
+                    className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-brand-500 hover:bg-brand-50 hover:text-brand-700 disabled:opacity-50"
+                  >
+                    {regeneratingField === "rationale" ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-3 w-3" />
+                    )}
+                    Re-generate
+                  </button>
+                </div>
                 <textarea
                   value={internalRationale}
                   onChange={(e) => setInternalRationale(e.target.value)}
@@ -1035,9 +1209,25 @@ export function OfferBuilderWorkspace({ result, offerMode }: OfferBuilderWorkspa
               </div>
 
               <div>
-                <label className="mb-1.5 block text-xs font-semibold text-brand-700">
-                  Risk flags (one per line)
-                </label>
+                <div className="mb-1.5 flex items-center justify-between">
+                  <label className="flex items-center gap-1.5 text-xs font-semibold text-brand-700">
+                    Risk flags (one per line)
+                    <FieldTooltip message="List potential risks that could affect this offer. Examples: competing offers, above-band positioning, thin market data, or flight risk. One flag per line." />
+                  </label>
+                  <button
+                    type="button"
+                    disabled={regeneratingField === "risk_flags"}
+                    onClick={() => handleRegenerateField("risk_flags")}
+                    className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-brand-500 hover:bg-brand-50 hover:text-brand-700 disabled:opacity-50"
+                  >
+                    {regeneratingField === "risk_flags" ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-3 w-3" />
+                    )}
+                    Re-generate
+                  </button>
+                </div>
                 <textarea
                   value={internalRiskFlags}
                   onChange={(e) => setInternalRiskFlags(e.target.value)}
@@ -1048,9 +1238,25 @@ export function OfferBuilderWorkspace({ result, offerMode }: OfferBuilderWorkspa
               </div>
 
               <div>
-                <label className="mb-1.5 block text-xs font-semibold text-brand-700">
-                  Talking points (one per line)
-                </label>
+                <div className="mb-1.5 flex items-center justify-between">
+                  <label className="flex items-center gap-1.5 text-xs font-semibold text-brand-700">
+                    Talking points (one per line)
+                    <FieldTooltip message="Key points for the recruiter or manager to use during the compensation conversation. Focus on value proposition, growth, benefits, or relocation support." />
+                  </label>
+                  <button
+                    type="button"
+                    disabled={regeneratingField === "talking_points"}
+                    onClick={() => handleRegenerateField("talking_points")}
+                    className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-brand-500 hover:bg-brand-50 hover:text-brand-700 disabled:opacity-50"
+                  >
+                    {regeneratingField === "talking_points" ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-3 w-3" />
+                    )}
+                    Re-generate
+                  </button>
+                </div>
                 <textarea
                   value={internalTalkingPoints}
                   onChange={(e) => setInternalTalkingPoints(e.target.value)}
@@ -1061,9 +1267,25 @@ export function OfferBuilderWorkspace({ result, offerMode }: OfferBuilderWorkspa
               </div>
 
               <div>
-                <label className="mb-1.5 block text-xs font-semibold text-brand-700">
-                  Approval notes
-                </label>
+                <div className="mb-1.5 flex items-center justify-between">
+                  <label className="flex items-center gap-1.5 text-xs font-semibold text-brand-700">
+                    Approval notes
+                    <FieldTooltip message="Context for the manager or HR lead who will approve this offer. Mention anything that requires special attention or escalation." />
+                  </label>
+                  <button
+                    type="button"
+                    disabled={regeneratingField === "approval_notes"}
+                    onClick={() => handleRegenerateField("approval_notes")}
+                    className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] font-medium text-brand-500 hover:bg-brand-50 hover:text-brand-700 disabled:opacity-50"
+                  >
+                    {regeneratingField === "approval_notes" ? (
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-3 w-3" />
+                    )}
+                    Re-generate
+                  </button>
+                </div>
                 <textarea
                   value={internalApprovalNotes}
                   onChange={(e) => setInternalApprovalNotes(e.target.value)}

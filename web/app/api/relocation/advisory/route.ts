@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { resolveAiFirstBenchmarkContext } from "@/lib/benchmarks/ai-benchmark-rows";
 import { getRelocationAiAdvisory, type RelocationAdvisoryRequest } from "@/lib/relocation/ai-advisory";
 import { calculateRelocation } from "@/lib/relocation/calculator";
+import { loadRelocationMarketData } from "@/lib/relocation/market-context";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getWorkspaceContext } from "@/lib/workspace-context";
 
@@ -72,16 +72,21 @@ export async function POST(request: Request) {
 
   const settings = (workspaceSettings as WorkspaceSettingsRow | null) ?? null;
 
-  const benchmark = await resolveAiFirstBenchmarkContext(
+  const marketData = await loadRelocationMarketData(
     serviceClient,
     {
       roleId: body.roleId,
-      locationId: body.targetCityId,
       levelId: body.levelId,
+      homeLocationId: body.homeCityId,
+      targetLocationId: body.targetCityId,
+      currentSalary: body.baseSalary,
+      currentSalaryCurrency: deterministicResult.baseSalaryCurrency,
       industry: settings?.industry ?? null,
       companySize: settings?.company_size ?? null,
     },
   );
+
+  const benchmark = marketData.targetMarketContext;
 
   const aiAdvisory = await getRelocationAiAdvisory({
     request: body,
@@ -99,13 +104,13 @@ export async function POST(request: Request) {
       ? {
           roleId: body.roleId,
           levelId: body.levelId,
-          locationId: body.targetCityId,
+          locationId: benchmark.matchedLocationId,
           currency: benchmark.currency,
           p25: benchmark.p25,
           p50: benchmark.p50,
           p75: benchmark.p75,
           p90: benchmark.p90,
-          sampleSize: benchmark.sample_size ?? 0,
+          sampleSize: benchmark.sampleSize ?? 0,
           benchmarkSource: benchmark.benchmarkSource,
         }
       : null,
@@ -113,6 +118,9 @@ export async function POST(request: Request) {
 
   return NextResponse.json({
     deterministicResult,
+    homeMarketContext: marketData.homeMarketContext,
+    targetMarketContext: marketData.targetMarketContext,
+    salaryComparisons: marketData.salaryComparisons,
     aiAdvisory,
     recommendedResult: aiAdvisory
       ? {

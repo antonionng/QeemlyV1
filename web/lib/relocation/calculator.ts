@@ -2,6 +2,7 @@
 // Calculates CoL adjustments, purchasing power, and recommended salary ranges
 
 import { City, CostBreakdown, getCity, getTotalMonthlyCost } from "./col-data";
+import { convertRelocationCurrency } from "./currency";
 
 export type CompApproach = "local" | "purchasing-power" | "hybrid";
 
@@ -19,8 +20,9 @@ export interface RelocationResult {
   targetCity: City;
   colRatio: number; // Target CoL / Home CoL
   baseSalary: number;
+  baseSalaryCurrency: string;
+  baseSalaryAed: number;
   purchasingPowerSalary: number; // Salary needed to maintain same purchasing power
-  localMarketSalary: number; // What local market pays for same role
   recommendedSalary: number; // Based on comp approach
   recommendedRange: { min: number; max: number };
   costBreakdown: {
@@ -46,21 +48,23 @@ export function calculateRelocation(inputs: RelocationInputs): RelocationResult 
   // Calculate Cost of Living ratio
   const colRatio = targetCity.colIndex / homeCity.colIndex;
 
-  // Calculate purchasing power equivalent salary
-  // If target is more expensive, salary needs to be higher
-  const purchasingPowerSalary = Math.round(inputs.baseSalary * colRatio);
+  const baseSalaryCurrency = homeCity.currency || "AED";
+  const baseSalaryAed = Math.round(
+    convertRelocationCurrency(inputs.baseSalary, baseSalaryCurrency, "AED"),
+  );
 
-  // Local market salary is the base salary adjusted by CoL
-  // (In a real app, this would come from benchmark data)
-  const localMarketSalary = Math.round(inputs.baseSalary * colRatio);
+  // Calculate purchasing power equivalent salary in AED.
+  // If target is more expensive, salary needs to be higher.
+  const purchasingPowerSalary = Math.round(baseSalaryAed * colRatio);
 
   // Calculate recommended salary based on approach
   let recommendedSalary: number;
 
   switch (inputs.compApproach) {
     case "local":
-      // Pay what the local market pays
-      recommendedSalary = localMarketSalary;
+      // Without benchmark context, fall back to the purchasing power baseline.
+      // Market-backed local pay is composed later in the relocation market layer.
+      recommendedSalary = purchasingPowerSalary;
       break;
 
     case "purchasing-power":
@@ -109,8 +113,9 @@ export function calculateRelocation(inputs: RelocationInputs): RelocationResult 
     targetCity,
     colRatio,
     baseSalary: inputs.baseSalary,
+    baseSalaryCurrency,
+    baseSalaryAed,
     purchasingPowerSalary,
-    localMarketSalary,
     recommendedSalary,
     recommendedRange,
     costBreakdown: {

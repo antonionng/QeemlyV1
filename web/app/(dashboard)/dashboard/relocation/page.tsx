@@ -12,7 +12,6 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import {
   calculateRelocation,
-  formatCurrency,
   getApproachExplanation,
 } from "@/lib/relocation/calculator";
 import type { RelocationResult } from "@/lib/relocation/calculator";
@@ -23,11 +22,20 @@ import {
   type CostBreakdown,
 } from "@/lib/relocation/col-data";
 import type { RelocationAiAdvisory } from "@/lib/relocation/ai-advisory";
+import {
+  buildRelocationDisplayMoney,
+  convertRelocationCurrency,
+  formatRelocationCurrency,
+} from "@/lib/relocation/currency";
+import type {
+  RelocationResolvedMarketContext,
+  RelocationSalaryComparisons,
+} from "@/lib/relocation/market-context";
 
 const DEFAULT_FORM_DATA: RelocationFormData = {
   homeCityId: "london",
   targetCityId: "dubai",
-  baseSalary: 450000,
+  baseSalary: 95000,
   compApproach: "hybrid",
   hybridCap: 110,
   rentOverride: undefined,
@@ -40,6 +48,9 @@ type RelocationAdvisoryState = {
     recommendedSalary: number;
     recommendedRange: RelocationResult["recommendedRange"];
   };
+  homeMarketContext: RelocationResolvedMarketContext | null;
+  targetMarketContext: RelocationResolvedMarketContext | null;
+  salaryComparisons: RelocationSalaryComparisons | null;
   aiAdvisory: RelocationAiAdvisory | null;
   recommendedResult: {
     recommendedSalary: number;
@@ -85,9 +96,35 @@ const COST_CATEGORIES: {
   },
 ];
 
-function formatCompact(val: number): string {
-  if (val >= 1000) return `${Math.round(val / 1000)}k`;
-  return val.toLocaleString();
+function formatSignedPercent(value: number): string {
+  if (Math.abs(value) < 0.1) return "0%";
+  const rounded = Math.round(value);
+  return `${rounded > 0 ? "+" : ""}${rounded}%`;
+}
+
+function MoneyStack({
+  amount,
+  currency,
+  compact = false,
+  className,
+  secondaryClassName,
+}: {
+  amount: number;
+  currency: string | null | undefined;
+  compact?: boolean;
+  className?: string;
+  secondaryClassName?: string;
+}) {
+  const display = buildRelocationDisplayMoney(amount, currency, { compact });
+
+  return (
+    <div className="space-y-1">
+      <p className={className}>{display.primary}</p>
+      {display.secondaryAed ? (
+        <p className={secondaryClassName}>AED reference: {display.secondaryAed}</p>
+      ) : null}
+    </div>
+  );
 }
 
 function CostBar({ breakdown }: { breakdown: CostBreakdown }) {
@@ -111,7 +148,13 @@ function CostBar({ breakdown }: { breakdown: CostBreakdown }) {
   );
 }
 
-function CostDetails({ breakdown }: { breakdown: CostBreakdown }) {
+function CostDetails({
+  breakdown,
+  currency,
+}: {
+  breakdown: CostBreakdown;
+  currency: string | null | undefined;
+}) {
   return (
     <div className="space-y-3">
       {COST_CATEGORIES.map(({ key, label, dotClass }) => (
@@ -121,7 +164,11 @@ function CostDetails({ breakdown }: { breakdown: CostBreakdown }) {
             {label}
           </span>
           <span className="w-16 text-right text-sm font-semibold text-accent-900">
-            {formatCompact(breakdown[key])}
+            {formatRelocationCurrency(
+              convertRelocationCurrency(breakdown[key], "AED", currency),
+              currency,
+              { compact: true },
+            )}
           </span>
         </div>
       ))}
@@ -132,6 +179,18 @@ function CostDetails({ breakdown }: { breakdown: CostBreakdown }) {
 function ComparisonCard({ result }: { result: RelocationResult }) {
   const targetBreakdown =
     result.costBreakdown.targetWithOverride ?? result.costBreakdown.target;
+  const homeMonthlyCost = getTotalMonthlyCost(result.costBreakdown.home);
+  const targetMonthlyCost = getTotalMonthlyCost(targetBreakdown);
+  const homeMonthlyCostLocal = convertRelocationCurrency(
+    homeMonthlyCost,
+    "AED",
+    result.homeCity.currency,
+  );
+  const targetMonthlyCostLocal = convertRelocationCurrency(
+    targetMonthlyCost,
+    "AED",
+    result.targetCity.currency,
+  );
 
   return (
     <Card className="panel p-6 sm:p-8">
@@ -190,23 +249,139 @@ function ComparisonCard({ result }: { result: RelocationResult }) {
           <div className="space-y-5 rounded-2xl border border-border bg-white p-5">
             <div className="space-y-1">
               <p className="overview-card-heading">Monthly estimated cost of living</p>
-              <p className="text-3xl font-semibold tracking-tight text-accent-900 sm:text-4xl">
-                {getTotalMonthlyCost(result.costBreakdown.home).toLocaleString()}
-              </p>
+              <MoneyStack
+                amount={homeMonthlyCostLocal}
+                currency={result.homeCity.currency}
+                className="text-3xl font-semibold tracking-tight text-accent-900 sm:text-4xl"
+                secondaryClassName="text-sm font-medium text-accent-500"
+              />
             </div>
             <CostBar breakdown={result.costBreakdown.home} />
-            <CostDetails breakdown={result.costBreakdown.home} />
+            <CostDetails
+              breakdown={result.costBreakdown.home}
+              currency={result.homeCity.currency}
+            />
           </div>
 
           <div className="space-y-5 rounded-2xl border border-border bg-white p-5">
             <div className="space-y-1">
               <p className="overview-card-heading">Monthly estimated cost of living</p>
-              <p className="text-3xl font-semibold tracking-tight text-accent-900 sm:text-4xl">
-                {getTotalMonthlyCost(targetBreakdown).toLocaleString()}
-              </p>
+              <MoneyStack
+                amount={targetMonthlyCostLocal}
+                currency={result.targetCity.currency}
+                className="text-3xl font-semibold tracking-tight text-accent-900 sm:text-4xl"
+                secondaryClassName="text-sm font-medium text-accent-500"
+              />
             </div>
             <CostBar breakdown={targetBreakdown} />
-            <CostDetails breakdown={targetBreakdown} />
+            <CostDetails
+              breakdown={targetBreakdown}
+              currency={result.targetCity.currency}
+            />
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+function SalaryComparisonSection({
+  advisory,
+}: {
+  advisory: RelocationAdvisoryState | null;
+}) {
+  if (
+    !advisory?.homeMarketContext ||
+    !advisory.targetMarketContext ||
+    !advisory.salaryComparisons
+  ) {
+    return null;
+  }
+
+  const { homeMarketContext, targetMarketContext, salaryComparisons } = advisory;
+
+  return (
+    <Card className="panel p-6 sm:p-8">
+      <div className="space-y-6">
+        <div>
+          <h2 className="overview-section-title">Salary comparison</h2>
+          <p className="overview-supporting-text mt-1">
+            Compare local market medians alongside the employee&apos;s current
+            salary, with AED references for cross-market review.
+          </p>
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-3">
+          <div className="rounded-2xl border border-border bg-white p-5">
+            <p className="overview-card-heading">Origin market salary</p>
+            <MoneyStack
+              amount={homeMarketContext.p50}
+              currency={homeMarketContext.currency}
+              className="mt-3 text-3xl font-semibold tracking-tight text-accent-900"
+              secondaryClassName="text-sm font-medium text-accent-500"
+            />
+            <p className="mt-3 text-sm font-medium text-accent-700">
+              {homeMarketContext.sourceLabel}
+            </p>
+            <p className="mt-1 text-sm text-accent-500">
+              {homeMarketContext.matchLabel}
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-border bg-white p-5">
+            <p className="overview-card-heading">Destination market salary</p>
+            <MoneyStack
+              amount={targetMarketContext.p50}
+              currency={targetMarketContext.currency}
+              className="mt-3 text-3xl font-semibold tracking-tight text-accent-900"
+              secondaryClassName="text-sm font-medium text-accent-500"
+            />
+            <p className="mt-3 text-sm font-medium text-accent-700">
+              {targetMarketContext.sourceLabel}
+            </p>
+            <p className="mt-1 text-sm text-accent-500">
+              {targetMarketContext.matchLabel}
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-border bg-white p-5">
+            <p className="overview-card-heading">Current salary vs destination market</p>
+            <MoneyStack
+              amount={salaryComparisons.currentToDestinationMarket.currentSalary}
+              currency={salaryComparisons.currentToDestinationMarket.currentSalaryCurrency}
+              className="mt-3 text-3xl font-semibold tracking-tight text-accent-900"
+              secondaryClassName="text-sm font-medium text-accent-500"
+            />
+            <p className="mt-4 text-sm text-accent-600">
+              Destination market median
+            </p>
+            <MoneyStack
+              amount={salaryComparisons.currentToDestinationMarket.targetMarketP50}
+              currency={salaryComparisons.currentToDestinationMarket.targetMarketCurrency}
+              className="text-lg font-semibold text-accent-900"
+              secondaryClassName="text-sm text-accent-500"
+            />
+            <div className="mt-4 rounded-2xl bg-accent-50/70 p-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.08em] text-accent-500">
+                AED reference gap
+              </p>
+              <p className="mt-2 text-lg font-semibold text-accent-900">
+                {formatRelocationCurrency(
+                  salaryComparisons.currentToDestinationMarket.gapInAed,
+                  "AED",
+                )}
+              </p>
+              <p className="mt-1 text-sm text-accent-500">
+                {formatSignedPercent(
+                  salaryComparisons.currentToDestinationMarket.gapPercent,
+                )}{" "}
+                vs current salary.{" "}
+                {formatSignedPercent(
+                  salaryComparisons.benchmarkToBenchmark.percentChange,
+                )}{" "}
+                market-to-market shift.
+              </p>
+            </div>
           </div>
         </div>
       </div>
@@ -231,6 +406,10 @@ function RecommendationCard({
 }) {
   const { min, max } = result.recommendedRange;
   const target = result.recommendedSalary;
+  const targetCurrency = result.targetCity.currency;
+  const targetLocal = convertRelocationCurrency(target, "AED", targetCurrency);
+  const minLocal = convertRelocationCurrency(min, "AED", targetCurrency);
+  const maxLocal = convertRelocationCurrency(max, "AED", targetCurrency);
   const isAiPrimary = Boolean(aiAdvisory);
   const risks = aiAdvisory?.risks ?? [];
   const policyNotes = aiAdvisory?.policyNotes ?? [];
@@ -318,9 +497,12 @@ function RecommendationCard({
             </div>
 
             <div className="mt-6 flex flex-wrap items-start gap-4">
-              <p className="text-3xl font-semibold tracking-tight text-accent-900 sm:text-5xl">
-                {formatCurrency(target)}
-              </p>
+              <MoneyStack
+                amount={targetLocal}
+                currency={targetCurrency}
+                className="text-3xl font-semibold tracking-tight text-accent-900 sm:text-5xl"
+                secondaryClassName="text-sm font-medium text-accent-500"
+              />
               <div className="rounded-xl bg-danger-soft px-3 py-2">
                 <p className="text-sm font-semibold text-danger">
                   {result.colRatio.toFixed(2)}x
@@ -330,7 +512,21 @@ function RecommendationCard({
             </div>
             {isAiPrimary ? (
               <p className="mt-4 text-sm text-accent-600">
-                Deterministic baseline: {formatCurrency(deterministicResult.recommendedSalary)}
+                Deterministic baseline:{" "}
+                {formatRelocationCurrency(
+                  convertRelocationCurrency(
+                    deterministicResult.recommendedSalary,
+                    "AED",
+                    targetCurrency,
+                  ),
+                  targetCurrency,
+                )}{" "}
+                (AED reference:{" "}
+                {formatRelocationCurrency(
+                  deterministicResult.recommendedSalary,
+                  "AED",
+                )}
+                )
               </p>
             ) : null}
           </div>
@@ -355,7 +551,9 @@ function RecommendationCard({
                 </span>
                 <div className="h-8 w-px bg-accent-300" />
                 <span className="text-sm font-semibold text-accent-900">
-                  {formatCurrency(min, true)}
+                  {formatRelocationCurrency(minLocal, targetCurrency, {
+                    compact: true,
+                  })}
                 </span>
               </div>
 
@@ -365,7 +563,9 @@ function RecommendationCard({
                 </span>
                 <div className="h-8 w-0.5 bg-brand-500" />
                 <span className="text-sm font-semibold text-brand-700">
-                  {formatCurrency(target, true)}
+                  {formatRelocationCurrency(targetLocal, targetCurrency, {
+                    compact: true,
+                  })}
                 </span>
               </div>
 
@@ -375,7 +575,9 @@ function RecommendationCard({
                 </span>
                 <div className="h-8 w-px bg-accent-300" />
                 <span className="text-sm font-semibold text-accent-900">
-                  {formatCurrency(max, true)}
+                  {formatRelocationCurrency(maxLocal, targetCurrency, {
+                    compact: true,
+                  })}
                 </span>
               </div>
             </div>
@@ -584,6 +786,7 @@ function RelocationPageContent() {
           {displayResult ? (
             <>
               <ComparisonCard result={displayResult} />
+              <SalaryComparisonSection advisory={advisory} />
               <RecommendationCard
                 result={displayResult}
                 deterministicResult={result ?? displayResult}

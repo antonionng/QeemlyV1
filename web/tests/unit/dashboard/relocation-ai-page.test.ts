@@ -81,6 +81,7 @@ vi.mock("@/lib/relocation/calculator", () => ({
       name: "London",
       country: "United Kingdom",
       flag: "GB",
+      currency: "GBP",
       colIndex: 145,
       breakdown: { rent: 12800, transport: 1650, food: 2900, utilities: 900, other: 2200 },
     },
@@ -89,13 +90,15 @@ vi.mock("@/lib/relocation/calculator", () => ({
       name: "Dubai",
       country: "UAE",
       flag: "AE",
+      currency: "AED",
       colIndex: 100,
       breakdown: { rent: 9000, transport: 1100, food: 2200, utilities: 750, other: 1500 },
     },
     colRatio: 0.69,
     baseSalary: 450000,
+    baseSalaryCurrency: "GBP",
+    baseSalaryAed: 2092500,
     purchasingPowerSalary: 310500,
-    localMarketSalary: 330000,
     recommendedSalary: 320000,
     recommendedRange: { min: 304000, max: 336000 },
     annualDifference: -52800,
@@ -243,8 +246,9 @@ describe("RelocationPage AI advisory", () => {
     expect(container.textContent).toContain(
       "Use a moderated uplift rather than a full market reset for this move.",
     );
-    expect(container.textContent).toContain("AED 338,000");
-    expect(container.textContent).toContain("AED 320,000");
+    expect(container.textContent).toContain("338,000");
+    expect(container.textContent).toContain("AED reference");
+    expect(container.textContent).toContain("320,000");
     expect(container.textContent).toContain(
       "Candidate may compare against Dubai software engineer medians.",
     );
@@ -264,7 +268,7 @@ describe("RelocationPage AI advisory", () => {
       await Promise.resolve();
     });
 
-    expect(container.textContent).toContain("AED 338,000");
+    expect(container.textContent).toContain("338,000");
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/api/relocation/advisory"))).toHaveLength(1);
 
     const buttons = Array.from(container.querySelectorAll("button"));
@@ -277,7 +281,7 @@ describe("RelocationPage AI advisory", () => {
 
     expect(container.textContent).toContain("Salary:900000");
     expect(container.textContent).toContain("Pending refresh");
-    expect(container.textContent).toContain("AED 338,000");
+    expect(container.textContent).toContain("338,000");
     expect(fetchMock.mock.calls.filter(([url]) => String(url).includes("/api/relocation/advisory"))).toHaveLength(1);
 
     await act(async () => {
@@ -287,7 +291,7 @@ describe("RelocationPage AI advisory", () => {
       await Promise.resolve();
     });
 
-    expect(container.textContent).toContain("AED 701,000");
+    expect(container.textContent).toContain("701,000");
     expect(container.textContent).toContain(
       "The revised salary input supports a materially higher relocation recommendation.",
     );
@@ -334,7 +338,7 @@ describe("RelocationPage AI advisory", () => {
       await Promise.resolve();
     });
 
-    expect(container.textContent).toContain("AED 320,000");
+    expect(container.textContent).toContain("320,000");
     expect(container.textContent).not.toContain("Qeemly AI Relocation Advisory");
   });
 });

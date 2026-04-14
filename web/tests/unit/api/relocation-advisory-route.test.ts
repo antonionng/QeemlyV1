@@ -5,13 +5,13 @@ const {
   calculateRelocationMock,
   getRelocationAiAdvisoryMock,
   createServiceClientMock,
-  resolveAiFirstBenchmarkContextMock,
+  loadRelocationMarketDataMock,
 } = vi.hoisted(() => ({
   getWorkspaceContextMock: vi.fn(),
   calculateRelocationMock: vi.fn(),
   getRelocationAiAdvisoryMock: vi.fn(),
   createServiceClientMock: vi.fn(),
-  resolveAiFirstBenchmarkContextMock: vi.fn(),
+  loadRelocationMarketDataMock: vi.fn(),
 }));
 
 vi.mock("@/lib/workspace-context", () => ({
@@ -30,8 +30,8 @@ vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: createServiceClientMock,
 }));
 
-vi.mock("@/lib/benchmarks/ai-benchmark-rows", () => ({
-  resolveAiFirstBenchmarkContext: resolveAiFirstBenchmarkContextMock,
+vi.mock("@/lib/relocation/market-context", () => ({
+  loadRelocationMarketData: loadRelocationMarketDataMock,
 }));
 
 describe("POST /api/relocation/advisory", () => {
@@ -75,8 +75,9 @@ describe("POST /api/relocation/advisory", () => {
       targetCity: { id: "dubai", name: "Dubai", country: "UAE", flag: "AE" },
       colRatio: 0.69,
       baseSalary: 450000,
+      baseSalaryCurrency: "GBP",
+      baseSalaryAed: 2_092_500,
       purchasingPowerSalary: 310500,
-      localMarketSalary: 330000,
       recommendedSalary: 320000,
       recommendedRange: { min: 304000, max: 336000 },
       costBreakdown: {
@@ -87,18 +88,64 @@ describe("POST /api/relocation/advisory", () => {
       annualDifference: -52800,
     });
 
-    resolveAiFirstBenchmarkContextMock.mockResolvedValue({
-      role_id: "swe",
-      location_id: "dubai",
-      level_id: "ic3",
-      currency: "AED",
-      p10: 240000,
-      p25: 280000,
-      p50: 320000,
-      p75: 370000,
-      p90: 420000,
-      sample_size: 12,
-      benchmarkSource: "ai-estimated",
+    loadRelocationMarketDataMock.mockResolvedValue({
+      homeMarketContext: {
+        requestedLocationId: "london",
+        matchedLocationId: "london",
+        currency: "GBP",
+        payPeriod: "annual",
+        p10: 80_000,
+        p25: 90_000,
+        p50: 100_000,
+        p75: 115_000,
+        p90: 130_000,
+        sampleSize: 18,
+        benchmarkSource: "market",
+        sourceLabel: "Qeemly Market Dataset",
+        matchType: "exact",
+        matchLabel: "Exact match",
+        fallbackReason: null,
+      },
+      targetMarketContext: {
+        requestedLocationId: "dubai",
+        matchedLocationId: "dubai",
+        currency: "AED",
+        payPeriod: "annual",
+        p10: 240_000,
+        p25: 280_000,
+        p50: 320_000,
+        p75: 370_000,
+        p90: 420_000,
+        sampleSize: 12,
+        benchmarkSource: "ai-estimated",
+        sourceLabel: "Qeemly AI Benchmark",
+        matchType: "exact",
+        matchLabel: "Exact match",
+        fallbackReason: null,
+      },
+      salaryComparisons: {
+        benchmarkToBenchmark: {
+          homeMarketP50: 100_000,
+          homeMarketCurrency: "GBP",
+          homeMarketP50Aed: 465_000,
+          targetMarketP50: 320_000,
+          targetMarketCurrency: "AED",
+          targetMarketP50Aed: 320_000,
+          differenceInAed: -145_000,
+          percentChange: -31.18,
+        },
+        currentToDestinationMarket: {
+          currentSalary: 450_000,
+          currentSalaryCurrency: "GBP",
+          currentSalaryAed: 2_092_500,
+          currentSalaryInTargetCurrency: 2_092_500,
+          targetMarketP50: 320_000,
+          targetMarketCurrency: "AED",
+          targetMarketP50Aed: 320_000,
+          gapInAed: -1_772_500,
+          gapPercent: -84.71,
+        },
+      },
     });
 
     getRelocationAiAdvisoryMock.mockResolvedValue({
@@ -123,7 +170,7 @@ describe("POST /api/relocation/advisory", () => {
     });
   });
 
-  it("returns deterministic and AI relocation recommendations together, with AI as the primary recommendation", async () => {
+  it("returns deterministic and AI relocation recommendations together, with market contexts for both sides", async () => {
     const { POST } = await import("@/app/api/relocation/advisory/route");
 
     const response = await POST(
@@ -147,6 +194,10 @@ describe("POST /api/relocation/advisory", () => {
     expect(payload.deterministicResult.recommendedSalary).toBe(320000);
     expect(payload.aiAdvisory.recommendedSalary).toBe(338000);
     expect(payload.recommendedResult.recommendedSalary).toBe(338000);
+    expect(payload.homeMarketContext.currency).toBe("GBP");
+    expect(payload.targetMarketContext.benchmarkSource).toBe("ai-estimated");
+    expect(payload.salaryComparisons.benchmarkToBenchmark.homeMarketP50Aed).toBe(465000);
+    expect(payload.salaryComparisons.currentToDestinationMarket.currentSalaryCurrency).toBe("GBP");
     expect(payload.aiAdvisory.sourceContext.benchmarkSource).toBe("ai-estimated");
     expect(payload.aiAdvisory.risks[0]).toContain("Candidate may anchor");
   });
