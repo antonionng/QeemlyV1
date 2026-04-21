@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useEffect } from "react";
 import clsx from "clsx";
 import { Check, ChevronLeft, X } from "lucide-react";
@@ -10,15 +11,53 @@ import {
   type UploadDataType,
 } from "@/lib/upload";
 import { StepDataType } from "./step-data-type";
-import { StepFileUpload } from "./step-file-upload";
-import { StepColumnMapping } from "./step-column-mapping";
-import { StepDepartmentMapping } from "./step-department-mapping";
-import { StepRoleMapping } from "./step-role-mapping";
-import { StepLevelMapping } from "./step-level-mapping";
-import { StepValidation } from "./step-validation";
-import { StepAutoFix } from "./step-auto-fix";
-import { StepErrorReview } from "./step-error-review";
-import { StepConfirm } from "./step-confirm";
+
+const stepLoading = () => <StepLoading />;
+
+const StepFileUpload = dynamic(
+  () => import("./step-file-upload").then((m) => ({ default: m.StepFileUpload })),
+  { ssr: false, loading: stepLoading },
+);
+const StepColumnMapping = dynamic(
+  () => import("./step-column-mapping").then((m) => ({ default: m.StepColumnMapping })),
+  { ssr: false, loading: stepLoading },
+);
+const StepDepartmentMapping = dynamic(
+  () => import("./step-department-mapping").then((m) => ({ default: m.StepDepartmentMapping })),
+  { ssr: false, loading: stepLoading },
+);
+const StepRoleMapping = dynamic(
+  () => import("./step-role-mapping").then((m) => ({ default: m.StepRoleMapping })),
+  { ssr: false, loading: stepLoading },
+);
+const StepLevelMapping = dynamic(
+  () => import("./step-level-mapping").then((m) => ({ default: m.StepLevelMapping })),
+  { ssr: false, loading: stepLoading },
+);
+const StepValidation = dynamic(
+  () => import("./step-validation").then((m) => ({ default: m.StepValidation })),
+  { ssr: false, loading: stepLoading },
+);
+const StepAutoFix = dynamic(
+  () => import("./step-auto-fix").then((m) => ({ default: m.StepAutoFix })),
+  { ssr: false, loading: stepLoading },
+);
+const StepErrorReview = dynamic(
+  () => import("./step-error-review").then((m) => ({ default: m.StepErrorReview })),
+  { ssr: false, loading: stepLoading },
+);
+const StepConfirm = dynamic(
+  () => import("./step-confirm").then((m) => ({ default: m.StepConfirm })),
+  { ssr: false, loading: stepLoading },
+);
+
+function StepLoading() {
+  return (
+    <div className="flex h-[400px] items-center justify-center">
+      <div className="h-8 w-8 animate-spin rounded-full border-2 border-brand-200 border-t-brand-500" />
+    </div>
+  );
+}
 
 type UploadWizardProps = {
   mode?: "page" | "modal";

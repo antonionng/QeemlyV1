@@ -1,13 +1,33 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { Suspense, useState, useEffect, useMemo, type FormEvent } from "react";
 import { Calendar, RefreshCw, Download, Upload, Loader2, Sparkles, UserPlus, X } from "lucide-react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { AiDistributionModal, ApprovalProposalDetail, ApprovalProposalList, ReviewTable, ReviewTabs } from "@/components/dashboard/salary-review";
-import { UploadModal } from "@/components/dashboard/upload";
+import { ApprovalProposalDetail, ApprovalProposalList, ReviewTable, ReviewTabs } from "@/components/dashboard/salary-review";
+
+const AiDistributionModal = dynamic(
+  () =>
+    import("@/components/dashboard/salary-review/ai-distribution-modal").then((m) => ({
+      default: m.AiDistributionModal,
+    })),
+  { ssr: false, loading: () => null },
+);
+const AiSelectionRulesModal = dynamic(
+  () =>
+    import("@/components/dashboard/salary-review/ai-rules-modal").then((m) => ({
+      default: m.AiSelectionRulesModal,
+    })),
+  { ssr: false, loading: () => null },
+);
+const UploadModal = dynamic(
+  () =>
+    import("@/components/dashboard/upload").then((m) => ({ default: m.UploadModal })),
+  { ssr: false, loading: () => null },
+);
 import { ReviewCycleListCard, SalaryReviewOverview } from "@/components/salary-review";
 import { useSalaryReview, type SalaryReviewAiPlanRequest } from "@/lib/salary-review";
 import { REVIEW_CYCLES, type ReviewCycle } from "@/lib/company";
@@ -85,6 +105,7 @@ function SalaryReviewPageContent() {
   const searchParams = useSearchParams();
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [showAiModal, setShowAiModal] = useState(false);
+  const [showAiRulesModal, setShowAiRulesModal] = useState(false);
   const [showAddEmployeeModal, setShowAddEmployeeModal] = useState(false);
   const [isCreatingEmployee, setIsCreatingEmployee] = useState(false);
   const [addAnotherOnSave, setAddAnotherOnSave] = useState(false);
@@ -265,14 +286,16 @@ function SalaryReviewPageContent() {
     router.replace("/dashboard/salary-review/new");
   }, [initialQueryState.tab, router]);
 
+  const hasBudget = budget > 0;
   const buildReviewFlow = useMemo(
     () =>
       getBuildReviewFlowModel({
         requestedStep: requestedBuildReviewStep,
         employeesCount: employees.length,
         proposedEmployees: withIncreaseCount,
+        hasBudget,
       }),
-    [requestedBuildReviewStep, employees.length, withIncreaseCount]
+    [requestedBuildReviewStep, employees.length, withIncreaseCount, hasBudget]
   );
 
   const handleExport = () => {
@@ -339,7 +362,7 @@ function SalaryReviewPageContent() {
   };
 
   const handleBuildManually = () => {
-    setRequestedBuildReviewStep("draft");
+    setRequestedBuildReviewStep(hasBudget ? "draft" : "budget");
   };
 
   const handleOpenFinalReview = () => {
@@ -351,6 +374,14 @@ function SalaryReviewPageContent() {
   };
 
   const handleBackToDraft = () => {
+    setRequestedBuildReviewStep("draft");
+  };
+
+  const handleOpenBudgetStep = () => {
+    setRequestedBuildReviewStep("budget");
+  };
+
+  const handleBudgetConfirm = () => {
     setRequestedBuildReviewStep("draft");
   };
 
@@ -728,6 +759,7 @@ function SalaryReviewPageContent() {
             actionLabel={dashboardModel.hasDraft ? "Continue Draft" : "Start Review Cycle"}
             onPrimaryAction={dashboardModel.hasDraft ? handleContinueDraft : () => void handleStartNewCycle()}
             onAiDraft={() => setShowAiModal(true)}
+            onShowAiRules={() => setShowAiRulesModal(true)}
             onImport={() => setShowUploadModal(true)}
             onExport={handleExport}
             onReset={resetReview}
@@ -775,9 +807,11 @@ function SalaryReviewPageContent() {
                     <p className="text-xs">
                       {step.id === "setup"
                         ? "Set policy and decide how to draft"
-                        : step.id === "draft"
-                          ? "Adjust employee recommendations"
-                          : "Review before submission"}
+                        : step.id === "budget"
+                          ? "Lock the master budget envelope"
+                          : step.id === "draft"
+                            ? "Adjust employee recommendations"
+                            : "Review before submission"}
                     </p>
                   </div>
                 </button>
@@ -804,6 +838,13 @@ function SalaryReviewPageContent() {
                     <Sparkles className="mr-1.5 h-3.5 w-3.5" />
                     Start With AI Draft
                   </Button>
+                  <button
+                    type="button"
+                    onClick={() => setShowAiRulesModal(true)}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-full border border-transparent px-3 text-[11px] font-medium text-[#6E56CF] hover:bg-[#F6F2FF]"
+                  >
+                    How AI selects
+                  </button>
                   <Button
                     variant="outline"
                     size="sm"
@@ -956,12 +997,161 @@ function SalaryReviewPageContent() {
             </Card>
           ) : null}
 
+          {buildReviewFlow.activeStep === "budget" ? (
+            <Card className="dash-card border border-brand-100 bg-gradient-to-r from-brand-50 via-white to-accent-50 p-6">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="max-w-3xl">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brand-700">Step 2</p>
+                  <h2 className="mt-2 text-xl font-semibold text-accent-950">Set the master budget</h2>
+                  <p className="mt-2 text-sm text-accent-700">
+                    Lock the total envelope you have to spend on this cycle. Every employee proposal will burn down against this budget in real time.
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={handleBackToSetup}
+                    className="h-9 rounded-full border-border bg-white px-5 text-accent-700 hover:bg-accent-50"
+                  >
+                    Back To Setup
+                  </Button>
+                  <Button
+                    onClick={handleBudgetConfirm}
+                    disabled={!hasBudget}
+                    className="h-9 rounded-full bg-brand-500 px-5 text-white hover:bg-brand-600"
+                  >
+                    Lock Budget &amp; Continue
+                  </Button>
+                </div>
+              </div>
+
+              <div className="mt-5 grid gap-3 md:grid-cols-3">
+                <OverviewMetric
+                  label="Master budget"
+                  value={budget > 0 ? formatAEDCompact(applyViewMode(budget, salaryView)) : "—"}
+                  body={
+                    settings.budgetType === "percentage"
+                      ? `${settings.budgetPercentage}% of current payroll.`
+                      : "Fixed AED budget for this cycle."
+                  }
+                />
+                <OverviewMetric
+                  label="Already allocated"
+                  value={formatAEDCompact(applyViewMode(budgetUsed, salaryView))}
+                  body={withIncreaseCount > 0 ? `${withIncreaseCount} proposals counted.` : "No proposals yet."}
+                />
+                <OverviewMetric
+                  label="Remaining"
+                  value={formatAEDCompact(applyViewMode(Math.max(budget - budgetUsed, 0), salaryView))}
+                  body={budget - budgetUsed < 0 ? "Currently over budget." : "Available for new proposals."}
+                />
+              </div>
+
+              <div className="mt-6 rounded-2xl border border-border/50 bg-white p-5">
+                <h3 className="text-sm font-semibold text-accent-900">Budget configuration</h3>
+                <p className="mt-1 text-xs text-accent-500">
+                  Switch between a percentage of payroll or a fixed AED amount. The wizard will not advance until a master budget is set.
+                </p>
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label htmlFor="masterBudgetType" className="text-xs font-semibold text-accent-700">
+                      Budget type
+                    </label>
+                    <div className="mt-2 inline-flex rounded-full border border-border bg-accent-50 p-1 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => updateSettings({ budgetType: "percentage" })}
+                        className={`rounded-full px-4 py-1 transition-colors ${
+                          settings.budgetType === "percentage" ? "bg-white text-accent-900 shadow" : "text-accent-500"
+                        }`}
+                      >
+                        Percentage
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => updateSettings({ budgetType: "absolute" })}
+                        className={`rounded-full px-4 py-1 transition-colors ${
+                          settings.budgetType === "absolute" ? "bg-white text-accent-900 shadow" : "text-accent-500"
+                        }`}
+                      >
+                        Absolute (AED)
+                      </button>
+                    </div>
+                  </div>
+                  <div>
+                    <label htmlFor="masterBudgetValue" className="text-xs font-semibold text-accent-700">
+                      {settings.budgetType === "percentage" ? "Budget %" : "Budget amount (AED)"}
+                    </label>
+                    <input
+                      id="masterBudgetValue"
+                      type="number"
+                      min={0}
+                      step={settings.budgetType === "percentage" ? 0.5 : 1000}
+                      value={budgetInput}
+                      onChange={(event) => {
+                        const raw = event.target.value;
+                        if (!raw) {
+                          if (settings.budgetType === "percentage") {
+                            updateSettings({ budgetPercentage: 0 });
+                          } else {
+                            updateSettings({ budgetAbsolute: 0 });
+                          }
+                          return;
+                        }
+                        const parsedValue = Number(raw);
+                        if (Number.isNaN(parsedValue) || parsedValue < 0) return;
+                        if (settings.budgetType === "percentage") {
+                          updateSettings({ budgetPercentage: parsedValue });
+                        } else {
+                          updateSettings({ budgetAbsolute: parsedValue });
+                        }
+                      }}
+                      placeholder={settings.budgetType === "percentage" ? "Enter budget %" : "Enter budget in AED"}
+                      className="mt-2 h-10 w-full rounded-xl border border-border bg-white px-3 text-sm text-accent-900 focus:border-brand-300 focus:outline-none"
+                    />
+                    <p className="mt-1 text-[11px] text-accent-500">
+                      {budgetModel.policyLabel}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="mt-6">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-accent-500">Live burn-down</span>
+                    <span className="text-xs text-accent-500">
+                      {budget > 0
+                        ? `${Math.min(((budgetUsed / budget) * 100), 999).toFixed(1)}% used`
+                        : "Set a master budget to enable burn-down"}
+                    </span>
+                  </div>
+                  <div className="mt-2 h-3 overflow-hidden rounded-full bg-accent-100">
+                    <div
+                      className={`h-full rounded-full transition-all ${
+                        budget === 0
+                          ? "bg-accent-200"
+                          : budgetUsed > budget
+                            ? "bg-rose-500"
+                            : budgetUsed / Math.max(budget, 1) > 0.9
+                              ? "bg-amber-500"
+                              : "bg-emerald-500"
+                      }`}
+                      style={{
+                        width: `${budget > 0 ? Math.min((budgetUsed / budget) * 100, 100) : 0}%`,
+                      }}
+                    />
+                  </div>
+                  <p className="mt-2 text-xs text-accent-500">{budgetModel.remainingLabel}</p>
+                </div>
+              </div>
+            </Card>
+          ) : null}
+
           {buildReviewFlow.activeStep === "draft" ? (
             <>
               <Card className="dash-card border border-brand-100 bg-gradient-to-r from-brand-50 via-white to-accent-50 p-5">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="max-w-3xl">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brand-700">Step 2</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brand-700">Step 3</p>
                     <h2 className="mt-2 text-xl font-semibold text-accent-950">Adjust the draft</h2>
                     <p className="mt-2 text-sm text-accent-700">
                       Review the employee-level recommendations, make manual changes where needed, save the draft, and continue only when the proposal is ready for final review.
@@ -1030,7 +1220,7 @@ function SalaryReviewPageContent() {
               <Card className="dash-card border border-brand-100 bg-gradient-to-r from-brand-50 via-white to-accent-50 p-5">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="max-w-3xl">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brand-700">Step 3</p>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brand-700">Step 4</p>
                     <h2 className="mt-2 text-xl font-semibold text-accent-950">Final review before approval</h2>
                     <p className="mt-2 text-sm text-accent-700">
                       Check the budget, diagnostics, and review watchouts here. If anything needs changing, go back to adjustments before you submit this cycle for approval.
@@ -1400,6 +1590,11 @@ function SalaryReviewPageContent() {
           loadEmployeesFromDb();
           setShowUploadModal(false);
         }}
+      />
+
+      <AiSelectionRulesModal
+        isOpen={showAiRulesModal}
+        onClose={() => setShowAiRulesModal(false)}
       />
     </div>
   );

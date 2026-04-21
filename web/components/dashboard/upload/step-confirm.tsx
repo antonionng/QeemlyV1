@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Upload,
   Check,
@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
 import {
   useUploadStore,
   buildUploadedBenchmarkPreviewRows,
@@ -30,9 +31,12 @@ import {
   transformEmployee,
   transformBenchmark,
   transformCompensationUpdate,
+  matchLevel,
+  matchRole,
   type TransformedEmployee,
   type TransformedBenchmark,
   type UploadResult,
+  type UploadMappingOptions,
   type UploadVerificationSummary,
 } from "@/lib/upload";
 
@@ -52,11 +56,6 @@ export function StepConfirm({ onSuccess, onClose }: StepConfirmProps) {
     importError,
     importedCount,
     importMode,
-    excludedRows,
-    departmentMappings,
-    roleMappings,
-    levelMappings,
-    multiCurrencyConfirmed,
     setImporting,
     setImportProgress,
     setImportError,
@@ -65,6 +64,46 @@ export function StepConfirm({ onSuccess, onClose }: StepConfirmProps) {
     goToStep,
     reset,
   } = store;
+  const departmentMappings = store.departmentMappings ?? {};
+  const roleMappings = store.roleMappings ?? {};
+  const levelMappings = store.levelMappings ?? {};
+  const rowLevelOverrides = store.rowLevelOverrides ?? {};
+  const rowRoleOverrides = store.rowRoleOverrides ?? {};
+  const setRowLevelOverride = store.setRowLevelOverride ?? (() => {});
+  const setRowRoleOverride = store.setRowRoleOverride ?? (() => {});
+  const multiCurrencyConfirmed = store.multiCurrencyConfirmed ?? false;
+  const excludedRows = store.excludedRows ?? new Set<number>();
+
+  // Mapping options (roles, levels) for the per-employee override dropdowns.
+  const [mappingOptions, setMappingOptions] = useState<UploadMappingOptions>({ roles: [], levels: [] });
+  useEffect(() => {
+    if (dataType !== "employees") return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const response = await fetch("/api/upload/mapping-options", { cache: "no-store" });
+        if (!response.ok) return;
+        const payload = (await response.json()) as UploadMappingOptions;
+        if (!cancelled) setMappingOptions(payload);
+      } catch {
+        // ignore - fallback rendering still works without labels
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [dataType]);
+
+  const roleLabelById = useMemo(
+    () => new Map(mappingOptions.roles.map((option) => [option.id, option.label])),
+    [mappingOptions.roles],
+  );
+  const levelLabelById = useMemo(
+    () => new Map(mappingOptions.levels.map((option) => [option.id, option.label])),
+    [mappingOptions.levels],
+  );
+
+  const [showFullTable, setShowFullTable] = useState(false);
 
   const isSuccess = currentStep === "success";
   const summary = getImportSummary(store);
@@ -440,12 +479,9 @@ export function StepConfirm({ onSuccess, onClose }: StepConfirmProps) {
               <ExternalLink className="h-4 w-4" />
             </Link>
           ))}
-          <button
-            onClick={handleDone}
-            className="rounded-lg border border-brand-300 px-5 py-2.5 text-sm font-medium text-brand-700 hover:bg-brand-50 transition-colors"
-          >
+          <Button variant="outline" size="sm" onClick={handleDone}>
             Done
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -516,6 +552,117 @@ export function StepConfirm({ onSuccess, onClose }: StepConfirmProps) {
           </div>
         </div>
       </div>
+
+      {dataType === "employees" && previewRows.length > 0 && (
+        <div className="rounded-xl border border-border bg-white p-4 mb-6">
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <div>
+              <h4 className="text-sm font-semibold text-brand-900">Validate every employee before import</h4>
+              <p className="mt-1 text-xs text-brand-600">
+                Review name, role, salary, level and the resolved Qeemly mapping for each row. Adjust mapped role or
+                mapped level inline if needed.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowFullTable((prev) => !prev)}
+              className="rounded-lg border border-brand-300 px-3 py-1.5 text-xs font-medium text-brand-700 hover:bg-brand-50"
+            >
+              {showFullTable ? "Show first 10" : `Show all ${previewRows.length}`}
+            </button>
+          </div>
+          <div className="rounded-xl border border-border overflow-hidden">
+            <div className="max-h-[400px] overflow-y-auto">
+              <table className="min-w-full text-xs">
+                <thead className="sticky top-0 bg-brand-50 text-brand-700">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-medium">Row</th>
+                    <th className="px-3 py-2 text-left font-medium">Name</th>
+                    <th className="px-3 py-2 text-left font-medium">Role</th>
+                    <th className="px-3 py-2 text-left font-medium">Salary</th>
+                    <th className="px-3 py-2 text-left font-medium">Level</th>
+                    <th className="px-3 py-2 text-left font-medium">Mapped role</th>
+                    <th className="px-3 py-2 text-left font-medium">Mapped level</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {(showFullTable ? previewRows : previewRows.slice(0, 10)).map((row) => {
+                    const data = row.data as Record<string, unknown>;
+                    const firstName = String(data.firstName ?? "").trim();
+                    const lastName = String(data.lastName ?? "").trim();
+                    const fullName = String(data.fullName ?? "").trim();
+                    const displayName =
+                      [firstName, lastName].filter(Boolean).join(" ") || fullName || "(no name)";
+                    const rawRole = String(data.role ?? "").trim();
+                    const rawLevel = String(data.level ?? "").trim();
+                    const totalSalary = data.totalSalary ?? data.baseSalary ?? "";
+                    const totalSalaryDisplay =
+                      typeof totalSalary === "number"
+                        ? totalSalary.toLocaleString()
+                        : String(totalSalary).trim() || "-";
+                    const currency = String(data.currency ?? "").trim();
+                    const overriddenRoleId = rowRoleOverrides[row.rowIndex];
+                    const overriddenLevelId = rowLevelOverrides[row.rowIndex];
+                    const mappedRoleId = overriddenRoleId ?? matchRole(rawRole) ?? "";
+                    const mappedLevelId = overriddenLevelId ?? matchLevel(rawLevel) ?? "";
+
+                    return (
+                      <tr key={row.rowIndex} className="hover:bg-brand-50/40">
+                        <td className="px-3 py-2 text-brand-500">{row.rowIndex}</td>
+                        <td className="px-3 py-2 font-medium text-brand-900">{displayName}</td>
+                        <td className="px-3 py-2 text-brand-700">{rawRole || "-"}</td>
+                        <td className="px-3 py-2 text-brand-700">
+                          {totalSalaryDisplay}
+                          {currency ? <span className="ml-1 text-brand-400">{currency}</span> : null}
+                        </td>
+                        <td className="px-3 py-2 text-brand-700">{rawLevel || "-"}</td>
+                        <td className="px-3 py-2">
+                          <select
+                            value={mappedRoleId}
+                            onChange={(e) => setRowRoleOverride(row.rowIndex, e.target.value)}
+                            className="w-full rounded-md border border-brand-200 bg-white px-2 py-1 text-xs text-brand-800 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                          >
+                            {!mappingOptions.roles.some((opt) => opt.id === mappedRoleId) && mappedRoleId && (
+                              <option value={mappedRoleId}>
+                                {roleLabelById.get(mappedRoleId) ?? mappedRoleId}
+                              </option>
+                            )}
+                            {!mappedRoleId && <option value="">Select role</option>}
+                            {mappingOptions.roles.map((option) => (
+                              <option key={option.id} value={option.id}>
+                                {option.label}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="px-3 py-2">
+                          <select
+                            value={mappedLevelId}
+                            onChange={(e) => setRowLevelOverride(row.rowIndex, e.target.value)}
+                            className="w-full rounded-md border border-brand-200 bg-white px-2 py-1 text-xs text-brand-800 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                          >
+                            {!mappingOptions.levels.some((opt) => opt.id === mappedLevelId) && mappedLevelId && (
+                              <option value={mappedLevelId}>
+                                {levelLabelById.get(mappedLevelId) ?? mappedLevelId.toUpperCase()}
+                              </option>
+                            )}
+                            {!mappedLevelId && <option value="">Select level</option>}
+                            {mappingOptions.levels.map((option) => (
+                              <option key={option.id} value={option.id}>
+                                {option.id.toUpperCase()}
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
       {dataType === "employees" && (
         <div className="rounded-xl border border-border bg-white p-4 mb-6">
@@ -624,35 +771,30 @@ export function StepConfirm({ onSuccess, onClose }: StepConfirmProps) {
 
       {/* Action buttons */}
       <div className="flex justify-end gap-3">
-        <button
+        <Button
+          variant="outline"
+          size="sm"
           onClick={() => store.prevStep()}
           disabled={isImporting}
-          className="rounded-lg border border-brand-300 px-5 py-2.5 text-sm font-medium text-brand-700 hover:bg-brand-50 transition-colors disabled:opacity-50"
         >
           Back
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="primary"
+          size="sm"
           onClick={handleImport}
+          isLoading={isImporting}
           disabled={isImporting || summary.importing === 0 || (hasMultiCurrency && !multiCurrencyConfirmed)}
-          className={clsx(
-            "flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium transition-all",
-            !isImporting && summary.importing > 0
-              ? "bg-brand-500 text-white hover:bg-brand-600"
-              : "bg-brand-100 text-brand-400 cursor-not-allowed"
-          )}
         >
           {isImporting ? (
-            <>
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
-              Importing...
-            </>
+            <>Importing...</>
           ) : (
             <>
               <Upload className="h-4 w-4" />
               Import {summary.importing} Records
             </>
           )}
-        </button>
+        </Button>
       </div>
     </div>
   );

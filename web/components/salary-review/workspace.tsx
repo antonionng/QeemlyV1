@@ -6,6 +6,7 @@ import {
   Calendar,
   ChevronDown,
   Download,
+  HelpCircle,
   Sparkles,
   Search,
   Settings2,
@@ -36,11 +37,13 @@ import {
   generateCompensationHistory,
 } from "@/lib/employees";
 import { EmployeeDetailPanel } from "@/components/dashboard/salary-review/employee-detail-panel";
+import { SalaryInput } from "@/components/ui/salary-input";
 
 type SalaryReviewHeaderProps = {
   actionLabel: string;
   onPrimaryAction: () => void;
   onAiDraft?: () => void;
+  onShowAiRules?: () => void;
   onImport: () => void;
   onExport: () => void;
   onReset: () => void;
@@ -77,6 +80,7 @@ type SalaryReviewOverviewProps = {
   actionLabel: string;
   onPrimaryAction: () => void;
   onAiDraft?: () => void;
+  onShowAiRules?: () => void;
   onImport: () => void;
   onExport: () => void;
   onReset: () => void;
@@ -174,6 +178,7 @@ export function SalaryReviewHeader({
   actionLabel,
   onPrimaryAction,
   onAiDraft,
+  onShowAiRules,
   onImport,
   onExport,
   onReset,
@@ -189,15 +194,25 @@ export function SalaryReviewHeader({
         {actionLabel}
       </Button>
       {onAiDraft ? (
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={onAiDraft}
-          className="h-10 rounded-[10px] border-[#D9D2FF] bg-[#F6F2FF] px-4 text-[#6E56CF]"
-        >
-          <Sparkles className="h-4 w-4" />
-          AI Draft
-        </Button>
+        <>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={onAiDraft}
+            className="h-10 rounded-[10px] border-[#D9D2FF] bg-[#F6F2FF] px-4 text-[#6E56CF]"
+          >
+            <Sparkles className="h-4 w-4" />
+            AI Draft
+          </Button>
+          <button
+            type="button"
+            onClick={onShowAiRules}
+            className="inline-flex h-10 items-center gap-1.5 rounded-[10px] border border-transparent px-2 text-xs font-medium text-[#6E56CF] hover:bg-[#F6F2FF]"
+          >
+            <HelpCircle className="h-3.5 w-3.5" />
+            How AI selects
+          </button>
+        </>
       ) : null}
       <Button
         variant="secondary"
@@ -390,12 +405,20 @@ export function BudgetUsageBar() {
     proposedEmployees: employees.filter((employee) => employee.proposedIncrease > 0).length,
   });
   const percent = budgetModel.totalBudget > 0 ? (budgetUsed / budgetModel.totalBudget) * 100 : 0;
+  const remaining = budgetModel.totalBudget - budgetUsed;
+  const overBudget = remaining < 0;
+  const nearLimit = !overBudget && percent >= 90;
+  const barColor = overBudget ? "bg-rose-500" : nearLimit ? "bg-amber-500" : "bg-[#16A34A]";
+  const valueColor = overBudget ? "text-rose-600" : nearLimit ? "text-amber-600" : "text-[#16A34A]";
+  const statusLabel = overBudget
+    ? `Over by ${formatAEDCompact(Math.abs(remaining))}`
+    : `${formatAEDCompact(remaining)} remaining`;
 
   return (
     <Card className="rounded-2xl border-[#E6E8F0] bg-white p-6 shadow-none">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold text-[#1F2430]">Budget Usage</h2>
+          <h2 className="text-lg font-semibold text-[#1F2430]">Budget Burn-Down</h2>
           <p className="mt-1 text-xs text-[#8A90A0]">
             {employees.filter((employee) => employee.isSelected).length} employees selected
           </p>
@@ -408,11 +431,12 @@ export function BudgetUsageBar() {
         <p className="text-[28px] font-semibold text-[#1F2430]">
           {formatAEDCompact(budgetUsed)} / {formatAEDCompact(budgetModel.totalBudget)}
         </p>
-        <p className="pb-1 text-sm font-medium text-[#16A34A]">{percent.toFixed(1)}%</p>
+        <p className={`pb-1 text-sm font-medium ${valueColor}`}>{percent.toFixed(1)}%</p>
+        <p className={`pb-1 text-xs font-medium ${valueColor}`}>{statusLabel}</p>
       </div>
       <div className="mt-4 h-2 rounded-full bg-[#EEF0F6]">
         <div
-          className="h-2 rounded-full bg-[#16A34A]"
+          className={`h-2 rounded-full transition-all ${barColor}`}
           style={{ width: `${Math.min(Math.max(percent, 0), 100)}%` }}
         />
       </div>
@@ -876,10 +900,7 @@ export function SalaryReviewTable({
                     </td>
                   ) : null}
                   <td className="px-3 text-right">
-                    <input
-                      type="number"
-                      min={0}
-                      step={100}
+                    <SalaryInput
                       value={Math.round(employee.newSalary)}
                       onChange={(event) => {
                         const nextSalary = Number(event.target.value);
@@ -975,6 +996,7 @@ export function SalaryReviewOverview({
   actionLabel,
   onPrimaryAction,
   onAiDraft,
+  onShowAiRules,
   onImport,
   onExport,
   onReset,
@@ -1007,6 +1029,7 @@ export function SalaryReviewOverview({
         actionLabel={actionLabel}
         onPrimaryAction={onPrimaryAction}
         onAiDraft={onAiDraft}
+        onShowAiRules={onShowAiRules}
         onImport={onImport}
         onExport={onExport}
         onReset={onReset}

@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useMemo, useState } from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -56,8 +57,17 @@ function LoginPageContent() {
   return (
     <AuthSplitShell
       title="Log In"
+      description="Welcome back. Pick up where you left off and keep your team's pay decisions on track."
       activeNav="login"
       heroImageSrc={AUTH_PUBLIC_HERO_IMAGE_PATH}
+      footer={
+        <p>
+          New to Qeemly?{" "}
+          <Link href="/register" className="font-semibold text-brand-800 underline underline-offset-4">
+            Request early access
+          </Link>
+        </p>
+      }
     >
       <form onSubmit={handleFormSubmit} className="space-y-6">
         <div className="space-y-3">
@@ -78,9 +88,17 @@ function LoginPageContent() {
         </div>
 
         <div className="space-y-3">
-          <label htmlFor="password" className="text-base font-medium text-[#111233]">
-            Password
-          </label>
+          <div className="flex items-center justify-between">
+            <label htmlFor="password" className="text-base font-medium text-[#111233]">
+              Password
+            </label>
+            <Link
+              href="/forgot-password"
+              className="text-sm font-semibold text-brand-800 underline underline-offset-4 hover:text-brand-700"
+            >
+              Forgot password?
+            </Link>
+          </div>
           <Input
             id="password"
             name="password"
@@ -94,11 +112,33 @@ function LoginPageContent() {
           {fieldErrors.password && <p className="text-sm font-medium text-red-600">{fieldErrors.password}</p>}
         </div>
 
+        <label className="flex items-center gap-3 text-sm font-medium text-brand-800">
+          <input
+            type="checkbox"
+            name="remember"
+            defaultChecked
+            className="h-4 w-4 rounded border-brand-200 text-brand-700 focus:ring-brand-200"
+          />
+          Keep me signed in on this device
+        </label>
+
         {(error || queryError) && <p className="text-sm font-medium text-red-600">{error || queryError}</p>}
 
         <Button type="submit" className="h-16 rounded-[32px] text-lg font-semibold shadow-none" fullWidth isLoading={isLoading}>
           Sign in
         </Button>
+
+        <p className="text-xs leading-relaxed text-brand-700/70">
+          By continuing, you agree to our{" "}
+          <Link href="/terms" className="font-semibold text-brand-800 underline underline-offset-4">
+            Terms of Service
+          </Link>{" "}
+          and{" "}
+          <Link href="/privacy" className="font-semibold text-brand-800 underline underline-offset-4">
+            Privacy Policy
+          </Link>
+          . Protected by industry-standard encryption.
+        </p>
       </form>
     </AuthSplitShell>
   );

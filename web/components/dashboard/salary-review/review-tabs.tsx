@@ -21,30 +21,32 @@ export function ReviewTabs({
 }: ReviewTabsProps) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-accent-100 bg-white px-3 py-2">
-      <div className="inline-flex flex-wrap rounded-2xl border border-accent-100 bg-accent-50/70 p-1">
-        {items.map((item) => (
-          <button
-            key={item.id}
-            type="button"
-            onClick={() => onChange(item.id)}
-            className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-colors ${
-              activeTab === item.id
-                ? "bg-brand-500 text-white shadow-sm"
-                : "text-accent-600 hover:bg-accent-50"
-            }`}
-          >
-            <span>{item.label}</span>
-            {typeof item.badge === "number" ? (
-              <span
-                className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
-                  activeTab === item.id ? "bg-white/20 text-white" : "bg-white text-accent-600"
-                }`}
-              >
-                {item.badge}
-              </span>
-            ) : null}
-          </button>
-        ))}
+      <div className="responsive-scroll-x w-full">
+        <div className="inline-flex min-w-max rounded-2xl border border-accent-100 bg-accent-50/70 p-1">
+          {items.map((item) => (
+            <button
+              key={item.id}
+              type="button"
+              onClick={() => onChange(item.id)}
+              className={`inline-flex shrink-0 items-center gap-2 whitespace-nowrap rounded-xl px-4 py-2 text-sm font-semibold transition-colors ${
+                activeTab === item.id
+                  ? "bg-brand-500 text-white shadow-sm"
+                  : "text-accent-600 hover:bg-accent-50"
+              }`}
+            >
+              <span>{item.label}</span>
+              {typeof item.badge === "number" ? (
+                <span
+                  className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${
+                    activeTab === item.id ? "bg-white/20 text-white" : "bg-white text-accent-600"
+                  }`}
+                >
+                  {item.badge}
+                </span>
+              ) : null}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );

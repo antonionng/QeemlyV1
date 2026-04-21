@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { SalaryInput } from "@/components/ui/salary-input";
 import { AiDistributionModal } from "@/components/dashboard/salary-review";
 import { buildSalaryReviewBudgetModel } from "@/lib/salary-review/workspace-budget";
 import { formatAEDCompact } from "@/lib/employees";
@@ -330,10 +331,7 @@ export function SalaryReviewWizard({
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs font-medium uppercase tracking-[0.06em] text-[#7B8190]">Budget</span>
-                      <input
-                        type="number"
-                        min={0}
-                        step={100}
+                      <SalaryInput
                         value={Math.round(allocation.allocatedBudget)}
                         onChange={(event) =>
                           updateDepartmentAllocation(allocation.department, Number(event.target.value))

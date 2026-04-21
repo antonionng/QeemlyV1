@@ -84,6 +84,7 @@ export type ColumnKey =
   | "level"
   | "department"
   | "location"
+  | "hireDate"
   | "current"
   | "basic"
   | "housing"
@@ -102,6 +103,7 @@ export const ALL_COLUMNS: { key: ColumnKey; label: string }[] = [
   { key: "level", label: "Level" },
   { key: "department", label: "Department" },
   { key: "location", label: "Location" },
+  { key: "hireDate", label: "Hire Date" },
   { key: "current", label: "Current Salary" },
   { key: "basic", label: "Basic" },
   { key: "housing", label: "Housing" },

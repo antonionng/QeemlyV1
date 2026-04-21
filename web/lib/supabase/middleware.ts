@@ -5,7 +5,7 @@ import { isSuperAdminEmail } from "@/lib/admin/super-admins";
 function redirectForProtectedArea(request: NextRequest, pathname: string) {
   const url = request.nextUrl.clone();
 
-  if (pathname.startsWith("/dashboard")) {
+  if (pathname.startsWith("/dashboard") || pathname.startsWith("/onboarding")) {
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
@@ -64,22 +64,25 @@ export async function updateSession(request: NextRequest) {
     } = await supabase.auth.getUser();
 
     const isDashboard = pathname.startsWith("/dashboard");
+    const isOnboardingPath =
+      pathname === "/onboarding" || pathname.startsWith("/onboarding/");
+    const isProtected = isDashboard || isOnboardingPath;
     const isPublic =
       pathname.startsWith("/login") ||
       pathname.startsWith("/register") ||
       pathname.startsWith("/auth");
 
-    if (!user && !isPublic && isDashboard) {
+    if (!user && !isPublic && isProtected) {
       const url = request.nextUrl.clone();
       url.pathname = "/login";
       return NextResponse.redirect(url);
     }
 
     // Role-based routing for authenticated dashboard users
-    if (user && isDashboard) {
+    if (user && (isDashboard || isOnboardingPath)) {
       const { data: profile } = await supabase
         .from("profiles")
-        .select("role")
+        .select("role, workspace_id")
         .eq("id", user.id)
         .single();
 
@@ -90,6 +93,43 @@ export async function updateSession(request: NextRequest) {
         const url = request.nextUrl.clone();
         url.pathname = "/dashboard/me";
         return NextResponse.redirect(url);
+      }
+
+      const isApiPath = pathname.startsWith("/api");
+      const isExemptDashboardPath =
+        pathname.startsWith("/dashboard/upload") ||
+        pathname.startsWith("/dashboard/benchmarks") ||
+        pathname.startsWith("/dashboard/settings");
+
+      const hasSkippedOnboarding = request.cookies.get("onboarding_skipped")?.value === "1";
+
+      if (
+        role === "admin" &&
+        !isSuperAdminEmail(user.email?.toLowerCase()) &&
+        !isOnboardingPath &&
+        !isApiPath &&
+        !isExemptDashboardPath &&
+        !hasSkippedOnboarding &&
+        profile?.workspace_id
+      ) {
+        const { data: workspaceSettings, error: workspaceSettingsError } = await supabase
+          .from("workspace_settings")
+          .select("onboarding_completed_at, is_configured")
+          .eq("workspace_id", profile.workspace_id)
+          .maybeSingle();
+
+        if (!workspaceSettingsError) {
+          const needsOnboarding =
+            workspaceSettings == null ||
+            (workspaceSettings.onboarding_completed_at == null &&
+              workspaceSettings.is_configured === false);
+
+          if (needsOnboarding) {
+            const url = request.nextUrl.clone();
+            url.pathname = "/onboarding";
+            return NextResponse.redirect(url);
+          }
+        }
       }
     }
 

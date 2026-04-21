@@ -25,12 +25,14 @@ import {
 import { EmployeeDetailPanel } from "./employee-detail-panel";
 import { ColumnSettings } from "./column-settings";
 import { ReviewToolbar } from "./review-toolbar";
+import { SalaryInput } from "@/components/ui/salary-input";
 
 type SortField =
   | "name"
   | "level"
   | "department"
   | "location"
+  | "hireDate"
   | "current"
   | "proposed"
   | "increase"
@@ -56,6 +58,27 @@ function SortIcon({
 }
 
 const LEADERSHIP_LEVELS = ["Director", "VP", "C-Level", "Head of"];
+
+function formatHireDate(value: Date | string | null | undefined) {
+  if (!value) return "—";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function formatTenureLabel(tenure: { years: number; months: number; totalMonths: number }) {
+  if (tenure.years === 0) {
+    return `${tenure.totalMonths}mo`;
+  }
+  if (tenure.months === 0) {
+    return `${tenure.years}y`;
+  }
+  return `${tenure.years}y ${tenure.months}mo`;
+}
 
 const PERF_ORDER: Record<string, number> = {
   exceptional: 4,
@@ -160,6 +183,12 @@ export function ReviewTable({
           `${b.location.city}, ${b.location.country}`
         );
         break;
+      case "hireDate": {
+        const aTime = a.hireDate ? new Date(a.hireDate).getTime() : 0;
+        const bTime = b.hireDate ? new Date(b.hireDate).getTime() : 0;
+        comparison = aTime - bTime;
+        break;
+      }
       case "current":
         comparison = a.baseSalary - b.baseSalary;
         break;
@@ -299,6 +328,13 @@ export function ReviewTable({
                   <th className="text-left px-3 py-3 text-[11px] font-semibold text-accent-500 uppercase tracking-wider cursor-pointer hover:text-accent-700" onClick={() => handleSort("location")}>
                     <div className="flex items-center gap-1">
                       Location <SortIcon field="location" sortField={sortField} sortDirection={sortDirection} />
+                    </div>
+                  </th>
+                )}
+                {show("hireDate") && (
+                  <th className="text-left px-3 py-3 text-[11px] font-semibold text-accent-500 uppercase tracking-wider cursor-pointer hover:text-accent-700" onClick={() => handleSort("hireDate")}>
+                    <div className="flex items-center gap-1">
+                      Hire Date <SortIcon field="hireDate" sortField={sortField} sortDirection={sortDirection} />
                     </div>
                   </th>
                 )}
@@ -450,6 +486,16 @@ export function ReviewTable({
                         </div>
                       </td>
                     )}
+                    {show("hireDate") && (
+                      <td className="px-3 py-3">
+                        <div className="text-sm text-accent-600 whitespace-nowrap">
+                          {formatHireDate(employee.hireDate)}
+                        </div>
+                        <div className="text-[10px] text-accent-400">
+                          {tenure.totalMonths > 0 ? formatTenureLabel(tenure) : "New hire"}
+                        </div>
+                      </td>
+                    )}
                     {show("current") && (
                       <td className="px-4 py-3 text-right">
                         <div className="text-sm font-medium text-accent-900">
@@ -485,10 +531,7 @@ export function ReviewTable({
                     </>
                     {show("proposed") && (
                       <td className="px-4 py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                        <input
-                          type="number"
-                          step={500}
-                          min={0}
+                        <SalaryInput
                           value={employee.newSalary}
                           onChange={(e) => {
                             const newSalary = Number(e.target.value);

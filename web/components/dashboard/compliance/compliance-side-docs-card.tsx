@@ -3,7 +3,14 @@
 import { FileText, AlertCircle } from "lucide-react";
 import { type DocumentItem } from "@/lib/compliance/data";
 import { useComplianceContext } from "@/lib/compliance/context";
+import { FieldTooltip } from "@/components/ui/field-tooltip";
 import clsx from "clsx";
+
+const DOC_STATUS_TOOLTIP: Record<string, string> = {
+  Valid: "Valid: document on file and not within renewal window.",
+  Expiring: "Expiring: document falls inside the renewal window (<=60 days). Action recommended.",
+  Expired: "Expired: document is past its expiry date. Action required.",
+};
 
 type Props = {
   onItemClick: (item: DocumentItem) => void;
@@ -47,13 +54,16 @@ export function ComplianceSideDocs({ onItemClick, onViewAll }: Props) {
               </span>
               <span
                 className={clsx(
-                  "text-[11px] font-medium",
+                  "inline-flex items-center gap-0.5 text-[11px] font-medium",
                   doc.status === "Expiring"
                     ? "text-red-500 font-bold"
                     : "text-brand-700"
                 )}
               >
                 {doc.expiry}
+                {DOC_STATUS_TOOLTIP[doc.status] && (
+                  <FieldTooltip message={DOC_STATUS_TOOLTIP[doc.status]} className="h-3 w-3" />
+                )}
               </span>
             </div>
           </button>

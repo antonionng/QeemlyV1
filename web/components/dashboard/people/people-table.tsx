@@ -6,6 +6,7 @@ import type { Employee } from "@/lib/employees";
 import { DropdownItem, DropdownMenu } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
 import { useCurrencyFormatter } from "@/lib/utils/currency";
+import { VisaBadge, classifyVisa } from "./visa-badge";
 
 type Props = {
   employees: Employee[];
@@ -26,12 +27,7 @@ function bandBadgeClass(position: Employee["bandPosition"]) {
 }
 
 function visaBadge(employee: Employee) {
-  if (!employee.visaExpiryDate) return null;
-  const days = Math.ceil((employee.visaExpiryDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-  if (days <= 30) return { label: "Expiring <=30d", cls: "bg-red-50 text-red-700 border-red-200" };
-  if (days <= 60) return { label: "Expiring <=60d", cls: "bg-orange-50 text-orange-700 border-orange-200" };
-  if (days <= 90) return { label: "Expiring <=90d", cls: "bg-amber-50 text-amber-700 border-amber-200" };
-  return { label: "Valid", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" };
+  return classifyVisa(employee.visaExpiryDate);
 }
 
 export function PeopleTable({
@@ -131,8 +127,8 @@ export function PeopleTable({
                       </p>
                       <p className="truncate text-xs text-accent-500">{employee.email || "No email"}</p>
                       {visa && (
-                        <span className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-[10px] font-semibold ${visa.cls}`}>
-                          {visa.label}
+                        <span className="mt-1 inline-flex">
+                          <VisaBadge visa={visa} />
                         </span>
                       )}
                     </div>

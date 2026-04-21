@@ -27,6 +27,7 @@ import { createClient } from "@/lib/supabase/client";
 import { normalizeSavedBonusPercentage, useCompanySettings } from "@/lib/company";
 import { getDashboardOverviewRoutes } from "@/lib/company-vs-market";
 import { isFeatureEnabled, type FeatureKey } from "@/lib/release/ga-scope";
+import { useOnboardingStore } from "@/lib/onboarding";
 import { useWorkspaceChangeVersion } from "@/lib/workspace-client";
 import { WorkspaceSwitcher } from "./workspace-switcher";
 
@@ -56,7 +57,7 @@ const adminNavSections: NavSection[] = [
   {
     label: "Analytics",
     items: [
-      { href: "/dashboard/reports", label: "Analytics", icon: BarChart3 },
+      { href: "/dashboard/reports", label: "Reports", icon: BarChart3 },
     ],
   },
   {
@@ -168,6 +169,9 @@ export function DashboardSidebar({
   const companySettings = useCompanySettings();
   const workspaceChangeVersion = useWorkspaceChangeVersion();
 
+  const onboardingComplete = useOnboardingStore((s) => s.isComplete);
+  const fetchOnboarding = useOnboardingStore((s) => s.fetchOnboarding);
+
   const isEmployee = user?.role === "employee";
   const navSections = isEmployee ? employeeNavSections : adminNavSections;
   const bottomItems = isEmployee ? [] : adminBottomItems;
@@ -251,6 +255,10 @@ export function DashboardSidebar({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceChangeVersion]);
 
+  useEffect(() => {
+    void fetchOnboarding();
+  }, [fetchOnboarding]);
+
   const displayName = user?.fullName || user?.email?.split("@")[0] || "User";
   const initials = displayName.charAt(0).toUpperCase();
   const profileTooltip = user?.email ? `${displayName} (${user.email})` : displayName;
@@ -292,6 +300,32 @@ export function DashboardSidebar({
       {!collapsed && (
         <div className="min-w-0 shrink-0 px-3 pb-2 pt-1">
           <WorkspaceSwitcher />
+        </div>
+      )}
+
+      {!isEmployee && !onboardingComplete && (
+        <div className={clsx("shrink-0 px-3", collapsed ? "pb-1 pt-1" : "pb-2")}>
+          <Link
+            href="/onboarding"
+            className={clsx(
+              "flex items-center gap-2.5 rounded-xl bg-brand-50 transition-colors hover:bg-brand-100",
+              collapsed ? "h-11 w-11 justify-center" : "px-3 py-2.5"
+            )}
+          >
+            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand-500 text-[10px] font-bold text-white">
+              !
+            </div>
+            {!collapsed && (
+              <div className="min-w-0">
+                <div className="truncate text-[13px] font-semibold text-brand-700">
+                  Complete setup
+                </div>
+                <div className="truncate text-[11px] text-brand-500">
+                  Continue onboarding
+                </div>
+              </div>
+            )}
+          </Link>
         </div>
       )}
 

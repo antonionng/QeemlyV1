@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import {
   ChevronDown,
   ChevronUp,
@@ -37,11 +37,39 @@ const AUDIENCE_ICONS: Record<string, typeof MessageSquare> = {
 };
 
 const OPEN_AI_DRAWER_EVENT = "qeemly:open-ai-drawer";
+const ADVISORY_OPEN_STORAGE_PREFIX = "qeemly:advisoryOpen:";
+
+function readAdvisoryOpen(employeeId: string): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const raw = window.localStorage.getItem(`${ADVISORY_OPEN_STORAGE_PREFIX}${employeeId}`);
+    return raw === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeAdvisoryOpen(employeeId: string, open: boolean) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(`${ADVISORY_OPEN_STORAGE_PREFIX}${employeeId}`, open ? "1" : "0");
+  } catch {
+    // ignore
+  }
+}
 
 export function AdvisoryPanel({ employee, proposedIncrease }: AdvisoryPanelProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [activeTalkTrack, setActiveTalkTrack] = useState<string>("manager");
   const [question, setQuestion] = useState("");
+
+  useEffect(() => {
+    setIsExpanded(readAdvisoryOpen(employee.id));
+  }, [employee.id]);
+
+  useEffect(() => {
+    writeAdvisoryOpen(employee.id, isExpanded);
+  }, [employee.id, isExpanded]);
 
   const advisory = useMemo(
     () =>

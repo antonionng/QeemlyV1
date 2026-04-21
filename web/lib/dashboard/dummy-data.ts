@@ -267,6 +267,10 @@ export const ROLES: Role[] = [
   { id: "people-ops", title: "People Operations Manager", family: "People", icon: "PO" },
   { id: "l-d", title: "Learning & Development Specialist", family: "People", icon: "LD" },
   { id: "chro", title: "Chief People Officer", family: "People", icon: "CPeO" },
+  { id: "hr-coordinator", title: "HR Coordinator", family: "People", icon: "HRC" },
+  { id: "payroll-specialist", title: "Payroll Specialist", family: "People", icon: "PAY" },
+  { id: "talent-sourcer", title: "Talent Sourcer", family: "People", icon: "TS" },
+  { id: "hris-analyst", title: "HRIS Analyst", family: "People", icon: "HRIS" },
 
   // Marketing
   { id: "marketing-manager", title: "Marketing Manager", family: "Marketing", icon: "MKT" },
@@ -294,6 +298,12 @@ export const ROLES: Role[] = [
   { id: "cs-associate", title: "Customer Success Associate", family: "Customer Success", icon: "CSA" },
   { id: "support-eng", title: "Technical Support Engineer", family: "Customer Success", icon: "TSE" },
   { id: "head-cs", title: "Head of Customer Success", family: "Customer Success", icon: "HCS" },
+  { id: "customer-ops-analyst", title: "Customer Operations Analyst", family: "Customer Success", icon: "COA" },
+  { id: "customer-ops-manager", title: "Customer Operations Manager", family: "Customer Success", icon: "COM" },
+  { id: "customer-support-rep", title: "Customer Support Representative", family: "Customer Success", icon: "CSR" },
+  { id: "support-specialist", title: "Customer Support Specialist", family: "Customer Success", icon: "CSS" },
+  { id: "implementation-specialist", title: "Implementation Specialist", family: "Customer Success", icon: "IS" },
+  { id: "onboarding-specialist", title: "Onboarding Specialist", family: "Customer Success", icon: "ONB" },
 
   // Operations
   { id: "ops-manager", title: "Operations Manager", family: "Operations", icon: "OPS" },
@@ -302,6 +312,22 @@ export const ROLES: Role[] = [
   { id: "scrum-master", title: "Scrum Master", family: "Operations", icon: "SCR" },
   { id: "chief-of-staff", title: "Chief of Staff", family: "Operations", icon: "CoS" },
   { id: "coo", title: "Chief Operating Officer", family: "Operations", icon: "COO" },
+  { id: "biz-ops-analyst", title: "Business Operations Analyst", family: "Operations", icon: "BOA" },
+  { id: "biz-ops-manager", title: "Business Operations Manager", family: "Operations", icon: "BOM" },
+  { id: "rev-ops-analyst", title: "Revenue Operations Analyst", family: "Operations", icon: "ROA" },
+  { id: "rev-ops-manager", title: "Revenue Operations Manager", family: "Operations", icon: "ROM" },
+  { id: "sales-ops-analyst", title: "Sales Operations Analyst", family: "Operations", icon: "SOA" },
+  { id: "sales-ops-manager", title: "Sales Operations Manager", family: "Operations", icon: "SOM" },
+  { id: "marketing-ops-manager", title: "Marketing Operations Manager", family: "Operations", icon: "MOM" },
+  { id: "people-ops-analyst", title: "People Operations Analyst", family: "Operations", icon: "POA" },
+  { id: "supply-chain-analyst", title: "Supply Chain Analyst", family: "Operations", icon: "SCA" },
+  { id: "logistics-coordinator", title: "Logistics Coordinator", family: "Operations", icon: "LOG" },
+  { id: "procurement-specialist", title: "Procurement Specialist", family: "Operations", icon: "PRC" },
+  { id: "office-manager", title: "Office Manager", family: "Operations", icon: "OFM" },
+  { id: "executive-assistant", title: "Executive Assistant", family: "Operations", icon: "EA" },
+  { id: "admin-assistant", title: "Administrative Assistant", family: "Operations", icon: "ADM" },
+  { id: "facilities-manager", title: "Facilities Manager", family: "Operations", icon: "FAC" },
+  { id: "receptionist", title: "Receptionist", family: "Operations", icon: "RCP" },
 
   // Legal & Compliance
   { id: "legal-counsel", title: "Legal Counsel", family: "Legal", icon: "LC" },

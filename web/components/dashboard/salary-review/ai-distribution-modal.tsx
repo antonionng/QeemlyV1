@@ -7,6 +7,7 @@ import {
   ArrowLeft,
   ArrowRight,
   CheckCircle2,
+  HelpCircle,
   Loader2,
   Shield,
   Sparkles,
@@ -17,6 +18,7 @@ import {
 } from "lucide-react";
 import clsx from "clsx";
 import { Button } from "@/components/ui/button";
+import { AiSelectionRulesModal } from "./ai-rules-modal";
 import {
   type SalaryReviewAiPlanRequest,
   type SalaryReviewAiPlanResponse,
@@ -773,9 +775,16 @@ function ScenarioDetailStep({
               <th className="w-10 px-3 py-2">
                 <input
                   type="checkbox"
-                  checked={scenario.items.length > 0 && selectedIds.length === scenario.items.length}
+                  checked={
+                    scenario.items.filter((i) => !i.isExcluded).length > 0 &&
+                    selectedIds.length === scenario.items.filter((i) => !i.isExcluded).length
+                  }
                   onChange={(e) => {
-                    setSelected(Object.fromEntries(scenario.items.map((item) => [item.employeeId, e.target.checked])));
+                    setSelected(
+                      Object.fromEntries(
+                        scenario.items.map((item) => [item.employeeId, e.target.checked && !item.isExcluded]),
+                      ),
+                    );
                   }}
                   className="h-4 w-4 rounded border-accent-300 text-brand-500 focus:ring-brand-500"
                 />
@@ -790,74 +799,109 @@ function ScenarioDetailStep({
           </thead>
           <tbody className="divide-y divide-border/30 bg-white">
             {scenario.items.map((item) => (
-              <tr key={item.employeeId}>
-                <td className="px-3 py-3 align-top">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(selected[item.employeeId])}
-                    onChange={() => setSelected((prev) => ({ ...prev, [item.employeeId]: !prev[item.employeeId] }))}
-                    className="h-4 w-4 rounded border-accent-300 text-brand-500 focus:ring-brand-500"
-                  />
-                </td>
-                <td className="px-3 py-3 align-top">
-                  <div className="text-sm font-semibold text-accent-900">{item.employeeName}</div>
-                  <details className="mt-2 rounded-xl border border-accent-100 bg-accent-50/60 px-3 py-2">
-                    <summary className="cursor-pointer text-xs font-semibold text-accent-600">
-                      Why AI suggested this
-                    </summary>
-                    <div className="mt-2 space-y-2 text-xs text-accent-600">
-                      <p className="text-sm leading-relaxed text-accent-700">
-                        {item.aiRationale ?? item.rationale.join(" ")}
-                      </p>
-                      <div className="flex flex-wrap gap-2 pt-1">
-                        {item.factors.map((factor) => (
-                          <span
-                            key={factor.key}
-                            className="rounded-full border border-accent-200 bg-white px-2.5 py-1 text-[11px] font-medium text-accent-700"
-                          >
-                            {factor.label}: {factor.value}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  </details>
-                  {item.warnings.length > 0 && (
-                    <div className="mt-2 space-y-1">
-                      {item.warnings.map((warning) => (
-                        <div key={warning} className="flex items-start gap-1.5 text-xs text-amber-700">
-                          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                          <span>{warning}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </td>
-                <td className="px-3 py-3 align-top text-right text-sm text-accent-700">{formatAED(item.currentSalary)}</td>
-                <td className="px-3 py-3 align-top text-right text-sm font-semibold text-emerald-600">
-                  +{formatAED(item.proposedIncrease)}
-                  <div className="text-xs font-normal text-accent-500">{item.proposedPercentage.toFixed(1)}%</div>
-                </td>
-                <td className="px-3 py-3 align-top text-right text-sm font-semibold text-accent-900">{formatAED(item.proposedSalary)}</td>
-                <td className="px-3 py-3 align-top">
-                  <div className="space-y-1">
-                    <ProvenanceBadge provenance={item.benchmark.provenance} />
-                    <div className="text-xs text-accent-500">{item.benchmark.sourceName ?? "No data source"}</div>
-                  </div>
-                </td>
-                <td className="px-3 py-3 align-top">
-                  <div className="space-y-1">
-                    <ConfidenceBadge value={item.confidence} />
-                    <div className="text-xs text-accent-500">
-                      Match: {item.benchmark.matchQuality.replaceAll("_", " ")}
-                    </div>
-                  </div>
-                </td>
-              </tr>
+              <ProposalRow
+                key={item.employeeId}
+                item={item}
+                selected={Boolean(selected[item.employeeId])}
+                onToggle={() => setSelected((prev) => ({ ...prev, [item.employeeId]: !prev[item.employeeId] }))}
+              />
             ))}
           </tbody>
         </table>
       </div>
     </div>
+  );
+}
+
+function ProposalRow({
+  item,
+  selected,
+  onToggle,
+}: {
+  item: SalaryReviewAiPlanResponse["items"][number];
+  selected: boolean;
+  onToggle: () => void;
+}) {
+  const isExcluded = Boolean(item.isExcluded);
+  return (
+    <tr className={isExcluded ? "bg-accent-50/50" : undefined}>
+      <td className="px-3 py-3 align-top">
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={onToggle}
+          disabled={isExcluded}
+          className="h-4 w-4 rounded border-accent-300 text-brand-500 focus:ring-brand-500 disabled:cursor-not-allowed disabled:opacity-50"
+        />
+      </td>
+      <td className="px-3 py-3 align-top">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold text-accent-900">{item.employeeName}</span>
+          {isExcluded && (
+            <span className="rounded-full bg-accent-200 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-accent-700">
+              Excluded
+            </span>
+          )}
+        </div>
+        {isExcluded && item.exclusionReason && (
+          <p className="mt-1 text-xs text-accent-600">{item.exclusionReason}</p>
+        )}
+        <details className="mt-2 rounded-xl border border-accent-100 bg-accent-50/60 px-3 py-2">
+          <summary className="cursor-pointer text-xs font-semibold text-accent-600">
+            {isExcluded ? "Why this employee is excluded" : "Why AI suggested this"}
+          </summary>
+          <div className="mt-2 space-y-2 text-xs text-accent-600">
+            <p className="text-sm leading-relaxed text-accent-700">
+              {item.aiRationale ?? item.rationale.join(" ")}
+            </p>
+            <div className="flex flex-wrap gap-2 pt-1">
+              {item.factors.map((factor) => (
+                <span
+                  key={factor.key}
+                  className="rounded-full border border-accent-200 bg-white px-2.5 py-1 text-[11px] font-medium text-accent-700"
+                >
+                  {factor.label}: {factor.value}
+                </span>
+              ))}
+            </div>
+          </div>
+        </details>
+        {item.warnings.length > 0 && !isExcluded && (
+          <div className="mt-2 space-y-1">
+            {item.warnings.map((warning) => (
+              <div key={warning} className="flex items-start gap-1.5 text-xs text-amber-700">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <span>{warning}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </td>
+      <td className="px-3 py-3 align-top text-right text-sm text-accent-700">{formatAED(item.currentSalary)}</td>
+      <td className="px-3 py-3 align-top text-right text-sm font-semibold text-emerald-600">
+        {isExcluded ? <span className="text-accent-400">-</span> : (
+          <>
+            +{formatAED(item.proposedIncrease)}
+            <div className="text-xs font-normal text-accent-500">{item.proposedPercentage.toFixed(1)}%</div>
+          </>
+        )}
+      </td>
+      <td className="px-3 py-3 align-top text-right text-sm font-semibold text-accent-900">{formatAED(item.proposedSalary)}</td>
+      <td className="px-3 py-3 align-top">
+        <div className="space-y-1">
+          <ProvenanceBadge provenance={item.benchmark.provenance} />
+          <div className="text-xs text-accent-500">{item.benchmark.sourceName ?? "No data source"}</div>
+        </div>
+      </td>
+      <td className="px-3 py-3 align-top">
+        <div className="space-y-1">
+          <ConfidenceBadge value={item.confidence} />
+          <div className="text-xs text-accent-500">
+            Match: {item.benchmark.matchQuality.replaceAll("_", " ")}
+          </div>
+        </div>
+      </td>
+    </tr>
   );
 }
 
@@ -961,9 +1005,16 @@ function LegacyPlanView({
               <th className="w-10 px-3 py-2">
                 <input
                   type="checkbox"
-                  checked={plan.items.length > 0 && selectedIds.length === plan.items.length}
+                  checked={
+                    plan.items.filter((i) => !i.isExcluded).length > 0 &&
+                    selectedIds.length === plan.items.filter((i) => !i.isExcluded).length
+                  }
                   onChange={(e) => {
-                    setSelected(Object.fromEntries(plan.items.map((item) => [item.employeeId, e.target.checked])));
+                    setSelected(
+                      Object.fromEntries(
+                        plan.items.map((item) => [item.employeeId, e.target.checked && !item.isExcluded]),
+                      ),
+                    );
                   }}
                   className="h-4 w-4 rounded border-accent-300 text-brand-500 focus:ring-brand-500"
                 />
@@ -978,69 +1029,12 @@ function LegacyPlanView({
           </thead>
           <tbody className="divide-y divide-border/30 bg-white">
             {plan.items.map((item) => (
-              <tr key={item.employeeId}>
-                <td className="px-3 py-3 align-top">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(selected[item.employeeId])}
-                    onChange={() => setSelected((prev) => ({ ...prev, [item.employeeId]: !prev[item.employeeId] }))}
-                    className="h-4 w-4 rounded border-accent-300 text-brand-500 focus:ring-brand-500"
-                  />
-                </td>
-                <td className="px-3 py-3 align-top">
-                  <div className="text-sm font-semibold text-accent-900">{item.employeeName}</div>
-                  <details className="mt-2 rounded-xl border border-accent-100 bg-accent-50/60 px-3 py-2">
-                    <summary className="cursor-pointer text-xs font-semibold text-accent-600">
-                      Why AI suggested this
-                    </summary>
-                    <div className="mt-2 space-y-2 text-xs text-accent-600">
-                      <p className="text-sm leading-relaxed text-accent-700">
-                        {item.aiRationale ?? item.rationale.join(" ")}
-                      </p>
-                      <div className="flex flex-wrap gap-2 pt-1">
-                        {item.factors.map((factor) => (
-                          <span
-                            key={factor.key}
-                            className="rounded-full border border-accent-200 bg-white px-2.5 py-1 text-[11px] font-medium text-accent-700"
-                          >
-                            {factor.label}: {factor.value}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  </details>
-                  {item.warnings.length > 0 && (
-                    <div className="mt-2 space-y-1">
-                      {item.warnings.map((warning) => (
-                        <div key={warning} className="flex items-start gap-1.5 text-xs text-amber-700">
-                          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-                          <span>{warning}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </td>
-                <td className="px-3 py-3 align-top text-right text-sm text-accent-700">{formatAED(item.currentSalary)}</td>
-                <td className="px-3 py-3 align-top text-right text-sm font-semibold text-emerald-600">
-                  +{formatAED(item.proposedIncrease)}
-                  <div className="text-xs font-normal text-accent-500">{item.proposedPercentage.toFixed(1)}%</div>
-                </td>
-                <td className="px-3 py-3 align-top text-right text-sm font-semibold text-accent-900">{formatAED(item.proposedSalary)}</td>
-                <td className="px-3 py-3 align-top">
-                  <div className="space-y-1">
-                    <ProvenanceBadge provenance={item.benchmark.provenance} />
-                    <div className="text-xs text-accent-500">{item.benchmark.sourceName ?? "No data source"}</div>
-                  </div>
-                </td>
-                <td className="px-3 py-3 align-top">
-                  <div className="space-y-1">
-                    <ConfidenceBadge value={item.confidence} />
-                    <div className="text-xs text-accent-500">
-                      Match: {item.benchmark.matchQuality.replaceAll("_", " ")}
-                    </div>
-                  </div>
-                </td>
-              </tr>
+              <ProposalRow
+                key={item.employeeId}
+                item={item}
+                selected={Boolean(selected[item.employeeId])}
+                onToggle={() => setSelected((prev) => ({ ...prev, [item.employeeId]: !prev[item.employeeId] }))}
+              />
             ))}
           </tbody>
         </table>
@@ -1069,6 +1063,8 @@ export function AiDistributionModal({ isOpen, onClose, request, onApprove, onApp
   // Legacy single-plan state
   const [legacyPlan, setLegacyPlan] = useState<SalaryReviewAiPlanResponse | null>(null);
   const [legacySelected, setLegacySelected] = useState<Record<string, boolean>>({});
+
+  const [showRulesModal, setShowRulesModal] = useState(false);
 
   const resetState = useCallback(() => {
     setStep("preferences");
@@ -1142,7 +1138,7 @@ export function AiDistributionModal({ isOpen, onClose, request, onApprove, onApp
       } else {
         const plan = data as SalaryReviewAiPlanResponse;
         setLegacyPlan(plan);
-        setLegacySelected(Object.fromEntries(plan.items.map((item) => [item.employeeId, true])));
+        setLegacySelected(Object.fromEntries(plan.items.map((item) => [item.employeeId, !item.isExcluded])));
         setStep("detail");
       }
     } catch (error) {
@@ -1161,7 +1157,7 @@ export function AiDistributionModal({ isOpen, onClose, request, onApprove, onApp
       const scenario = currentScenarioResponse?.scenarios.find((s) => s.id === id);
       if (!scenario) return;
       setDetailScenarioId(id);
-      setDetailSelected(Object.fromEntries(scenario.items.map((item) => [item.employeeId, true])));
+      setDetailSelected(Object.fromEntries(scenario.items.map((item) => [item.employeeId, !item.isExcluded])));
       setStep("detail");
     },
     [currentScenarioResponse],
@@ -1235,16 +1231,28 @@ export function AiDistributionModal({ isOpen, onClose, request, onApprove, onApp
                 </p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex h-9 w-9 items-center justify-center rounded-xl text-accent-500 hover:bg-accent-100 hover:text-accent-700"
-              aria-label="Close"
-            >
-              <X className="h-5 w-5" />
-            </button>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setShowRulesModal(true)}
+                className="flex items-center gap-1.5 rounded-full border border-brand-200 bg-white px-3 py-1.5 text-xs font-medium text-brand-700 hover:bg-brand-50"
+              >
+                <HelpCircle className="h-3.5 w-3.5" />
+                How AI selects
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex h-9 w-9 items-center justify-center rounded-xl text-accent-500 hover:bg-accent-100 hover:text-accent-700"
+                aria-label="Close"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
           </div>
         </div>
+
+        <AiSelectionRulesModal isOpen={showRulesModal} onClose={() => setShowRulesModal(false)} />
 
         <div className="max-h-[calc(92vh-170px)] overflow-y-auto">
           {step === "preferences" && (

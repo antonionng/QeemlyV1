@@ -79,18 +79,41 @@ export async function GET(
   const isInternal = offerMode === "internal";
 
   let recipientName = (offer.recipient_name as string) || "";
-  if (!recipientName && offer.employee_id) {
+  let targetEmployee: OfferPdfData["targetEmployee"] = undefined;
+  if (offer.employee_id) {
     const { data: employee } = await queryClient
       .from("employees")
-      .select("first_name, last_name")
+      .select("first_name, last_name, department, base_salary, bonus, equity, currency")
       .eq("id", offer.employee_id)
       .eq("workspace_id", workspace_id)
       .single();
     if (employee) {
-      recipientName =
-        `${employee.first_name || ""} ${employee.last_name || ""}`.trim();
+      const fullName = `${employee.first_name || ""} ${employee.last_name || ""}`.trim();
+      if (!recipientName) {
+        recipientName = fullName;
+      }
+      const base = Number(employee.base_salary) || 0;
+      const bonus = Number(employee.bonus) || 0;
+      const equity = Number(employee.equity) || 0;
+      targetEmployee = {
+        name: fullName || "Employee",
+        department: (employee.department as string) || null,
+        currentBaseSalary: base || null,
+        currentTotalComp: base + bonus + equity || null,
+        currency: (employee.currency as string) || offer.currency,
+      };
     }
   }
+
+  const benchmarkPercentilesRaw = (snapshot.benchmark_percentiles ?? {}) as Record<string, number>;
+  const benchmarkPercentiles = isInternal
+    ? {
+        p25: benchmarkPercentilesRaw.p25 ?? null,
+        p50: benchmarkPercentilesRaw.p50 ?? null,
+        p75: benchmarkPercentilesRaw.p75 ?? null,
+        p90: benchmarkPercentilesRaw.p90 ?? null,
+      }
+    : undefined;
 
   const pdfData: OfferPdfData = {
     companyName: (settings.company_name as string) || "Your Company",
@@ -119,6 +142,10 @@ export async function GET(
     advisedBaseline: offerMode === "candidate_advised"
       ? ((offer.advised_baseline ?? null) as AdvisedBaseline | null)
       : undefined,
+    targetEmployee: isInternal ? targetEmployee : undefined,
+    benchmarkPercentiles,
+    benchmarkSampleSize: (snapshot.sample_size as number | undefined) ?? null,
+    benchmarkLastUpdated: (snapshot.last_updated as string | null | undefined) ?? null,
   };
 
   try {

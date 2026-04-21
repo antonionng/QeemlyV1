@@ -110,7 +110,7 @@ describe("home page", () => {
     expect(html).toContain("See it with your own data");
     expect(html).toContain('data-testid="site-footer"');
     expect(html).toContain("logo-white.svg");
-    expect(html).toContain("hero-figure.png");
+    expect(html).toContain("hero-female.png");
     expect(html).toContain("bento-gcc.png");
     expect(html).toContain("services-table.png");
     expect(html).toContain("workable-logo.png");

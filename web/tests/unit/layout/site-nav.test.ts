@@ -232,7 +232,7 @@ describe("SiteNav", () => {
     expect(container.textContent).toContain("Help");
     expect(container.textContent).toContain("Super Admin");
     expect(container.textContent).toContain("Sign Out");
-    expect(container.textContent).not.toContain("Dashboard");
+    expect(container.textContent).toContain("Company Dashboard");
   });
 
   it("swaps Super Admin for Dashboard when the user is already in admin", async () => {

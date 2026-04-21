@@ -39,7 +39,7 @@ export default function RegisterPage() {
   return (
     <AuthSplitShell
       title="Create account"
-      description="Tell us a bit about you to get started."
+      description="Set up your workspace in under a minute. We'll guide you through the rest after sign-up."
       activeNav="register"
       heroImageSrc={AUTH_PUBLIC_HERO_IMAGE_PATH}
       footer={
@@ -114,6 +114,20 @@ export default function RegisterPage() {
           />
         </div>
 
+        <label className="flex items-start gap-3 text-sm leading-6 text-brand-800">
+          <input
+            type="checkbox"
+            name="agreeTerms"
+            required
+            className="mt-1 h-4 w-4 shrink-0 rounded border-brand-200 text-brand-700 focus:ring-brand-200"
+          />
+          <span>
+            I agree to Qeemly's <InlineLegalLink href="/terms">Terms of Service</InlineLegalLink> and{" "}
+            <InlineLegalLink href="/privacy">Privacy Policy</InlineLegalLink>, and consent to receive product
+            updates by email.
+          </span>
+        </label>
+
         {error && <p className="text-sm font-medium text-red-600">{error}</p>}
 
         <Button type="submit" className="h-16 rounded-[32px] text-lg font-semibold shadow-none" fullWidth isLoading={isLoading}>
@@ -121,8 +135,8 @@ export default function RegisterPage() {
         </Button>
 
         <p className="text-xs leading-relaxed text-brand-700/70">
-          By signing up, you agree to our <InlineLegalLink href="/terms">Terms of Service</InlineLegalLink> and{" "}
-          <InlineLegalLink href="/privacy">Privacy Policy</InlineLegalLink>.
+          We'll only use your work email to verify your account and share important workspace updates. No spam,
+          ever.
         </p>
       </form>
     </AuthSplitShell>

@@ -2,8 +2,8 @@
 
 import { useMemo } from "react";
 import { ArrowRight, AlertTriangle } from "lucide-react";
-import clsx from "clsx";
 import { useUploadStore } from "@/lib/upload";
+import { Button } from "@/components/ui/button";
 
 export function StepErrorReview() {
   const {
@@ -112,16 +112,10 @@ export function StepErrorReview() {
       </div>
 
       <div className="mt-6 flex justify-end">
-        <button
-          onClick={nextStep}
-          className={clsx(
-            "flex items-center gap-2 rounded-lg px-5 py-2.5 text-sm font-medium transition-all",
-            "bg-brand-500 text-white hover:bg-brand-600",
-          )}
-        >
+        <Button variant="primary" size="sm" onClick={nextStep}>
           Continue to Import
           <ArrowRight className="h-4 w-4" />
-        </button>
+        </Button>
       </div>
     </div>
   );

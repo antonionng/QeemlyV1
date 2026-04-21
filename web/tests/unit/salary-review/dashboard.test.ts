@@ -163,6 +163,7 @@ describe("salary review build flow", () => {
       requestedStep: "review",
       employeesCount: 95,
       proposedEmployees: 0,
+      hasBudget: true,
     });
 
     expect(flow.activeStep).toBe("draft");
@@ -174,11 +175,37 @@ describe("salary review build flow", () => {
       requestedStep: "review",
       employeesCount: 95,
       proposedEmployees: 12,
+      hasBudget: true,
     });
 
     expect(flow.activeStep).toBe("review");
     expect(flow.canContinueToReview).toBe(true);
     expect(flow.steps.find((step) => step.id === "review")?.enabled).toBe(true);
+  });
+
+  it("routes through the master budget step when no budget is set", () => {
+    const flow = getBuildReviewFlowModel({
+      requestedStep: "draft",
+      employeesCount: 95,
+      proposedEmployees: 0,
+      hasBudget: false,
+    });
+
+    expect(flow.activeStep).toBe("budget");
+    expect(flow.steps.find((step) => step.id === "budget")?.enabled).toBe(true);
+    expect(flow.steps.find((step) => step.id === "draft")?.enabled).toBe(false);
+  });
+
+  it("unlocks the draft step once a master budget is set", () => {
+    const flow = getBuildReviewFlowModel({
+      requestedStep: "draft",
+      employeesCount: 95,
+      proposedEmployees: 0,
+      hasBudget: true,
+    });
+
+    expect(flow.activeStep).toBe("draft");
+    expect(flow.steps.find((step) => step.id === "draft")?.enabled).toBe(true);
   });
 });
 

@@ -123,6 +123,8 @@ vi.mock("@/lib/upload", () => ({
   }),
   transformBenchmark: vi.fn(),
   transformCompensationUpdate: vi.fn(),
+  matchRole: () => null,
+  matchLevel: () => null,
 }));
 
 import { StepConfirm } from "@/components/dashboard/upload/step-confirm";

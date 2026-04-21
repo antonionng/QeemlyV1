@@ -14,6 +14,7 @@ import type {
   AuditLogItem,
 } from "@/lib/compliance/data";
 import { useComplianceContext } from "@/lib/compliance/context";
+import { FieldTooltip } from "@/components/ui/field-tooltip";
 import clsx from "clsx";
 
 type Props = {
@@ -267,10 +268,22 @@ function DocDetail({ item }: { item: DocumentItem }) {
       <div className="flex items-center gap-3">
         <FileText className="h-5 w-5 text-brand-500" />
         <span className="text-xs text-accent-500">{item.docType} &bull; {item.size}</span>
-        <span className={clsx("rounded-full px-2 py-0.5 text-[10px] font-bold ml-auto",
+        <span className={clsx("inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-[10px] font-bold ml-auto",
           item.status === "Expiring" ? "bg-red-50 text-red-500" :
           item.status === "Review" ? "bg-amber-50 text-amber-600" : "bg-emerald-50 text-emerald-600"
-        )}>{item.status}</span>
+        )}>
+          {item.status}
+          <FieldTooltip
+            message={
+              item.status === "Expiring"
+                ? "Expiring: document falls inside the renewal window (<=60 days). Action recommended."
+                : item.status === "Review"
+                  ? "Review: document needs verification before it can be marked Valid."
+                  : "Valid: document is on file and not within the renewal window."
+            }
+            className="h-3 w-3"
+          />
+        </span>
       </div>
       <div className="rounded-xl border border-border p-4">
         <p className="text-xs text-accent-500">Expiry Date</p>

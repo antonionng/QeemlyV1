@@ -45,7 +45,7 @@ export function HomeHero({ header }: HomeHeroProps) {
 
         <div className="relative min-h-[32rem] overflow-visible lg:h-[46.125rem] xl:h-[50.5rem]">
           <Image
-            src="/images/marketing/home/hero-figure.png"
+            src="/images/marketing/home/hero-female.png"
             alt="Qeemly compensation intelligence preview"
             width={958}
             height={1080}

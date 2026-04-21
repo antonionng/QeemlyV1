@@ -67,4 +67,38 @@ describe("renderOfferPdf", () => {
     );
     expect(buf.length).toBeGreaterThan(100);
   });
+
+  it("renders internal mode with current compensation and benchmark snapshot sections", async () => {
+    const buf = await renderOfferPdf(
+      makeOfferPdfData({
+        offerMode: "internal",
+        recipientName: "Internal Brief",
+        targetEmployee: {
+          name: "Sara Al Mansouri",
+          department: "Product",
+          currentBaseSalary: 180000,
+          currentTotalComp: 220000,
+          currency: "AED",
+        },
+        benchmarkPercentiles: {
+          p25: 200000,
+          p50: 240000,
+          p75: 280000,
+          p90: 310000,
+        },
+        benchmarkSampleSize: 42,
+        benchmarkLastUpdated: "2026-03-01T00:00:00.000Z",
+        internalMetadata: {
+          rationale: "Promotion to Senior IC3 with strong recent reviews.",
+          band_position: "in-band",
+          negotiation_floor: 230000,
+          negotiation_ceiling: 260000,
+          risk_flags: ["Retention risk"],
+          talking_points: ["Highlight new scope"],
+        },
+      }),
+    );
+    expect(buf.subarray(0, 5).toString()).toBe("%PDF-");
+    expect(buf.length).toBeGreaterThan(500);
+  });
 });

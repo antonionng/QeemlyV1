@@ -23,6 +23,7 @@ vi.mock("lucide-react", () => ({
   TrendingUp: () => React.createElement("svg"),
   Upload: () => React.createElement("svg"),
   RotateCcw: () => React.createElement("svg"),
+  HelpCircle: () => React.createElement("svg"),
 }));
 
 vi.mock("@/components/ui/button", () => ({

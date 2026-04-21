@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useCallback, useEffect, useMemo } from "react";
-import { ArrowRight, Loader2, RefreshCw, Settings } from "lucide-react";
+import { ArrowRight, Check, Loader2, RefreshCw, Settings } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
@@ -30,6 +30,7 @@ import {
   type OverviewMetricDrawerContent,
 } from "@/lib/dashboard/overview-interactions";
 import { useWorkspaceChangeVersion } from "@/lib/workspace-client";
+import { useOnboardingStore } from "@/lib/onboarding";
 
 const EMPTY_SNAPSHOT: CompanyOverviewSnapshot = {
   metrics: {
@@ -99,10 +100,14 @@ export default function CompanyOverviewPage() {
   const [error, setError] = useState<string | null>(null);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
   const [drawerContent, setDrawerContent] = useState<OverviewMetricDrawerContent | null>(null);
-  const { companyName, isConfigured } = useCompanySettings();
+  const { companyName } = useCompanySettings();
   const [snapshot, setSnapshot] = useState<CompanyOverviewSnapshot | null>(null);
   const router = useRouter();
   const workspaceChangeVersion = useWorkspaceChangeVersion();
+  const onboardingComplete = useOnboardingStore((s) => s.isComplete);
+  const onboardingStep = useOnboardingStore((s) => s.currentStep);
+  const onboardingSteps = useOnboardingStore((s) => s.steps);
+  const fetchOnboarding = useOnboardingStore((s) => s.fetchOnboarding);
 
   const loadData = useCallback(async ({ refresh = false }: { refresh?: boolean } = {}) => {
     try {
@@ -139,6 +144,10 @@ export default function CompanyOverviewPage() {
     void loadData();
   }, [loadData, workspaceChangeVersion]);
 
+  useEffect(() => {
+    void fetchOnboarding();
+  }, [fetchOnboarding]);
+
   const handleRefresh = useCallback(() => {
     setIsRefreshing(true);
     void loadData({ refresh: true });
@@ -172,6 +181,35 @@ export default function CompanyOverviewPage() {
     },
     [router]
   );
+
+  const onboardingChecklist = useMemo(() => {
+    const s = onboardingSteps;
+    const uploadDone = Boolean(s.upload.completedAt) || Boolean(s.upload.skippedAt);
+    const items = [
+      {
+        id: "company_profile" as const,
+        label: "Company profile",
+        done: Boolean(s.company_profile.completedAt),
+      },
+      {
+        id: "compensation_defaults" as const,
+        label: "Compensation defaults",
+        done: Boolean(s.compensation_defaults.completedAt),
+      },
+      {
+        id: "upload" as const,
+        label: "Employee data",
+        done: uploadDone,
+      },
+      {
+        id: "first_benchmark" as const,
+        label: "First benchmark",
+        done: Boolean(s.first_benchmark.completedAt),
+      },
+    ];
+    const doneCount = items.filter((i) => i.done).length;
+    return { items, doneCount, total: items.length };
+  }, [onboardingSteps]);
 
   if (loading) {
     return (
@@ -252,45 +290,65 @@ export default function CompanyOverviewPage() {
           </Card>
         )}
 
-        {metrics.activeEmployees === 0 && (
+        {!onboardingComplete && (
           <Card className="border-dashed border-brand-200 bg-brand-50 p-6">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div className="max-w-2xl">
-                <h2 className="overview-section-title">Import company data to unlock this view</h2>
-                <p className="overview-supporting-text mt-1">
-                  Company Overview compares your employee roster against Qeemly market data. Import
-                  your latest roster to start generating coverage, trust, and company-versus-market insights.
-                </p>
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="min-w-0 max-w-2xl flex-1 space-y-4">
+                <div>
+                  <h2 className="overview-section-title">Complete your setup</h2>
+                  <p className="overview-supporting-text mt-1">
+                    Finish onboarding to unlock the full dashboard experience.
+                  </p>
+                </div>
+                <div>
+                  <div className="mb-3 h-2 overflow-hidden rounded-full bg-brand-100">
+                    <div
+                      className="h-full rounded-full bg-brand-500 transition-[width]"
+                      style={{
+                        width: `${Math.round((onboardingChecklist.doneCount / onboardingChecklist.total) * 100)}%`,
+                      }}
+                    />
+                  </div>
+                  <ul className="space-y-2.5">
+                    {onboardingChecklist.items.map((item) => {
+                      const isCurrent = !item.done && onboardingStep === item.id;
+                      return (
+                        <li
+                          key={item.id}
+                          className={`flex items-center gap-3 text-sm ${
+                            isCurrent ? "font-semibold text-brand-900" : "text-accent-600"
+                          }`}
+                        >
+                          <span
+                            className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full ${
+                              item.done
+                                ? "bg-brand-500 text-white"
+                                : "border border-brand-200 bg-white"
+                            }`}
+                            aria-hidden
+                          >
+                            {item.done ? <Check className="h-3.5 w-3.5" strokeWidth={3} /> : null}
+                          </span>
+                          <span className="flex flex-wrap items-center gap-2">
+                            {item.label}
+                            {isCurrent ? (
+                              <span className="text-xs font-normal text-brand-600">In progress</span>
+                            ) : null}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
               </div>
-              <Link href="/dashboard/upload">
+              <Link href="/onboarding">
                 <Button variant="secondary" size="sm">
-                  Import Company Data
+                  Continue Setup
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               </Link>
             </div>
           </Card>
-        )}
-
-        {!isConfigured && (
-          <div className="rounded-2xl border border-amber-200 bg-[#FFF4E5] p-6">
-            <div className="flex items-center gap-3">
-              <div className="flex-shrink-0 rounded-xl bg-amber-100 p-3">
-                <Settings className="h-5 w-5 text-amber-600" />
-              </div>
-              <div className="flex-1">
-                <h3 className="overview-section-title text-amber-900">Complete your setup</h3>
-                <p className="overview-supporting-text text-amber-700">
-                  Configure your company settings to get accurate market comparisons.
-                </p>
-              </div>
-              <Link href="/dashboard/settings">
-                <Button size="sm">
-                  Configure
-                </Button>
-              </Link>
-            </div>
-          </div>
         )}
 
         <ShortcutsRow />

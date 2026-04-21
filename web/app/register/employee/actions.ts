@@ -71,6 +71,8 @@ export async function employeeSignup(formData: FormData) {
     return { error: "Email must match the invited email address." };
   }
 
+  const isAdminInvite = invitation.role === "admin" || invitation.role === "company_admin";
+
   // Create the user account
   const { data, error } = await supabase.auth.signUp({
     email,
@@ -87,21 +89,24 @@ export async function employeeSignup(formData: FormData) {
   }
 
   if (data.user) {
-    // Find matching employee record
-    const { data: employee } = await supabase
-      .from("employees")
-      .select("id")
-      .eq("workspace_id", invitation.workspace_id)
-      .eq("email", email.toLowerCase())
-      .maybeSingle();
+    let employee: { id: string } | null = null;
+    if (!isAdminInvite) {
+      const { data } = await supabase
+        .from("employees")
+        .select("id")
+        .eq("workspace_id", invitation.workspace_id)
+        .eq("email", email.toLowerCase())
+        .maybeSingle();
+      employee = data;
+    }
 
     // Create profile linked to workspace and employee record
     const { error: profileError } = await supabase.from("profiles").insert({
       id: data.user.id,
       workspace_id: invitation.workspace_id,
       full_name: fullName,
-      role: invitation.role ?? "employee",
-      employee_id: employee?.id ?? null,
+      role: isAdminInvite ? "admin" : (invitation.role ?? "employee"),
+      employee_id: isAdminInvite ? null : (employee?.id ?? null),
     });
 
     if (profileError) {
@@ -122,5 +127,5 @@ export async function employeeSignup(formData: FormData) {
   }
 
   revalidatePath("/", "layout");
-  redirect("/dashboard/me");
+  redirect(isAdminInvite ? "/onboarding" : "/dashboard/me");
 }

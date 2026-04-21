@@ -476,22 +476,36 @@ function applyPopulationFilters(
   request: SalaryReviewAiPlanRequest,
   scored: ScoredEmployee[],
 ): ScoredEmployee[] {
-  const rules = request.populationRules;
-  if (!rules) return scored;
+  const exclusions = computeExclusionReasons(scored, request);
+  return scored.filter((entry) => !exclusions.get(entry.employee.id));
+}
 
-  return scored.filter((entry) => {
+function computeExclusionReasons(
+  scored: ScoredEmployee[],
+  request: SalaryReviewAiPlanRequest,
+): Map<string, string | null> {
+  const result = new Map<string, string | null>();
+  const rules = request.populationRules;
+  if (!rules) {
+    for (const entry of scored) result.set(entry.employee.id, null);
+    return result;
+  }
+
+  for (const entry of scored) {
+    let reason: string | null = null;
     if (rules.excludeRecentHires) {
       const years = yearsSince(entry.employee.hireDate);
-      if (years < 1) return false;
+      if (years < 1) reason = "Excluded: hired less than 1 year ago.";
     }
-    if (rules.excludeLowPerformers && entry.employee.performanceRating === "low") {
-      return false;
+    if (!reason && rules.excludeLowPerformers && entry.employee.performanceRating === "low") {
+      reason = "Excluded: low performance rating.";
     }
-    if (rules.exactBenchmarkOnly && entry.matchQuality !== "exact") {
-      return false;
+    if (!reason && rules.exactBenchmarkOnly && entry.matchQuality !== "exact") {
+      reason = "Excluded: no exact benchmark match for role, level and location.";
     }
-    return true;
-  });
+    result.set(entry.employee.id, reason);
+  }
+  return result;
 }
 
 function computeRiskSummary(scored: ScoredEmployee[]): SalaryReviewAiRiskSummary {
@@ -566,13 +580,17 @@ function buildScenarioFromScored(
   freshness: SalaryReviewAiFreshnessInput[],
   maxIncreasePercent: number | null,
   isRecommended: boolean,
+  exclusions: Map<string, string | null> = new Map(),
 ): SalaryReviewAiScenario {
+  const isExcluded = (id: string) => Boolean(exclusions.get(id));
   const meta = SCENARIO_META[scenarioId];
   const weights = SCENARIO_WEIGHT_PROFILES[scenarioId];
 
   if (scenarioId === "hold" || budget <= 0) {
     const items: SalaryReviewAiProposalItem[] = scored.map((entry) => {
       const f = getFreshnessForProvenance(freshness, entry.benchmark?.provenance ?? "none");
+      const excluded = isExcluded(entry.employee.id);
+      const reason = exclusions.get(entry.employee.id) ?? null;
       return {
         employeeId: entry.employee.id,
         employeeName: `${entry.employee.firstName} ${entry.employee.lastName}`.trim(),
@@ -593,7 +611,9 @@ function buildScenarioFromScored(
           fallbackReason: entry.fallbackReason,
           freshness: f,
         },
-        warnings: entry.warnings,
+        warnings: excluded && reason ? [...entry.warnings, reason] : entry.warnings,
+        isExcluded: excluded,
+        exclusionReason: reason,
       };
     });
 
@@ -618,7 +638,7 @@ function buildScenarioFromScored(
       },
       items,
       warnings: [],
-      riskSummary: computeRiskSummary(scored),
+      riskSummary: computeRiskSummary(scored.filter((entry) => !isExcluded(entry.employee.id))),
     };
   }
 
@@ -643,6 +663,9 @@ function buildScenarioFromScored(
   });
 
   const shares = reweighted.map((entry) => {
+    if (isExcluded(entry.employee.id)) {
+      return { id: entry.employee.id, share: 0 };
+    }
     const baseShare = totalCurrentPayroll > 0 ? entry.employee.baseSalary / totalCurrentPayroll : 0;
     const scoreMultiplier = clamp(1 + entry.score, 0.2, 2.2);
     return {
@@ -659,9 +682,17 @@ function buildScenarioFromScored(
   const allocated = allocateRoundedBudget(budget, normalizedShares);
 
   const items: SalaryReviewAiProposalItem[] = reweighted.map((entry) => {
-    let proposedIncrease = Math.max(0, allocated.get(entry.employee.id) ?? 0);
+    const excluded = isExcluded(entry.employee.id);
+    const reason = exclusions.get(entry.employee.id) ?? null;
 
-    if (maxIncreasePercent != null && maxIncreasePercent > 0 && entry.employee.baseSalary > 0) {
+    let proposedIncrease = excluded ? 0 : Math.max(0, allocated.get(entry.employee.id) ?? 0);
+
+    if (
+      !excluded &&
+      maxIncreasePercent != null &&
+      maxIncreasePercent > 0 &&
+      entry.employee.baseSalary > 0
+    ) {
       const cap = Math.round((entry.employee.baseSalary * maxIncreasePercent) / 100);
       proposedIncrease = Math.min(proposedIncrease, cap);
     }
@@ -691,7 +722,9 @@ function buildScenarioFromScored(
         fallbackReason: entry.fallbackReason,
         freshness: f,
       },
-      warnings: entry.warnings,
+      warnings: excluded && reason ? [...entry.warnings, reason] : entry.warnings,
+      isExcluded: excluded,
+      exclusionReason: reason,
     };
   });
 
@@ -726,7 +759,7 @@ function buildScenarioFromScored(
     },
     items,
     warnings,
-    riskSummary: computeRiskSummary(reweighted),
+    riskSummary: computeRiskSummary(reweighted.filter((entry) => !isExcluded(entry.employee.id))),
   };
 }
 
@@ -810,7 +843,8 @@ export function buildSalaryReviewAiScenarios(args: {
     );
   });
 
-  const eligible = applyPopulationFilters(selectedEmployees, args.request, allScored);
+  const exclusions = computeExclusionReasons(allScored, args.request);
+  const eligibleForBudget = allScored.filter((entry) => !exclusions.get(entry.employee.id));
 
   const scenarioIds = selectScenariosToGenerate(userBudget, args.request.budgetIntent);
   const recommended = pickRecommendedScenario(args.request.objective, userBudget);
@@ -820,18 +854,19 @@ export function buildSalaryReviewAiScenarios(args: {
     let scenarioBudget = id === "hold" ? 0 : userBudget;
 
     if (id === "market_alignment" && args.request.budgetIntent === "show_ideal") {
-      const ideal = computeIdealBudget(eligible);
+      const ideal = computeIdealBudget(eligibleForBudget);
       scenarioBudget = Math.max(scenarioBudget, ideal);
     }
 
     return buildScenarioFromScored(
       id,
-      eligible,
+      allScored,
       scenarioBudget,
       totalCurrentPayroll,
       args.freshness,
       maxIncreasePct,
       id === recommended,
+      exclusions,
     );
   });
 
@@ -846,6 +881,7 @@ export const __internal = {
   resolveBenchmarkMatch,
   allocateRoundedBudget,
   applyPopulationFilters,
+  computeExclusionReasons,
   computeRiskSummary,
   computeCohortContext,
   buildScenarioFromScored,

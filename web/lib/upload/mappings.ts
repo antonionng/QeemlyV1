@@ -6,6 +6,33 @@ export type UploadMappingOptions = {
   levels: Array<{ id: string; label: string; description: string }>;
 };
 
+// Canonical department options shown in the department mapping dropdown.
+// Values must match the canonical labels returned by `normalizeDepartment`.
+export const DEPARTMENT_OPTIONS: Array<{ id: string; label: string }> = [
+  { id: "Engineering", label: "Engineering" },
+  { id: "Product", label: "Product" },
+  { id: "Design", label: "Design" },
+  { id: "Data", label: "Data" },
+  { id: "Sales", label: "Sales" },
+  { id: "Marketing", label: "Marketing" },
+  { id: "Operations", label: "Operations" },
+  { id: "Customer Success", label: "Customer Success" },
+  { id: "Finance", label: "Finance" },
+  { id: "HR", label: "HR" },
+  { id: "Legal", label: "Legal" },
+  { id: "Executive", label: "Executive" },
+  { id: "Administration", label: "Administration" },
+  { id: "IT", label: "IT" },
+  { id: "Procurement", label: "Procurement" },
+  { id: "Other", label: "Other" },
+];
+
+export const DEPARTMENT_OPTION_IDS = new Set(DEPARTMENT_OPTIONS.map((option) => option.id));
+
+export function isCanonicalDepartment(value: string): boolean {
+  return DEPARTMENT_OPTION_IDS.has(value);
+}
+
 export function extractUniqueFieldValues(
   rows: string[][],
   mappings: ColumnMapping[],

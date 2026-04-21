@@ -4,6 +4,7 @@ import { MapPin, Pencil, Trash2 } from "lucide-react";
 import { buildBenchmarkTrustLabels } from "@/lib/benchmarks/trust";
 import type { Employee } from "@/lib/employees";
 import { useCurrencyFormatter } from "@/lib/utils/currency";
+import { VisaBadge, classifyVisa } from "./visa-badge";
 
 type Props = {
   employees: Employee[];
@@ -24,12 +25,7 @@ const DEPARTMENT_COLORS: Record<string, string> = {
 };
 
 function visaBadge(employee: Employee) {
-  if (!employee.visaExpiryDate) return null;
-  const days = Math.ceil((employee.visaExpiryDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-  if (days <= 30) return { label: "Expiring <=30d", cls: "bg-red-50 text-red-700 border-red-200" };
-  if (days <= 60) return { label: "Expiring <=60d", cls: "bg-orange-50 text-orange-700 border-orange-200" };
-  if (days <= 90) return { label: "Expiring <=90d", cls: "bg-amber-50 text-amber-700 border-amber-200" };
-  return { label: "Valid", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" };
+  return classifyVisa(employee.visaExpiryDate);
 }
 
 export function PeopleCardGrid({ employees, onOpenDetails, onDelete }: Props) {
@@ -130,11 +126,7 @@ export function PeopleCardGrid({ employees, onOpenDetails, onDelete }: Props) {
                 {employee.level.name}
               </span>
             </div>
-            {visa && (
-              <p className={`inline-flex rounded-full border px-2 py-1 text-[10px] font-semibold ${visa.cls}`}>
-                {visa.label}
-              </p>
-            )}
+            {visa && <VisaBadge visa={visa} />}
           </div>
 
           <div className="mt-4 flex flex-wrap gap-2 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">

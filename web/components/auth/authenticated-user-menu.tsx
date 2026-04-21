@@ -8,6 +8,7 @@ import {
   ChevronDown,
   CreditCard,
   HelpCircle,
+  LayoutDashboard,
   LogOut,
   Settings,
   Shield,
@@ -77,7 +78,19 @@ async function fetchAdminAccess(): Promise<boolean> {
 }
 
 function buildMenuDefinitions(model: AuthenticatedMenuModel, pathname: string | null): MenuDefinition[] {
-  const items: MenuDefinition[] = [
+  const isOutsideDashboard = !(pathname?.startsWith("/dashboard") ?? false);
+  const items: MenuDefinition[] = [];
+
+  if (isOutsideDashboard) {
+    items.push({
+      key: "company-dashboard",
+      label: "Company Dashboard",
+      href: "/dashboard",
+      icon: <LayoutDashboard className="h-4 w-4" />,
+    });
+  }
+
+  items.push(
     {
       key: "profile",
       label: "Profile",
@@ -90,7 +103,7 @@ function buildMenuDefinitions(model: AuthenticatedMenuModel, pathname: string | 
       href: "/dashboard/settings",
       icon: <Settings className="h-4 w-4" />,
     },
-  ];
+  );
 
   if (isFeatureEnabled("billing")) {
     items.push({

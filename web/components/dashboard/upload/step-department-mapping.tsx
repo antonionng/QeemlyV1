@@ -1,13 +1,17 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowRight } from "lucide-react";
 import clsx from "clsx";
 import {
+  DEPARTMENT_OPTIONS,
   defaultDepartmentMappings,
   extractUniqueFieldValues,
+  isCanonicalDepartment,
   useUploadStore,
 } from "@/lib/upload";
+
+const CUSTOM_SENTINEL = "__custom__";
 
 export function StepDepartmentMapping() {
   const {
@@ -24,6 +28,8 @@ export function StepDepartmentMapping() {
     return extractUniqueFieldValues(file.rows, mappings, "department");
   }, [file, mappings, dataType]);
 
+  const [customMode, setCustomMode] = useState<Record<string, boolean>>({});
+
   useEffect(() => {
     const defaults = defaultDepartmentMappings(departments);
     for (const [source, target] of Object.entries(defaults)) {
@@ -32,6 +38,20 @@ export function StepDepartmentMapping() {
       }
     }
   }, [departments, departmentMappings, setDepartmentMapping]);
+
+  // Detect rows whose mapped value isn't canonical so we surface a custom input.
+  useEffect(() => {
+    setCustomMode((prev) => {
+      const next = { ...prev };
+      for (const dept of departments) {
+        const mapped = departmentMappings[dept];
+        if (mapped && !isCanonicalDepartment(mapped) && next[dept] !== true) {
+          next[dept] = true;
+        }
+      }
+      return next;
+    });
+  }, [departments, departmentMappings]);
 
   if (dataType !== "employees") {
     return (
@@ -46,7 +66,7 @@ export function StepDepartmentMapping() {
       <div className="mb-6">
         <h2 className="text-lg font-semibold text-brand-900">Map departments</h2>
         <p className="text-sm text-brand-600 mt-1">
-          Departments are flexible. We accept all uploaded values, then map and resolve before insert.
+          Choose a Qeemly department for each uploaded value. Use Custom only when no option fits.
         </p>
       </div>
 
@@ -55,17 +75,53 @@ export function StepDepartmentMapping() {
           <div>Uploaded department</div>
           <div>Mapped department</div>
         </div>
-        {departments.map((department) => (
-          <div key={department} className="grid grid-cols-2 items-center gap-4 border-t border-border px-4 py-3">
-            <div className="text-sm text-brand-900">{department}</div>
-            <input
-              value={departmentMappings[department] || ""}
-              onChange={(e) => setDepartmentMapping(department, e.target.value)}
-              className="rounded-lg border border-brand-200 px-3 py-2 text-sm text-brand-800 focus:outline-none focus:ring-2 focus:ring-brand-500"
-              placeholder="Mapped department"
-            />
-          </div>
-        ))}
+        {departments.map((department) => {
+          const mapped = departmentMappings[department] || "";
+          const isCustom = customMode[department] === true || (mapped !== "" && !isCanonicalDepartment(mapped));
+          const selectValue = isCustom ? CUSTOM_SENTINEL : mapped;
+
+          return (
+            <div
+              key={department}
+              className="grid grid-cols-2 items-start gap-4 border-t border-border px-4 py-3"
+            >
+              <div className="text-sm text-brand-900 pt-2">{department}</div>
+              <div className="space-y-2">
+                <select
+                  value={selectValue}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value === CUSTOM_SENTINEL) {
+                      setCustomMode((prev) => ({ ...prev, [department]: true }));
+                      // Clear the canonical mapping so the user enters their own.
+                      setDepartmentMapping(department, "");
+                    } else {
+                      setCustomMode((prev) => ({ ...prev, [department]: false }));
+                      setDepartmentMapping(department, value);
+                    }
+                  }}
+                  className="w-full rounded-lg border border-brand-200 px-3 py-2 text-sm text-brand-800 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                >
+                  <option value="">Select department</option>
+                  {DEPARTMENT_OPTIONS.map((option) => (
+                    <option key={option.id} value={option.id}>
+                      {option.label}
+                    </option>
+                  ))}
+                  <option value={CUSTOM_SENTINEL}>Custom...</option>
+                </select>
+                {isCustom && (
+                  <input
+                    value={mapped}
+                    onChange={(e) => setDepartmentMapping(department, e.target.value)}
+                    className="w-full rounded-lg border border-brand-200 px-3 py-2 text-sm text-brand-800 focus:outline-none focus:ring-2 focus:ring-brand-500"
+                    placeholder="Enter custom department"
+                  />
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
 
       <div className="mt-6 flex justify-end">

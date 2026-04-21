@@ -57,6 +57,18 @@ export async function GET(request: Request) {
         if (profileUpdateError) {
           return NextResponse.redirect(`${origin}/login?error=invite_accept_failed`);
         }
+      } else if (invitation.role === "admin" || invitation.role === "company_admin") {
+        const { error: profileUpdateError } = await supabase
+          .from("profiles")
+          .update({
+            role: "admin",
+            employee_id: null,
+          })
+          .eq("id", user.id);
+
+        if (profileUpdateError) {
+          return NextResponse.redirect(`${origin}/login?error=invite_accept_failed`);
+        }
       }
 
       // Mark invitation accepted
@@ -69,7 +81,12 @@ export async function GET(request: Request) {
         return NextResponse.redirect(`${origin}/login?error=invite_accept_failed`);
       }
 
-      return NextResponse.redirect(`${origin}/dashboard/me`);
+      const postAcceptPath =
+        invitation.role === "admin" || invitation.role === "company_admin"
+          ? "/onboarding"
+          : "/dashboard/me";
+
+      return NextResponse.redirect(`${origin}${postAcceptPath}`);
     }
 
     return NextResponse.redirect(`${origin}/login?error=invite_wrong_workspace`);
@@ -79,5 +96,8 @@ export async function GET(request: Request) {
   const signupUrl = new URL(`${origin}/register/employee`);
   signupUrl.searchParams.set("token", token);
   signupUrl.searchParams.set("email", invitation.email);
+  if (invitation.role === "admin" || invitation.role === "company_admin") {
+    signupUrl.searchParams.set("role", "admin");
+  }
   return NextResponse.redirect(signupUrl.toString());
 }

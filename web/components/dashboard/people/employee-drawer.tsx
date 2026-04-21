@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { AdvisoryPanel } from "@/components/dashboard/overview/advisory-panel";
 import { Button } from "@/components/ui/button";
+import { FieldTooltip } from "@/components/ui/field-tooltip";
 import { Input } from "@/components/ui/input";
 import { LEVELS, LOCATIONS, ROLES } from "@/lib/dashboard/dummy-data";
 import { formatAEDCompact, type Department, type Employee, type PerformanceRating } from "@/lib/employees";
@@ -592,6 +593,10 @@ export function EmployeeDrawer({
             <div className="flex items-center gap-2">
               <ShieldCheck className="h-4 w-4 text-brand-500" />
               <h4 className="text-sm font-semibold text-brand-900">Visa &amp; Mobility</h4>
+              <FieldTooltip
+                message="Active = visa on file. Expiring = within renewal window. Expired = past expiry date. Pending = application in progress. Cancelled = no longer in effect."
+                className="ml-1 h-3.5 w-3.5"
+              />
             </div>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
               <select

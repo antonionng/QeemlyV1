@@ -9,6 +9,7 @@ import {
   resolveBenchmarkForEmployee,
   type BenchmarkResolverMatchType,
   type BenchmarkResolverResult,
+  type BenchmarkResolverSource,
 } from "@/lib/benchmarks/benchmark-resolver";
 import { buildBenchmarkTrustLabels } from "@/lib/benchmarks/trust";
 import { getRelocationCities } from "@/lib/relocation/col-data";
@@ -41,7 +42,7 @@ export type RelocationResolvedMarketContext = {
   p75: number;
   p90: number;
   sampleSize: number;
-  benchmarkSource: "market" | "ai-estimated";
+  benchmarkSource: BenchmarkResolverSource;
   sourceLabel: string;
   matchType: Exclude<BenchmarkResolverMatchType, "none">;
   matchLabel: string;

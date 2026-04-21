@@ -26,6 +26,27 @@ export type OfferPdfData = {
   offerMode: OfferMode;
   internalMetadata?: InternalOfferMetadata;
   advisedBaseline?: AdvisedBaseline | null;
+  // Optional internal-mode enrichments. When `targetEmployee` is present the internal PDF
+  // renders the Current Compensation section. When `benchmarkPercentiles` is provided we
+  // render the Benchmark Snapshot section.
+  targetEmployee?: {
+    name: string;
+    email?: string | null;
+    department?: string | null;
+    currentTotalComp?: number | null;
+    currentBaseSalary?: number | null;
+    currency?: string | null;
+    roleTitle?: string | null;
+    levelName?: string | null;
+  } | null;
+  benchmarkPercentiles?: {
+    p25?: number | null;
+    p50?: number | null;
+    p75?: number | null;
+    p90?: number | null;
+  } | null;
+  benchmarkSampleSize?: number | null;
+  benchmarkLastUpdated?: string | null;
 };
 
 const CURRENCY_SYMBOLS: Record<string, string> = {
@@ -133,6 +154,17 @@ function renderInternalPdf(doc: PDFKit.PDFDocument, data: OfferPdfData) {
   doc.moveDown(1);
 
   renderPositionBox(doc, data, left, pageWidth);
+
+  if (data.targetEmployee) {
+    renderCurrentCompensationSection(doc, data, left, pageWidth);
+  }
+
+  if (data.benchmarkPercentiles) {
+    renderBenchmarkSnapshotSection(doc, data, left, pageWidth);
+  }
+
+  doc.font("Helvetica-Bold").fontSize(10).fillColor("#92400E").text("PROPOSED OFFER", left);
+  doc.moveDown(0.4);
   renderCompensationSection(doc, data, left, pageWidth, brandColor);
   renderBreakdownSection(doc, data, left, pageWidth, brandColor);
 
@@ -343,6 +375,99 @@ function renderFooter(
   );
 
   doc.rect(0, doc.page.height - 8, doc.page.width, 8).fill(accentColor);
+}
+
+function renderCurrentCompensationSection(
+  doc: PDFKit.PDFDocument,
+  data: OfferPdfData,
+  left: number,
+  pageWidth: number,
+) {
+  const employee = data.targetEmployee;
+  if (!employee) return;
+  const currency = employee.currency || data.currency;
+
+  doc.font("Helvetica-Bold").fontSize(10).fillColor("#92400E").text("CURRENT COMPENSATION", left);
+  doc.moveDown(0.4);
+
+  const boxY = doc.y;
+  doc.roundedRect(left, boxY, pageWidth, 78, 6).fillColor("#FFF7ED").fill();
+
+  const col1 = left + 16;
+  const col2 = left + pageWidth * 0.5;
+
+  doc.font("Helvetica").fontSize(8).fillColor("#9CA3AF").text("EMPLOYEE", col1, boxY + 12);
+  doc.font("Helvetica-Bold").fontSize(11).fillColor("#111827").text(employee.name, col1, boxY + 26, {
+    width: pageWidth * 0.45,
+  });
+  if (employee.department) {
+    doc.font("Helvetica").fontSize(9).fillColor("#6B7280").text(employee.department, col1, boxY + 44);
+  }
+
+  doc.font("Helvetica").fontSize(8).fillColor("#9CA3AF").text("CURRENT TOTAL COMP", col2, boxY + 12);
+  doc.font("Helvetica-Bold").fontSize(14).fillColor("#111827").text(
+    employee.currentTotalComp != null ? currencyFormat(employee.currentTotalComp, currency) : "N/A",
+    col2,
+    boxY + 26,
+  );
+  if (employee.currentBaseSalary != null) {
+    doc.font("Helvetica").fontSize(8).fillColor("#6B7280").text(
+      `Basic ${currencyFormat(employee.currentBaseSalary, currency)}`,
+      col2,
+      boxY + 50,
+    );
+  }
+
+  doc.y = boxY + 92;
+}
+
+function renderBenchmarkSnapshotSection(
+  doc: PDFKit.PDFDocument,
+  data: OfferPdfData,
+  left: number,
+  pageWidth: number,
+) {
+  const pcts = data.benchmarkPercentiles;
+  if (!pcts) return;
+
+  doc.font("Helvetica-Bold").fontSize(10).fillColor("#92400E").text("BENCHMARK SNAPSHOT", left);
+  doc.moveDown(0.4);
+
+  const boxY = doc.y;
+  doc.roundedRect(left, boxY, pageWidth, 78, 6).fillColor("#F9FAFB").fill();
+
+  const cellWidth = pageWidth / 4;
+  const labels: Array<{ key: keyof typeof pcts; label: string }> = [
+    { key: "p25", label: "P25" },
+    { key: "p50", label: "P50" },
+    { key: "p75", label: "P75" },
+    { key: "p90", label: "P90" },
+  ];
+
+  labels.forEach(({ key, label }, i) => {
+    const x = left + cellWidth * i;
+    doc.font("Helvetica").fontSize(8).fillColor("#9CA3AF").text(label, x + 12, boxY + 12);
+    doc.font("Helvetica-Bold").fontSize(13).fillColor("#111827").text(
+      pcts[key] != null ? currencyFormat(pcts[key]!, data.currency) : "-",
+      x + 12,
+      boxY + 26,
+      { width: cellWidth - 16 },
+    );
+  });
+
+  const trustBits: string[] = [];
+  if (data.benchmarkSource) trustBits.push(`Source: ${data.benchmarkSource}`);
+  if (data.confidence) trustBits.push(`Confidence: ${data.confidence}`);
+  if (data.benchmarkSampleSize != null) trustBits.push(`Sample: ${data.benchmarkSampleSize}`);
+  if (data.benchmarkLastUpdated) {
+    const updated = new Date(data.benchmarkLastUpdated);
+    if (!isNaN(updated.valueOf())) {
+      trustBits.push(`Updated: ${updated.toLocaleDateString("en-GB", { month: "short", year: "numeric" })}`);
+    }
+  }
+  doc.font("Helvetica").fontSize(8).fillColor("#6B7280").text(trustBits.join("  |  "), left + 12, boxY + 56);
+
+  doc.y = boxY + 92;
 }
 
 export async function renderOfferPdf(data: OfferPdfData): Promise<Buffer> {

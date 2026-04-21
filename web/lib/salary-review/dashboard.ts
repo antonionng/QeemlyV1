@@ -27,7 +27,7 @@ type SalaryReviewWorkspaceVisibility = {
   showTable: boolean;
 };
 
-export type BuildReviewStep = "setup" | "draft" | "review";
+export type BuildReviewStep = "setup" | "budget" | "draft" | "review";
 
 type BuildReviewFlowStep = {
   id: BuildReviewStep;
@@ -131,16 +131,24 @@ export function getBuildReviewFlowModel(args: {
   requestedStep: BuildReviewStep | null;
   employeesCount: number;
   proposedEmployees: number;
+  hasBudget?: boolean;
 }): BuildReviewFlowModel {
   const hasEmployees = args.employeesCount > 0;
   const hasDraftValues = args.proposedEmployees > 0;
+  const hasBudget = args.hasBudget ?? false;
   const resolvedStep = (() => {
     if (args.requestedStep === "review") {
       if (hasDraftValues) return "review";
-      return hasEmployees ? "draft" : "setup";
+      if (hasEmployees && hasBudget) return "draft";
+      if (hasEmployees) return "budget";
+      return "setup";
     }
     if (args.requestedStep === "draft") {
-      return hasEmployees ? "draft" : "setup";
+      if (hasEmployees && hasBudget) return "draft";
+      return hasEmployees ? "budget" : "setup";
+    }
+    if (args.requestedStep === "budget") {
+      return hasEmployees ? "budget" : "setup";
     }
     if (args.requestedStep === "setup") {
       return "setup";
@@ -153,7 +161,8 @@ export function getBuildReviewFlowModel(args: {
     activeStep: resolvedStep,
     steps: [
       { id: "setup", label: "Setup", enabled: true },
-      { id: "draft", label: "Draft", enabled: hasEmployees },
+      { id: "budget", label: "Master Budget", enabled: hasEmployees },
+      { id: "draft", label: "Draft", enabled: hasEmployees && hasBudget },
       { id: "review", label: "Final Review", enabled: hasDraftValues },
     ],
     canContinueToReview: hasDraftValues,

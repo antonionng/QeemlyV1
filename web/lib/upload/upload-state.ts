@@ -21,6 +21,17 @@ export type WizardStep =
 
 export type UploadImportMode = "upsert" | "replace";
 
+export type CustomRoleOption = {
+  id: string;
+  label: string;
+};
+
+export type CustomLevelOption = {
+  id: string;
+  label: string;
+  description?: string;
+};
+
 export type UploadState = {
   // Wizard navigation
   currentStep: WizardStep;
@@ -37,7 +48,13 @@ export type UploadState = {
   departmentMappings: Record<string, string>;
   roleMappings: Record<string, string>;
   levelMappings: Record<string, string>;
-  
+  customRoleOptions: CustomRoleOption[];
+  customLevelOptions: CustomLevelOption[];
+
+  // Per-row overrides applied at import time (rowIndex -> level_id / role_id)
+  rowLevelOverrides: Record<number, string>;
+  rowRoleOverrides: Record<number, string>;
+
   // Step 4: Validation
   validationResult: ValidationResult | null;
   excludedRows: Set<number>;
@@ -58,6 +75,11 @@ export type UploadState = {
   setDepartmentMapping: (sourceValue: string, targetValue: string) => void;
   setRoleMapping: (sourceValue: string, targetValue: string) => void;
   setLevelMapping: (sourceValue: string, targetValue: string) => void;
+  addCustomRoleOption: (option: CustomRoleOption) => void;
+  addCustomLevelOption: (option: CustomLevelOption) => void;
+  setRowLevelOverride: (rowIndex: number, levelId: string) => void;
+  setRowRoleOverride: (rowIndex: number, roleId: string) => void;
+  clearRowOverride: (rowIndex: number) => void;
   updateMapping: (sourceIndex: number, targetField: string | null) => void;
   setValidationResult: (result: ValidationResult) => void;
   setExcludedRows: (rows: Set<number>) => void;
@@ -98,6 +120,10 @@ const initialState = {
   departmentMappings: {},
   roleMappings: {},
   levelMappings: {},
+  customRoleOptions: [] as CustomRoleOption[],
+  customLevelOptions: [] as CustomLevelOption[],
+  rowLevelOverrides: {} as Record<number, string>,
+  rowRoleOverrides: {} as Record<number, string>,
   validationResult: null,
   excludedRows: new Set<number>(),
   isImporting: false,
@@ -144,6 +170,51 @@ export const useUploadStore = create<UploadState>()(
             [sourceValue]: targetValue,
           },
         })),
+
+      addCustomRoleOption: (option) =>
+        set((state) => {
+          if (state.customRoleOptions.some((existing) => existing.id === option.id)) {
+            return state;
+          }
+          return {
+            customRoleOptions: [...state.customRoleOptions, option],
+          };
+        }),
+
+      addCustomLevelOption: (option) =>
+        set((state) => {
+          if (state.customLevelOptions.some((existing) => existing.id === option.id)) {
+            return state;
+          }
+          return {
+            customLevelOptions: [...state.customLevelOptions, option],
+          };
+        }),
+
+      setRowLevelOverride: (rowIndex, levelId) =>
+        set((state) => ({
+          rowLevelOverrides: {
+            ...state.rowLevelOverrides,
+            [rowIndex]: levelId,
+          },
+        })),
+
+      setRowRoleOverride: (rowIndex, roleId) =>
+        set((state) => ({
+          rowRoleOverrides: {
+            ...state.rowRoleOverrides,
+            [rowIndex]: roleId,
+          },
+        })),
+
+      clearRowOverride: (rowIndex) =>
+        set((state) => {
+          const nextLevels = { ...state.rowLevelOverrides };
+          const nextRoles = { ...state.rowRoleOverrides };
+          delete nextLevels[rowIndex];
+          delete nextRoles[rowIndex];
+          return { rowLevelOverrides: nextLevels, rowRoleOverrides: nextRoles };
+        }),
 
       updateMapping: (sourceIndex, targetField) => {
         const { mappings } = get();
@@ -269,12 +340,27 @@ export function initModalUpload(type: UploadDataType) {
   store.goToStep("file-upload");
 }
 
-// Helper to get rows that will be imported (valid and not excluded)
+// Helper to get rows that will be imported (valid and not excluded).
+// Per-row level/role overrides are merged into row.data so transformers see the corrected values.
 export function getRowsToImport(state: UploadState): RowValidationResult[] {
   if (!state.validationResult) return [];
-  return state.validationResult.rows.filter(
-    (row) => row.isValid && !state.excludedRows.has(row.rowIndex)
-  );
+  return state.validationResult.rows
+    .filter((row) => row.isValid && !state.excludedRows.has(row.rowIndex))
+    .map((row) => applyRowOverrides(row, state));
+}
+
+export function applyRowOverrides(
+  row: RowValidationResult,
+  state: Pick<UploadState, "rowLevelOverrides" | "rowRoleOverrides">,
+): RowValidationResult {
+  const levelOverride = state.rowLevelOverrides[row.rowIndex];
+  const roleOverride = state.rowRoleOverrides[row.rowIndex];
+  if (!levelOverride && !roleOverride) return row;
+
+  const data = { ...row.data };
+  if (levelOverride) data.level = levelOverride;
+  if (roleOverride) data.role = roleOverride;
+  return { ...row, data };
 }
 
 // Helper to get summary stats for confirmation

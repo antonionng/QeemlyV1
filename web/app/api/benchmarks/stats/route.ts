@@ -52,10 +52,12 @@ export async function GET() {
       diagnostics.market.warning = "No published shared-market benchmark rows were returned from the market pool.";
     }
   } catch (error) {
-    diagnostics.market.error = toClientSafeError(error, {
-      defaultMessage: "Market benchmark data is temporarily unavailable.",
-      action: "Refresh the page or try again in a few minutes.",
-    }).message;
+    if (!diagnostics.market.error) {
+      diagnostics.market.error = toClientSafeError(error, {
+        defaultMessage: "Market benchmark data is temporarily unavailable.",
+        action: "Refresh the page or try again in a few minutes.",
+      }).message;
+    }
   }
 
   // Workspace benchmarks (company pay bands)

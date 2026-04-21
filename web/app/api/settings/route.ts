@@ -34,11 +34,16 @@ export async function GET() {
     .eq("workspace_id", workspace_id)
     .single();
 
+  const hasOnboardingStarted = !!settings?.onboarding_started_at;
+  const onboardingComplete = !!settings?.onboarding_completed_at;
+
   return NextResponse.json({
     workspace_id,
     workspace_name: workspace?.name || null,
     workspace_slug: workspace?.slug || null,
     is_viewing_as_admin: is_override,
+    onboarding_started: hasOnboardingStarted,
+    onboarding_complete: onboardingComplete,
     settings: settings || {
       company_name: workspace?.name || null,
       company_logo: null,

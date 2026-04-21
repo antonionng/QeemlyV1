@@ -70,6 +70,8 @@ export type SalaryReviewAiProposalItem = {
     };
   };
   warnings: string[];
+  isExcluded?: boolean;
+  exclusionReason?: string | null;
 };
 
 export type SalaryReviewAiPlanSummary = {

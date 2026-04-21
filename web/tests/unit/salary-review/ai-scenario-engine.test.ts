@@ -159,9 +159,13 @@ describe("buildSalaryReviewAiScenarios", () => {
     expect(withIncreases.length).toBeGreaterThan(0);
 
     for (const scenario of withIncreases) {
-      expect(scenario.items.every((item) => item.employeeId === veteranId)).toBe(true);
       const recentItem = scenario.items.find((item) => item.employeeId === recentId);
-      expect(recentItem == null || recentItem.proposedIncrease === 0).toBe(true);
+      expect(recentItem).toBeDefined();
+      expect(recentItem?.isExcluded).toBe(true);
+      expect(recentItem?.proposedIncrease).toBe(0);
+      expect(recentItem?.exclusionReason).toMatch(/less than 1 year/i);
+      const veteranItem = scenario.items.find((item) => item.employeeId === veteranId);
+      expect(veteranItem?.isExcluded).toBeFalsy();
     }
 
     const veteranGotIncrease = withIncreases.some((s) => {

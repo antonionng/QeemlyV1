@@ -135,6 +135,22 @@ describe("DashboardSidebar workspace refresh", () => {
           });
         }
 
+        if (url === "/api/onboarding") {
+          return createJsonResponse({
+            steps: {
+              company_profile: { completedAt: "2026-01-01T00:00:00Z" },
+              compensation_defaults: { completedAt: "2026-01-01T00:00:00Z" },
+              upload: { completedAt: "2026-01-01T00:00:00Z", skippedAt: null },
+              first_benchmark: { completedAt: "2026-01-01T00:00:00Z" },
+            },
+            currentStep: "complete",
+            isComplete: true,
+            canBenchmark: true,
+            startedAt: "2026-01-01T00:00:00Z",
+            completedAt: "2026-01-01T00:00:00Z",
+          });
+        }
+
         throw new Error(`Unexpected fetch: ${url}`);
       }),
     );
@@ -156,7 +172,10 @@ describe("DashboardSidebar workspace refresh", () => {
     });
 
     const fetchMock = vi.mocked(globalThis.fetch);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    const settingsCallsBefore = fetchMock.mock.calls.filter(
+      ([url]) => String(url) === "/api/settings",
+    ).length;
+    expect(settingsCallsBefore).toBe(1);
 
     await act(async () => {
       window.dispatchEvent(
@@ -167,7 +186,10 @@ describe("DashboardSidebar workspace refresh", () => {
       await Promise.resolve();
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const settingsCallsAfter = fetchMock.mock.calls.filter(
+      ([url]) => String(url) === "/api/settings",
+    ).length;
+    expect(settingsCallsAfter).toBe(2);
 
     await act(async () => {
       root.unmount();

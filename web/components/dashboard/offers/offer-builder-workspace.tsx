@@ -19,6 +19,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { SalaryInput } from "@/components/ui/salary-input";
 import { type BenchmarkResult } from "@/lib/benchmarks/benchmark-state";
 import { useCompanySettings } from "@/lib/company";
 import {
@@ -27,6 +28,7 @@ import {
   toBenchmarkDisplayValue,
 } from "@/lib/utils/currency";
 import { useSalaryView } from "@/lib/salary-view-store";
+import { SalaryViewToggle } from "@/components/ui/salary-view-toggle";
 import { LEVELS } from "@/lib/dashboard/dummy-data";
 import { useOffersStore } from "@/lib/offers/store";
 import { fetchDbEmployees } from "@/lib/employees/data-service";
@@ -81,7 +83,7 @@ export function OfferBuilderWorkspace({ result, offerMode }: OfferBuilderWorkspa
   const level = result?.level ?? null;
   const location = result?.location ?? null;
   const companySettings = useCompanySettings();
-  const { salaryView } = useSalaryView();
+  const { salaryView, setSalaryView } = useSalaryView();
   const { createOffer } = useOffersStore();
   const targetCurrency = location?.currency ?? "SAR";
 
@@ -89,29 +91,69 @@ export function OfferBuilderWorkspace({ result, offerMode }: OfferBuilderWorkspa
   const breakdown = mod?.data.breakdown;
   const adjacentLevels = mod?.data.adjacentLevels ?? [];
 
+  const manualDraft = useOffersStore((s) => s.manualDraft);
+  const setManualDraft = useOffersStore((s) => s.setManualDraft);
+  const clearManualDraft = useOffersStore((s) => s.clearManualDraft);
+  const hasPersistedDraft = isManual && manualDraft.updatedAt > 0;
+
   const [step, setStep] = useState<BuilderStep>("context");
-  const [offerTarget, setOfferTarget] = useState<number>(companySettings.targetPercentile);
-  const [recipientMode, setRecipientMode] = useState<"employee" | "manual">("manual");
+  const [offerTarget, setOfferTarget] = useState<number>(
+    isManual && hasPersistedDraft ? manualDraft.offerTarget : companySettings.targetPercentile,
+  );
+  const [recipientMode, setRecipientMode] = useState<"employee" | "manual">(
+    isManual && hasPersistedDraft ? manualDraft.recipientMode : "manual",
+  );
   const [employeeOptions, setEmployeeOptions] = useState<
-    { id: string; name: string; email: string }[]
+    {
+      id: string;
+      name: string;
+      email: string;
+      roleTitle?: string;
+      levelName?: string;
+      locationCity?: string;
+      locationCountry?: string;
+      currentTotalComp?: number;
+      currentBaseSalary?: number;
+      currency?: string;
+      department?: string;
+    }[]
   >([]);
+  const [internalEmployeeId, setInternalEmployeeId] = useState<string>("");
   const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
   const [employeesError, setEmployeesError] = useState<string | null>(null);
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>("");
-  const [recipientName, setRecipientName] = useState<string>("");
-  const [recipientEmail, setRecipientEmail] = useState<string>("");
+  const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>(
+    isManual && hasPersistedDraft ? manualDraft.selectedEmployeeId : "",
+  );
+  const [recipientName, setRecipientName] = useState<string>(
+    isManual && hasPersistedDraft ? manualDraft.recipientName : "",
+  );
+  const [recipientEmail, setRecipientEmail] = useState<string>(
+    isManual && hasPersistedDraft ? manualDraft.recipientEmail : "",
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [lastOfferId, setLastOfferId] = useState<string | null>(null);
   const [isPdfDownloading, setIsPdfDownloading] = useState(false);
 
   // Manual mode fields
-  const [manualOfferValue, setManualOfferValue] = useState<string>("");
-  const [manualRoleTitle, setManualRoleTitle] = useState<string>("");
-  const [manualLevelName, setManualLevelName] = useState<string>("");
-  const [manualLocationCity, setManualLocationCity] = useState<string>("");
-  const [manualLocationCountry, setManualLocationCountry] = useState<string>("");
-  const [manualCurrency, setManualCurrency] = useState<string>("SAR");
+  const [manualOfferValue, setManualOfferValue] = useState<string>(
+    isManual && hasPersistedDraft ? manualDraft.manualOfferValue : "",
+  );
+  const [manualRoleTitle, setManualRoleTitle] = useState<string>(
+    isManual && hasPersistedDraft ? manualDraft.manualRoleTitle : "",
+  );
+  const [manualLevelName, setManualLevelName] = useState<string>(
+    isManual && hasPersistedDraft ? manualDraft.manualLevelName : "",
+  );
+  const [manualLocationCity, setManualLocationCity] = useState<string>(
+    isManual && hasPersistedDraft ? manualDraft.manualLocationCity : "",
+  );
+  const [manualLocationCountry, setManualLocationCountry] = useState<string>(
+    isManual && hasPersistedDraft ? manualDraft.manualLocationCountry : "",
+  );
+  const [manualCurrency, setManualCurrency] = useState<string>(
+    isManual && hasPersistedDraft ? manualDraft.manualCurrency : "SAR",
+  );
 
   // Internal mode fields
   const [internalRationale, setInternalRationale] = useState<string>("");
@@ -242,7 +284,6 @@ export function OfferBuilderWorkspace({ result, offerMode }: OfferBuilderWorkspa
   };
 
   useEffect(() => {
-    if (isInternal) return;
     const loadEmployees = async () => {
       setIsLoadingEmployees(true);
       setEmployeesError(null);
@@ -254,19 +295,63 @@ export function OfferBuilderWorkspace({ result, offerMode }: OfferBuilderWorkspa
             id: employee.id,
             name: `${employee.firstName} ${employee.lastName}`.trim(),
             email: employee.email,
+            roleTitle: employee.role?.title,
+            levelName: employee.level?.name,
+            locationCity: employee.location?.city,
+            locationCountry: employee.location?.country,
+            currentTotalComp: employee.totalComp,
+            currentBaseSalary: employee.baseSalary,
+            currency: employee.location?.currency,
+            department: employee.department,
           }));
         setEmployeeOptions(normalized);
-        if (normalized.length > 0) {
-          setSelectedEmployeeId(normalized[0].id);
+        if (!isInternal && normalized.length > 0) {
+          setSelectedEmployeeId((current) => current || normalized[0].id);
         }
       } catch {
-        setEmployeesError("Unable to load employee recipients right now.");
+        setEmployeesError("Unable to load employees right now.");
       } finally {
         setIsLoadingEmployees(false);
       }
     };
     void loadEmployees();
   }, [isInternal]);
+
+  const internalEmployeeRecord = useMemo(
+    () => employeeOptions.find((e) => e.id === internalEmployeeId) || null,
+    [employeeOptions, internalEmployeeId],
+  );
+
+  useEffect(() => {
+    if (!isManual) return;
+    setManualDraft({
+      recipientMode,
+      selectedEmployeeId,
+      recipientName,
+      recipientEmail,
+      manualOfferValue,
+      manualRoleTitle,
+      manualLevelName,
+      manualLocationCity,
+      manualLocationCountry,
+      manualCurrency,
+      offerTarget,
+    });
+  }, [
+    isManual,
+    recipientMode,
+    selectedEmployeeId,
+    recipientName,
+    recipientEmail,
+    manualOfferValue,
+    manualRoleTitle,
+    manualLevelName,
+    manualLocationCity,
+    manualLocationCountry,
+    manualCurrency,
+    offerTarget,
+    setManualDraft,
+  ]);
 
   const convertToMarket = (
     value: number,
@@ -377,9 +462,8 @@ export function OfferBuilderWorkspace({ result, offerMode }: OfferBuilderWorkspa
     }
     if (recipientMode === "manual") {
       if (!recipientName.trim()) return "Enter a recipient name.";
-      if (!recipientEmail.trim()) return "Enter a recipient email.";
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail.trim())) {
-        return "Enter a valid email address.";
+      if (recipientEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipientEmail.trim())) {
+        return "Enter a valid email address or leave the email field blank.";
       }
     }
     return null;
@@ -460,6 +544,7 @@ export function OfferBuilderWorkspace({ result, offerMode }: OfferBuilderWorkspa
         return;
       }
       setLastOfferId(result_.offer.id);
+      clearManualDraft();
       setStep("complete");
       return;
     }
@@ -476,6 +561,9 @@ export function OfferBuilderWorkspace({ result, offerMode }: OfferBuilderWorkspa
 
       const result_ = await createOffer({
         offer_mode: "internal",
+        employee_id: internalEmployeeId || null,
+        recipient_name: internalEmployeeRecord?.name ?? null,
+        recipient_email: internalEmployeeRecord?.email ?? null,
         role_id: role!.id,
         level_id: level!.id,
         location_id: location!.id,
@@ -495,7 +583,24 @@ export function OfferBuilderWorkspace({ result, offerMode }: OfferBuilderWorkspa
           role: role!,
           level: level!,
           location: location!,
-          form_data: result!.formData as unknown as Record<string, unknown>,
+          form_data: {
+            ...(result!.formData as unknown as Record<string, unknown>),
+            target_employee: internalEmployeeRecord
+              ? {
+                  id: internalEmployeeRecord.id,
+                  name: internalEmployeeRecord.name,
+                  email: internalEmployeeRecord.email,
+                  current_total_comp: internalEmployeeRecord.currentTotalComp,
+                  current_base_salary: internalEmployeeRecord.currentBaseSalary,
+                  currency: internalEmployeeRecord.currency,
+                  department: internalEmployeeRecord.department,
+                  role_title: internalEmployeeRecord.roleTitle,
+                  level_name: internalEmployeeRecord.levelName,
+                  location_city: internalEmployeeRecord.locationCity,
+                  location_country: internalEmployeeRecord.locationCountry,
+                }
+              : undefined,
+          },
         },
         internal_metadata: {
           rationale: internalRationale || undefined,
@@ -667,6 +772,33 @@ export function OfferBuilderWorkspace({ result, offerMode }: OfferBuilderWorkspa
               <p className="text-sm text-brand-600">
                 Enter the role and compensation values manually.
               </p>
+              {hasPersistedDraft && (
+                <div className="flex items-center justify-between rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  <span>
+                    Restored your saved manual offer draft from
+                    {" "}
+                    {new Date(manualDraft.updatedAt).toLocaleString()}
+                    .
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      clearManualDraft();
+                      setManualOfferValue("");
+                      setManualRoleTitle("");
+                      setManualLevelName("");
+                      setManualLocationCity("");
+                      setManualLocationCountry("");
+                      setManualCurrency("SAR");
+                      setRecipientName("");
+                      setRecipientEmail("");
+                    }}
+                    className="ml-3 rounded-md border border-amber-300 bg-white px-2 py-1 font-semibold text-amber-700 hover:bg-amber-100"
+                  >
+                    Discard draft
+                  </button>
+                </div>
+              )}
               <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label className="mb-1.5 block text-xs font-semibold text-brand-700">
@@ -732,11 +864,11 @@ export function OfferBuilderWorkspace({ result, offerMode }: OfferBuilderWorkspa
                   <label className="mb-1.5 block text-xs font-semibold text-brand-700">
                     Total annual compensation
                   </label>
-                  <input
-                    type="number"
+                  <SalaryInput
                     value={manualOfferValue}
                     onChange={(e) => setManualOfferValue(e.target.value)}
-                    className="w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm text-brand-900"
+                    fullWidth
+                    className="rounded-lg border border-border bg-white px-3 py-2.5 text-sm text-brand-900"
                     placeholder="e.g. 600000"
                   />
                 </div>
@@ -789,6 +921,10 @@ export function OfferBuilderWorkspace({ result, offerMode }: OfferBuilderWorkspa
               </div>
 
               <div className="bench-section">
+                <div className="mb-3 flex items-center justify-between gap-2">
+                  <h3 className="bench-section-header pb-0">Recommended package</h3>
+                  <SalaryViewToggle value={salaryView} onChange={setSalaryView} />
+                </div>
                 <div className="grid gap-4 lg:grid-cols-3">
                   <div className="rounded-2xl border border-brand-100 bg-brand-50 p-5">
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-brand-500">
@@ -997,6 +1133,17 @@ export function OfferBuilderWorkspace({ result, offerMode }: OfferBuilderWorkspa
               </button>
             </div>
 
+            <div className="flex items-start gap-2 rounded-xl border border-brand-100 bg-brand-50/60 px-4 py-3 text-xs text-brand-700">
+              <FileText className="mt-0.5 h-4 w-4 shrink-0 text-brand-500" />
+              <span>
+                Qeemly does not send offers automatically. After you create the
+                offer you will be able to download a branded PDF to share with
+                the candidate through your own channels. Recipient details are
+                stored on the offer record only and never used for outbound
+                email.
+              </span>
+            </div>
+
             {recipientMode === "employee" ? (
               <div className="space-y-2">
                 <label className="block text-xs font-semibold text-brand-700">
@@ -1046,6 +1193,7 @@ export function OfferBuilderWorkspace({ result, offerMode }: OfferBuilderWorkspa
                   <label className="mb-1.5 flex items-center gap-2 text-xs font-semibold text-brand-700">
                     <Mail className="h-3.5 w-3.5" />
                     Recipient email
+                    <span className="font-normal text-brand-500">(optional, for your records)</span>
                   </label>
                   <input
                     type="email"
@@ -1054,6 +1202,9 @@ export function OfferBuilderWorkspace({ result, offerMode }: OfferBuilderWorkspa
                     className="w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm text-brand-900"
                     placeholder="candidate@company.com"
                   />
+                  <p className="mt-1 text-[11px] text-brand-500">
+                    Stored on the offer for your reference. No email is sent from Qeemly.
+                  </p>
                 </div>
               </div>
             )}
@@ -1081,6 +1232,86 @@ export function OfferBuilderWorkspace({ result, offerMode }: OfferBuilderWorkspa
       {/* Step 2b: Internal Details (internal mode only) */}
       {step === "internal_details" && isInternal && (
         <div className="space-y-6">
+          <div className="bench-section space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="bench-section-header pb-0 flex items-center gap-2">
+                  <User className="h-4 w-4 text-brand-500" />
+                  Who is this offer for?
+                </h3>
+                <p className="mt-2 text-sm text-brand-600">
+                  Pick the employee this internal offer relates to. We pre-fill their current
+                  position, level and location into the brief and the PDF.
+                </p>
+              </div>
+            </div>
+            {isLoadingEmployees && (
+              <div className="rounded-xl border border-brand-100 bg-brand-50 px-4 py-3 text-sm text-brand-700">
+                Loading employees...
+              </div>
+            )}
+            {employeesError && (
+              <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                {employeesError}
+              </div>
+            )}
+            <select
+              value={internalEmployeeId}
+              onChange={(e) => setInternalEmployeeId(e.target.value)}
+              className="w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm text-brand-900"
+            >
+              <option value="">No specific employee (general internal brief)</option>
+              {employeeOptions.map((employee) => (
+                <option key={employee.id} value={employee.id}>
+                  {employee.name}
+                  {employee.roleTitle ? ` - ${employee.roleTitle}` : ""}
+                  {employee.levelName ? ` (${employee.levelName})` : ""}
+                </option>
+              ))}
+            </select>
+            {internalEmployeeRecord && (
+              <div className="grid gap-3 rounded-xl border border-border bg-surface-1 p-4 sm:grid-cols-2">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-brand-500">Position</p>
+                  <p className="text-sm font-bold text-brand-900">
+                    {internalEmployeeRecord.roleTitle ?? role?.title ?? "-"}
+                  </p>
+                  <p className="text-xs text-brand-600">
+                    {internalEmployeeRecord.levelName ?? level?.name ?? "-"}
+                    {internalEmployeeRecord.department ? ` - ${internalEmployeeRecord.department}` : ""}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-brand-500">Location</p>
+                  <p className="text-sm font-bold text-brand-900">
+                    {internalEmployeeRecord.locationCity ?? location?.city ?? "-"}
+                    {internalEmployeeRecord.locationCountry ? `, ${internalEmployeeRecord.locationCountry}` : ""}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-brand-500">
+                    Current total comp
+                  </p>
+                  <p className="text-sm font-bold text-brand-900">
+                    {internalEmployeeRecord.currentTotalComp != null
+                      ? `${internalEmployeeRecord.currency ?? ""} ${internalEmployeeRecord.currentTotalComp.toLocaleString()}`.trim()
+                      : "-"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-brand-500">
+                    Current base salary
+                  </p>
+                  <p className="text-sm font-bold text-brand-900">
+                    {internalEmployeeRecord.currentBaseSalary != null
+                      ? `${internalEmployeeRecord.currency ?? ""} ${internalEmployeeRecord.currentBaseSalary.toLocaleString()}`.trim()
+                      : "-"}
+                  </p>
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="bench-section space-y-4">
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -1154,26 +1385,26 @@ export function OfferBuilderWorkspace({ result, offerMode }: OfferBuilderWorkspa
                 <div>
                   <label className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-brand-700">
                     Negotiation floor
-                    <FieldTooltip message="The minimum total compensation you are willing to offer. Set this at or slightly below the offer low to give the recruiter a hard boundary." />
+                    <FieldTooltip message="The lowest total compensation you would approve. Set this at or near the benchmark p25 to anchor against the lower quartile of the market range and give recruiters a hard floor." />
                   </label>
-                  <input
-                    type="number"
+                  <SalaryInput
                     value={internalNegotiationFloor}
                     onChange={(e) => setInternalNegotiationFloor(e.target.value)}
-                    className="w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm text-brand-900"
+                    fullWidth
+                    className="rounded-lg border border-border bg-white px-3 py-2.5 text-sm text-brand-900"
                     placeholder="Minimum acceptable value"
                   />
                 </div>
                 <div>
                   <label className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold text-brand-700">
                     Negotiation ceiling
-                    <FieldTooltip message="The maximum total compensation you would approve. Set this at or slightly above the offer high to cap recruiter discretion." />
+                    <FieldTooltip message="The highest total compensation you would approve. Set this near the benchmark p75 (or up to p90 for critical roles) so recruiter discretion stays inside the upper quartile of the market range." />
                   </label>
-                  <input
-                    type="number"
+                  <SalaryInput
                     value={internalNegotiationCeiling}
                     onChange={(e) => setInternalNegotiationCeiling(e.target.value)}
-                    className="w-full rounded-lg border border-border bg-white px-3 py-2.5 text-sm text-brand-900"
+                    fullWidth
+                    className="rounded-lg border border-border bg-white px-3 py-2.5 text-sm text-brand-900"
                     placeholder="Maximum acceptable value"
                   />
                 </div>
@@ -1479,7 +1710,8 @@ export function OfferBuilderWorkspace({ result, offerMode }: OfferBuilderWorkspa
               {isInternal
                 ? "The internal compensation brief has been saved to your workspace."
                 : <>The offer for <span className="font-semibold">{recipientLabel}</span> has been saved to your workspace.</>}
-              {" "}Download the branded PDF below.
+              {" "}Download the branded PDF below and share it through your own channel.
+              {" "}Qeemly does not send candidate emails.
             </p>
 
             <div className="mx-auto mt-8 flex max-w-sm flex-col gap-3 sm:flex-row sm:max-w-md">
