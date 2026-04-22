@@ -94,7 +94,7 @@ export function AuthSplitShell({
         </header>
 
         <main className="relative h-[812px]">
-          <section className="absolute left-[84px] top-[138px] w-[512px]">
+          <section className="absolute left-[84px] top-0 w-[512px]">
             <div
               data-testid="auth-form-panel"
               className="rounded-[24px] bg-white p-10 shadow-[0_20px_60px_rgba(17,18,51,0.08)]"
