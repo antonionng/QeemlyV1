@@ -17,14 +17,12 @@ export function HomeFinalCta() {
               sourceCta="final-cta"
               size="md"
               tone="dark"
-              fullWidth
               triggerClassName="w-[13.4375rem] sm:w-auto sm:!px-10 sm:h-16 sm:!text-[1.125rem]"
             />
             <MarketingDemoLink
               href="/contact"
               size="md"
               tone="dark"
-              fullWidth
               className="w-[13.4375rem] sm:w-auto sm:!px-10 sm:h-16 sm:!text-[1.125rem]"
             />
           </div>

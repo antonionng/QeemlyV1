@@ -22,19 +22,17 @@ export function HomeHero({ header }: HomeHeroProps) {
               Qeemly replaces payroll guesswork with a live, data-backed platform, giving you the real-time
               benchmarks needed to build a fair, high-performing organization with total certainty
             </p>
-            <div className="mt-12 flex flex-col items-stretch gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+            <div className="mt-12 flex flex-col items-start gap-3 sm:flex-row sm:flex-wrap sm:items-center">
               <PilotApplicationModal
                 sourceCta="hero"
                 size="md"
                 tone="dark"
-                fullWidth
                 triggerClassName="w-[13.4375rem] sm:w-auto sm:!px-10 sm:h-16 sm:!text-[1.125rem]"
               />
               <MarketingDemoLink
                 href="/contact"
                 size="md"
                 tone="dark"
-                fullWidth
                 className="w-[13.4375rem] sm:w-auto sm:!px-10 sm:h-16 sm:!text-[1.125rem]"
               />
             </div>
