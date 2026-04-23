@@ -13,10 +13,10 @@ type IntegrationLogo = {
 const integrations: IntegrationLogo[] = [
   {
     name: "Workable",
-    src: "/images/marketing/home/workable-logo.png",
+    src: "/images/marketing/home/workable-logo.svg",
     alt: "Workable logo",
-    width: 405,
-    height: 67,
+    width: 155,
+    height: 40,
     className: "h-7 w-auto max-w-none object-contain lg:h-8",
   },
   { name: "Slack", src: "/images/marketing/home/slack-logo.svg", alt: "Slack logo", width: 2448, height: 2452 },
@@ -76,7 +76,7 @@ function IntegrationsTrack({ hidden = false }: { hidden?: boolean }) {
       data-testid={hidden ? "integrations-track-clone" : "integrations-track"}
       aria-hidden={hidden ? "true" : undefined}
       className={[
-        "home-ticker-track flex min-w-max shrink-0 items-center gap-10 whitespace-nowrap px-4 sm:gap-12 lg:gap-16",
+        "home-ticker-track flex min-w-max shrink-0 items-center gap-20 whitespace-nowrap px-4 sm:gap-12 lg:gap-16",
         hidden ? "home-ticker-seam" : "",
       ]
         .filter(Boolean)
@@ -111,9 +111,9 @@ function IntegrationsTrack({ hidden = false }: { hidden?: boolean }) {
 export function HomeIntegrationsStrip() {
   return (
     <section className="overflow-hidden bg-[rgba(245,245,245,0.96)]">
-      <div className="mx-auto w-full max-w-[90rem] px-6 py-20 sm:px-10 lg:px-20">
+      <div className="mx-auto w-full max-w-[90rem] px-4 py-20 sm:px-10 lg:px-20">
         <div className="mx-auto max-w-[39.1875rem] text-center">
-          <h2 className="text-[2rem] font-semibold leading-[1.4] text-[#111233] sm:text-[2.25rem]">
+          <h2 className="text-[1.5rem] font-semibold leading-[1.3] text-[#111233] sm:text-[2rem] sm:leading-[1.4] lg:text-[2.25rem]">
             Seamless HRIS Integrations
           </h2>
           <p className="mt-5 text-base leading-[1.5] text-[#111233]">

@@ -151,8 +151,10 @@ export function SiteNav({ variant = "light" }: SiteNavProps) {
             <button
               type="button"
               className={clsx(
-                "flex h-12 w-12 items-center justify-center rounded-full transition-colors lg:hidden",
-                isDark ? "text-white hover:bg-white/10" : "text-brand-700 hover:bg-muted",
+                "flex items-center justify-center rounded-full transition-colors lg:hidden",
+                isDark
+                  ? "h-14 w-14 bg-[#111233] text-white ring-1 ring-white/10 hover:bg-white/10"
+                  : "h-12 w-12 text-brand-700 hover:bg-muted",
               )}
               onClick={() => setMobileOpen(!mobileOpen)}
               aria-label="Toggle menu"

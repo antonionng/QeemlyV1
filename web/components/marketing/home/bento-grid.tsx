@@ -1,5 +1,4 @@
 import Image from "next/image";
-import { Button } from "@/components/ui/button";
 import { PilotApplicationModal } from "@/components/marketing/pilot-application-modal";
 
 type BentoCard = {
@@ -49,8 +48,8 @@ const cards: BentoCard[] = [
 
 export function HomeBentoGrid() {
   return (
-    <section className="bg-white pb-24">
-      <div className="mx-auto grid w-full max-w-[90rem] gap-[1.5625rem] px-6 sm:px-10 lg:grid-cols-12 lg:px-20">
+    <section className="bg-white pb-16 sm:pb-24">
+      <div className="mx-auto grid w-full max-w-[90rem] grid-cols-1 gap-3 px-2 sm:gap-4 sm:px-10 lg:grid-cols-12 lg:gap-[1.5625rem] lg:px-20">
         {cards.map((card) => {
           const baseClassName =
             card.tone === "wide"
@@ -67,7 +66,7 @@ export function HomeBentoGrid() {
           return (
             <article
               key={card.title}
-              className={`relative overflow-hidden rounded-[2.5rem] px-6 py-8 text-white sm:px-10 sm:py-12 ${baseClassName} ${shellClassName}`}
+              className={`relative overflow-hidden rounded-[2.5rem] px-8 py-10 text-white sm:px-10 sm:py-12 ${baseClassName} ${shellClassName}`}
             >
               {card.imageSrc ? (
                 <>
@@ -91,16 +90,13 @@ export function HomeBentoGrid() {
                 }`}
               >
                 <div className={card.tone === "cta" ? "max-w-[20.6875rem]" : "max-w-[18.75rem]"}>
-                  <h2 className="text-[1.5rem] font-semibold leading-[1.2]">{card.title}</h2>
+                  <h2 className="text-[1.25rem] font-semibold leading-[1.2] sm:text-[1.5rem]">{card.title}</h2>
                   <p className="mt-2 text-base leading-[1.5] text-white/92">{card.body}</p>
                 </div>
 
                 {card.tone === "cta" ? (
                   <div className="mt-10">
-                    <PilotApplicationModal
-                      sourceCta="bento"
-                      triggerClassName="h-16 rounded-full !bg-[#28e7c5] !px-10 !text-[1.125rem] !font-semibold !tracking-[0.02em] !text-[#111233] shadow-[0_0_52px_rgba(40,231,197,0.7),-8px_16px_31px_rgba(17,18,51,0.3)]"
-                    />
+                    <PilotApplicationModal sourceCta="bento" size="lg" tone="dark" glow />
                   </div>
                 ) : null}
               </div>

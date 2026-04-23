@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { ArrowRight, CheckCircle2 } from "lucide-react";
+import { ArrowRight, CheckCircle2, ChevronRight } from "lucide-react";
 import { useMemo, useState } from "react";
 
 import {
@@ -54,12 +54,38 @@ export function HomeServicesShowcase() {
     [activeServiceId],
   );
 
+  const activeIndex = serviceItems.findIndex((service) => service.id === activeServiceId);
+  const goToOffset = (offset: number) => {
+    const next = (activeIndex + offset + serviceItems.length) % serviceItems.length;
+    setActiveServiceId(serviceItems[next].id);
+  };
+
   return (
-    <section className="bg-white py-24">
-      <div className="mx-auto grid w-full max-w-[90rem] gap-10 px-6 sm:px-10 lg:grid-cols-[minmax(0,38.75rem)_minmax(0,44.25rem)] lg:px-20">
-        <div className="max-w-[38.75rem] px-0 lg:px-10">
-          <div className="pb-6 pt-1">
-            <h2 className="text-[2rem] font-semibold leading-[1.4] text-[#111233] sm:text-[2.25rem]">See how Qeemly works</h2>
+    <section className="bg-white py-16 sm:py-24">
+      <div className="mx-auto grid w-full max-w-[90rem] grid-cols-1 gap-10 px-4 sm:px-10 lg:grid-cols-[minmax(0,38.75rem)_minmax(0,44.25rem)] lg:px-20">
+        <div className="max-w-full px-0 lg:max-w-[38.75rem] lg:px-10">
+          <div className="flex items-center justify-between gap-4 pb-6 pt-1">
+            <h2 className="text-[1.5rem] font-semibold leading-[1.3] text-[#111233] sm:text-[2rem] sm:leading-[1.4] lg:text-[2.25rem]">See how Qeemly works</h2>
+            <div className="flex items-center gap-2 lg:hidden">
+              <button
+                type="button"
+                aria-label="Previous service"
+                data-testid="services-prev"
+                onClick={() => goToOffset(-1)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[#f5f5f5] p-2 text-[#111233] hover:bg-[#ebebeb]"
+              >
+                <ChevronRight aria-hidden="true" className="h-5 w-5 rotate-180" />
+              </button>
+              <button
+                type="button"
+                aria-label="Next service"
+                data-testid="services-next"
+                onClick={() => goToOffset(1)}
+                className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-[#f5f5f5] p-2 text-[#111233] hover:bg-[#ebebeb]"
+              >
+                <ChevronRight aria-hidden="true" className="h-5 w-5" />
+              </button>
+            </div>
           </div>
 
           <div className="border-y border-[rgba(150,151,153,0.2)]">
@@ -68,7 +94,10 @@ export function HomeServicesShowcase() {
               return (
                 <article
                   key={item.id}
-                  className={clsx("border-b border-[rgba(150,151,153,0.2)] last:border-b-0", isActive ? "py-10" : "py-6")}
+                  className={clsx(
+                    "border-b border-[rgba(150,151,153,0.2)] last:border-b-0 py-6",
+                    isActive && "lg:py-10",
+                  )}
                 >
                   <button
                     id={`${item.id}-trigger`}
@@ -80,7 +109,7 @@ export function HomeServicesShowcase() {
                   >
                     <span
                       className={clsx(
-                        "max-w-[31.75rem] text-[2.25rem] leading-[1.2]",
+                        "max-w-[31.75rem] text-[1.5rem] leading-[1.2] sm:text-[1.875rem] lg:text-[2.25rem]",
                         isActive ? "font-semibold text-[#5c45fd]" : "font-medium text-[#111233]",
                       )}
                     >
@@ -89,7 +118,7 @@ export function HomeServicesShowcase() {
                     <ArrowRight
                       aria-hidden="true"
                       className={clsx(
-                        "mt-2 h-8 w-8 transition-transform duration-200",
+                        "mt-2 h-7 w-7 transition-transform duration-200 sm:h-8 sm:w-8",
                         isActive ? "translate-x-1 text-[#5c45fd]" : "text-[#111233]",
                       )}
                     />
@@ -100,7 +129,7 @@ export function HomeServicesShowcase() {
                     aria-labelledby={`${item.id}-trigger`}
                     aria-label={`${item.title} details`}
                     hidden={!isActive}
-                    className={isActive ? "pt-5" : undefined}
+                    className={clsx("hidden", isActive && "lg:block lg:pt-5")}
                   >
                     {isActive ? (
                       <>
@@ -134,9 +163,47 @@ export function HomeServicesShowcase() {
               );
             })}
           </div>
+
+          <div
+            id={`${activeService.id}-mobile-panel`}
+            role="region"
+            aria-labelledby={`${activeService.id}-trigger`}
+            aria-label={`${activeService.title} details`}
+            className="mt-8 lg:hidden"
+          >
+            <p className="max-w-[21.5rem] text-base leading-[1.5] text-[#111233]">{activeService.body}</p>
+            <div className="mt-5 grid gap-3">
+              {activeService.detailPoints.map((point) => (
+                <div
+                  key={point}
+                  className="flex items-center gap-3 rounded-[1.25rem] border border-[rgba(92,69,253,0.12)] bg-[rgba(92,69,253,0.04)] px-4 py-3"
+                >
+                  <CheckCircle2 aria-hidden="true" className="h-4 w-4 shrink-0 text-[#5c45fd]" />
+                  <span className="text-sm font-medium leading-[1.4] text-[#111233]">{point}</span>
+                </div>
+              ))}
+            </div>
+            <div className="mt-5">
+              <SectionModal
+                key={`mobile-${activeService.id}`}
+                title={activeService.modalTitle}
+                subtitle={activeService.modalSubtitle}
+                triggerLabel="Get Early Access"
+                triggerVariant="button"
+                maxWidthClassName="max-w-5xl"
+              >
+                <ServiceDemoModalContent serviceId={activeService.id} />
+              </SectionModal>
+            </div>
+            <div className="mt-8">
+              <ServiceDemoPreview serviceId={activeService.id} />
+            </div>
+          </div>
         </div>
 
-        <ServiceDemoPreview serviceId={activeService.id} />
+        <div className="hidden lg:block">
+          <ServiceDemoPreview serviceId={activeService.id} />
+        </div>
       </div>
     </section>
   );

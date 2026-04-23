@@ -9,8 +9,9 @@ type SectionModalProps = {
   title: string;
   subtitle?: string;
   triggerLabel: string;
-  triggerVariant?: "link" | "button";
+  triggerVariant?: "link" | "button" | "bare";
   triggerClassName?: string;
+  triggerProps?: Record<string, string | number | boolean>;
   icon?: ReactNode;
   children: ReactNode;
   className?: string;
@@ -36,6 +37,7 @@ export function SectionModal({
   triggerLabel,
   triggerVariant = "link",
   triggerClassName,
+  triggerProps,
   icon,
   children,
   className,
@@ -125,6 +127,20 @@ export function SectionModal({
   }, [open]);
 
   const trigger = useMemo(() => {
+    if (triggerVariant === "bare") {
+      return (
+        <button
+          ref={triggerRef}
+          type="button"
+          onClick={() => setOpen(true)}
+          className={clsx("cursor-pointer", triggerClassName)}
+          {...triggerProps}
+        >
+          {triggerLabel}
+        </button>
+      );
+    }
+
     if (triggerVariant === "button") {
       return (
         <button
@@ -137,6 +153,7 @@ export function SectionModal({
             "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-300",
             triggerClassName,
           )}
+          {...triggerProps}
         >
           {triggerLabel}
         </button>
@@ -153,11 +170,12 @@ export function SectionModal({
           "hover:text-brand-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-300",
           triggerClassName,
         )}
+        {...triggerProps}
       >
         {triggerLabel}
       </button>
     );
-  }, [triggerClassName, triggerLabel, triggerVariant]);
+  }, [triggerClassName, triggerLabel, triggerProps, triggerVariant]);
 
   return (
     <div className={clsx("inline-flex", className)}>
