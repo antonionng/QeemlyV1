@@ -1,4 +1,5 @@
 import Image from "next/image";
+import clsx from "clsx";
 import { PilotApplicationModal } from "@/components/marketing/pilot-application-modal";
 
 type BentoCard = {
@@ -81,15 +82,16 @@ export function HomeBentoGrid() {
               ) : null}
 
               <div
-                className={`relative flex h-full flex-col ${
+                className={clsx(
+                  "relative flex h-full flex-col items-center justify-start text-center",
                   card.tone === "cta"
-                    ? "items-center justify-between text-center"
-                    : card.contentAlign === "bottom"
-                      ? "justify-end"
-                      : "justify-start"
-                }`}
+                    ? "lg:justify-between"
+                    : "lg:items-start lg:text-left",
+                  card.tone !== "cta" && card.contentAlign === "bottom" && "lg:justify-end",
+                  card.tone !== "cta" && card.contentAlign !== "bottom" && "lg:justify-start",
+                )}
               >
-                <div className={card.tone === "cta" ? "max-w-[20.6875rem]" : "max-w-[18.75rem]"}>
+                <div className={clsx("w-full", card.tone === "cta" ? "lg:max-w-[20.6875rem]" : "lg:max-w-[18.75rem]")}>
                   <h2 className="text-[1.25rem] font-semibold leading-[1.2] sm:text-[1.5rem]">{card.title}</h2>
                   <p className="mt-2 text-base leading-[1.5] text-white/92">{card.body}</p>
                 </div>

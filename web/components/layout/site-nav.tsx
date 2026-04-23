@@ -14,11 +14,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Logo } from "@/components/logo";
 
-const navLinks = [
-  { href: "/home", label: "Home" },
-  { href: "/contact", label: "Contact" },
-];
-
 type SiteNavProps = {
   variant?: "light" | "dark";
 };
@@ -34,7 +29,7 @@ function NavLogo({ variant }: { variant: "light" | "dark" }) {
           height={64}
           priority
           unoptimized
-          className="h-12 w-auto lg:h-16"
+          className="h-14 w-auto lg:h-16"
         />
       </Link>
     );
@@ -57,49 +52,26 @@ export function SiteNav({ variant = "light" }: SiteNavProps) {
     <header
       className={clsx(
         "z-50",
-        isDark ? "relative bg-[#111233] text-white" : "sticky top-0 border-b border-border bg-white/95 backdrop-blur-md",
+        isDark
+          ? "relative bg-[#111233] text-white"
+          : "sticky top-0 border-b border-border bg-white/95 backdrop-blur-md",
       )}
     >
-      <div className="mx-auto w-full max-w-[90rem] px-6 sm:px-10 lg:px-20">
-        <div className="grid h-28 grid-cols-[auto_1fr_auto] items-center gap-4 lg:gap-6">
+      <div className="mx-auto w-full max-w-[90rem] p-4 sm:px-10 lg:px-20 lg:py-6">
+        <div className="flex items-center justify-between gap-4">
           <div className="shrink-0">
             <NavLogo variant={variant} />
           </div>
 
-          <nav className="hidden items-center justify-center gap-px lg:flex">
-            {navLinks.map((link) => {
-              const active = pathname === link.href;
-              return (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className={clsx(
-                    "inline-flex items-center justify-center rounded-[32px] px-6 py-5 text-[16px] leading-none tracking-[0.02em] transition-colors",
-                    isDark
-                      ? active
-                        ? "bg-[rgba(92,69,253,0.2)] font-semibold text-white"
-                        : "font-medium text-white/88 hover:bg-white/5 hover:text-white"
-                      : active
-                        ? "bg-brand-50 font-semibold text-brand-800"
-                        : "font-medium text-brand-700 hover:bg-muted hover:text-brand-900",
-                  )}
-                >
-                  {link.label}
-                </Link>
-              );
-            })}
-          </nav>
-
-          <div className="flex items-center justify-end gap-2 sm:gap-3">
+          <div className="hidden items-center gap-3 lg:flex">
             {account.status === "loading" ? (
-              <div
-                aria-busy="true"
-                className="hidden sm:flex"
-              >
+              <div aria-busy="true" className="flex">
                 <div
                   className={clsx(
-                    "flex h-14 w-40 items-center justify-center rounded-full",
-                    isDark ? "bg-white/10 ring-1 ring-white/12" : "bg-brand-50 ring-1 ring-brand-100",
+                    "flex h-16 w-40 items-center justify-center rounded-[32px]",
+                    isDark
+                      ? "bg-white/10 ring-1 ring-white/12"
+                      : "bg-brand-50 ring-1 ring-brand-100",
                   )}
                 >
                   <span className="sr-only">Loading account</span>
@@ -113,32 +85,34 @@ export function SiteNav({ variant = "light" }: SiteNavProps) {
                 </div>
               </div>
             ) : account.status === "signed_in" ? (
-              <div className="hidden sm:block">
-                <AuthenticatedUserMenuFromModel variant="marketing" dark={isDark} model={account} />
-              </div>
+              <AuthenticatedUserMenuFromModel
+                variant="marketing"
+                dark={isDark}
+                model={account}
+              />
             ) : (
               <>
-                <Link href="/register" className="hidden sm:inline-flex">
+                <Link href="/register" className="inline-flex">
                   <Button
                     size="sm"
                     className={clsx(
-                      "h-14 rounded-full !px-8 !text-[16px] !font-semibold !tracking-[0.02em]",
+                      "h-16 rounded-[32px] !px-10 !text-[18px] !font-semibold !tracking-[0.02em]",
                       isDark
-                        ? "!bg-[#28e7c5] !text-[#111233] shadow-[0_4px_16px_rgba(17,18,51,0.25)]"
+                        ? "!bg-[#28e7c5] !text-[#111233] shadow-[0px_4px_16px_0px_rgba(17,18,51,0.25)] hover:!bg-[#28e7c5]/90"
                         : "",
                     )}
                   >
                     Early access
                   </Button>
                 </Link>
-                <Link href="/login" className="hidden sm:inline-flex">
+                <Link href="/login" className="inline-flex">
                   <Button
                     variant={isDark ? "ghost" : "secondary"}
                     size="sm"
                     className={clsx(
-                      "h-14 rounded-full !px-8 !text-[16px] !font-semibold !tracking-[0.02em]",
+                      "h-16 rounded-[32px] !px-10 !text-[18px] !font-semibold !tracking-[0.02em]",
                       isDark
-                        ? "!bg-[#111233] !text-white ring-1 ring-white/10 shadow-[0_4px_16px_rgba(17,18,51,0.25)] hover:!bg-white/10"
+                        ? "!bg-[#111233] !text-white shadow-[0px_4px_16px_0px_rgba(17,18,51,0.25)] hover:!bg-white/10"
                         : "",
                     )}
                   >
@@ -147,58 +121,32 @@ export function SiteNav({ variant = "light" }: SiteNavProps) {
                 </Link>
               </>
             )}
-
-            <button
-              type="button"
-              className={clsx(
-                "flex items-center justify-center rounded-full transition-colors lg:hidden",
-                isDark
-                  ? "h-14 w-14 bg-[#111233] text-white ring-1 ring-white/10 hover:bg-white/10"
-                  : "h-12 w-12 text-brand-700 hover:bg-muted",
-              )}
-              onClick={() => setMobileOpen(!mobileOpen)}
-              aria-label="Toggle menu"
-              aria-expanded={mobileOpen}
-            >
-              {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-            </button>
           </div>
+
+          <button
+            type="button"
+            className={clsx(
+              "flex h-14 w-14 items-center justify-center rounded-[32px] transition-colors lg:hidden",
+              isDark
+                ? "bg-[#111233] text-white hover:bg-white/10"
+                : "bg-white text-brand-700 ring-1 ring-border hover:bg-muted",
+            )}
+            onClick={() => setMobileOpen(!mobileOpen)}
+            aria-label="Toggle menu"
+            aria-expanded={mobileOpen}
+          >
+            {mobileOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+          </button>
         </div>
 
         {mobileOpen && (
           <div
             className={clsx(
-              "border-t py-4 lg:hidden",
+              "mt-4 border-t pt-4 lg:hidden",
               isDark ? "border-white/10" : "border-border",
             )}
           >
-            <nav className="flex flex-col gap-1">
-              {navLinks.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className={clsx(
-                    "rounded-[24px] px-4 py-3 text-sm font-medium transition-colors",
-                    isDark
-                      ? pathname === link.href
-                        ? "bg-[rgba(92,69,253,0.2)] text-white"
-                        : "text-white/88 hover:bg-white/5 hover:text-white"
-                      : pathname === link.href
-                        ? "bg-brand-50 text-brand-800"
-                        : "text-brand-700 hover:bg-muted hover:text-brand-900",
-                  )}
-                  onClick={() => setMobileOpen(false)}
-                >
-                  {link.label}
-                </Link>
-              ))}
-            </nav>
-            <div
-              className={clsx(
-                "mt-4 flex flex-col gap-2 border-t pt-4",
-                isDark ? "border-white/10" : "border-border",
-              )}
-            >
+            <div className="flex flex-col gap-2">
               {account.status === "signed_in" ? (
                 <AuthenticatedUserMenuMobileItems model={account} dark={isDark} />
               ) : account.status === "loading" ? (
@@ -217,7 +165,7 @@ export function SiteNav({ variant = "light" }: SiteNavProps) {
                     <Button
                       size="sm"
                       className={clsx(
-                        "h-12 w-full rounded-full text-sm font-semibold",
+                        "h-14 w-full rounded-[32px] !text-base !font-semibold !tracking-[0.02em]",
                         isDark ? "!bg-[#28e7c5] !text-[#111233]" : "",
                       )}
                     >
@@ -227,8 +175,10 @@ export function SiteNav({ variant = "light" }: SiteNavProps) {
                   <Link
                     href="/login"
                     className={clsx(
-                      "inline-flex items-center justify-center rounded-full px-4 py-3 text-sm font-semibold transition-colors",
-                      isDark ? "bg-[#111233] text-white ring-1 ring-white/10 hover:bg-white/10" : "text-brand-700 hover:bg-muted",
+                      "inline-flex h-14 w-full items-center justify-center rounded-[32px] text-base font-semibold tracking-[0.02em] transition-colors",
+                      isDark
+                        ? "bg-[#111233] text-white ring-1 ring-white/10 hover:bg-white/10"
+                        : "bg-white text-brand-700 ring-1 ring-border hover:bg-muted",
                     )}
                   >
                     Log in

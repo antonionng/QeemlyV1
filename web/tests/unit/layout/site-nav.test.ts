@@ -123,16 +123,17 @@ describe("SiteNav", () => {
     });
   }
 
-  it("renders the simplified shared public menu and anonymous actions", async () => {
+  it("renders only the logo, CTAs, and burger toggle (no inline nav links)", async () => {
     createClientMock.mockReturnValue(createSupabaseClient({ user: null }));
     const { container } = renderNav();
     await flushEffects();
     const html = container.innerHTML;
 
-    expect(html).toContain("Home");
-    expect(html).toContain("Contact");
     expect(html).toContain("Early access");
     expect(html).toContain("Log in");
+    expect(html).toContain("Toggle menu");
+    expect(html).not.toContain(">Home<");
+    expect(html).not.toContain(">Contact<");
     expect(html).not.toContain("Search");
     expect(html).not.toContain("Pricing");
     expect(html).not.toContain("Product");
@@ -140,7 +141,7 @@ describe("SiteNav", () => {
     expect(html).not.toContain("Get Started");
   });
 
-  it("renders the dark home variant with the white logo and active home pill", async () => {
+  it("renders the dark home variant with the white logo and Figma button styling", async () => {
     createClientMock.mockReturnValue(createSupabaseClient({ user: null }));
     const { container } = renderNav({ variant: "dark" });
 
@@ -148,9 +149,9 @@ describe("SiteNav", () => {
 
     expect(container.innerHTML).toContain("logo-white.svg");
     expect(container.innerHTML).toContain("bg-[#111233]");
-    expect(container.innerHTML).toContain("bg-[rgba(92,69,253,0.2)]");
     expect(container.innerHTML).toContain("rounded-[32px]");
-    expect(container.innerHTML).toContain("h-28");
+    expect(container.innerHTML).toContain("shadow-[0px_4px_16px_0px_rgba(17,18,51,0.25)]");
+    expect(container.innerHTML).toContain("!bg-[#28e7c5]");
   });
 
   it("shows a loading placeholder before auth resolves", async () => {
