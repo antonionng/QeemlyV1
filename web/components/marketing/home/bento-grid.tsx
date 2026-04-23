@@ -7,6 +7,7 @@ type BentoCard = {
   body: string;
   tone: "wide" | "compact" | "cta";
   imageSrc?: string;
+  imageSrcMobile?: string;
   contentAlign?: "top" | "bottom";
 };
 
@@ -37,6 +38,7 @@ const cards: BentoCard[] = [
     body: "Create salary bands and compensation structures that support fair and consistent growth.",
     tone: "compact",
     imageSrc: "/images/marketing/home/bento-frameworks.png",
+    imageSrcMobile: "/images/marketing/home/bento-frameworks-mobile.png",
     contentAlign: "bottom",
   },
   {
@@ -71,12 +73,31 @@ export function HomeBentoGrid() {
             >
               {card.imageSrc ? (
                 <>
-                  <Image
-                    src={card.imageSrc}
-                    alt=""
-                    fill
-                    className="object-cover"
-                  />
+                  {card.imageSrcMobile ? (
+                    <>
+                      <Image
+                        src={card.imageSrcMobile}
+                        alt=""
+                        fill
+                        sizes="(min-width: 1024px) 0px, 100vw"
+                        className="object-cover object-bottom lg:hidden"
+                      />
+                      <Image
+                        src={card.imageSrc}
+                        alt=""
+                        fill
+                        sizes="(min-width: 1024px) 50vw, 0px"
+                        className="hidden object-cover lg:block"
+                      />
+                    </>
+                  ) : (
+                    <Image
+                      src={card.imageSrc}
+                      alt=""
+                      fill
+                      className="object-cover"
+                    />
+                  )}
                   <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(17,18,51,0.08)_0%,rgba(17,18,51,0.22)_100%)]" />
                 </>
               ) : null}
